@@ -1,0 +1,16 @@
+{
+  "contract_version": "1.0",
+  "implementation_status": "SKELETON",
+  "runtime_status": "IDLE",
+  "last_successful_run": null,
+  "data_freshness": "NOT_EVALUATED",
+  "rqs": null,
+  "rhs": null,
+  "evidence_gate_result": "NOT_EVALUATED",
+  "legacy_reuse_violation_count": 0,
+  "owner_review_count": 0,
+  "open_gap_count": 0,
+  "overdue_debt_count": 0,
+  "openai_enabled": false,
+  "actionable": false
+}

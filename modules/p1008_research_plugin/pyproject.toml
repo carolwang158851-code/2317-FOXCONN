@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "p1008-research-plugin"
+version = "0.1.0"
+description = "P1008 Research OS Phase 1B deterministic skeleton"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.p1008]
+contract-version = "1.0"
+openai-enabled = false
+actionable = false
