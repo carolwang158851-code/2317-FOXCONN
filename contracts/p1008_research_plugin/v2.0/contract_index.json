@@ -1,0 +1,42 @@
+{
+  "contractId": "P1008_RESEARCH_GOVERNANCE_CONTRACT",
+  "contractVersion": "2.0",
+  "phase": "PHASE_1C_V2_CONTRACT_FREEZE",
+  "status": "FROZEN_OWNER_ACCEPTED",
+  "contractForm": "ADDITIVE_GOVERNANCE_OVERLAY",
+  "extendsContractVersion": "1.0",
+  "extendsContractRootHash": "3370C4DBD6B564E2200D051AC07C8507442C130ADE64D770621107FA09D2924D",
+  "actionable": false,
+  "implementationPresent": false,
+  "witnessConnectorPresent": false,
+  "networkEnabled": false,
+  "openAiEnabled": false,
+  "launcherIntegrated": false,
+  "statusApiChanged": false,
+  "runtimeSqliteChanged": false,
+  "formalCsvChanged": false,
+  "phase2Enabled": false,
+  "schemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "directories": {
+    "schemas": "schemas/",
+    "policies": "policies/",
+    "events": "events/",
+    "ledgers": "ledgers/",
+    "validation": "validation/",
+    "compatibility": "compatibility/",
+    "governance": "governance/",
+    "migration": "migration/"
+  },
+  "permanentInvariants": {
+    "actionable": false,
+    "noAutoTrade": true,
+    "noFormalCsvWrite": true,
+    "noRuleEnablement": true,
+    "canModifyRuntimeSqlite": false,
+    "canChangeMidr": false,
+    "canChangeHold": false,
+    "canPublish": false,
+    "modelCannotApproveGovernance": true
+  },
+  "ownerApprovalToken": "OWNER_APPROVE_P1008_PHASE1C_V2_CONTRACT_FREEZE_TARGETFILES"
+}

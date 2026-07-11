@@ -1,0 +1,29 @@
+{
+  "reportId": "P1008_V2_BACKWARD_COMPATIBILITY_REPORT",
+  "contractVersion": "2.0",
+  "baselineContractVersion": "1.0",
+  "baselineRootHash": "3370C4DBD6B564E2200D051AC07C8507442C130ADE64D770621107FA09D2924D",
+  "status": "PASS_ADDITIVE_OVERLAY",
+  "actionable": false,
+  "summary": {
+    "checks": 10,
+    "passed": 10,
+    "failed": 0,
+    "breakingChangesToV1": 0,
+    "runtimeChanges": 0
+  },
+  "checks": [
+    {"id": "BC-001", "status": "PASS", "evidence": "All 43 v1 root artifacts reproduce the accepted v1 manifest hashes."},
+    {"id": "BC-002", "status": "PASS", "evidence": "The v1 root hash remains unchanged."},
+    {"id": "BC-003", "status": "PASS", "evidence": "No v1 schema, policy, API, event, ledger, or validation rule is edited."},
+    {"id": "BC-004", "status": "PASS", "evidence": "v2 adds a separate governance event namespace and does not alter v1 research events."},
+    {"id": "BC-005", "status": "PASS", "evidence": "v2 adds separate governance ledger formats and does not alter the eight v1 research ledger formats."},
+    {"id": "BC-006", "status": "PASS", "evidence": "v1 API and Status API contracts are unchanged."},
+    {"id": "BC-007", "status": "PASS", "evidence": "The Phase 1B skeleton may continue operating against v1 only; it does not claim v2 conformance."},
+    {"id": "BC-008", "status": "PASS", "evidence": "No Runtime, Launcher, SQLite, CSV, rule, report, or scheduling path changes."},
+    {"id": "BC-009", "status": "PASS", "evidence": "No OpenAI or network capability is introduced."},
+    {"id": "BC-010", "status": "PASS", "evidence": "Migration is explicit and future-only; there is no automatic state conversion."}
+  ],
+  "compatibilityMode": "LOAD_V1_AUTHORITY_THEN_V2_GOVERNANCE_OVERLAY",
+  "phase2Authorized": false
+}

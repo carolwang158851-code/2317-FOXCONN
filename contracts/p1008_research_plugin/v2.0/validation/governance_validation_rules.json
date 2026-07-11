@@ -1,0 +1,32 @@
+{
+  "validationId": "P1008_PHASE1C_V2_CONTRACT_VALIDATION",
+  "version": "2.0",
+  "status": "FROZEN_VALIDATION_RULES",
+  "actionable": false,
+  "checks": [
+    {"id": "P1C-001", "severity": "CRITICAL", "rule": "Every frozen v2 JSON artifact parses successfully."},
+    {"id": "P1C-002", "severity": "CRITICAL", "rule": "Every schema uses Draft 2020-12, has a stable v2.0 $id, and rejects additional top-level properties."},
+    {"id": "P1C-003", "severity": "CRITICAL", "rule": "Every relative $ref and declared schema locator resolves inside v2.0."},
+    {"id": "P1C-004", "severity": "CRITICAL", "rule": "The accepted v1 root, v1 manifest, and all v1 artifact bytes remain unchanged."},
+    {"id": "P1C-005", "severity": "CRITICAL", "rule": "v2.0 is an additive governance overlay and does not replace v1.0 in place."},
+    {"id": "P1C-006", "severity": "CRITICAL", "rule": "A local hash, HMAC, DPAPI file, Owner checkpoint, or test witness cannot claim complete suffix deletion detection."},
+    {"id": "P1C-007", "severity": "CRITICAL", "rule": "Production rollback detection requires EXTERNAL_APPEND_ONLY or HARDWARE_MONOTONIC witness class."},
+    {"id": "P1C-008", "severity": "HIGH", "rule": "Receipt binds the full anchor payload hash, witness identity, monotonic counter, previous receipt hash, signature algorithm, key id, and signature."},
+    {"id": "P1C-009", "severity": "CRITICAL", "rule": "Ledger rollback, divergence, unanchored tail, unavailable witness, and uninitialized states fail closed for Research OS while preserving the core Warroom."},
+    {"id": "P1C-010", "severity": "CRITICAL", "rule": "Only MATCHED permits normal governance projection."},
+    {"id": "P1C-011", "severity": "CRITICAL", "rule": "Governance events allow OWNER and SYSTEM actors only; OpenAI, Codex, model, agent, and tool actors are forbidden."},
+    {"id": "P1C-012", "severity": "HIGH", "rule": "Every state-changing Owner event requires an Owner authorization reference and required artifact bindings."},
+    {"id": "P1C-013", "severity": "CRITICAL", "rule": "Governance ledger is append-only, RFC8785 canonicalized, hash-chained, externally anchored, and cannot update, delete, or truncate records."},
+    {"id": "P1C-014", "severity": "CRITICAL", "rule": "Genesis binds accepted v1 root, Git baseline commit, Phase 1B implementation commit, and a qualifying first receipt."},
+    {"id": "P1C-015", "severity": "HIGH", "rule": "Projection is disposable and fully reconstructable from verified anchored records."},
+    {"id": "P1C-016", "severity": "HIGH", "rule": "Model-generated Architecture Review remains a hashed candidate artifact until OWNER or SYSTEM records it and has no authority by itself."},
+    {"id": "P1C-017", "severity": "CRITICAL", "rule": "No event or policy can change formal CSV, Runtime SQLite, rules, HOLD, MIDR, IC scores, reports, trades, or positions."},
+    {"id": "P1C-018", "severity": "CRITICAL", "rule": "No Runtime, provider connector, network access, credential, Launcher integration, Status API change, or OpenAI capability is authorized by this Contract freeze."},
+    {"id": "P1C-019", "severity": "HIGH", "rule": "Phase 2 remains blocked until qualifying witness implementation, rollback tests, governance replay tests, implementation commit binding, Owner acceptance, and separate Phase 2 authorization complete."},
+    {"id": "P1C-020", "severity": "CRITICAL", "rule": "The frozen Contract contains no Python, executable connector, API implementation, SDK dependency, or generated runtime state."},
+    {"id": "P1C-021", "severity": "CRITICAL", "rule": "The freeze manifest reproduces every root artifact hash and the deterministic root hash."},
+    {"id": "P1C-022", "severity": "CRITICAL", "rule": "Owner acceptance binds the v2 root, manifest hash, conformance evidence hash, and approval token."}
+  ],
+  "passCondition": "All CRITICAL and HIGH checks PASS.",
+  "failureBehavior": "Do not recognize v2 authority, do not implement Runtime, and keep Phase 2 blocked."
+}

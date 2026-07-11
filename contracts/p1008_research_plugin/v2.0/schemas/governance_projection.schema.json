@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v2.0/schemas/governance_projection.schema.json",
+  "title": "P1008 Replayed Research Governance Projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "projection_id",
+    "projection_contract_version",
+    "as_of_sequence",
+    "governance_ledger_tail_hash",
+    "anchor_state",
+    "latest_anchor_receipt",
+    "accepted_contracts",
+    "active_policy_bindings",
+    "active_schema_bindings",
+    "phase_authorizations",
+    "implementation_bindings",
+    "validation_bindings",
+    "architecture_reviews",
+    "rollback_records",
+    "replay_complete",
+    "projection_hash",
+    "warroom_effective_change_applied",
+    "actionable"
+  ],
+  "properties": {
+    "projection_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "projection_contract_version": {"const": "2.0"},
+    "as_of_sequence": {"type": "integer", "minimum": 0},
+    "governance_ledger_tail_hash": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+    "anchor_state": {
+      "enum": [
+        "MATCHED",
+        "UNANCHORED_TAIL",
+        "LEDGER_ROLLBACK_DETECTED",
+        "DIVERGED",
+        "WITNESS_UNAVAILABLE",
+        "NOT_INITIALIZED"
+      ]
+    },
+    "latest_anchor_receipt": {
+      "anyOf": [
+        {"type": "null"},
+        {"$ref": "anchor_receipt.schema.json"}
+      ]
+    },
+    "accepted_contracts": {"type": "array", "items": {"$ref": "#/$defs/artifactState"}},
+    "active_policy_bindings": {"type": "array", "items": {"$ref": "#/$defs/artifactState"}},
+    "active_schema_bindings": {"type": "array", "items": {"$ref": "#/$defs/artifactState"}},
+    "phase_authorizations": {"type": "array", "items": {"$ref": "#/$defs/stateRecord"}},
+    "implementation_bindings": {"type": "array", "items": {"$ref": "#/$defs/artifactState"}},
+    "validation_bindings": {"type": "array", "items": {"$ref": "#/$defs/artifactState"}},
+    "architecture_reviews": {"type": "array", "items": {"$ref": "#/$defs/artifactState"}},
+    "rollback_records": {"type": "array", "items": {"$ref": "#/$defs/stateRecord"}},
+    "replay_complete": {"type": "boolean"},
+    "projection_hash": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+    "warroom_effective_change_applied": {"const": false},
+    "actionable": {"const": false}
+  },
+  "$defs": {
+    "artifactState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "sha256", "locator", "bound_at_sequence"],
+      "properties": {
+        "artifact_id": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+        "locator": {"type": "string", "minLength": 1},
+        "bound_at_sequence": {"type": "integer", "minimum": 1}
+      }
+    },
+    "stateRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject_id", "state", "event_id", "sequence"],
+      "properties": {
+        "subject_id": {"type": "string", "minLength": 1},
+        "state": {"type": "string", "minLength": 1},
+        "event_id": {"type": "string", "minLength": 1},
+        "sequence": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

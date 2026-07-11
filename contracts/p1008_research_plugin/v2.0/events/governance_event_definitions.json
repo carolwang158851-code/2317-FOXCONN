@@ -1,0 +1,113 @@
+{
+  "catalogId": "P1008_RESEARCH_GOVERNANCE_EVENT_CATALOG",
+  "version": "2.0",
+  "status": "FROZEN_AUTHORITY",
+  "eventSchema": "../schemas/governance_event.schema.json",
+  "modifiesV1": false,
+  "actionable": false,
+  "events": [
+    {
+      "eventType": "GOVERNANCE_GENESIS_RECORDED",
+      "aggregateType": "GOVERNANCE",
+      "allowedActors": ["OWNER"],
+      "governanceStateChangeRecorded": true,
+      "ownerAuthorizationRequired": true
+    },
+    {
+      "eventType": "CONTRACT_DRAFT_CREATED",
+      "aggregateType": "CONTRACT",
+      "allowedActors": ["OWNER", "SYSTEM"],
+      "governanceStateChangeRecorded": false,
+      "ownerAuthorizationRequired": false
+    },
+    {
+      "eventType": "CONTRACT_FROZEN",
+      "aggregateType": "CONTRACT",
+      "allowedActors": ["SYSTEM"],
+      "governanceStateChangeRecorded": true,
+      "ownerAuthorizationRequired": false
+    },
+    {
+      "eventType": "CONTRACT_OWNER_ACCEPTED",
+      "aggregateType": "CONTRACT",
+      "allowedActors": ["OWNER"],
+      "governanceStateChangeRecorded": true,
+      "ownerAuthorizationRequired": true
+    },
+    {
+      "eventType": "POLICY_VERSION_BOUND",
+      "aggregateType": "POLICY",
+      "allowedActors": ["OWNER", "SYSTEM"],
+      "governanceStateChangeRecorded": true,
+      "ownerAuthorizationRequired": true
+    },
+    {
+      "eventType": "SCHEMA_VERSION_BOUND",
+      "aggregateType": "SCHEMA",
+      "allowedActors": ["OWNER", "SYSTEM"],
+      "governanceStateChangeRecorded": true,
+      "ownerAuthorizationRequired": true
+    },
+    {
+      "eventType": "ARCHITECTURE_REVIEW_RECORDED",
+      "aggregateType": "ARCHITECTURE_REVIEW",
+      "allowedActors": ["OWNER", "SYSTEM"],
+      "governanceStateChangeRecorded": false,
+      "ownerAuthorizationRequired": false
+    },
+    {
+      "eventType": "PHASE_AUTHORIZED",
+      "aggregateType": "PHASE",
+      "allowedActors": ["OWNER"],
+      "governanceStateChangeRecorded": true,
+      "ownerAuthorizationRequired": true
+    },
+    {
+      "eventType": "IMPLEMENTATION_COMMIT_BOUND",
+      "aggregateType": "IMPLEMENTATION",
+      "allowedActors": ["SYSTEM"],
+      "governanceStateChangeRecorded": true,
+      "ownerAuthorizationRequired": false
+    },
+    {
+      "eventType": "VALIDATION_REPORT_BOUND",
+      "aggregateType": "VALIDATION",
+      "allowedActors": ["SYSTEM"],
+      "governanceStateChangeRecorded": true,
+      "ownerAuthorizationRequired": false
+    },
+    {
+      "eventType": "PHASE_ACCEPTED",
+      "aggregateType": "PHASE",
+      "allowedActors": ["OWNER"],
+      "governanceStateChangeRecorded": true,
+      "ownerAuthorizationRequired": true
+    },
+    {
+      "eventType": "ROLLBACK_RECORDED",
+      "aggregateType": "ROLLBACK",
+      "allowedActors": ["OWNER"],
+      "governanceStateChangeRecorded": true,
+      "ownerAuthorizationRequired": true
+    },
+    {
+      "eventType": "CONTRACT_DEPRECATED",
+      "aggregateType": "CONTRACT",
+      "allowedActors": ["OWNER"],
+      "governanceStateChangeRecorded": true,
+      "ownerAuthorizationRequired": true
+    }
+  ],
+  "forbiddenEvents": [
+    "CONTRACT_MODIFIED_IN_PLACE",
+    "POLICY_OVERWRITTEN",
+    "SCHEMA_OVERWRITTEN",
+    "MODEL_GOVERNANCE_APPROVED",
+    "ANCHOR_BYPASSED",
+    "GOVERNANCE_LEDGER_TRUNCATED",
+    "PHASE_AUTO_AUTHORIZED",
+    "OPENAI_RUNTIME_AUTO_ENABLED",
+    "WARROOM_DECISION_CHANGED",
+    "TRADE_SUBMITTED"
+  ]
+}

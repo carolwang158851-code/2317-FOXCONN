@@ -1,0 +1,115 @@
+{
+    "manifestId":  "P1008_RESEARCH_GOVERNANCE_V2_FREEZE_MANIFEST",
+    "contractVersion":  "2.0",
+    "generatedAt":  "2026-07-11T16:04:14+08:00",
+    "freezeStatus":  "FROZEN_OWNER_ACCEPTED",
+    "hashAlgorithm":  "SHA-256",
+    "rootHashConstruction":  "SHA256(UTF8(join(sorted(path + \u0027|\u0027 + sha256), LF)))",
+    "rootHash":  "E056357A8A63A15BCF9FDC286BEE0BDB56E043AF26F4DDCD5624FDB3707BD782",
+    "artifactCount":  16,
+    "selfExcluded":  true,
+    "evidenceExcluded":  [
+                             "contract.manifest.json",
+                             "CONTRACT_FREEZE.md",
+                             "validation/CONFORMANCE_EVIDENCE.json",
+                             "validation/CONFORMANCE_EVIDENCE.md",
+                             "../acceptance/v2.0/OWNER_ACCEPTANCE_RECORD.json"
+                         ],
+    "normativeDependency":  {
+                                "contractVersion":  "1.0",
+                                "rootHash":  "3370C4DBD6B564E2200D051AC07C8507442C130ADE64D770621107FA09D2924D",
+                                "manifestSha256":  "5D213CB4360329FCC969164F559952A0F1545BFE8E53D5CFDFF014B9D5619773"
+                            },
+    "ownerApprovalToken":  "OWNER_APPROVE_P1008_PHASE1C_V2_CONTRACT_FREEZE_TARGETFILES",
+    "runtimeAuthorized":  false,
+    "networkAuthorized":  false,
+    "openAiAuthorized":  false,
+    "launcherChangesAuthorized":  false,
+    "sqliteChangesAuthorized":  false,
+    "csvChangesAuthorized":  false,
+    "statusApiChangesAuthorized":  false,
+    "phase2Authorized":  false,
+    "actionable":  false,
+    "artifacts":  [
+                      {
+                          "path":  "compatibility/BACKWARD_COMPATIBILITY_REPORT.json",
+                          "sha256":  "8EC93200AC49D3C9C2767D58AB373515B06EE469F6986D2259CD446CC0132900",
+                          "sizeBytes":  1775
+                      },
+                      {
+                          "path":  "compatibility/BACKWARD_COMPATIBILITY_REPORT.md",
+                          "sha256":  "44604B7B04D4197AB84CB7F9CABCD95C111C55CA9EED4B73F52DC66B292BCCDA",
+                          "sizeBytes":  1087
+                      },
+                      {
+                          "path":  "contract_index.json",
+                          "sha256":  "8DDAD74E6416C0A7EE49EF6872B57133FD6A3B83DA9796C9BD7790751C280E6E",
+                          "sizeBytes":  1360
+                      },
+                      {
+                          "path":  "events/governance_event_definitions.json",
+                          "sha256":  "CEAFD4691874D2DEF133C9A5EB13087CAF95DD6732634E4BF6400C00EF85EB70",
+                          "sizeBytes":  3375
+                      },
+                      {
+                          "path":  "governance/GOVERNANCE_DIFF.md",
+                          "sha256":  "7C181ED22283D018F3FBD4006DC45ADC2134A23CD193D327DF01F9C743348FBD",
+                          "sizeBytes":  1739
+                      },
+                      {
+                          "path":  "ledgers/governance_ledger_formats.json",
+                          "sha256":  "532B27514C90F4074AC28E77893B03B5CDB3CC3DEE6E9E1DB23F42F0AAAD721A",
+                          "sizeBytes":  2360
+                      },
+                      {
+                          "path":  "migration/MIGRATION_GUIDE.md",
+                          "sha256":  "12F20BE447C8804DA85325D7718BC272DF135F8B5B34F730EA136BBF77EA49C3",
+                          "sizeBytes":  1912
+                      },
+                      {
+                          "path":  "policies/governance_ledger_policy.json",
+                          "sha256":  "F37418B56AB8E962B421D4824A51D0C47F92CEE66E78726DB1EFD744B32BAE27",
+                          "sizeBytes":  2960
+                      },
+                      {
+                          "path":  "policies/tail_anchor_policy.json",
+                          "sha256":  "7635F73B72E60275F059F9AA627C7F288CCFB70A8276D1006F35B0DE54EF9ECD",
+                          "sizeBytes":  4567
+                      },
+                      {
+                          "path":  "README.md",
+                          "sha256":  "606A83E4A3A8357D1B15CCEE6B45BF29A14883F267812EDE3B32519BB56317B7",
+                          "sizeBytes":  2528
+                      },
+                      {
+                          "path":  "schemas/anchor_receipt.schema.json",
+                          "sha256":  "C1F52D4971414787C0472B3BC9B2406D8B5827DBD6A84EF8E438B766188AFDDC",
+                          "sizeBytes":  2158
+                      },
+                      {
+                          "path":  "schemas/governance_event.schema.json",
+                          "sha256":  "14A2B9B6229CA22118BBBF8FA4619C836D5A9F466908A9BA3B09494B87114B3D",
+                          "sizeBytes":  2567
+                      },
+                      {
+                          "path":  "schemas/governance_ledger_record.schema.json",
+                          "sha256":  "A2BB7AEA1CE23415D9EAF3F54F356058DA374AAE35502729767C8C1995EBCFA9",
+                          "sizeBytes":  1003
+                      },
+                      {
+                          "path":  "schemas/governance_projection.schema.json",
+                          "sha256":  "6B6170F2705CE082F9F703B27A0A5AC980BA21055FD16DC95A6F1B9C7D4D1D64",
+                          "sizeBytes":  3219
+                      },
+                      {
+                          "path":  "schemas/tail_anchor.schema.json",
+                          "sha256":  "A990032900F4E2607FD589821FA1EF6D54F0D650523233E7727B73A4316595FA",
+                          "sizeBytes":  1744
+                      },
+                      {
+                          "path":  "validation/governance_validation_rules.json",
+                          "sha256":  "ABAA95B0E9D3D5C466DAF10A0193B14DE2E47235877D5AAB51B2515E07050E73",
+                          "sizeBytes":  4014
+                      }
+                  ]
+}
