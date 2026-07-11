@@ -1,0 +1,35 @@
+{
+  "recordId": "P1008_RESEARCH_PHASE1B_ACCEPTANCE",
+  "acceptedAt": "2026-07-11T14:33:29+08:00",
+  "acceptedBy": "Owner",
+  "acceptanceStatus": "PHASE_1B_ACCEPTED_PHASE_2_BLOCKED",
+  "contractVersion": "1.0",
+  "acceptedContractRootHash": "3370C4DBD6B564E2200D051AC07C8507442C130ADE64D770621107FA09D2924D",
+  "gitBaselineCommit": "efbf0b2ec1aaf25d1d4f9025fe4a04b0f336dce7",
+  "phase1bImplementationCommit": "da8f1e286c5a3c2bb0c77fe176a277c3bbc6faa9",
+  "validationEvidence": {
+    "phase1bUnitTests": "27/27 PASS",
+    "ledgerReplaySmoke": "8 ledgers / 8 records / deterministic projection hash",
+    "openAiCalls": 0,
+    "nonTargetFileChanges": 0,
+    "formalDataModified": false,
+    "runtimeSqliteModified": false,
+    "launcherModified": false,
+    "appServerModified": false
+  },
+  "acceptedCapabilities": [
+    "FROZEN_CONTRACT_LOADER",
+    "READ_ONLY_AUTHORITY_ADAPTER",
+    "READ_ONLY_RUNTIME_SNAPSHOT_ADAPTER",
+    "EVENT_CATALOG_VALIDATION",
+    "TEST_ONLY_APPEND_LEDGER",
+    "DETERMINISTIC_PROJECTION_REPLAY",
+    "LOOPBACK_GET_ONLY_STATUS_API"
+  ],
+  "knownContractGap": "A complete valid suffix deletion cannot be detected after restart without an independently retained external or monotonic tail anchor.",
+  "requiredNextPhase": "PHASE_1B5_RUNTIME_HARDENING_AND_GOVERNANCE_ANCHORING",
+  "phase2Authorized": false,
+  "openAiRuntimeAuthorized": false,
+  "launcherIntegrationAuthorized": false,
+  "actionable": false
+}

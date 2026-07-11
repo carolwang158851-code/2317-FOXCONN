@@ -1,0 +1,58 @@
+{
+  "planId": "P1008_RESEARCH_PHASE1B5_CONTRACT_DESIGN_PLAN",
+  "planVersion": "1.0",
+  "status": "CONTRACT_DESIGN_ONLY_RUNTIME_NOT_AUTHORIZED",
+  "actionable": false,
+  "phase2Blocked": true,
+  "objectives": [
+    "EXTERNAL_TAIL_ANCHOR_V2_CONTRACT",
+    "RESEARCH_GOVERNANCE_LEDGER_CONTRACT",
+    "ROLLBACK_AND_REPLAY_VALIDATION_DESIGN",
+    "PHASE2_GOVERNANCE_ENTRY_GATE"
+  ],
+  "approvedTargetFiles": [
+    "CODEX_RESEARCH_PLUGIN_PHASE1B5_DRY_RUN.md",
+    "contracts/p1008_research_plugin/acceptance/v1.0/PHASE1B_ACCEPTANCE_RECORD.json",
+    "contracts/p1008_research_plugin/v2.0-draft/README.md",
+    "contracts/p1008_research_plugin/v2.0-draft/schemas/tail_anchor.schema.json",
+    "contracts/p1008_research_plugin/v2.0-draft/schemas/anchor_receipt.schema.json",
+    "contracts/p1008_research_plugin/v2.0-draft/schemas/governance_event.schema.json",
+    "contracts/p1008_research_plugin/v2.0-draft/schemas/governance_ledger_record.schema.json",
+    "contracts/p1008_research_plugin/v2.0-draft/schemas/governance_projection.schema.json",
+    "contracts/p1008_research_plugin/v2.0-draft/policies/tail_anchor_policy.json",
+    "contracts/p1008_research_plugin/v2.0-draft/policies/governance_ledger_policy.json",
+    "contracts/p1008_research_plugin/v2.0-draft/events/governance_event_definitions.json",
+    "contracts/p1008_research_plugin/v2.0-draft/ledgers/governance_ledger_formats.json",
+    "contracts/p1008_research_plugin/v2.0-draft/validation/governance_validation_rules.json",
+    "contracts/p1008_research_plugin/planning/PHASE1B5_IMPLEMENTATION_PLAN.json"
+  ],
+  "nonTargets": [
+    "contracts/p1008_research_plugin/v1.0/",
+    "modules/p1008_research_plugin/",
+    "launcher.html",
+    "tools/p1008_app_server.py",
+    "data/",
+    "rules/",
+    "runtime/",
+    "%LOCALAPPDATA%/P1008/data/warroom.sqlite3",
+    "OpenAI SDK or API",
+    "Windows Task Scheduler and BAT files"
+  ],
+  "designStages": [
+    "DRAFT_SCHEMAS_POLICIES_EVENTS_AND_LEDGER_FORMAT",
+    "STATIC_JSON_REFERENCE_AND_GOVERNANCE_VALIDATION",
+    "OWNER_REVIEW_AND_V2_CONTRACT_FREEZE_AUTHORIZATION",
+    "SEPARATE_V2_FREEZE_AND_CONFORMANCE",
+    "SEPARATE_PHASE1B5_RUNTIME_TARGETFILES_REVIEW",
+    "QUALIFY_EXTERNAL_WITNESS_PROVIDER",
+    "TAIL_ROLLBACK_AND_GOVERNANCE_REPLAY_TESTS",
+    "OWNER_PHASE1B5_ACCEPTANCE",
+    "SEPARATE_PHASE2_DRY_RUN"
+  ],
+  "witnessProviderDecision": "NOT_SELECTED_REQUIRES_SEPARATE_SECURITY_SOURCE_COST_AND_CREDENTIAL_REVIEW",
+  "runtimeImplementationAuthorized": false,
+  "networkConnectorAuthorized": false,
+  "credentialProvisioningAuthorized": false,
+  "openAiRuntimeAuthorized": false,
+  "nextApprovalGate": "OWNER_APPROVE_P1008_PHASE1B5_V2_CONTRACT_FREEZE_TARGETFILES"
+}

@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v2.0-draft/schemas/governance_event.schema.json",
+  "title": "P1008 Research Governance Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "event_contract_version",
+    "event_type",
+    "aggregate_type",
+    "aggregate_id",
+    "occurred_at",
+    "actor_type",
+    "actor_id",
+    "artifact_bindings",
+    "payload",
+    "owner_authorization_reference",
+    "governance_state_change_recorded",
+    "warroom_effective_change_applied",
+    "actionable"
+  ],
+  "properties": {
+    "event_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "event_contract_version": {"const": "2.0-draft"},
+    "event_type": {"type": "string", "minLength": 1, "maxLength": 120},
+    "aggregate_type": {
+      "enum": [
+        "GOVERNANCE",
+        "CONTRACT",
+        "POLICY",
+        "SCHEMA",
+        "ARCHITECTURE_REVIEW",
+        "PHASE",
+        "IMPLEMENTATION",
+        "VALIDATION",
+        "ROLLBACK"
+      ]
+    },
+    "aggregate_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "actor_type": {"enum": ["OWNER", "SYSTEM"]},
+    "actor_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "causation_event_id": {"type": ["string", "null"], "maxLength": 200},
+    "correlation_id": {"type": ["string", "null"], "maxLength": 200},
+    "artifact_bindings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["artifact_type", "artifact_id", "sha256", "locator"],
+        "properties": {
+          "artifact_type": {
+            "enum": [
+              "CONTRACT_ROOT",
+              "POLICY",
+              "SCHEMA",
+              "ARCHITECTURE_REVIEW",
+              "GIT_COMMIT",
+              "VALIDATION_REPORT",
+              "OWNER_ACCEPTANCE",
+              "ROLLBACK_PLAN"
+            ]
+          },
+          "artifact_id": {"type": "string", "minLength": 1, "maxLength": 240},
+          "sha256": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+          "locator": {"type": "string", "minLength": 1, "maxLength": 2000}
+        }
+      }
+    },
+    "payload": {"type": "object"},
+    "owner_authorization_reference": {"type": ["string", "null"], "maxLength": 1000},
+    "governance_state_change_recorded": {"type": "boolean"},
+    "warroom_effective_change_applied": {"const": false},
+    "actionable": {"const": false}
+  }
+}
