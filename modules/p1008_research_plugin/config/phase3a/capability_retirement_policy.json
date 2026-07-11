@@ -1,0 +1,11 @@
+{
+  "policy_id": "P1008_PHASE3A_CAPABILITY_RETIREMENT_POLICY",
+  "version": "1.0.0",
+  "owner_approval_required": true,
+  "delete_manifest_allowed": false,
+  "delete_history_allowed": false,
+  "preserve_artifact_hashes": true,
+  "preserve_replay_events": true,
+  "production_side_effect_allowed": false,
+  "actionable": false
+}

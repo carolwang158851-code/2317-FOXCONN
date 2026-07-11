@@ -1,0 +1,22 @@
+{
+  "capability_id": "echo_research",
+  "display_name": "Echo Research Capability",
+  "version": "1.0.0",
+  "lifecycle_state": "SHADOW_ENABLED",
+  "execution_mode": "MOCK_SHADOW",
+  "provider_id": "phase2a-mock",
+  "implementation_available": true,
+  "enabled": true,
+  "owner_approval_reference": "OWNER_APPROVE_P1008_PHASE2A_GOVERNED_OPENAI_RUNTIME_TARGETFILES",
+  "allowed_operations": ["ECHO_PIPELINE_VALIDATION"],
+  "input_contract": "symbol=2317; question=test-only",
+  "output_contract": "PHASE2A_TYPED_RESEARCH_OUTPUT",
+  "required_contract_roots": {
+    "v1": "3370C4DBD6B564E2200D051AC07C8507442C130ADE64D770621107FA09D2924D",
+    "v2": "E056357A8A63A15BCF9FDC286BEE0BDB56E043AF26F4DDCD5624FDB3707BD782"
+  },
+  "health_policy_id": "P1008_PHASE3A_CAPABILITY_HEALTH_POLICY",
+  "compatibility_policy_id": "P1008_PHASE3A_CAPABILITY_COMPATIBILITY_POLICY",
+  "retirement_policy_id": "P1008_PHASE3A_CAPABILITY_RETIREMENT_POLICY",
+  "actionable": false
+}

@@ -1,0 +1,18 @@
+{
+  "registry_id": "P1008_PHASE3A_GOVERNED_CAPABILITY_REGISTRY",
+  "framework_version": "1.0.0",
+  "status": "PHASE3A_FRAMEWORK_ONLY",
+  "default_enabled": false,
+  "production_enablement_allowed": false,
+  "runtime_integration_authorized": false,
+  "openai_production_authorized": false,
+  "manifest_paths": [
+    "manifests/echo_research.json",
+    "manifests/financial.json",
+    "manifests/macro.json",
+    "manifests/news.json",
+    "manifests/deep_research.json",
+    "manifests/foreign_flow.json"
+  ],
+  "actionable": false
+}

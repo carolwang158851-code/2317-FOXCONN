@@ -1,0 +1,23 @@
+{
+  "policy_id": "P1008_PHASE3A_CAPABILITY_LIFECYCLE_POLICY",
+  "version": "1.0.0",
+  "default_state": "DRAFT",
+  "production_state_defined": false,
+  "transitions": [
+    {"from": "DRAFT", "event": "CAPABILITY_REGISTERED", "to": "REGISTERED_DISABLED", "owner_approval_required": false},
+    {"from": "REGISTERED_DISABLED", "event": "CAPABILITY_VALIDATED", "to": "VALIDATED_DISABLED", "owner_approval_required": false},
+    {"from": "VALIDATED_DISABLED", "event": "CAPABILITY_SHADOW_ENABLED", "to": "SHADOW_ENABLED", "owner_approval_required": true},
+    {"from": "SHADOW_ENABLED", "event": "CAPABILITY_SHADOW_DISABLED", "to": "VALIDATED_DISABLED", "owner_approval_required": true},
+    {"from": "REGISTERED_DISABLED", "event": "CAPABILITY_RETIREMENT_PROPOSED", "to": "RETIREMENT_PENDING", "owner_approval_required": true},
+    {"from": "VALIDATED_DISABLED", "event": "CAPABILITY_RETIREMENT_PROPOSED", "to": "RETIREMENT_PENDING", "owner_approval_required": true},
+    {"from": "SHADOW_ENABLED", "event": "CAPABILITY_RETIREMENT_PROPOSED", "to": "RETIREMENT_PENDING", "owner_approval_required": true},
+    {"from": "RETIREMENT_PENDING", "event": "CAPABILITY_RETIRED", "to": "RETIRED", "owner_approval_required": true}
+  ],
+  "forbidden_events": [
+    "CAPABILITY_PRODUCTION_ENABLED",
+    "CAPABILITY_AUTO_ENABLED",
+    "CAPABILITY_MANIFEST_DELETED",
+    "CAPABILITY_GOVERNANCE_BYPASSED"
+  ],
+  "actionable": false
+}

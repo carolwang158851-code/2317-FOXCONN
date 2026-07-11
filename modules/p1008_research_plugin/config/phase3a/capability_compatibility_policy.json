@@ -1,0 +1,17 @@
+{
+  "policy_id": "P1008_PHASE3A_CAPABILITY_COMPATIBILITY_POLICY",
+  "version": "1.0.0",
+  "framework_major": 1,
+  "compatible_contract_roots": {
+    "v1": "3370C4DBD6B564E2200D051AC07C8507442C130ADE64D770621107FA09D2924D",
+    "v2": "E056357A8A63A15BCF9FDC286BEE0BDB56E043AF26F4DDCD5624FDB3707BD782"
+  },
+  "breaking_change_rules": [
+    "removing a required manifest field",
+    "weakening actionable=false",
+    "adding production enablement",
+    "changing authority ownership",
+    "weakening evidence or boundary validation"
+  ],
+  "actionable": false
+}

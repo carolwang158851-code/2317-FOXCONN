@@ -1,0 +1,15 @@
+{
+  "enabled": ["echo_research"],
+  "disabled": ["deep_research", "financial", "foreign_flow", "macro", "news"],
+  "states": {
+    "deep_research": "REGISTERED_DISABLED",
+    "echo_research": "SHADOW_ENABLED",
+    "financial": "REGISTERED_DISABLED",
+    "foreign_flow": "REGISTERED_DISABLED",
+    "macro": "REGISTERED_DISABLED",
+    "news": "REGISTERED_DISABLED"
+  },
+  "production_enablement_allowed": false,
+  "runtime_integration_authorized": false,
+  "actionable": false
+}
