@@ -1,0 +1,18 @@
+{
+  "policyId": "P1008_RESEARCH_SCHEDULE",
+  "version": "1.0",
+  "frozen": true,
+  "actionable": false,
+  "automaticSchedulingApproved": false,
+  "manualOnly": true,
+  "hooks": [
+    {"id": "after_data_update", "registered": true, "enabled": false},
+    {"id": "after_news_scan", "registered": true, "enabled": false},
+    {"id": "before_report_compile", "registered": true, "enabled": false},
+    {"id": "weekly_research_review", "registered": true, "enabled": false},
+    {"id": "monthly_thesis_review", "registered": true, "enabled": false}
+  ],
+  "phase1AExecutionAllowed": false,
+  "shadowModeRequiredBeforeScheduling": true,
+  "minimumSuccessfulTradingDayRuns": 20
+}

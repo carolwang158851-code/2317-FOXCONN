@@ -1,0 +1,85 @@
+{
+  "reportId": "P1008_RESEARCH_CONTRACT_CONFORMANCE_V1",
+  "contractVersion": "1.0",
+  "frozenRootHash": "3370C4DBD6B564E2200D051AC07C8507442C130ADE64D770621107FA09D2924D",
+  "generatedAt": "2026-07-10T21:21:01+08:00",
+  "overallStatus": "PASS",
+  "phase1bStatus": "DRY_RUN_ELIGIBLE_SEPARATE_OWNER_APPROVAL_REQUIRED",
+  "results": [
+    {
+      "suite_id": "BACKWARD_COMPATIBILITY_TEST",
+      "status": "PASS",
+      "duration_ms": 20,
+      "details": {
+        "authorityFilesVerified": 5,
+        "legacyApiRoutesVerified": 8,
+        "researchApiPathsVerified": 16,
+        "capabilitiesVerified": 6,
+        "ruleDigestMatch": true,
+        "keepDisabledRules": 9,
+        "phase1bModuleAbsent": true
+      },
+      "error": ""
+    },
+    {
+      "suite_id": "LEDGER_REPLAY_TEST",
+      "status": "PASS",
+      "duration_ms": 1,
+      "details": {
+        "recordsReplayed": 10,
+        "aggregatesProjected": 3,
+        "hashChainsVerified": 3,
+        "tamperRejected": true
+      },
+      "error": ""
+    },
+    {
+      "suite_id": "DETERMINISTIC_RESEARCH_TEST",
+      "status": "PASS",
+      "duration_ms": 1,
+      "details": {
+        "stableOutputHash": "EAF91F044767A0E671713E29A0E3BAE0398123DBB9B6539E2BB8E3057C439248",
+        "repeatRunsCompared": 3,
+        "healthScore": 81.75,
+        "healthState": "HEALTHY",
+        "knownUnknownPreserved": true,
+        "defaultFillUsed": false
+      },
+      "error": ""
+    },
+    {
+      "suite_id": "CONTRACT_DRIFT_MONITOR",
+      "status": "PASS",
+      "duration_ms": 57,
+      "details": {
+        "artifactCount": 43,
+        "rootHash": "3370C4DBD6B564E2200D051AC07C8507442C130ADE64D770621107FA09D2924D",
+        "ownerAcceptanceMatched": true,
+        "pythonFilesInFrozenRoot": 0
+      },
+      "error": ""
+    },
+    {
+      "suite_id": "OPENAI_CAPABILITY_BOUNDARY_TEST",
+      "status": "PASS",
+      "duration_ms": 3,
+      "details": {
+        "capabilitiesVerified": 6,
+        "boundaryCasesVerified": 9,
+        "deterministicGatesVerified": 8,
+        "securedPostOperations": 8,
+        "openAiCallsMade": 0
+      },
+      "error": ""
+    }
+  ],
+  "safety": {
+    "openAiCallsMade": 0,
+    "networkCallsMade": 0,
+    "formalCsvWrites": 0,
+    "ruleManifestWrites": 0,
+    "runtimeSqliteWrites": 0,
+    "launcherChanges": 0,
+    "actionable": false
+  }
+}

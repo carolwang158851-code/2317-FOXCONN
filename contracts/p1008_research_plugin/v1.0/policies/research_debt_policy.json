@@ -1,0 +1,14 @@
+{
+  "policyId": "P1008_RESEARCH_DEBT_POLICY",
+  "version": "1.0",
+  "frozen": true,
+  "allowedStates": ["OPEN", "WAITING_EVENT", "WAITING_DATA", "OVERDUE", "RESOLVED", "ACCEPTED_DEBT", "RETIRED"],
+  "dueTriggerRequired": true,
+  "autoDeleteAllowed": false,
+  "autoResolveAllowed": false,
+  "overdueBehavior": ["RAISE_RESEARCH_PRIORITY", "LOWER_RESEARCH_HEALTH", "OWNER_REVIEW_QUEUE"],
+  "overdueMayChangeHold": false,
+  "resolutionRequiresEvidence": true,
+  "acceptedDebtValidatesClaim": false,
+  "actionable": false
+}

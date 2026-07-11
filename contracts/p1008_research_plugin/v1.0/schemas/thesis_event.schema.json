@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v1.0/schemas/thesis_event.schema.json",
+  "title": "P1008 Thesis Event Candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "thesis_id", "occurred_at", "event_type", "from_status", "to_status", "evidence_ids", "requires_owner_approval", "effective_change_applied", "actionable"],
+  "properties": {
+    "event_id": {"type": "string", "minLength": 1},
+    "thesis_id": {"type": "string", "minLength": 1},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "event_type": {"enum": ["PROPOSED", "WATCHED", "CHALLENGED", "QUARANTINE_PROPOSED", "DEPRECATION_PROPOSED", "RETIREMENT_PROPOSED", "RESTORATION_PROPOSED", "REPLACEMENT_PROPOSED", "OWNER_DISPOSITION_RECORDED"]},
+    "from_status": {"enum": ["ACTIVE", "WATCHED", "CHALLENGED", "QUARANTINED", "DEPRECATED", "RETIRED", "RESTORED", "REPLACED", "RETIRED_BUT_HISTORICALLY_VALID"]},
+    "to_status": {"enum": ["ACTIVE", "WATCHED", "CHALLENGED", "QUARANTINED", "DEPRECATED", "RETIRED", "RESTORED", "REPLACED", "RETIRED_BUT_HISTORICALLY_VALID"]},
+    "evidence_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "counter_evidence_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "suggested_weight": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "requires_owner_approval": {"const": true},
+    "effective_change_applied": {"const": false},
+    "actionable": {"const": false}
+  }
+}

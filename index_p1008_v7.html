@@ -1,0 +1,140 @@
+<!--
+  Generated runtime HTML.
+  Edit src/index_p1008_v7.source.html and run tools/build_index_p1008_v7.js.
+-->
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <link rel="icon" href="data:,">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>鴻海戰略決策戰情室 - P1008 治理版</title>
+
+    <style>
+        :root {
+            --p1008-bg: #050914;
+            --p1008-panel: rgba(12, 18, 32, 0.94);
+            --p1008-panel-2: rgba(16, 24, 40, 0.88);
+            --p1008-border: rgba(96, 165, 250, 0.22);
+            --p1008-border-soft: rgba(148, 163, 184, 0.16);
+            --p1008-text: #e6edf7;
+            --p1008-muted: #9fb0c8;
+            --p1008-dim: #73839a;
+            --p1008-cyan: #38d9f2;
+            --p1008-amber: #f7c948;
+            --p1008-rose: #fb7185;
+            --p1008-emerald: #34d399;
+        }
+        * { box-sizing: border-box; }
+        body { font-family: 'Inter', 'Noto Sans TC', 'Microsoft JhengHei', 'PingFang TC', 'Heiti TC', Arial, sans-serif; background-color: var(--p1008-bg); display: flex; justify-content: center; padding: 12px; margin: 0; overflow-x: hidden; color: var(--p1008-text); line-height: 1.58; letter-spacing: 0; text-rendering: geometricPrecision; -webkit-font-smoothing: antialiased; }
+        #root { width: 100%; display: flex; justify-content: center; }
+        .warroom-shell { width: min(100%, 1800px); min-height: 100vh; gap: 14px; }
+        .warroom-topbar { min-height: 58px; }
+        .warroom-title { font-size: 1.75rem; line-height: 1.15; }
+        .tech-grid-bg { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-size: 40px 40px; background-image: linear-gradient(to right, rgba(96, 165, 250, 0.035) 1px, transparent 1px), linear-gradient(to bottom, rgba(96, 165, 250, 0.035) 1px, transparent 1px); pointer-events: none; z-index: 0; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .glass-panel { background: linear-gradient(180deg, rgba(12, 18, 32, 0.96), rgba(14, 22, 38, 0.92)); backdrop-filter: blur(14px); border: 1px solid var(--p1008-border); box-shadow: 0 14px 34px -22px rgba(0, 0, 0, 0.82), inset 0 1px 0 rgba(255,255,255,0.035); border-radius: 8px; position: relative; z-index: 10; }
+        .kpi-card { background: linear-gradient(180deg, rgba(13, 20, 34, 0.96), rgba(10, 16, 28, 0.94)); border: 1px solid var(--p1008-border); border-top: 2px solid rgba(56, 189, 248, 0.55); border-radius: 8px; z-index: 10; }
+        .font-num { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+        .readable-copy { font-size: 14px; line-height: 1.72; color: #d3dce9; }
+        .readable-small { font-size: 12.5px; line-height: 1.65; color: #aebbd0; }
+        .section-title-readable { font-size: 17px; line-height: 1.35; font-weight: 900; color: inherit; letter-spacing: 0; }
+        .panel-kicker { font-size: 11px; line-height: 1.3; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; color: var(--p1008-muted); }
+        .panel-title { font-size: 18px; line-height: 1.35; font-weight: 900; color: #f8fafc; letter-spacing: 0; }
+        .panel-subtitle { font-size: 13px; line-height: 1.6; color: var(--p1008-muted); }
+        .metric-label { font-size: 11px; line-height: 1.35; font-weight: 800; color: var(--p1008-dim); }
+        .metric-value { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; font-weight: 900; color: #f8fafc; }
+        .data-note { font-size: 12px; line-height: 1.65; color: var(--p1008-muted); }
+        .status-chip { display: inline-flex; align-items: center; min-height: 24px; border-radius: 6px; padding: 3px 8px; border: 1px solid var(--p1008-border-soft); background: rgba(15, 23, 42, 0.72); font-size: 11px; line-height: 1.2; font-weight: 900; white-space: nowrap; }
+        .analysis-card { border: 1px solid var(--p1008-border-soft); background: rgba(15, 23, 42, 0.56); border-radius: 8px; }
+        .analysis-row { display: grid; grid-template-columns: 96px minmax(0,1fr); gap: 10px; font-size: 13px; line-height: 1.65; color: #d3dce9; }
+        .analysis-row + .analysis-row { margin-top: 8px; }
+        .decision-row { display: grid; grid-template-columns: 56px minmax(0,1fr); border: 1px solid var(--p1008-border-soft); background: rgba(15, 23, 42, 0.55); border-radius: 8px; overflow: hidden; }
+        .decision-row-index { background: rgba(30, 41, 59, 0.72); border-right: 1px solid var(--p1008-border-soft); color: #eaf2ff; font-family: 'JetBrains Mono', monospace; font-weight: 900; display: flex; align-items: center; justify-content: center; }
+        .decision-row-body { padding: 14px 16px; font-size: 14px; line-height: 1.7; color: #e2e8f0; }
+        .warroom-shell table { border-collapse: collapse; }
+        .warroom-shell th { color: #a8b5c8; font-weight: 900; letter-spacing: 0; }
+        .warroom-shell td { line-height: 1.55; }
+        .warroom-shell canvas { max-width: 100%; }
+        .warroom-shell .rounded-2xl, .warroom-shell .rounded-xl { border-radius: 8px !important; }
+        .warroom-shell .shadow-2xl, .warroom-shell .shadow-xl, .warroom-shell .shadow-lg { box-shadow: 0 14px 34px -24px rgba(0, 0, 0, 0.86) !important; }
+        .glass-panel [class*="bg-slate-900/70"],
+        .glass-panel [class*="bg-slate-950/55"],
+        .glass-panel [class*="bg-slate-950/60"],
+        .glass-panel [class*="bg-slate-950/45"],
+        .glass-panel [class*="bg-slate-800/40"] {
+            background: rgba(15, 23, 42, 0.58) !important;
+            border-color: var(--p1008-border-soft) !important;
+        }
+        .glass-panel [class*="text-slate-500"] { color: var(--p1008-dim); }
+        .glass-panel [class*="text-slate-400"] { color: var(--p1008-muted); }
+        .p2-kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px; }
+        .p2-analysis-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 860px), 1fr)); gap: 18px; }
+        .radar-card { container-type: inline-size; }
+        .radar-detail-grid { display: grid; grid-template-columns: 1fr; gap: 24px; align-items: center; }
+        @container (min-width: 960px) {
+            .radar-detail-grid { grid-template-columns: 460px minmax(0, 1fr); }
+        }
+        .check-anim { animation: checkPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        @keyframes checkPop { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        .progress-bar-stripes { background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.15) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.15) 50%, rgba(255, 255, 255, 0.15) 75%, transparent 75%, transparent); background-size: 1rem 1rem; animation: progress-stripes 1s linear infinite; }
+        @keyframes progress-stripes { from { background-position: 1rem 0; } to { background-position: 0 0; } }
+        @media (max-width: 767px) {
+            body { padding: 0; background-color: #020617; }
+            .warroom-shell { width: 100%; gap: 8px; padding: 8px 8px 96px; }
+            .warroom-topbar { min-height: auto; padding: 12px !important; align-items: flex-start !important; }
+            .warroom-title { font-size: 1.55rem; letter-spacing: 0; }
+            .glass-panel { border-radius: 8px; box-shadow: inset 0 0 10px rgba(14, 165, 233, 0.04); }
+            .kpi-card { min-height: 112px; border-radius: 8px; }
+            .readable-copy { font-size: 13.5px; line-height: 1.68; }
+            .panel-title { font-size: 17px; }
+            .analysis-row { grid-template-columns: 82px minmax(0,1fr); font-size: 12.5px; }
+            .decision-row { grid-template-columns: 44px minmax(0,1fr); }
+            .decision-row-body { padding: 12px; font-size: 13.5px; }
+            .mobile-compact { padding: 16px !important; }
+            .mobile-hide { display: none !important; }
+            .mobile-bottom-safe { margin-bottom: 72px; }
+        }
+        .source-file-warning { display: none; position: fixed; left: 12px; right: 12px; top: 12px; z-index: 9999; border: 1px solid rgba(251, 191, 36, 0.55); background: rgba(24, 18, 4, 0.96); color: #fde68a; border-radius: 10px; padding: 12px 14px; box-shadow: 0 14px 36px rgba(0,0,0,0.45); font-size: 14px; line-height: 1.6; }
+        .source-file-warning strong { color: #fff7ed; }
+        .source-file-warning code { color: #bae6fd; background: rgba(15, 23, 42, 0.9); padding: 1px 5px; border-radius: 4px; }
+    </style>
+    <script>
+        (function() {
+            var normalizedPath = String(location.pathname || '').replace(/\\/g, '/');
+            if (!normalizedPath.endsWith('/src/index_p1008_v7.source.html')) return;
+            document.addEventListener('DOMContentLoaded', function() {
+                var warning = document.getElementById('source-file-warning');
+                if (warning) warning.style.display = 'block';
+            });
+        })();
+    </script>
+</head>
+<body>
+    <div id="source-file-warning" class="source-file-warning">
+        <strong>目前開啟的是開發源檔，不是戰情室主程式。</strong><br>
+        圖表與 CSV 讀取請用 <code>2_開啟戰情室網頁.bat</code>，正確網址是 <code>http://127.0.0.1:8767/index_p1008_v7.html</code>。不要直接開 <code>src/index_p1008_v7.source.html</code>。
+    </div>
+    <div id="root" class="relative"></div>
+
+        <script src="vendor/react-18.2.0.production.min.js"></script>
+    <script src="vendor/react-dom-18.2.0.production.min.js"></script>
+    <script src="vendor/chart-4.4.1.umd.min.js"></script>
+    <script src="dist/index_p1008_v7.bundle.js"></script>
+    <script>
+      window.__p1008ConsoleWarn = console.warn;
+      console.warn = function(...args) {
+        const p1008SuppressedWarning = 'cdn.tailwindcss' + '.com should not be used in production';
+        if (String(args[0] || '').includes(p1008SuppressedWarning)) return;
+        return window.__p1008ConsoleWarn.apply(console, args);
+      };
+    </script>
+    <script src="vendor/tailwindcss-browser.js"></script>
+    <script>
+      if (window.__p1008ConsoleWarn) {
+        console.warn = window.__p1008ConsoleWarn;
+        delete window.__p1008ConsoleWarn;
+      }
+    </script>
+</body>
+</html>

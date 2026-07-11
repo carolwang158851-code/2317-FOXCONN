@@ -1,0 +1,38 @@
+{
+  "manifestVersion": "1.0.0",
+  "createdAt": "2026-06-29",
+  "purpose": "P1008 frontend local vendor dependencies for precompiled index_p1008_v7.html",
+  "runtimeNetworkDependency": false,
+  "files": [
+    {
+      "path": "vendor/tailwindcss-browser.js",
+      "sourceUrl": "https://cdn.tailwindcss.com",
+      "sha256": "176E894661AA9CDC9A5CBA6C720044CBBF7B8BD80D1C9A142A7C24B1B6C50D15",
+      "noteZh": "本機 Tailwind browser build；目前保留為樣式補強，主頁不再依賴外部 CDN。"
+    },
+    {
+      "path": "vendor/react-18.2.0.production.min.js",
+      "sourceUrl": "https://unpkg.com/react@18.2.0/umd/react.production.min.js",
+      "sha256": "4B4969FA4EF3594324DA2C6D78CE8766FBBC2FD121FFF395AEDF997DB0A99A06",
+      "noteZh": "React 18.2.0 UMD production build。"
+    },
+    {
+      "path": "vendor/react-dom-18.2.0.production.min.js",
+      "sourceUrl": "https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js",
+      "sha256": "21758ED084CD0E37E735722EE4F3957EA960628A29DFA6C3CE1A1D47A2D6E4F7",
+      "noteZh": "ReactDOM 18.2.0 UMD production build。"
+    },
+    {
+      "path": "vendor/babel-standalone-7.12.9.min.js",
+      "sourceUrl": "https://unpkg.com/@babel/standalone@7.12.9/babel.min.js",
+      "sha256": "670FEDDB0411EDF9AFA609CB7F5566170FD4A0A488E1C5EE32029F3CD78D306F",
+      "noteZh": "只供本機 build script 預編譯 JSX；主頁執行時不載入 Babel。"
+    },
+    {
+      "path": "vendor/chart-4.4.1.umd.min.js",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js",
+      "sha256": "D2AF8974E95271638772E9E9524DB5B9A6F58D6EC2D5D781400447B4A31C681E",
+      "noteZh": "Chart.js 4.4.1 UMD build。"
+    }
+  ]
+}

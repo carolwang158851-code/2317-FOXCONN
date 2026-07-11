@@ -1,0 +1,44 @@
+{
+  "policyId": "P1008_RESEARCH_PLUGIN_POLICY",
+  "version": "1.0",
+  "frozen": true,
+  "authorityLevel": "EXTERNAL_RESEARCH_CANDIDATE",
+  "hostSystem": "P1008_WAR_ROOM",
+  "ownerIsFinalDecisionAuthority": true,
+  "actionable": false,
+  "noAutoTrade": true,
+  "noFormalCsvWrite": true,
+  "noRuleEnablement": true,
+  "canModifyRuntimeSqlite": false,
+  "canChangeMidr": false,
+  "canChangeHold": false,
+  "canPublish": false,
+  "requiresWarroomGate": true,
+  "requiresOwnerGate": true,
+  "failureMode": "NON_BLOCKING_TO_CORE_WARROOM",
+  "writeRoots": [
+    "staging/research_plugin/",
+    "runtime/research_plugin/",
+    "reports/generated/research_plugin/",
+    "logs/research_plugin/"
+  ],
+  "forbiddenWriteRoots": [
+    "data/",
+    "rules/",
+    "runtime/warroom_",
+    "%LOCALAPPDATA%/P1008/data/warroom.sqlite3"
+  ],
+  "forbiddenCapabilities": [
+    "BUY",
+    "SELL",
+    "ADD",
+    "TRIM",
+    "CHANGE_POSITION",
+    "AUTO_PUBLISH",
+    "ENABLE_RULE",
+    "WRITE_FORMAL_CSV",
+    "WRITE_RUNTIME_SQLITE",
+    "CHANGE_HOLD",
+    "CHANGE_MIDR"
+  ]
+}

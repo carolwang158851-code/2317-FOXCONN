@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>P1008 Hon Hai 戰情室操作 SOP v4.2</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #020617;
+      --panel: #0f172a;
+      --panel-2: #111827;
+      --line: #334155;
+      --text: #e5edf7;
+      --muted: #9ca3af;
+      --cyan: #22d3ee;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --rose: #fb7185;
+      --blue: #60a5fa;
+      font-family: "Noto Sans TC", "Microsoft JhengHei", Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        linear-gradient(rgba(14, 165, 233, 0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(14, 165, 233, 0.045) 1px, transparent 1px),
+        var(--bg);
+      background-size: 40px 40px;
+      color: var(--text);
+      line-height: 1.68;
+    }
+    .wrap { width: min(1180px, calc(100% - 28px)); margin: 0 auto; padding: 22px 0 48px; }
+    header, section {
+      background: rgba(15, 23, 42, 0.92);
+      border: 1px solid rgba(56, 189, 248, 0.24);
+      border-radius: 10px;
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
+      margin-bottom: 16px;
+    }
+    header { padding: 24px; border-color: rgba(34, 211, 238, 0.45); }
+    section { padding: 22px; }
+    h1 { margin: 0; font-size: clamp(28px, 4vw, 44px); line-height: 1.12; }
+    h2 { margin: 0 0 12px; color: #dff7ff; font-size: 24px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+    h3 { color: #bfdbfe; margin: 18px 0 8px; font-size: 18px; }
+    p { color: #d1d5db; margin: 8px 0; }
+    a { color: var(--cyan); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      color: #bae6fd;
+      background: rgba(2, 6, 23, 0.72);
+      border: 1px solid rgba(56, 189, 248, 0.22);
+      border-radius: 6px;
+      padding: 0.12rem 0.36rem;
+      font-family: Consolas, "JetBrains Mono", monospace;
+    }
+    .top-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      padding: 8px 13px;
+      border-radius: 8px;
+      border: 1px solid rgba(34, 211, 238, 0.48);
+      background: rgba(8, 47, 73, 0.38);
+      color: #e0f2fe;
+      font-weight: 900;
+    }
+    button.btn { cursor: pointer; font: inherit; }
+    button.btn:disabled { opacity: 0.48; cursor: not-allowed; }
+    button.btn[aria-pressed="true"] {
+      border-color: rgba(52, 211, 153, 0.62);
+      background: rgba(6, 78, 59, 0.34);
+      color: #d1fae5;
+    }
+    :fullscreen { background: var(--bg); }
+    body.p1008-focus-mode { background: var(--bg); }
+    body.p1008-focus-mode .wrap { max-width: none; min-height: 100vh; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .box {
+      background: rgba(2, 6, 23, 0.46);
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      padding: 14px;
+    }
+    .box h3 { margin-top: 0; }
+    .pill {
+      display: inline-flex;
+      margin: 4px 6px 4px 0;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid currentColor;
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .green { color: var(--green); }
+    .amber { color: var(--amber); }
+    .rose { color: var(--rose); }
+    .blue { color: var(--blue); }
+    table { width: 100%; border-collapse: collapse; margin: 10px 0 18px; font-size: 14px; }
+    th, td { border-bottom: 1px solid var(--line); padding: 10px 11px; text-align: left; vertical-align: top; }
+    th { color: #bfdbfe; background: rgba(2, 6, 23, 0.62); }
+    .warn {
+      border: 1px solid rgba(251, 191, 36, 0.36);
+      background: rgba(120, 53, 15, 0.18);
+      color: #fde68a;
+      border-radius: 9px;
+      padding: 12px 14px;
+      margin: 12px 0;
+    }
+    .ok {
+      border: 1px solid rgba(52, 211, 153, 0.32);
+      background: rgba(6, 78, 59, 0.18);
+      color: #d1fae5;
+      border-radius: 9px;
+      padding: 12px 14px;
+      margin: 12px 0;
+    }
+    ol, ul { color: #d1d5db; }
+    li { margin: 5px 0; }
+    @media (max-width: 860px) {
+      .grid, .grid-2 { grid-template-columns: 1fr; }
+      header, section { padding: 17px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <h1>P1008 Hon Hai 戰情室操作 SOP v4.2</h1>
+      <p>本版重整三個 BAT 的責任邊界：正式 CSV 是戰情室決策基準；臨時快照只供盤中/收盤後觀察；Owner 發布流程才會 append 正式 CSV 並更新 manifest/hash；週/月戰報負責檢測持股風險與決策邏輯是否需要修正。</p>
+      <div class="top-actions">
+        <button id="fullscreen-toggle" type="button" class="btn" onclick="toggleFullscreen()">全螢幕</button>
+        <a id="back-home" class="btn" href="./index_p1008_v7.html" onclick="goMain(event)">回來源入口</a>
+        <a class="btn" href="./staging/2026-06-29/DRY_RUN.md">查看最新 Dry-Run</a>
+      </div>
+      <p>
+        <span class="pill blue">資料基準：正式 CSV</span>
+        <span class="pill amber">臨時資料：runtime snapshot</span>
+        <span class="pill green">正式入口：英文 BAT</span>
+        <span class="pill blue">戰報：風險與邏輯稽核</span>
+        <span class="pill rose">維持 actionable:false</span>
+      </p>
+    </header>
+
+    <section>
+      <h2>1. 三個 BAT 不重複，角色不同</h2>
+      <table>
+        <thead>
+          <tr><th>檔案</th><th>用途</th><th>會不會修改正式 CSV</th><th>何時使用</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>P1008_1_UPDATE_DATA.bat</code></td>
+            <td>連線抓取最新資料，產生 <code>staging/&lt;date&gt;</code> 候選 CSV 與 <code>runtime/warroom_realtime_snapshot.json</code>。它是資料抓取與候選產生工具。</td>
+            <td>不會。它不得 append、覆寫或直接批准正式 CSV。</td>
+            <td>盤中臨時觀察、每日收盤後產生候選資料、Owner 發布前的資料準備。</td>
+          </tr>
+          <tr>
+            <td><code>P1008_3_OWNER_PUBLISH_CSV.bat</code></td>
+            <td>備援發布工具。Launcher Owner gate 會復用同一套 readiness、schema、重複日期、manifest 檢查；BAT 供進階維運或 Launcher 不可用時使用。</td>
+            <td>只有 Owner 明確輸入發布指令且候選達標時，才 append 正式 CSV 並更新 manifest/hash。</td>
+            <td>Launcher 不可用或 Owner 要用命令列備援發布時。</td>
+          </tr>
+          <tr>
+            <td><code>P1008_2_OPEN_WARROOM.bat</code></td>
+            <td>啟動本機 server 並開啟 <code>launcher.html</code>。戰情室主判讀基準應是正式 CSV；若存在 runtime snapshot，UI 必須標示為臨時快照。</td>
+            <td>不會。</td>
+            <td>決策者查看戰情室時。平常先進 Launcher，不需要直接開新 UI。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="warn">重要：<code>P1008_1_UPDATE_DATA.bat</code> 不是「正式更新」。它只是把最新可取得資料放到 staging/runtime，供戰情室臨時觀察與 Owner 發布前審核。中文檔名 BAT 只保留相容用途，正式操作請用英文 BAT。</div>
+    </section>
+
+    <section>
+      <h2>2. 推薦操作流程</h2>
+      <div class="grid">
+        <div class="box">
+          <h3>A. 一般正式查看</h3>
+          <ol>
+            <li>直接執行 <code>P1008_APP.bat</code>。</li>
+            <li>Launcher 讀取 review package；若無待決，會進入新 UI。</li>
+            <li>新 UI 讀取正式 CSV 作為主要 KPI 與圖表基準；若有 runtime snapshot，必須回 Launcher 確認是否只是臨時觀察。</li>
+          </ol>
+        </div>
+        <div class="box">
+          <h3>B. 盤中或臨時觀察</h3>
+          <ol>
+            <li>在 Launcher 按「一鍵更新資料與資訊」或「只更新資料」。</li>
+            <li>在 Launcher 確認 <code>DRY_RUN.md</code> / review package 是否標示缺欄、沿用值、資料來源。</li>
+            <li>Launcher gate 通過後才進新 UI；若有缺欄或 Owner 待決，停留在 Launcher 審查。</li>
+          </ol>
+          <p>此模式只能提示風險與重審，不得產生正式決策結論。</p>
+        </div>
+        <div class="box">
+          <h3>C. 收盤後正式發布</h3>
+          <ol>
+            <li>收盤後在 Launcher 執行一鍵資料流程，產生候選檔與 review package。</li>
+            <li>查看 Launcher 的 readiness、候選檔、缺欄、總經/新聞/FX 待決。</li>
+            <li>若候選日期為週末或交易所休市日，Launcher / 新 UI 應沿用最近正式交易日收盤價供 PB 與畫面連續；該列需標示 <code>MARKET_CLOSED_CARRY_FORWARD</code>，不得當成新交易日收盤價 append。</li>
+            <li>readiness 達 95% 且無核心缺欄時，Owner 才可在 <code>Owner Formal Publish Gate</code> 輸入強確認字串。</li>
+            <li>發布完成後由 Launcher 檢查正式 CSV hash / manifest，通過後再進新 UI 檢查正式基準。</li>
+            <li><code>P1008_3_OWNER_PUBLISH_CSV.bat</code> 僅作備援。</li>
+          </ol>
+        </div>
+      </div>
+      <div class="box" style="margin-top:14px">
+        <h3>旁路 CSV：總經事件 / FX 趨勢觀察</h3>
+        <ul>
+          <li><code>macro_snapshot.csv</code> 維持既有 18 欄，不擴欄、不塞新聞判斷。</li>
+          <li><code>data/macro_event_observations.csv</code> 承接 Owner 輸入或 v2 核准公開來源掃描到的新聞、黑天鵝、地緣政治、Fed/CPI/油價事件；無來源證據時不得自動幻想新聞。</li>
+          <li><code>data/fx_trend_observations.csv</code> 承接 TWD/USD、DXY、JPY/USD、Fed/BOJ 利差與 FX 壓力觀察；缺 JPY 或 BOJ 時標示資料缺口。</li>
+          <li>兩個旁路 CSV 的 <code>Actionable</code> 必須永遠是 <code>false</code>；UI 只能顯示重審提示，不得改 HOLD、不得啟用規則。</li>
+        </ul>
+      </div>
+      <div class="box" style="margin-top:14px">
+        <h3>固定新聞掃描與事件時間差保護</h3>
+        <p>新聞掃描應由 Windows Task Scheduler 固定呼叫 BAT；BAT 只產生 staging event candidate 與 dry-run 註記，不直接 append 正式 CSV。手動 BAT 僅作補跑或 Owner 指定事件輸入。</p>
+        <table>
+          <thead><tr><th>時間</th><th>建議 lookback</th><th>目的</th></tr></thead>
+          <tbody>
+            <tr><td>08:10 開盤前</td><td>16 小時</td><td>補抓夜間美股、Fed、國際與供應鏈事件。</td></tr>
+            <tr><td>12:30 盤中</td><td>6 小時</td><td>保護盤中突發事件，不等待收盤或週報。</td></tr>
+            <tr><td>15:30 收盤後</td><td>8 小時</td><td>與每日資料候選檔一併檢查，供 Owner review。</td></tr>
+            <tr><td>21:30 國際事件</td><td>12 小時</td><td>補抓美股開盤前、匯率、油價、地緣政治事件。</td></tr>
+            <tr><td>週末 / 週一</td><td>7 天</td><td>產生週/月戰報事件反證表，檢查是否漏掉未結案事件。</td></tr>
+          </tbody>
+        </table>
+        <ul>
+          <li><code>OBSERVE</code>：可保留 7 天供戰報追蹤，Launcher / 新 UI 不阻斷主結論。</li>
+          <li><code>WATCH</code>：Launcher / 新 UI 至少提示 3 天或直到 Owner ack；若無後續證據才可降級為 stale observation。</li>
+          <li><code>REVIEW_REQUIRED</code>：未 Owner ack 前不得自動過期；Launcher / 新 UI 需顯示 <code>HOLD_UNDER_REVIEW</code> 或等價重審提示，但仍維持 <code>Actionable=false</code>。</li>
+        </ul>
+      </div>
+    </section>
+
+    <section>
+      <h2>3. 正式 CSV 與 runtime snapshot 的判讀規則</h2>
+      <div class="grid-2">
+        <div class="box">
+          <h3>正式 CSV</h3>
+          <ul>
+            <li>是戰情室 KPI、估值圖、正式報告的基準。</li>
+            <li>只能由 Launcher Owner gate 或備援 Owner 發布流程 append，不允許一鍵更新或抓取器直接覆寫。</li>
+            <li>每次發布都要更新 SHA-256、rowCount、dateRange 或 lastPublishedAt。</li>
+            <li>可用於正式判讀，但仍維持 <code>actionable:false</code>。</li>
+          </ul>
+        </div>
+        <div class="box">
+          <h3>runtime snapshot</h3>
+          <ul>
+            <li>是臨時快照，用來滿足盤中與收盤後快速觀察。</li>
+            <li>可以讓戰情室暫時更新數字、圖表、風險提醒。</li>
+            <li>必須顯示中文資料狀態，例如「臨時即時快照，尚未核准發布」。</li>
+            <li>不能提升為正式資料，除非經過 staging 檢核與 Owner 發布。</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>4. 發布門檻與 Owner 決策點</h2>
+      <table>
+        <thead><tr><th>檢核項目</th><th>規則</th><th>不通過時</th></tr></thead>
+        <tbody>
+          <tr><td>Readiness</td><td>必須達 95% 或以上。</td><td>維持 staging/runtime，不允許 append。</td></tr>
+          <tr><td>核心欄位</td><td>若有每日股價候選檔，必須有 Close；若為週末或交易所休市日，Launcher / 新 UI 可沿用最近正式交易日 Close/PB 作觀察顯示，但不得 append 週末 daily_price 正式列。macro 候選需有 TWD/USD、VIX、WTI、US10Y、Fed Rate、DXY、RiskLevel。Fed Rate 應採 FRED DFEDTARU/DFEDTARL 目標區間中位數。</td><td>交易日缺核心欄位時阻擋發布，要求重新抓取或 Owner 補充來源；休市日 daily price 沿用只供畫面觀察。</td></tr>
+          <tr><td>正式來源阻擋</td><td>若 Launcher 顯示「總經 connector/source 未取得正式來源：vix、wti、twd_usd、us10y、dxy」或等價訊息，代表候選值可能只是 <code>CONNECTOR_SOURCE_UNAVAILABLE_CARRY_FORWARD</code> 沿用值。</td><td>可供畫面與戰報觀察，但不得升格正式 CSV；Owner 需重跑 connector、設定合法 proxy，或補充可追溯官方/公開市場來源。</td></tr>
+          <tr><td>總經來源優先序</td><td>優先採 FRED / TWSE / 央行 / 交易所等官方或準官方 connector；其次採 Stooq 等公開市場資料；Yahoo Finance 只能作最後備援。若本次 connector/source 未取得但正式 CSV 有最近值，可沿用作 runtime 觀察，但必須標示 <code>CONNECTOR_SOURCE_UNAVAILABLE_CARRY_FORWARD</code>。</td><td>可保留畫面連續，但不得因沿用值通過正式發布 gate。</td></tr>
+          <tr><td>PB / BVPS 標示</td><td>Launcher 顯示的 PB 是 P/B 倍數，即收盤價除以 BVPS；例如收盤價 251、BVPS 127.12 時，P/B 倍數約 1.975。BVPS 本身應另以「每股淨值」標示。</td><td>P/B 倍數與 BVPS 分開標示，估值表需保留欄位名稱與公式。</td></tr>
+          <tr><td>觀察欄位</td><td>Fed 年底升息機率不是 Fed 官方發布資料，應視為 CME FedWatch 市場隱含機率觀察欄位。connector 未穩定前可沿用正式 CSV 或標示缺口，但 UI 與報告必須中文註明。</td><td>降低註記信心，但不應永久卡住正式發布，也不得啟用交易規則。</td></tr>
+          <tr><td>旁路 CSV</td><td><code>macro_event_observations_candidate.csv</code> 與 <code>fx_trend_observations_candidate.csv</code> 只經 Launcher Owner gate 或備援 BAT append；必須檢查 schema、日期/重複列、來源層級與 <code>Actionable=false</code>。</td><td>不通過時保留於 staging，Launcher / 新 UI / 戰報只能標示觀察版。</td></tr>
+          <tr><td>Schema</td><td>候選 CSV 欄位必須和正式 CSV 完全一致。</td><td>阻擋發布。</td></tr>
+          <tr><td>重複日期</td><td>正式 CSV 已有同日期資料時，不可重複 append。</td><td>保留候選檔為檢視，不列入發布。</td></tr>
+        </tbody>
+      </table>
+      <div class="ok">Owner 決策點優先在 <code>launcher.html</code> 的 <code>Owner Formal Publish Gate</code>。只有 Launcher gate 或備援 <code>P1008_3_OWNER_PUBLISH_CSV.bat</code> 才是「正式資料升格」動作。</div>
+    </section>
+
+    <section>
+      <h2>5. 決策者看戰情室時要先確認什麼</h2>
+      <ol>
+        <li>頂部資料狀態是否為正式資料、臨時快照、資料過期或待核准。</li>
+        <li>KPI 是否有 N/A、沿用值、觀察欄位或資料註記扣分。</li>
+        <li>市場情報是否只影響風險提醒與重審提示，不啟用交易規則。</li>
+        <li>正式報告輸出前，需以正式 CSV 為主；runtime snapshot 只能作為附註與盤中觀察。</li>
+        <li>若資料狀態不是正式發布，報告需明確標示「僅供觀察，尚未核准發布」。</li>
+      </ol>
+      <div class="warn">MIDR / MRD 僅供估值風險輔助觀察，不是主結論、不做主模組、不產生買賣訊號。主畫面只顯示「估值偏離觀察」與中文結論；MRD、MIDR、公式拆解與門檻值應放在 UI 展開區。</div>
+    </section>
+
+    <section>
+      <h2>6. 週/月戰報輸出規則</h2>
+      <p>戰報不是市場評論，也不是把主程式畫面截圖整理成報告。每次戰報的主要目標，是檢查目前持股風險是否仍可承受，以及戰情室原本的決策邏輯是否需要修正。</p>
+      <div class="grid-2">
+        <div class="box">
+          <h3>戰報必答五問</h3>
+          <ol>
+            <li>目前持股風險是否比上一期升高？</li>
+            <li>現行 HOLD / 觀察邏輯是否仍被數據支持？</li>
+            <li>哪些 KPI 或總經條件正在挑戰原本判斷？</li>
+            <li>若發生黑天鵝或財報惡化，現有規則是否能及時重審？</li>
+            <li>戰情室邏輯是否需要修正，還是只需維持觀察？</li>
+          </ol>
+        </div>
+        <div class="box">
+          <h3>三層主結論</h3>
+          <ul>
+            <li><strong>持股風險狀態：</strong>可承受、升高需觀察、需重審。</li>
+            <li><strong>決策邏輯狀態：</strong>有效、需監控、需修正、資料不足。</li>
+            <li><strong>Owner 動作：</strong>不變更、補資料、重審門檻、修正規則。</li>
+          </ul>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>輸出狀態</th><th>使用條件</th><th>Owner 動作</th></tr></thead>
+        <tbody>
+          <tr><td><code>LOGIC_VALID</code></td><td>正式資料鏈完整，主要 KPI 與原結論一致。</td><td>維持原邏輯，列支持證據。</td></tr>
+          <tr><td><code>WATCH_REQUIRED</code></td><td>風險升高但尚未推翻主論點。</td><td>提高觀察頻率，追蹤接近門檻 KPI。</td></tr>
+          <tr><td><code>REVIEW_REQUIRED</code></td><td>關鍵風險或資料註記足以要求人工判斷。</td><td>Owner 重審，不自動修改規則。</td></tr>
+          <tr><td><code>REVISION_REQUIRED</code></td><td>回測、財報或黑天鵝檢討證明原規則不足。</td><td>提出修正案，需 Owner 核准後才可改權重、門檻或資料源。</td></tr>
+          <tr><td><code>DATA_BLOCKED</code></td><td>正式 CSV、schema、hash 或核心欄位不足。</td><td>只能產生觀察版，先補資料或重新發布。</td></tr>
+        </tbody>
+      </table>
+      <div class="warn">正式戰報必須以正式 CSV 與 manifest/hash 為基準。runtime snapshot 或 staging candidate 可以出現在附註與觀察版，但不能直接改正式結論。</div>
+      <div class="box">
+        <h3>MIDR / MRD 在戰報中的位置</h3>
+        <ul>
+          <li>戰報主文不以 <code>MIDR / MRD</code> 當標題，也不把數值當主結論。</li>
+          <li>主文只寫決策語言：例如「估值偏離觀察：未出現明顯超跌，統計分數偏謹慎」。</li>
+          <li>詳細數值、公式、權重、門檻與來源層級放在附錄或稽核明細。</li>
+          <li>若數值來自正式 CSV 衍生計算，需標示「正式欄位衍生」；若含觀察欄位，需中文註記。</li>
+          <li>所有 MIDR / MRD 輸出維持 <code>actionable:false</code>，只影響估值風險提醒與重審頻率。</li>
+        </ul>
+      </div>
+      <div class="ok">研報庫已新增 <code>P1008_DECISION_AUDIT_REPORT_STANDARD_20260701.md</code>，作為週/月戰報的格式標準與驗收依據。</div>
+    </section>
+
+    <section>
+      <h2>7. 流程結論</h2>
+      <p><code>P1008_1_UPDATE_DATA.bat</code>、<code>P1008_3_OWNER_PUBLISH_CSV.bat</code> 與 Launcher 沒有功能重複。Launcher 是決策者中控；BAT 是備援與維運入口。平常開戰情室先進 Launcher；需要臨時觀察或日常更新按一鍵資料流程；要升格正式資料則使用 Launcher 的 Owner Formal Publish Gate。</p>
+      <p>這個分層能同時滿足兩件事：決策者臨時需要最新資訊時，戰情室可以即時反映；正式報告和正式 KPI 判斷，又不會被未核准資料污染。</p>
+      <p>週/月戰報則負責更高一層的檢查：持股風險是否升高、原本 HOLD / 觀察邏輯是否仍有效、戰情室規則是否需要 Owner 核准後修正。</p>
+    </section>
+    <section>
+      <h2>8. 固定新聞掃描器 v2 實作流程</h2>
+      <p><code>P1008_4_NEWS_SCAN.bat</code> 是觀察型新聞掃描入口，底層呼叫 <code>tools/warroom_news_scanner_v2.py</code>。它可依 <code>data/NEWS_SCAN_SOURCE_MANIFEST.json</code> 抓取 enabled 且 <code>connectorStatus=APPROVED</code> 的公開來源，並只產生 <code>staging/YYYY-MM-DD/NEWS_SCAN.json</code>、<code>NEWS_SCAN.md</code>、必要時的 <code>macro_event_observations_candidate.csv</code>，以及 <code>runtime/warroom_news_scan_snapshot.json</code>；正式 CSV、主結論 IC 與 KEEP_DISABLED 規則都不會被修改。</p>
+      <table>
+        <thead><tr><th>項目</th><th>規則</th><th>Owner 動作</th></tr></thead>
+        <tbody>
+          <tr><td>無事件掃描</td><td>只留下 no-event scan report 與 runtime snapshot；不把空候選列加入待發布清單。</td><td>不需發布，首頁顯示 no-event。</td></tr>
+          <tr><td>OBSERVE / WATCH</td><td>進入 staging candidate，但 <code>Actionable=false</code>；單一媒體最高只能 WATCH，未驗證來源最高只能 OBSERVE。</td><td>檢查來源、摘要與是否需要寫入旁路 CSV。</td></tr>
+          <tr><td>REVIEW_REQUIRED</td><td>Launcher / 新 UI 顯示 <code>HOLD_UNDER_REVIEW</code>，只代表需要重審，不會改 HOLD。</td><td>12 小時內 review；若核准，才用 Launcher Owner gate 或備援 BAT append。</td></tr>
+          <tr><td>crawler health</td><td>v2 會在 runtime snapshot 記錄 <code>networkSummary</code>、<code>sourceHealth</code>、optional dependency 狀態，以及每個來源的成功/失敗/錯誤類型。</td><td>若多數來源為 <code>CONNECTION_REFUSED</code>、timeout、DNS 或 proxy 錯誤，先處理網路/proxy，再判斷是否補跑。</td></tr>
+          <tr><td>排程註冊</td><td><code>P1008_4_REGISTER_NEWS_SCHEDULE.bat</code> 預設只預覽；只有加 <code>--register</code> 才建立 Windows 工作排程。</td><td>Owner 明確核准後才執行註冊。</td></tr>
+        </tbody>
+      </table>
+      <div class="ok">新聞掃描 v2 可抓取 Owner-approved observation sources，例如鴻海/MOPS 官方來源、經濟日報、工商時報、鉅亨、MoneyDJ、中央社、NVIDIA、Apple，以及 CSP/AI demand watchlist：Microsoft/Azure、AWS/Amazon、Google Cloud、Meta、Oracle、CoreWeave、OpenAI 等公開頁。判定重點不是只看公司名稱，而是 <code>CSP_CAPEX_DEMAND</code>、AI data center、GB200/GB300/Blackwell、AI server、rack-scale、供應鏈中斷或鴻海直接關聯。抓取成功不等於正式資料發布；所有事件仍必須 <code>Actionable=false</code>，並經 Owner gate 才能 append 旁路 CSV。</div>
+      <div class="warn">若本機 Python HTTPS 被防火牆或 proxy 擋住，Launcher 會顯示逐來源錯誤；v2 也可在 Playwright 可用時嘗試 Edge/Chrome browser-mode fallback。系統不得繞過公司網路政策，僅能使用合法 proxy、系統瀏覽器 session 或 Owner 核准來源。</div>
+    </section>
+    <section>
+      <h2>9. 定期戰報產生器與單一窗口閉環</h2>
+      <p><code>P1008_5_GENERATE_REPORTS.bat</code> 是本機日報、週報、月報的產生入口。它只讀取正式 CSV、旁路 CSV、<code>runtime/warroom_news_scan_snapshot.json</code> 與 <code>runtime/warroom_event_review_state.json</code>；輸出只限於 <code>reports/generated/</code>、<code>reports/P1008_REPORT_MANIFEST.json</code>、<code>runtime/warroom_report_manifest.json</code> 與 log。</p>
+      <table>
+        <thead><tr><th>產物</th><th>用途</th><th>邊界</th></tr></thead>
+        <tbody>
+          <tr><td><code>reports/P1008_REPORT_MANIFEST.json</code></td><td>提供首頁、<code>reports.html</code> 與 <code>report_viewer.html</code> 讀取最新戰報索引。</td><td>只是索引 manifest，不是正式資料。</td></tr>
+          <tr><td><code>runtime/warroom_event_review_state.json</code></td><td>追蹤 <code>WATCH / REVIEW_REQUIRED</code> 事件是否仍等待 Owner ack。</td><td>屬於 runtime 治理狀態，不會 append 旁路 CSV。</td></tr>
+          <tr><td>Launcher / 新 UI 分工</td><td>Launcher 是更新與 Owner gate 入口；新 UI 是決策摘要；主 IC、事件/FX 與資料治理卡片才進入舊 UI 明細錨點。</td><td>6 大系統卡片留在新 UI 摘要，不各自打開舊 UI 視窗。</td></tr>
+          <tr><td>最新戰報卡</td><td>依 manifest 顯示最新日報、週報、月報狀態。</td><td>戰報維持 <code>actionable:false</code>。</td></tr>
+        </tbody>
+      </table>
+      <div class="ok">當 Owner 需要刷新本機靜態戰報時，於資料更新、新聞掃描與 review-only 檢查後執行 <code>P1008_5_GENERATE_REPORTS.bat --date YYYY-MM-DD --period daily|weekly|monthly</code>。此命令永遠不修改正式 CSV。</div>
+      <div class="warn">若 Launcher 或新 UI 曾顯示 <code>HOLD_UNDER_REVIEW</code>，下一份戰報必須回答：事件是否解除、是否已反映在 KPI / FX / 市場資料、原 HOLD 邏輯是否仍有效。</div>
+    </section>
+
+    <section>
+      <h2>10. BAT 使用方式：手動、排程與戰報產出</h2>
+      <p>本套件的 BAT 分成「手動執行」與「註冊後由 Windows 排程自動執行」兩種。預設情況下，<strong>沒有任何 BAT 會自動發布正式 CSV，也不會自動改主結論 IC</strong>。</p>
+      <table>
+        <thead><tr><th>BAT</th><th>預設是否自動</th><th>何時使用</th><th>會產生什麼</th><th>不會做什麼</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>P1008_4_NEWS_SCAN.bat</code></td>
+            <td>手動；只有完成排程註冊後才會由 Windows 自動執行。</td>
+            <td>開盤前、盤中、收盤後、夜間國際事件檢查，或 Owner 懷疑有重大事件時補跑。</td>
+            <td><code>staging/YYYY-MM-DD/NEWS_SCAN.json</code>、<code>NEWS_SCAN.md</code>、<code>runtime/warroom_news_scan_snapshot.json</code>，必要時產生事件 candidate。</td>
+            <td>不抓未核准來源、不發布正式 CSV、不改 HOLD、不啟用 KEEP_DISABLED。</td>
+          </tr>
+          <tr>
+            <td><code>P1008_4_REGISTER_NEWS_SCHEDULE.bat</code></td>
+            <td>手動一次性設定工具；雙擊預設只預覽，不改 Windows。</td>
+            <td>Owner 決定要讓新聞掃描固定自動跑時使用。加 <code>--register</code> 才建立 08:10、12:30、15:30、21:30 四個排程；加 <code>--remove</code> 可移除。</td>
+            <td>Windows Task Scheduler 工作項目，工作內容是呼叫 <code>P1008_4_NEWS_SCAN.bat --dry-run --allow-network --scan-window ...</code>；實際可抓來源仍受 manifest 的 enabled / APPROVED 控制。</td>
+            <td>不掃新聞、不產生報告、不發布 CSV；它只管理排程。</td>
+          </tr>
+          <tr>
+            <td><code>P1008_5_GENERATE_REPORTS.bat</code></td>
+            <td>手動；目前不建議自動排程，避免未完成 Owner review 就生成正式觀感的戰報。</td>
+            <td>資料更新、新聞掃描、Owner publish review-only 完成後，需要日報、週報或月報時執行。</td>
+            <td><code>reports/generated/</code> 戰報、<code>reports/P1008_REPORT_MANIFEST.json</code>、<code>runtime/warroom_report_manifest.json</code>、<code>reports/generated/latest_report.html</code>。</td>
+            <td>不更新資料、不抓新聞、不 append 正式 CSV、不改 HOLD。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="warn"><code>P1008_4_NEWS_SCAN.bat</code> v2 的固定排程可以抓取已核准公開來源，但仍不是正式資料發布工具。若來源失敗，Launcher 應顯示 connector health；若掃到單一媒體事件，最高只到 WATCH；只有官方來源或多來源交叉驗證且同時具備鴻海直接事件、CSP capex / AI data center 需求、GB200/GB300/AI server、供應鏈中斷、關稅/制裁等明確觸發詞，才可進 REVIEW_REQUIRED。</div>
+
+      <div class="box">
+        <h3>建議日常順序</h3>
+        <ol>
+          <li>需要最新資料時，先執行 <code>P1008_1_UPDATE_DATA.bat</code> 產生 staging/runtime 候選。</li>
+          <li>需要事件保護時，執行 <code>P1008_4_NEWS_SCAN.bat --dry-run --allow-network</code>；若已註冊 Windows 排程，則平時可由排程自動補跑。</li>
+          <li>正式資料發布前，優先在 <code>launcher.html</code> 的 <code>Owner Formal Publish Gate</code> 做 review；Owner 輸入強確認字串後才會 append。<code>P1008_3_OWNER_PUBLISH_CSV.bat</code> 保留為備援。</li>
+          <li>需要戰報時，執行 <code>P1008_5_GENERATE_REPORTS.bat --date YYYY-MM-DD --period daily</code>；週報或月報則把 <code>daily</code> 改成 <code>weekly</code> 或 <code>monthly</code>。</li>
+          <li>決策者閱讀時，優先用 <code>P1008_APP.bat</code> 開啟 <code>launcher.html</code>；Launcher gate 通過後再進入新 UI、研報庫、SOP 或最新戰報。</li>
+        </ol>
+      </div>
+
+      <div class="warn">資料夾雙擊 <code>reports.html</code> 屬於 <code>file://</code> 模式，部分瀏覽器會阻擋 manifest 或 markdown 讀取。若只是要看最新產生戰報，可點研報庫中的「最新本機定期戰報」或直接開 <code>reports/generated/latest_report.html</code>；若要完整互動閱讀，請使用 <code>P1008_2_OPEN_WARROOM.bat</code>。</div>
+    </section>
+
+    <section>
+      <h2>11. 資料夾版本治理與單一入口</h2>
+      <p><code>CODEX_P1008_PACKAGE</code> 應視為 P1008 戰情室的獨立工作資料夾。決策者日常使用優先雙擊 <code>P1008_APP.bat</code>，先進 <code>launcher.html</code> 完成資料更新、總經 / 新聞 / FX 審查與 Owner gate；<code>P1008_START_HERE.bat</code> 僅作備援選單，<code>P1008_2_OPEN_WARROOM.bat</code> 作技術 launcher。不要直接修改內部 runtime、staging、logs 或 generated report 產物。</p>
+      <table>
+        <thead><tr><th>項目</th><th>治理方式</th><th>原因</th></tr></thead>
+        <tbody>
+          <tr><td><code>P1008_APP.bat</code></td><td>決策者 App 啟動按鈕，開啟 <code>launcher.html</code> 與 App API。</td><td>把日常入口集中成一個可見檔案。</td></tr>
+          <tr><td><code>launcher.html</code></td><td>資料更新、Owner review、正式 CSV publish gate 與進入新 UI 的守門頁。</td><td>把更新/發布操作與新 UI 決策視野分開。</td></tr>
+          <tr><td><code>P1008_START_HERE.bat</code></td><td>備援選單，提供開首頁、更新 staging、觀察型新聞掃描、產生日報與排程預覽。</td><td>保留進階維運能力，但不作主要入口。</td></tr>
+          <tr><td><code>docs/</code></td><td>集中保存決策者操作、App workflow、Git 版本治理、資料夾歸屬說明。</td><td>避免 MD 文件散在根目錄，讓資料夾歸屬更清楚。</td></tr>
+          <tr><td><code>README_START_HERE.md</code></td><td>根目錄簡短索引，指向 <code>docs/</code>。</td><td>保留舊連結相容性。</td></tr>
+          <tr><td><code>.gitignore</code></td><td>忽略 <code>logs/</code>、<code>runtime/</code>、<code>staging/</code>、<code>reports/generated/</code>、cache 與暫存檔。</td><td>Git 只追蹤規則、工具、UI、SOP、正式資料與來源文件，不被每日產物淹沒。</td></tr>
+          <tr><td>Git 工作樹</td><td>以 <code>CODEX_P1008_PACKAGE</code> 作為戰情室版本稽核邊界。</td><td>之後每次 UI、SOP、connector、CSV gate 調整都能比對、回復與審查。</td></tr>
+        </tbody>
+      </table>
+      <h3>Owner 驗收後的 baseline commit</h3>
+      <p>baseline commit 是「把目前已驗收的 Launcher App、SOP、UI、工具、規則與正式資料 schema 建立第一個版本快照」。它只在 Git 版本庫內記錄檔案狀態，不代表正式 CSV 發布，也不代表新聞 connector 或 HOLD 規則核准。</p>
+      <table>
+        <thead><tr><th>問題</th><th>規定</th></tr></thead>
+        <tbody>
+          <tr><td>在哪裡做</td><td>只在 <code>C:\Users\a2231\OneDrive\foxconn_dashboard\foxconn-system\CODEX_P1008_PACKAGE</code> 這個資料夾內做。不要在上一層 <code>foxconn-system</code> 做。</td></tr>
+          <tr><td>誰可以做</td><td>Owner 驗收後，由 Owner 或受指派的維運者手動執行。Codex 不應自動 add/commit。</td></tr>
+          <tr><td>何時做</td><td>確認 <code>P1008_APP.bat</code> 可開啟 App、SOP/docs 已更新、正式 CSV hash 未變、<code>.gitignore</code> 已排除 <code>runtime/</code>、<code>staging/</code>、<code>logs/</code>、<code>reports/generated/</code> 後再做。</td></tr>
+          <tr><td>提交什麼</td><td>提交 launcher BAT、HTML/UI、<code>docs/</code>、<code>rules/</code>、<code>tools/</code>、<code>src/</code>、<code>dist/</code>、正式 <code>data/</code> schema 與 manifest；不提交每日 runtime/staging/log/generated 產物。</td></tr>
+          <tr><td>操作細節</td><td>依 <code>docs/GIT_VERSIONING.md</code> 的「Baseline commit 操作位置與命令」執行。</td></tr>
+        </tbody>
+      </table>
+      <div class="warn">Git 版本治理不等於自動發布。任何正式 CSV append、新聞 connector 啟用、Windows 排程註冊與 HOLD 邏輯調整，仍必須走 Owner 核准。</div>
+    </section>
+
+    <section>
+      <h2>12. Launcher 控制台與 Owner Gate</h2>
+      <p>決策者應從 Windows 檔案總管直接雙擊 <code>P1008_APP.bat</code> 啟動；它會呼叫 <code>P1008_2_OPEN_WARROOM.bat</code> 啟動本機 App server，預設開啟 <code>launcher.html</code>。Launcher 負責資料更新、總經 / 新聞 / FX 審查、Owner formal publish gate，以及是否可進入新 UI 的判斷。若 Launcher 顯示 <code>Codex 沙盒</code>，代表該 server 可能繼承 Codex 網路限制，不能當作正式 connector 驗收結果。</p>
+      <p><code>P1008_APP.bat</code> 會優先以 Edge / Chrome App 視窗與 <code>fs=1</code> 參數開啟 Launcher，使 Launcher、新 UI、研報庫、單篇戰報與 SOP 在互相跳轉時維持戰情室沉浸模式。瀏覽器原生 Fullscreen API 會在跨頁導覽時被瀏覽器取消，因此系統以 App 視窗 + <code>p1008_immersive_mode</code> 保存畫面狀態；若畫面不是沉浸模式，請關閉舊 localhost 視窗後重新雙擊 <code>P1008_APP.bat</code>。</p>
+      <table>
+        <thead><tr><th>API / 動作</th><th>用途</th><th>安全邊界</th></tr></thead>
+        <tbody>
+          <tr><td><code>GET /api/p1008/review-package</code></td><td>讀取候選 CSV、readiness、總經/新聞/FX 待決、Owner 強確認字串。</td><td>只讀審查包。</td></tr>
+          <tr><td><code>POST /api/p1008/run/default</code></td><td>依序執行 preflight、update data、news scan、daily report、refresh。</td><td>不呼叫 Owner publish，不修改 HOLD。</td></tr>
+          <tr><td><code>POST /api/p1008/run/update-data</code></td><td>只補跑 staging/runtime 資料更新。</td><td>正式 CSV 不應改變；若 hash 改變，App 標示錯誤。</td></tr>
+          <tr><td><code>POST /api/p1008/run/news-scan</code></td><td>只補跑 v2 觀察型新聞掃描，並回寫 <code>networkSummary</code> / <code>sourceHealth</code> 給 Launcher。</td><td>只有來源 manifest 中 <code>enabled=true</code> 且 <code>connectorStatus=APPROVED</code> 的網路來源可連網；其餘來源一律跳過。</td></tr>
+          <tr><td><code>POST /api/p1008/run/report</code></td><td>只產生日報與最新本機戰報 HTML。</td><td>只讀正式 CSV 與 runtime / sidecar，不 append CSV。</td></tr>
+          <tr><td><code>POST /api/p1008/publish/formal</code></td><td>Owner 在 Launcher 輸入 <code>OWNER_APPROVE_PUBLISH_YYYY-MM-DD</code> 後 append 正式 CSV。</td><td>只能呼叫既有 <code>owner_publish_csv_v2.py</code> gate；一鍵資料流程不得觸發。</td></tr>
+          <tr><td><code>GET /api/p1008/status</code></td><td>回傳目前 job、步驟、Owner review 狀態、來源 manifest 與正式 CSV hash 檢查。</td><td>只讀狀態。</td></tr>
+        </tbody>
+      </table>
+      <div class="ok">Launcher gate 通過後才進入新 UI。若存在 CSV candidate、總經/FX 缺欄、新聞 <code>WATCH / REVIEW_REQUIRED</code>、Owner ack 未完成或 readiness blocked，決策者應停留在 Launcher 審查。</div>
+      <div class="warn">一鍵資料流程不是正式資料發布工具。正式 CSV append 只能由 Launcher 的 <code>Owner Formal Publish Gate</code> 或備援 <code>P1008_3_OWNER_PUBLISH_CSV.bat</code> 完成。</div>
+    </section>
+
+    <section>
+      <h2>13. Launcher 顯示與正式發布判讀補充</h2>
+      <table>
+        <thead><tr><th>畫面訊息</th><th>決策者解讀</th><th>處理原則</th></tr></thead>
+        <tbody>
+          <tr><td>總經 connector/source 未取得正式來源：vix、wti、twd_usd、us10y、dxy</td><td>候選值可能是沿用最近正式 CSV 的觀察值，缺少本次可追溯來源。</td><td>可供 Launcher / 新 UI 觀察，但不得升格正式 CSV；需重跑 connector、設定合法 proxy，或由 Owner 補充官方/公開市場來源。</td></tr>
+          <tr><td>新聞來源成功率 0/16</td><td>本次 App server 的 Python connector 未取得外網資料，不代表新聞不存在，也不代表瀏覽器或 Yahoo 網頁不可用。</td><td>成功率低於 70% 時，新聞掃描不得視為完整；0% 時先看 Launcher 是否顯示 <code>Codex 沙盒</code>。若是，請改從 Windows 檔案總管直接雙擊 <code>P1008_APP.bat</code> 後重跑；若不是，再檢查 proxy/firewall、server 啟動方式或 browser-mode 依賴。</td></tr>
+          <tr><td>多次雙擊仍是 0/16</td><td>通常代表本機 proxy/firewall、browser-mode 依賴、來源 manifest，或重用了沙盒/舊版 localhost server。</td><td><code>P1008_APP.bat</code> 日常會重用健康 server，避免多次雙擊累積 port 佔用；若剛更新 server 程式碼或懷疑舊 server 卡住，維護者才手動執行 <code>P1008_APP.bat --fresh</code>。啟動器會掃描 <code>8767-8899</code>，並跳過 Codex 網路沙盒 server。</td></tr>
+          <tr><td>Yahoo Finance</td><td>Yahoo 只可作總經/市場資料最後 fallback，不是新聞 crawler 的正式來源。</td><td>新聞來源以 <code>NEWS_SCAN_SOURCE_MANIFEST.json</code> 中 Owner 核准來源為準；不得用單一 Yahoo 訊息升級 <code>REVIEW_REQUIRED</code>。</td></tr>
+          <tr><td>休市沿用 P/B 倍數</td><td>P/B 倍數 = 收盤價 / BVPS。例如收盤價 251、BVPS 127.12 時，P/B 約 1.975。</td><td>UI、戰報與研報需分開標示 P/B 倍數與 BVPS，避免誤判估值。</td></tr>
+          <tr><td>候選檔 schema PASS</td><td>只代表欄位格式通過，不代表可以正式發布。</td><td>仍需 Readiness 達 95%、正式來源可追溯、無重複列、<code>Actionable=false</code> 且 Owner 強確認後才可發布。</td></tr>
+          <tr><td>新 UI 分數與 Readiness 不同</td><td>新 UI 六大 IC 分數是決策摘要/觀察分數；Launcher 的 <code>Readiness 95%</code> 是正式 CSV 發布稽核門檻。</td><td>runtime carry-forward 值可供新 UI 觀察，但不得讓正式 CSV 發布通過。若 required source 沒有本次可追溯來源，Owner publish gate 必須阻擋。</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>14. 新聞來源 URL 維護與 crawler 成功率判讀</h2>
+      <div class="box">
+        <h3>URL 維護規則</h3>
+        <ul>
+          <li>新聞 crawler 不得只依賴站內搜尋 URL；每個重要來源需保留首頁、分類頁、RSS/Atom 或 sitemap 作主路徑。</li>
+          <li><code>NEWS_SCAN_SOURCE_MANIFEST.json</code> 的 <code>deprecatedUrlPatterns</code> 會列出已知失效 URL；<code>warroom_news_scanner_v2.py</code> 會在 URL build 階段略過這些路徑。</li>
+          <li>鉅亨網目前以 <code>https://news.cnyes.com/news/cat/tw_stock</code> 等分類頁為主，<code>https://news.cnyes.com/search?q=...</code> 為輔；不得再使用舊的 <code>search/all?keyword=...</code>。</li>
+          <li>鴻海官方來源以中文站 <code>/zh-tw/press-center/press-releases/latest-news</code> 與 IR 月營收報告頁為主，不再使用舊的 English press release 空白頁。</li>
+          <li>工商時報以首頁、即時、證券、產業、國際等分類頁為主；search URL 只作輔助，不可成為唯一路徑。</li>
+        </ul>
+      </div>
+      <div class="warn">
+        Launcher 的 crawler 成功率只計算 <code>requiresNetwork=true</code> 的網路來源；<code>Owner manual event input</code> 是本地 Owner 輸入，不列入 <code>0/16</code> 或 <code>13/16</code> 分母。若網路來源顯示 0%，代表本次 App server 的 connector/source 未取得資料，應檢查 proxy/firewall、來源 manifest、browser-mode fallback 依賴；只有剛更新 server 程式碼或懷疑舊 server 卡住時，才使用 <code>--fresh</code>。
+      </div>
+    </section>
+
+    <section>
+      <h2>15. 數據更新引擎 connector 與正式發布保護</h2>
+      <div class="box">
+        <h3>資料來源順序</h3>
+        <ul>
+          <li>2317 收盤價優先採 TWSE 官方日成交資訊、TWSE MIS 日期相符資料；Yahoo Finance 只作最後備援。</li>
+          <li>總經核心欄位優先採 FRED / 官方或公開市場來源；Stooq 作公開市場交叉來源；Yahoo Finance 只能作最後 fallback。</li>
+          <li>CME FedWatch 年底升息機率仍標示 <code>CONNECTOR_PENDING</code>，不得用 FRED 利率或模型值代替。</li>
+        </ul>
+      </div>
+      <div class="warn">
+        若 Python HTTPS 被 proxy / TLS / firewall 擋住，<code>warroom_data_fetcher_v2.py</code> 會用固定 Windows <code>Invoke-WebRequest</code> 嘗試一次系統 proxy 路徑。這只改善讀取公開資料來源，不繞過公司網路政策，也不代表可正式發布。只要 VIX、WTI、TWD/USD、US10Y、DXY 等 required source 本次沒有可追溯來源，Owner publish gate 仍必須阻擋。
+      </div>
+      <div class="ok">
+        休市日可沿用最近正式交易日收盤價供 Launcher / 新 UI 顯示 P/B 連續，但不 append 週末 <code>daily_price</code> 正式列；總經欄位 carry-forward 只作觀察，不可單獨支持正式 CSV 發布。
+      </div>
+      <div class="note">
+        Launcher 的 <code>macroSourceHealth</code> 必須逐欄顯示 VIX、WTI、TWD/USD、US10Y、DXY、Fed_Rate 的來源狀態、來源日期、URL 與發布判斷。Fed_Rate 屬慢變政策利率，可由正式 CSV 沿用但仍需定期複核；VIX、WTI、TWD/USD、US10Y、DXY 若只剩沿用值，Owner publish 必須阻擋。
+      </div>
+      <div class="note">
+        Owner formal publish 完成後，系統必須同步 <code>warroom_news_scan_snapshot.json</code> 與 <code>warroom_event_review_state.json</code>：清除 <code>holdUnderReview</code>、<code>ownerReviewRequired</code>、<code>ownerAckRequired</code>，並保留 <code>formalSynced</code> 與 <code>formalPublishedAt</code>。此動作只解除 Launcher gate，不改主結論 IC。
+      </div>
+      <div class="warn">
+        Alpaca 可作正式市場資料源；若抓取的是 VIXY、USO、UUP、IEF/TLT 等 ETF，正式性只適用於該 ETF 報價本身。這類資料可發布到代理指標或旁路 CSV，但不得直接填入 VIX、WTI、DXY、US10Y 等不同語義的原始總經欄位。
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    function sourceParam() {
+      return new URLSearchParams(window.location.search).get("from") || "";
+    }
+    function sourceHomeHref() {
+      const from = sourceParam();
+      if (from === "launcher") {
+        return "./launcher.html?stay=1&from=sop_v4";
+      }
+      if (from === "newui") {
+        return "./output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html?from=sop_v4&ts=" + Date.now();
+      }
+      if (from === "oldui") {
+        return "./index_p1008_v7.html?from=sop_v4&ts=" + Date.now();
+      }
+      return "./index_p1008_v7.html?from=sop_v4&ts=" + Date.now();
+    }
+    const P1008_IMMERSIVE_KEY = "p1008_immersive_mode";
+    function readImmersivePref() {
+      try { return localStorage.getItem(P1008_IMMERSIVE_KEY) === "1"; } catch (err) { return false; }
+    }
+    function writeImmersivePref(active) {
+      try { localStorage.setItem(P1008_IMMERSIVE_KEY, active ? "1" : "0"); } catch (err) {}
+    }
+    function immersiveRequested() {
+      return new URLSearchParams(window.location.search).get("fs") === "1" || readImmersivePref();
+    }
+    function immersiveActive() {
+      return document.body.classList.contains("p1008-focus-mode") || immersiveRequested();
+    }
+    function applyImmersiveMode(active, persist = true) {
+      document.body.classList.toggle("p1008-focus-mode", active);
+      if (persist) writeImmersivePref(active);
+      updateFullscreenButton();
+    }
+    function withImmersive(href) {
+      const url = new URL(href, window.location.href);
+      if (immersiveActive()) url.searchParams.set("fs", "1");
+      else url.searchParams.delete("fs");
+      return url.href;
+    }
+    function goMain(event) {
+      if (event) event.preventDefault();
+      window.location.assign(withImmersive(sourceHomeHref()));
+    }
+    async function toggleFullscreen() {
+      const next = !document.body.classList.contains("p1008-focus-mode");
+      if (!next && document.fullscreenElement) {
+        try { await document.exitFullscreen(); } catch (err) {}
+      }
+      applyImmersiveMode(next, true);
+    }
+    function updateFullscreenButton() {
+      const btn = document.getElementById("fullscreen-toggle");
+      if (!btn) return;
+      const active = Boolean(document.body.classList.contains("p1008-focus-mode") || document.fullscreenElement);
+      btn.disabled = false;
+      btn.textContent = active ? "退出全螢幕" : "全螢幕";
+      btn.setAttribute("aria-pressed", active ? "true" : "false");
+      btn.title = "切換戰情室沉浸模式；內部跳轉會保持此狀態";
+    }
+    function syncSourceLinks() {
+      if (immersiveRequested()) document.body.classList.add("p1008-focus-mode");
+      const home = document.getElementById("back-home");
+      if (home) home.setAttribute("href", withImmersive(sourceHomeHref()));
+      syncImmersiveLinks();
+      updateFullscreenButton();
+    }
+    function syncImmersiveLinks() {
+      document.querySelectorAll("a[href]").forEach((link) => {
+        const raw = link.getAttribute("href");
+        if (!raw || /^(#|mailto:|tel:|javascript:)/i.test(raw)) return;
+        const url = new URL(raw, window.location.href);
+        if (url.protocol === window.location.protocol && url.host === window.location.host) {
+          link.setAttribute("href", withImmersive(raw));
+        }
+      });
+    }
+    document.addEventListener("click", (event) => {
+      const link = event.target.closest?.("a[href]");
+      if (!link) return;
+      const raw = link.getAttribute("href");
+      if (!raw || /^(#|mailto:|tel:|javascript:)/i.test(raw)) return;
+      const url = new URL(raw, window.location.href);
+      if (url.protocol === window.location.protocol && url.host === window.location.host) {
+        link.setAttribute("href", withImmersive(raw));
+      }
+    }, true);
+    document.addEventListener("fullscreenchange", updateFullscreenButton);
+    document.addEventListener("DOMContentLoaded", syncSourceLinks);
+  </script>
+</body>
+</html>

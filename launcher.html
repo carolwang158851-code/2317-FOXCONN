@@ -1,0 +1,1015 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>P1008 Launcher | 資料更新與 Owner 審查</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --surface: #111827;
+      --surface-2: #172033;
+      --line: #31405c;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --green: #34d399;
+      --blue: #38bdf8;
+      --amber: #fbbf24;
+      --red: #fb7185;
+      --violet: #c084fc;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0;
+    }
+    a { color: inherit; }
+    .shell { max-width: 1280px; margin: 0 auto; padding: 20px 14px 36px; }
+    body.p1008-focus-mode .shell { max-width: none; min-height: 100vh; }
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: flex-start;
+      padding: 16px;
+      border: 1px solid var(--line);
+      background: #0f172a;
+      border-radius: 8px;
+    }
+    h1 { margin: 0; font-size: 24px; line-height: 1.2; }
+    h2 { margin: 0; font-size: 18px; line-height: 1.25; }
+    h3 { margin: 0; font-size: 14px; color: var(--muted); text-transform: uppercase; }
+    p { margin: 0; color: var(--muted); line-height: 1.6; }
+    code { color: var(--green); font-weight: 700; }
+    .grid { display: grid; gap: 12px; }
+    .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    @media (max-width: 920px) {
+      .grid.two, .grid.three, .grid.four { grid-template-columns: 1fr; }
+    }
+    .panel {
+      margin-top: 12px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: 8px;
+    }
+    .panel.accent-green { border-color: rgba(52, 211, 153, .55); }
+    .panel.accent-amber { border-color: rgba(251, 191, 36, .65); }
+    .panel.accent-red { border-color: rgba(251, 113, 133, .65); }
+    .stat {
+      min-height: 92px;
+      padding: 12px;
+      border: 1px solid #26344c;
+      background: var(--surface-2);
+      border-radius: 8px;
+    }
+    .label { font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; }
+    .value { margin-top: 8px; font-size: 18px; font-weight: 900; color: white; word-break: break-word; }
+    .small { margin-top: 6px; font-size: 12px; color: var(--muted); line-height: 1.5; word-break: break-word; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .between { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; justify-content: space-between; }
+    .buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+    button, .button {
+      appearance: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      padding: 9px 12px;
+      border: 1px solid var(--line);
+      background: #0f172a;
+      color: var(--text);
+      border-radius: 8px;
+      font-weight: 800;
+      text-decoration: none;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    button:hover, .button:hover { border-color: var(--blue); color: white; }
+    #fullscreen-toggle[aria-pressed="true"] { border-color: rgba(52, 211, 153, .65); background: rgba(6, 78, 59, .45); color: #d1fae5; }
+    button.primary, .button.primary { border-color: rgba(52, 211, 153, .75); background: rgba(6, 78, 59, .45); color: #d1fae5; }
+    button.warning { border-color: rgba(251, 191, 36, .75); background: rgba(120, 53, 15, .45); color: #fef3c7; }
+    button.danger { border-color: rgba(251, 113, 133, .75); background: rgba(127, 29, 29, .45); color: #ffe4e6; }
+    button:disabled, .button.disabled {
+      cursor: not-allowed;
+      border-color: #243044;
+      background: #111827;
+      color: #64748b;
+      pointer-events: none;
+    }
+    input, textarea {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #0b1220;
+      color: var(--text);
+      padding: 10px 12px;
+      outline: none;
+      font: inherit;
+    }
+    textarea { min-height: 84px; resize: vertical; }
+    input:focus, textarea:focus { border-color: var(--blue); }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 5px 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 900;
+      background: #0f172a;
+    }
+    .badge.green { color: var(--green); border-color: rgba(52, 211, 153, .55); }
+    .badge.blue { color: var(--blue); border-color: rgba(56, 189, 248, .55); }
+    .badge.amber { color: var(--amber); border-color: rgba(251, 191, 36, .55); }
+    .badge.red { color: var(--red); border-color: rgba(251, 113, 133, .55); }
+    .badge.violet { color: var(--violet); border-color: rgba(192, 132, 252, .55); }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 9px 8px; border-bottom: 1px solid #26344c; vertical-align: top; text-align: left; }
+    th { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+    pre {
+      margin: 0;
+      max-height: 260px;
+      overflow: auto;
+      white-space: pre-wrap;
+      border: 1px solid #26344c;
+      background: #080d18;
+      border-radius: 8px;
+      padding: 12px;
+      color: #cbd5e1;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .notice {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      line-height: 1.6;
+      background: #0f172a;
+      font-size: 13px;
+    }
+    .notice.red { border-color: rgba(251, 113, 133, .6); color: #fecdd3; }
+    .notice.amber { border-color: rgba(251, 191, 36, .6); color: #fde68a; }
+    .notice.blue { border-color: rgba(56, 189, 248, .6); color: #bae6fd; }
+    .notice.green { border-color: rgba(52, 211, 153, .6); color: #bbf7d0; }
+    .note-group + .note-group { margin-top: 12px; }
+    .note-title { font-size: 12px; font-weight: 900; color: white; text-transform: uppercase; }
+    .note-group ul { margin: 6px 0 0 18px; padding: 0; }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <h1>P1008 Launcher：資料更新與 Owner 審查中控</h1>
+        <p style="margin-top:8px">先完成資料更新、總經 / 新聞 / FX 檢核與 Owner publish gate，再進入新 UI 決策摘要。新 UI 不再承擔更新與正式 CSV 同意流程。</p>
+      </div>
+      <div class="buttons">
+        <button id="fullscreen-toggle" type="button" aria-pressed="false">全螢幕</button>
+        <a class="button" href="./output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html?from=launcher_manual">進入新 UI</a>
+        <a class="button" href="./reports.html?from=launcher">研報庫</a>
+        <a class="button" href="./SOP_v4.html?from=launcher">SOP</a>
+      </div>
+    </header>
+
+    <section id="gate-panel" class="panel">
+      <div class="between">
+        <div>
+          <h2>Launcher Gate</h2>
+          <p id="gate-message" style="margin-top:6px">讀取中...</p>
+        </div>
+        <span id="gate-badge" class="badge blue">CHECKING</span>
+      </div>
+      <div class="notice" id="auto-redirect-note">若一鍵資料流程成功且沒有 Owner 待決，Launcher 會自動進入新 UI。</div>
+    </section>
+
+    <section class="panel">
+      <div class="between">
+        <div>
+          <h2>一鍵資料流程</h2>
+          <p style="margin-top:6px">更新 staging/runtime、觀察型新聞掃描、產生日報。此流程不做正式 CSV append。</p>
+        </div>
+        <span id="job-badge" class="badge blue">IDLE</span>
+      </div>
+      <div class="buttons" style="margin-top:12px">
+        <button id="run-default" class="primary">一鍵更新資料與資訊</button>
+        <button id="run-update">只更新資料</button>
+        <button id="run-news">只掃描新聞</button>
+        <button id="run-report">產生日報</button>
+        <button id="refresh">刷新狀態</button>
+      </div>
+      <div class="grid four" style="margin-top:12px">
+        <div class="stat"><div class="label">目前任務</div><div id="job-type" class="value">N/A</div><div id="job-id" class="small">等待啟動</div></div>
+        <div class="stat"><div class="label">正式 CSV 邊界</div><div id="formal-boundary" class="value">檢查中</div><div class="small">一鍵資料流程前後 hash 必須不變</div></div>
+        <div class="stat"><div class="label">新聞 connector</div><div id="connector-status" class="value">N/A</div><div class="small">未核准來源不得連網</div></div>
+        <div class="stat"><div class="label">最新戰報</div><div id="latest-report" class="value">N/A</div><div class="small">日報 / 週報 / 月報 manifest</div></div>
+      </div>
+      <div class="notice blue" style="margin-top:12px">
+        <div class="between">
+          <div>
+            <strong>新聞 / 總經 crawler v2 health</strong>
+            <div id="connector-health-summary" class="small">尚未執行 v2 掃描。</div>
+          </div>
+          <span id="network-status-badge" class="badge blue">NO_SCAN</span>
+        </div>
+        <div style="overflow:auto;margin-top:10px">
+          <table>
+            <thead><tr><th>來源</th><th>層級</th><th>狀態</th><th>成功/失敗</th><th>事件</th><th>錯誤</th></tr></thead>
+            <tbody id="connector-health-table"><tr><td colspan="6">尚未執行 v2 掃描。</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="server-context-warning" class="notice amber" style="display:none"></div>
+    </section>
+
+    <section id="review-panel" class="panel">
+      <div class="between">
+        <div>
+          <h2>Owner Review Package</h2>
+          <p style="margin-top:6px">CSV candidate、總經缺欄、新聞事件、FX sidecar 與 readiness 都先在這裡審查。</p>
+        </div>
+        <span id="readiness-badge" class="badge amber">READINESS</span>
+      </div>
+      <div class="grid four" style="margin-top:12px">
+        <div class="stat"><div class="label">候選日期</div><div id="candidate-date" class="value">N/A</div><div id="dry-run-path" class="small">DRY_RUN</div></div>
+        <div class="stat"><div class="label">正式發布 Readiness</div><div id="readiness-score" class="value">N/A</div><div id="readiness-threshold" class="small">required</div></div>
+        <div class="stat"><div class="label">候選檔案</div><div id="candidate-count" class="value">0</div><div class="small">正式發布前需 Owner gate</div></div>
+        <div class="stat"><div class="label">新聞 / FX</div><div id="news-level" class="value">N/A</div><div id="news-detail" class="small">掃描狀態</div></div>
+      </div>
+      <div id="daily-carry-note" class="notice blue" style="display:none"></div>
+      <div class="grid two" style="margin-top:12px">
+        <div>
+          <h3>候選檔與檢核</h3>
+          <div style="overflow:auto;margin-top:8px">
+            <table>
+              <thead><tr><th>Dataset</th><th>Rows</th><th>Schema</th><th>Duplicates</th><th>Target</th></tr></thead>
+              <tbody id="candidate-table"><tr><td colspan="5">讀取中...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <h3>正式發布阻擋 / 休市提示</h3>
+          <div id="blockers" class="notice amber">讀取中...</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="publish-panel" class="panel accent-amber">
+      <div class="between">
+        <div>
+          <h2>Owner Formal Publish Gate</h2>
+          <p style="margin-top:6px">此卡片可把候選資料升格為正式 CSV，但只在 readiness 通過且 Owner 輸入強確認字串時執行。</p>
+        </div>
+        <span id="publish-badge" class="badge amber">REVIEW ONLY</span>
+      </div>
+      <div class="notice amber">
+        正式 publish 會 append CSV 並更新 manifest/hash。它不屬於一鍵更新流程，也不會改主結論 IC 或啟用交易規則。
+      </div>
+      <div class="grid two" style="margin-top:12px">
+        <div>
+          <label class="label" for="approval-phrase">Owner 確認字串</label>
+          <input id="approval-phrase" autocomplete="off" spellcheck="false" placeholder="等待候選日期...">
+          <div id="approval-help" class="small">請先產生候選資料並通過 readiness。</div>
+        </div>
+        <div class="buttons" style="align-items:end">
+          <button id="owner-publish" class="danger" disabled>正式發布 CSV</button>
+          <a id="open-new-ui" class="button primary" href="./output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html?from=launcher">進入新 UI</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="between">
+        <div>
+          <h2>執行步驟與 Log</h2>
+          <p style="margin-top:6px">若流程失敗，先在這裡看錯誤，不要直接進新 UI 判讀。</p>
+        </div>
+      </div>
+      <div class="grid two" style="margin-top:12px">
+        <div>
+          <h3>Pipeline steps</h3>
+          <div id="steps" style="margin-top:8px" class="grid">讀取中...</div>
+        </div>
+        <div>
+          <h3>Latest log</h3>
+          <pre id="log" style="margin-top:8px">尚無 log。</pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const state = { app: null, review: null, log: '', autoRedirected: false };
+    const EXPECTED_SERVER_VERSION = 'P1008_APP_SERVER_20260710_FULLSCREEN_REPORT_V1';
+    const $ = (id) => document.getElementById(id);
+    const P1008_IMMERSIVE_KEY = 'p1008_immersive_mode';
+    function readImmersivePref() {
+      try { return localStorage.getItem(P1008_IMMERSIVE_KEY) === '1'; } catch (error) { return false; }
+    }
+    function writeImmersivePref(active) {
+      try { localStorage.setItem(P1008_IMMERSIVE_KEY, active ? '1' : '0'); } catch (error) {}
+    }
+    function immersiveRequested() {
+      return new URLSearchParams(location.search).get('fs') === '1' || readImmersivePref();
+    }
+    function immersiveDisabled() {
+      return new URLSearchParams(location.search).get('fs') === '0';
+    }
+    function immersiveActive() {
+      return document.body.classList.contains('p1008-focus-mode') || immersiveRequested();
+    }
+    function withImmersive(href) {
+      const url = new URL(href, location.href);
+      if (immersiveActive()) url.searchParams.set('fs', '1');
+      else url.searchParams.delete('fs');
+      return url.href;
+    }
+    function updateFullscreenButton() {
+      const btn = $('fullscreen-toggle');
+      if (!btn) return;
+      const active = document.body.classList.contains('p1008-focus-mode');
+      btn.textContent = active ? '退出全螢幕' : '全螢幕';
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      btn.title = '切換戰情室沉浸模式；內部跳轉會保持此狀態';
+    }
+    function applyImmersiveMode(active, persist = true) {
+      document.body.classList.toggle('p1008-focus-mode', active);
+      if (persist) writeImmersivePref(active);
+      syncImmersiveLinks();
+      updateFullscreenButton();
+    }
+    function syncImmersiveLinks() {
+      document.querySelectorAll('a[href]').forEach((link) => {
+        const raw = link.getAttribute('href');
+        if (!raw || /^(#|mailto:|tel:|javascript:)/i.test(raw)) return;
+        const url = new URL(raw, location.href);
+        if (url.protocol === location.protocol && url.host === location.host) {
+          link.setAttribute('href', withImmersive(raw));
+        }
+      });
+    }
+    document.addEventListener('click', (event) => {
+      const btn = event.target.closest?.('#fullscreen-toggle');
+      if (btn) {
+        event.preventDefault();
+        applyImmersiveMode(!document.body.classList.contains('p1008-focus-mode'), true);
+        return;
+      }
+      const link = event.target.closest?.('a[href]');
+      if (!link) return;
+      const raw = link.getAttribute('href');
+      if (!raw || /^(#|mailto:|tel:|javascript:)/i.test(raw)) return;
+      const url = new URL(raw, location.href);
+      if (url.protocol === location.protocol && url.host === location.host) {
+        link.setAttribute('href', withImmersive(raw));
+      }
+    }, true);
+    document.addEventListener('DOMContentLoaded', () => {
+      applyImmersiveMode(!immersiveDisabled(), true);
+    });
+    const safe = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[char]));
+    const WEEKDAY_ZH = ['週一', '週二', '週三', '週四', '週五', '週六', '週日'];
+    const FIELD_LABEL_ZH = {
+      DXY: '美元指數',
+      TWD_USD: '新台幣兌美元',
+      US_10Y_Yield: '美國 10 年期公債殖利率',
+      VIX: '市場波動率指數',
+      WTI_Oil: 'WTI 原油價格',
+      BOJ_Rate: '日本央行政策利率',
+      JPY_USD: '日圓兌美元',
+      RateSpread_US_JP: '美日利差',
+      Close: '2317 日收盤價',
+    };
+    const SOURCE_LABEL_ZH = {
+      dxy: '美元指數',
+      twd_usd: '新台幣兌美元',
+      us10y: '美國 10 年期公債殖利率',
+      vix: '市場波動率指數',
+      wti: 'WTI 原油價格',
+      stock_price: '2317 日收盤價',
+      jpy_usd: '日圓兌美元',
+      boj_rate: '日本央行政策利率',
+    };
+
+    function candidateMarketContext(candidateDate) {
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(candidateDate || '');
+      if (!match) return { isWeekend: false, zh: '無法判斷候選日期是否為交易日；請以 TWSE 交易日曆或 Owner 判斷為準。' };
+      const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+      const day = date.getUTCDay();
+      const mondayBased = day === 0 ? 6 : day - 1;
+      const weekdayZh = WEEKDAY_ZH[mondayBased];
+      if (day === 0 || day === 6) {
+        return { isWeekend: true, zh: `${candidateDate} 是${weekdayZh}，台股例行休市；沒有 2317 日收盤價屬正常狀況。` };
+      }
+      return { isWeekend: false, zh: `${candidateDate} 是${weekdayZh}；系統尚未接入正式 TWSE 休市日曆，若當天為國定假日需由 Owner 或交易所日曆確認。` };
+    }
+
+    function labeledList(items, labels) {
+      return items.map((item) => {
+        const key = String(item).trim();
+        const label = labels[key] || labels[key.toLowerCase()];
+        return label ? `${key}（${label}）` : key;
+      }).join('、');
+    }
+
+    function splitAfter(text, prefix) {
+      return String(text || '').startsWith(prefix)
+        ? String(text).slice(prefix.length).split(',').map((item) => item.trim()).filter(Boolean)
+        : [];
+    }
+
+    function translateWarning(note, candidateDate) {
+      const text = String(note || '');
+      const context = candidateMarketContext(candidateDate);
+      if (text.includes('未取得 2317 收盤價')) {
+        return context.isWeekend
+          ? `休市提示：${context.zh} 本次不產生 daily_price candidate，也不會補假資料；若其他候選檔通過，只會發布已生成的候選 CSV。`
+          : '價格缺口：未取得 2317 日收盤價，因此不產生 daily_price candidate。若不是休市日，需檢查 TWSE connector 或由 Owner 補正式收盤價來源。';
+      }
+      if (text.includes('沿用正式 CSV 最近交易日') && text.includes('收盤價')) return `休市沿用：${text}`;
+      if (text.includes('休市沿用列僅供 runtime/UI')) return text;
+      if (text.startsWith('BOJ_Rate missing')) return 'FX 觀察缺口：BOJ_Rate 尚未取得，無法計算美日利差；此為 sidecar 觀察欄位，不會直接改 HOLD。';
+      if (text.startsWith('JPY_USD missing')) return 'FX 觀察缺口：JPY_USD 尚未取得，FX sidecar 標示資料缺口；此欄位目前不直接阻擋 macro_snapshot。';
+      if (text.includes('macro_event_observations_candidate.csv not generated')) return '新聞觀察提示：未提供 Owner 事件輸入，因此不產生事件 candidate；系統不得自動幻想新聞。';
+      if (text.includes('macro_event_observations_candidate.csv reset to header-only')) return '新聞觀察提示：事件候選檔已重置為只有表頭，避免舊事件被誤 append。';
+      if (text.includes('沿用正式 CSV 最近值')) return `沿用提示：${text} 這是維持觀察連續性，不代表新資料已取得。`;
+      return text;
+    }
+
+    function clientReadinessExplanation(readiness, candidateDate) {
+      const blockersZh = [];
+      const advisoriesZh = [];
+      const improvementsZh = [];
+      for (const raw of readiness.blockers || []) {
+        const text = String(raw || '');
+        const critical = splitAfter(text, 'Missing critical fields:');
+        const sources = splitAfter(text, 'Missing required sources:');
+        if (critical.length) {
+          blockersZh.push(`正式發布阻擋：總經核心欄位缺值：${labeledList(critical, FIELD_LABEL_ZH)}。這些欄位會影響宏觀風險、匯率壓力與市場壓力判斷，未補齊前不可升格正式 CSV。`);
+          improvementsZh.push('改善方向：接入 Owner 核准來源，或在更新資料時由 Owner 手動輸入 DXY、TWD/USD、US10Y、VIX、WTI。');
+        } else if (sources.length) {
+          blockersZh.push(`正式發布阻擋：總經 connector/source 未取得正式來源：${labeledList(sources, SOURCE_LABEL_ZH)}。系統可沿用正式 CSV 最近值作畫面觀察，但缺少本次可追溯來源時不能把候選資料升格正式 CSV。`);
+          improvementsZh.push('改善方向：優先接 FRED/TWSE/央行/交易所等官方或準官方 connector；公開市場來源作交叉驗證，Yahoo 只能當最後備援。');
+        } else if (text.startsWith('Readiness score')) {
+          blockersZh.push(`正式發布阻擋：Readiness 目前 ${readiness.score ?? 'N/A'}%，低於門檻 ${readiness.threshold ?? 95}%。主因通常是總經來源缺失或 candidate 檢核未通過。`);
+        } else {
+          blockersZh.push(`正式發布阻擋：${text}`);
+        }
+      }
+      const context = candidateMarketContext(candidateDate);
+      const warnings = readiness.warningsZh || [];
+      const hasDailyCloseNote = warnings.some((warning) => String(warning || '').includes('2317 收盤價') || String(warning || '').includes('daily_price'));
+      if (context.isWeekend && !hasDailyCloseNote) advisoriesZh.push(context.zh);
+      for (const warning of warnings) advisoriesZh.push(translateWarning(warning, candidateDate));
+      return {
+        blockersZh: [...new Set(blockersZh)],
+        advisoriesZh: [...new Set(advisoriesZh)],
+        improvementsZh: [...new Set(improvementsZh)],
+      };
+    }
+
+    function renderNoteGroup(title, items) {
+      return items?.length
+        ? `<div class="note-group"><div class="note-title">${safe(title)}</div><ul>${items.map((item) => `<li>${safe(item)}</li>`).join('')}</ul></div>`
+        : '';
+    }
+
+    async function fetchJson(url, options = {}) {
+      const response = await fetch(url, {
+        cache: 'no-store',
+        ...options,
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      });
+      const text = await response.text();
+      let payload = {};
+      try { payload = text ? JSON.parse(text) : {}; }
+      catch { payload = { error: text || `HTTP ${response.status}` }; }
+      if (!response.ok) {
+        const error = new Error(payload.message || payload.error || `HTTP ${response.status}`);
+        error.payload = payload;
+        throw error;
+      }
+      return payload;
+    }
+
+    function badgeClass(code) {
+      if (/READY|SUCCEEDED|PASS/.test(code || '')) return 'badge green';
+      if (/FAILED|BLOCKED|VIOLATED|ERROR/.test(code || '')) return 'badge red';
+      if (/REVIEW|RUNNING|PENDING/.test(code || '')) return 'badge amber';
+      return 'badge blue';
+    }
+
+    function displayLog(value) {
+      const text = String(value || '');
+      if (!text) return '';
+      const tail = text.split(/\r?\n/).slice(-140).join('\n');
+      if (text.includes('AmpersandNotAllowed') || text.includes('The ampersand (&) character is not allowed')) {
+        return [
+          '中文摘要：此 log 含有修正前的 PowerShell URL 引用錯誤。帶 & 的 URL 已改用環境變數傳遞；請重新執行資料更新後，以新的 connector/source 結果為準。',
+          '',
+          tail,
+        ].join('\n');
+      }
+      return tail;
+    }
+
+    const JOB_TYPE_ZH = {
+      default: '一鍵更新流程',
+      'update-data': '只更新資料',
+      'news-scan': '只掃描新聞',
+      report: '產生日報',
+      'owner-publish': 'Owner 正式發布 CSV',
+    };
+
+    function setBusy(disabled) {
+      ['run-default', 'run-update', 'run-news', 'run-report', 'owner-publish'].forEach((id) => {
+        const el = $(id);
+        if (el) el.disabled = disabled || (id === 'owner-publish' && !canPublish());
+      });
+    }
+
+    function canPublish() {
+      const review = state.review || {};
+      const expected = review.ownerApprovalPhrase || '';
+      return Boolean(review.formalPublishAllowed && expected && $('approval-phrase').value.trim() === expected);
+    }
+
+    function renderStatus() {
+      const app = state.app || {};
+      const review = state.review || {};
+      const gate = app.launcherGate || review.launcherGate || {};
+      const readiness = review.readiness || {};
+      const news = review.newsScan || {};
+      const sourceManifest = app.sourceManifest || {};
+      const networkSummary = news.networkSummary || sourceManifest.networkSummary || {};
+      const sourceHealth = news.sourceHealth || sourceManifest.sourceHealth || [];
+      const latest = app.latestReport || review.latestReport || {};
+      const latestDaily = latest.latestDaily || {};
+      const steps = Array.isArray(app.steps) ? app.steps : [];
+      const busy = app.status === 'RUNNING';
+
+      $('gate-badge').className = badgeClass(gate.code || 'CHECKING');
+      $('gate-badge').textContent = gate.code || 'CHECKING';
+      $('gate-message').textContent = gate.zh || '讀取 Launcher gate 中。';
+      $('gate-panel').className = `panel ${gate.canEnterNewUi ? 'accent-green' : gate.code === 'PIPELINE_FAILED' || gate.code === 'FORMAL_CSV_BOUNDARY_VIOLATED' ? 'accent-red' : 'accent-amber'}`;
+      $('auto-redirect-note').className = `notice ${gate.canEnterNewUi ? 'green' : 'amber'}`;
+      const stayMode = new URLSearchParams(location.search).get('stay') === '1';
+      $('auto-redirect-note').textContent = gate.canEnterNewUi
+        ? stayMode
+          ? 'Gate 已通過；目前為 Launcher 審查停留模式，請按「進入新 UI」進入決策摘要。'
+          : 'Gate 已通過；若剛完成一鍵資料流程或正式發布，Launcher 會自動進入新 UI。'
+        : 'Gate 尚未通過；請先完成候選資料、總經/新聞/FX 或 Owner 審查。';
+
+      $('job-badge').className = badgeClass(app.status || 'IDLE');
+      $('job-badge').textContent = app.status || 'IDLE';
+      $('job-type').textContent = JOB_TYPE_ZH[app.jobType] || app.jobType || '無執行中任務';
+      $('job-id').textContent = app.jobId || '等待啟動';
+      $('formal-boundary').textContent = app.formalCsvModified
+        ? (app.jobType === 'owner-publish' ? 'Owner 已發布' : 'Hash 異常')
+        : '未修改';
+      const approvedCount = sourceManifest.approvedNetworkCount ?? 0;
+      const successCount = networkSummary.succeeded ?? 0;
+      const checkedCount = networkSummary.checked ?? sourceHealth.length;
+      $('connector-status').textContent = `${successCount}/${checkedCount || approvedCount} success`;
+      $('latest-report').textContent = latestDaily?.date || latestDaily?.title || 'N/A';
+      $('network-status-badge').className = badgeClass(networkSummary.status || 'NO_SCAN');
+      $('network-status-badge').textContent = networkSummary.status || 'NO_SCAN';
+      $('connector-health-summary').textContent = networkSummary.status
+        ? `已核准 ${approvedCount} 個網路來源；本次檢查 ${checkedCount || 0} 個，成功 ${successCount || 0}，失敗 ${networkSummary.failed || 0}，跳過 ${networkSummary.skipped || 0}。${networkSummary.networkLikelyBlocked ? '多數來源被拒絕連線，優先檢查防火牆/proxy。' : ''}`
+        : `已核准 ${approvedCount} 個網路來源；尚未有 v2 health snapshot。`;
+      $('connector-health-table').innerHTML = sourceHealth.length
+        ? sourceHealth.slice(0, 12).map((item) => `<tr>
+            <td>${safe(item.sourceName || item.sourceId || 'UNKNOWN')}</td>
+            <td>${safe(item.sourceTier || '')}</td>
+            <td>${safe(item.status || '')}</td>
+            <td>${safe(item.fetchOk ?? 0)} / ${safe(item.fetchFailed ?? 0)}</td>
+            <td>${safe(item.itemsDiscovered ?? 0)} discovered / ${safe(item.itemsAccepted ?? 0)} accepted</td>
+            <td>${safe(item.lastErrorType || item.lastError || item.statusZh || '')}</td>
+          </tr>`).join('')
+        : '<tr><td colspan="6">尚未執行 v2 掃描；按「只跑新聞掃描」或「一鍵更新資料與資訊」。</td></tr>';
+
+      $('candidate-date').textContent = review.candidateDate || 'N/A';
+      $('dry-run-path').textContent = review.dryRunPath || '無 DRY_RUN';
+      $('readiness-score').textContent = Number.isFinite(readiness.score) ? `${readiness.score}%` : 'N/A';
+      $('readiness-threshold').textContent = `正式發布門檻 ${readiness.threshold ?? 95}%`;
+      $('readiness-badge').className = badgeClass(readiness.allowed ? 'PASS' : 'BLOCKED');
+      $('readiness-badge').textContent = readiness.allowed ? 'PUBLISH READY' : 'BLOCKED';
+      $('candidate-count').textContent = String((review.generatedFiles || []).length);
+      $('news-level').textContent = news.holdUnderReview ? 'HOLD_UNDER_REVIEW' : (news.highestLevel || 'NONE');
+      $('news-detail').textContent = `${news.candidateRowCount || 0} rows | deadline ${news.reviewDeadline || 'N/A'}`;
+      const dailyRow = review.dailyRow || {};
+      if (dailyRow.Status === 'MARKET_CLOSED_CARRY_FORWARD') {
+        $('daily-carry-note').style.display = '';
+        $('daily-carry-note').textContent = `休市沿用：${review.candidateDate} 使用最近正式收盤價 ${dailyRow.Close}，PB ${dailyRow.PB_daily}，來源狀態 ${dailyRow.DataSupportLevel}；此列供 Launcher / 新 UI 顯示，不列入正式 daily_price append。`;
+      } else {
+        $('daily-carry-note').style.display = 'none';
+        $('daily-carry-note').textContent = '';
+      }
+
+      const diagnostics = readiness.candidateDiagnostics || [];
+      $('candidate-table').innerHTML = diagnostics.length
+        ? diagnostics.map((item) => `<tr>
+            <td>${safe(item.dataset)}</td>
+            <td>${safe(item.rows)}</td>
+            <td>${item.schemaMatch ? 'PASS' : 'FAIL'}</td>
+            <td>${safe((item.duplicateKeys || []).join(', ') || 'none')}</td>
+            <td>${safe(item.target)}</td>
+          </tr>`).join('')
+        : '<tr><td colspan="5">無候選檔案或不需發布。</td></tr>';
+
+      const explanation = review.readinessExplanation || clientReadinessExplanation(readiness, review.candidateDate);
+      const blockersZh = explanation.blockersZh || [];
+      const advisoriesZh = explanation.advisoriesZh || [];
+      const improvementsZh = explanation.improvementsZh || [];
+      const hasNotes = blockersZh.length || advisoriesZh.length || improvementsZh.length;
+      $('blockers').className = `notice ${blockersZh.length ? 'amber' : hasNotes ? 'blue' : 'green'}`;
+      $('blockers').innerHTML = hasNotes
+        ? [
+            renderNoteGroup('正式發布阻擋', blockersZh),
+            renderNoteGroup('休市 / 觀察提示', advisoriesZh),
+            renderNoteGroup('改善方向', improvementsZh),
+          ].join('')
+        : '目前沒有阻擋原因。';
+
+      const noPublishPending = !review.formalPublishAllowed && !review.formalPublishBlocked && !review.formalPublishRequired;
+      $('publish-badge').className = badgeClass(review.formalPublishAllowed ? 'PASS' : review.formalPublishBlocked ? 'BLOCKED' : noPublishPending ? 'PASS' : 'REVIEW');
+      $('publish-badge').textContent = review.formalPublishAllowed ? '可正式發布' : review.formalPublishBlocked ? '已阻擋' : noPublishPending ? '無待發布' : '審查中';
+      $('approval-phrase').placeholder = review.ownerApprovalPhrase || '無候選資料';
+      $('approval-help').textContent = review.formalPublishAllowed && review.ownerApprovalPhrase
+        ? `請輸入：${review.ownerApprovalPhrase}`
+        : noPublishPending
+          ? '候選資料已發布或目前沒有可發布候選資料。'
+          : '目前沒有可發布候選資料。';
+      $('owner-publish').disabled = busy || !canPublish();
+
+      $('steps').innerHTML = steps.length
+        ? steps.map((step) => `<div class="stat" style="min-height:58px">
+            <div class="between"><strong>${safe(step.label || step.id)}</strong><span class="${badgeClass(step.status)}">${safe(step.status)}</span></div>
+            <div class="small">${safe(step.message || '')}</div>
+          </div>`).join('')
+        : '<div class="notice">尚無 pipeline steps。</div>';
+      $('log').textContent = displayLog(state.log) || '尚無 log。';
+      setBusy(busy);
+      maybeRedirect();
+    }
+
+    function maybeRedirect() {
+      const app = state.app || {};
+      const gate = app.launcherGate || state.review?.launcherGate || {};
+      const params = new URLSearchParams(location.search);
+      const justFinished = app.status === 'SUCCEEDED' && ['default', 'owner-publish'].includes(app.jobType);
+      if (!state.autoRedirected && justFinished && gate.canEnterNewUi && params.get('stay') !== '1') {
+        state.autoRedirected = true;
+        $('auto-redirect-note').textContent = 'Gate 已通過，正在進入新 UI。';
+        setTimeout(() => {
+          location.assign(withImmersive(`./output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html?from=launcher&ts=${Date.now()}`));
+        }, 900);
+      }
+    }
+
+    async function refreshAll() {
+      try {
+        const [app, review] = await Promise.all([
+          fetchJson(`/api/p1008/status?t=${Date.now()}`),
+          fetchJson(`/api/p1008/review-package?t=${Date.now()}`),
+        ]);
+        state.app = app;
+        state.review = review;
+        if (app.jobId) {
+          try {
+            const response = await fetch(`/api/p1008/log?jobId=${encodeURIComponent(app.jobId)}&t=${Date.now()}`, { cache: 'no-store' });
+            state.log = response.ok ? await response.text() : '';
+          } catch {
+            state.log = '';
+          }
+        }
+      } catch (error) {
+        state.app = { status: 'ERROR', errors: [error.message] };
+        state.review = { launcherGate: { code: 'APP_API_UNAVAILABLE', zh: 'App API 未啟動，請使用 P1008_APP.bat 開啟。', canEnterNewUi: false }, readiness: { blockers: [error.message] } };
+      }
+      renderStatus();
+    }
+
+    async function runJob(route) {
+      setBusy(true);
+      try {
+        state.app = await fetchJson(route, { method: 'POST', body: '{}' });
+      } catch (error) {
+        state.app = error.payload || { status: 'FAILED', errors: [error.message] };
+      }
+      await refreshAll();
+    }
+
+    async function ownerPublish() {
+      const review = state.review || {};
+      if (!canPublish()) return;
+      setBusy(true);
+      try {
+        state.app = await fetchJson('/api/p1008/publish/formal', {
+          method: 'POST',
+          body: JSON.stringify({
+            date: review.candidateDate,
+            approvalPhrase: $('approval-phrase').value.trim(),
+          }),
+        });
+      } catch (error) {
+        state.app = error.payload || { status: 'FAILED', errors: [error.message] };
+      }
+      await refreshAll();
+    }
+
+    $('run-default').addEventListener('click', () => runJob('/api/p1008/run/default'));
+    $('run-update').addEventListener('click', () => runJob('/api/p1008/run/update-data'));
+    $('run-news').addEventListener('click', () => runJob('/api/p1008/run/news-scan'));
+    $('run-report').addEventListener('click', () => runJob('/api/p1008/run/report'));
+    $('refresh').addEventListener('click', refreshAll);
+    $('owner-publish').addEventListener('click', ownerPublish);
+    $('approval-phrase').addEventListener('input', renderStatus);
+
+    refreshAll();
+    setInterval(refreshAll, 5000);
+  </script>
+  <script>
+    (function installDecisionUiPolish() {
+      const jobTypeZh = {
+        default: '一鍵更新：資料 + 新聞 + 日報',
+        'update-data': '只更新資料',
+        'news-scan': '只掃描新聞',
+        report: '產生日報',
+        'owner-publish': 'Owner 正式發布 CSV',
+      };
+      const datasetZh = {
+        daily: '2317 每日股價',
+        macro: '總經快照',
+        fx_trend_observations: '匯率趨勢旁路',
+        macro_event_observations: '事件 / 黑天鵝旁路',
+      };
+      const statusZh = {
+        IDLE: '待命',
+        RUNNING: '執行中',
+        SUCCEEDED: '已完成',
+        FAILED: '失敗',
+        ERROR: '錯誤',
+        NETWORK_BLOCKED: '連線受阻',
+        ONLINE_VERIFIED: '外網可用',
+        NO_NETWORK_RUN: '未連網測試',
+        NO_SCAN: '尚未掃描',
+        LOCAL_INPUT_ONLY: '本地輸入',
+        CONNECTION_REFUSED: '連線被拒',
+        TIMEOUT: '逾時',
+        HTTP_404: '來源改版或網址錯誤',
+        OK: '成功',
+        OK_NO_RELEVANT_ITEMS: '成功但無相關事件',
+        DISABLED: '未啟用',
+      };
+
+      function text(id, value) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+      }
+      function html(id, value) {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = value;
+      }
+      function esc(value) {
+        return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[char]));
+      }
+      function pct(numerator, denominator) {
+        const den = Number(denominator || 0);
+        if (!den) return 'N/A';
+        return `${Math.round((Number(numerator || 0) / den) * 100)}%`;
+      }
+      function sourceNote(item) {
+        const status = item.status || item.lastErrorType || '';
+        if (status === 'CONNECTION_REFUSED') return 'Python connector 連線被拒。若瀏覽器可上網，通常代表目前 App server session 被 proxy/firewall 或 Codex 沙盒限制。';
+        if (status === 'TIMEOUT') return '來源逾時，可稍後補跑或調整來源權重。';
+        if (status === 'HTTP_404') return '來源 URL 可能改版，需要更新 manifest。';
+        if (status === 'OK_NO_RELEVANT_ITEMS') return '來源可連，但本次沒有符合關鍵字的事件。';
+        if (status === 'OK') return '來源可連，已完成抽取與降噪。';
+        if (status === 'DISABLED') return '來源未啟用。';
+        if (status === 'LOCAL_INPUT_ONLY') return '本地 Owner 輸入來源，非網路來源。';
+        return item.lastErrorType || item.statusZh || '';
+      }
+      function datasetStandard(item) {
+        const dataset = item.dataset || '';
+        const duplicated = (item.duplicateKeys || []).length;
+        const schemaPass = Boolean(item.schemaMatch);
+        const common = schemaPass && !duplicated ? '格式通過、無重複；' : '格式或重複列需修正；';
+        if (dataset === 'macro') return `${common}正式發布仍需 VIX / WTI / TWD/USD / US10Y / DXY 等核心總經來源可追溯，不能只靠沿用值。`;
+        if (dataset === 'daily') return `${common}休市日沿用只供畫面，不 append 週末 daily_price。`;
+        if (dataset === 'fx_trend_observations') return `${common}旁路觀察，Actionable 必須為 false，缺 JPY/BOJ 時只能標觀察缺口。`;
+        if (dataset === 'macro_event_observations') return `${common}事件旁路需來源證據與 Owner gate，新聞不可直接改 HOLD。`;
+        return `${common}仍需看右側阻擋原因。`;
+      }
+      function macroStatusZh(item) {
+        const status = item.status || '';
+        const map = {
+          OFFICIAL_OR_PUBLIC_SERIES_OK: '本次正式/公開序列來源成功',
+          PUBLIC_MARKET_OK: '本次公開市場來源成功',
+          FALLBACK_OK: '本次備援來源成功',
+          SOURCE_OK: '本次來源成功',
+          OWNER_INPUT_OK: 'Owner 輸入成功',
+          STABLE_SERIES_CARRY_FORWARD_OK: '慢變欄位沿用，可支持但需定期複核',
+          CARRY_FORWARD: '沿用舊值，不能支持正式發布',
+          OBSERVATION_CARRY_FORWARD: '觀察沿用，不能支持正式發布',
+          MISSING: '缺本次可追溯來源',
+        };
+        return map[status] || item.statusZh || status || '尚未檢查';
+      }
+      function renderMacroSourceHealth(review) {
+        const rows = review.macroSourceHealth || [];
+        const summary = review.macroSourceSummary || {};
+        const proxies = review.marketProxyManifest || [];
+        let panel = document.getElementById('macro-source-health-panel');
+        if (!panel) {
+          panel = document.createElement('div');
+          panel.id = 'macro-source-health-panel';
+          panel.className = 'notice blue';
+          panel.style.marginTop = '12px';
+          const anchor = document.getElementById('daily-carry-note') || document.getElementById('review-panel');
+          anchor?.after(panel);
+        }
+        if (!panel) return;
+        if (!rows.length) {
+          panel.innerHTML = '<strong>總經正式來源健康表</strong><div class="small">尚未取得本次來源健康表；請先執行資料更新。</div>';
+          return;
+        }
+        const rowHtml = rows.map((item) => {
+          const ok = item.supportsFormal ? '可支持正式發布' : '只供觀察 / 阻擋正式發布';
+          const sourceUrl = item.sourceUrl ? `<a href="${esc(item.sourceUrl)}" target="_blank" rel="noopener">來源</a>` : 'N/A';
+          return `<tr>
+            <td>${esc(item.label || item.field)}</td>
+            <td>${esc(macroStatusZh(item))}</td>
+            <td>${esc(item.value || 'N/A')}</td>
+            <td>${esc(item.sourceDate || item.effectiveDate || 'N/A')}</td>
+            <td>${esc(item.inputSource || 'N/A')}</td>
+            <td>${sourceUrl}</td>
+            <td>${esc(ok)}</td>
+          </tr>`;
+        }).join('');
+        const proxyHtml = proxies.length
+          ? `<div class="small" style="margin-top:10px"><strong>Alpaca 市場資料源：</strong>${proxies.map((item) => `${esc(item.symbol)} → ${esc(item.mapsTo)}（${item.formalDataSource ? '可作正式代理指標' : '觀察用'}；${item.formalReplacement ? '可替代原欄位' : '不替代原欄位'}）`).join('；')}</div>`
+          : '<div class="small" style="margin-top:10px"><strong>Alpaca 市場資料源：</strong>尚未設定。代理 ETF 可正式記錄為代理指標，但不能直接填入不同語義的總經欄位。</div>';
+        panel.innerHTML = `
+          <strong>總經正式來源健康表</strong>
+          <div class="small">${esc(summary.statusZh || 'VIX / WTI / TWD_USD / US10Y / DXY 必須有本次可追溯來源，沿用值只能讓 UI 連續顯示。')}</div>
+          <div class="table-wrap" style="margin-top:10px">
+            <table>
+              <thead><tr><th>欄位</th><th>狀態</th><th>數值</th><th>來源日期</th><th>來源類型</th><th>URL</th><th>發布判斷</th></tr></thead>
+              <tbody>${rowHtml}</tbody>
+            </table>
+          </div>
+          ${proxyHtml}
+          <div class="small" style="margin-top:8px">判讀原則：Alpaca 可作正式市場資料源；若標的是代理 ETF，只能發布到代理指標或旁路欄位，不能直接取代 VIX、WTI、DXY、US10Y 等原始總經欄位。</div>
+        `;
+      }
+      function addPublishStandards(readiness, review, networkSummary) {
+        let box = document.getElementById('publish-standards');
+        if (!box) {
+          box = document.createElement('div');
+          box.id = 'publish-standards';
+          box.className = 'notice blue';
+          const table = document.getElementById('candidate-table');
+          table?.closest('div')?.after(box);
+        }
+        const checked = Number(networkSummary.checked || 0);
+        const succeeded = Number(networkSummary.succeeded || 0);
+        box.innerHTML = [
+          '<strong>Owner 核准標準</strong>',
+          '<ul>',
+          `<li>正式發布 Readiness 必須達 ${esc(readiness.threshold ?? 95)}%；目前 ${esc(readiness.score ?? 'N/A')}%。這不是六大 IC 投資分數，而是候選 CSV 可否升格正式資料的稽核分數。</li>`,
+          '<li>候選檔 schema 通過、無重複列，且正式來源缺口已處理。</li>',
+          '<li>總經核心來源不可只靠沿用值正式發布；沿用值只供 Launcher / 新 UI 觀察。</li>',
+          '<li>新聞與 FX 旁路必須保持 Actionable=false，不能直接改主結論 IC。</li>',
+          `<li>新聞來源成功率目前 ${checked ? pct(succeeded, checked) : '尚未掃描'}；0% 時不應相信本次新聞掃描完整。</li>`,
+          `<li>正式發布需輸入 ${esc(review.ownerApprovalPhrase || 'OWNER_APPROVE_PUBLISH_YYYY-MM-DD')}。</li>`,
+          '</ul>',
+        ].join('');
+      }
+      function polishStaticLabels() {
+        const h1 = document.querySelector('h1');
+        if (h1) h1.textContent = 'P1008 Launcher：資料更新與 Owner 審查';
+        const links = document.querySelectorAll('.topbar .button');
+        if (links[0]) links[0].textContent = '進入新 UI';
+        if (links[1]) links[1].textContent = '研報庫';
+        if (links[2]) links[2].textContent = 'SOP';
+        const buttons = [
+          ['run-default', '一鍵更新資料與資訊'],
+          ['run-update', '只更新資料'],
+          ['run-news', '只掃描新聞'],
+          ['run-report', '產生日報'],
+          ['refresh', '刷新狀態'],
+          ['owner-publish', '正式發布 CSV'],
+        ];
+        buttons.forEach(([id, label]) => text(id, label));
+      }
+      function polishDecisionUi() {
+        if (typeof state === 'undefined') return;
+        polishStaticLabels();
+        const app = state.app || {};
+        const review = state.review || {};
+        const readiness = review.readiness || {};
+        const news = review.newsScan || {};
+        const sourceManifest = app.sourceManifest || {};
+        const serverContext = app.serverContext || {};
+        const networkSummary = news.networkSummary || sourceManifest.networkSummary || {};
+        const sourceHealth = news.sourceHealth || sourceManifest.sourceHealth || [];
+        const networkHealth = sourceHealth.filter((item) =>
+          item && item.enabled !== false && item.requiresNetwork !== false && item.sourceTier !== 'OWNER_NOTE' && item.status !== 'LOCAL_INPUT_ONLY'
+        );
+        const approvedCount = Number(sourceManifest.approvedNetworkCount ?? 0);
+        const checkedCount = Number(networkSummary.checked ?? networkHealth.length ?? 0);
+        const successCount = Number(networkSummary.succeeded ?? 0);
+        const failureCount = Number(networkSummary.failed ?? 0);
+        const skippedCount = Number(networkSummary.skipped ?? 0);
+        const networkStatus = String(networkSummary.status || '');
+        const networkRunSkipped = networkStatus === 'NO_NETWORK_RUN' || (checkedCount && skippedCount >= checkedCount && !successCount && !failureCount);
+        const sourceRate = checkedCount && !networkRunSkipped ? pct(successCount, checkedCount) : (networkRunSkipped ? '未啟用網路' : 'N/A');
+        const sandboxSuffix = serverContext.codexNetworkSandbox ? '，Codex 沙盒' : '';
+        const connectorStatusText = networkRunSkipped
+          ? `未啟用網路（${skippedCount}/${checkedCount} 跳過）`
+          : (checkedCount ? `${sourceRate}（${successCount}/${checkedCount}${sandboxSuffix}）` : '尚未掃描');
+        const cleanConnectorSummary = networkRunSkipped
+          ? `本次是 no-network / dry-run 或網路掃描被明確跳過；${checkedCount} 個網路來源沒有實際連線，不列為爬蟲失敗率。`
+          : (networkSummary.status
+            ? `已核准 ${approvedCount} 個網路來源；本次檢查 ${checkedCount || 0} 個，成功 ${successCount || 0}，失敗 ${failureCount || 0}，跳過 ${skippedCount || 0}。來源成功率 ${sourceRate}。`
+            : `已核准 ${approvedCount} 個網路來源；尚未取得本次 crawler v2 health snapshot。`);
+
+        text('job-type', jobTypeZh[app.jobType] || app.jobType || '無執行中任務');
+        text('job-id', app.jobId || '等待啟動');
+        text('formal-boundary', app.formalCsvModified ? (app.jobType === 'owner-publish' ? 'Owner 已發布' : 'Hash 異常') : '未修改');
+        text('connector-status', checkedCount ? `${sourceRate}（${successCount}/${checkedCount}）` : '尚未掃描');
+        text('network-status-badge', statusZh[networkSummary.status] || networkSummary.status || '尚未掃描');
+        text('connector-health-summary', networkSummary.status
+          ? `已核准 ${approvedCount} 個網路來源；本次檢查 ${checkedCount || 0} 個，成功 ${successCount || 0}，失敗 ${failureCount || 0}，跳過 ${networkSummary.skipped || 0}。來源成功率 ${sourceRate}。${networkSummary.networkLikelyBlocked ? '目前 App server 執行 Python HTTPS 全部被拒，不代表 Yahoo、經濟日報、NVIDIA 或 CSP 網站不存在；請檢查 proxy/firewall，或用 Windows 直接啟動 P1008_APP.bat 後重跑。' : '來源成功不等於正式發布；新聞仍只作觀察與 Owner review。'}`
+          : `已核准 ${approvedCount} 個網路來源；尚未取得 v2 health snapshot。Yahoo Finance 不是新聞來源，只可作市場 / 總經資料最後備援。`);
+        if (networkHealth.length) {
+          html('connector-health-table', networkHealth.map((item) => `<tr>
+            <td>${esc(item.sourceName || item.sourceId || 'UNKNOWN')}</td>
+            <td>${esc(item.sourceTier || '')}</td>
+            <td>${esc(statusZh[item.status] || item.status || '')}</td>
+            <td>${esc(item.fetchOk ?? 0)} 成功 / ${esc(item.fetchFailed ?? 0)} 失敗</td>
+            <td>${esc(item.itemsDiscovered ?? 0)} discovered / ${esc(item.itemsAccepted ?? 0)} accepted</td>
+            <td>${esc(sourceNote(item))}</td>
+          </tr>`).join(''));
+        } else {
+          html('connector-health-table', '<tr><td colspan="6">尚未取得網路來源 health；本地 Owner 輸入不列入 crawler 成功率。</td></tr>');
+        }
+        const dailyRow = review.dailyRow || {};
+        if (dailyRow.Status === 'MARKET_CLOSED_CARRY_FORWARD') {
+          text('daily-carry-note', `休市沿用：${review.candidateDate} 是休市日；沿用最近正式交易日收盤價 ${dailyRow.Close}。P/B 倍數 ${dailyRow.PB_daily} = 收盤價 / BVPS ${dailyRow.BVPS_ref ?? 'N/A'}。本列只供 Launcher / 新 UI 畫面連續，不 append 週末 daily_price 正式列。`);
+        }
+        renderMacroSourceHealth(review);
+        const diagnostics = readiness.candidateDiagnostics || [];
+        if (diagnostics.length) {
+          html('candidate-table', diagnostics.map((item) => `<tr>
+            <td>${esc(datasetZh[item.dataset] || item.dataset)}</td>
+            <td>${esc(item.rows)}</td>
+            <td>${item.schemaMatch ? 'PASS' : 'FAIL'}</td>
+            <td>${esc((item.duplicateKeys || []).join(', ') || 'none')}</td>
+            <td>${esc(datasetStandard(item))}</td>
+          </tr>`).join(''));
+        }
+        text('connector-status', connectorStatusText);
+        text('connector-health-summary', cleanConnectorSummary);
+        const serverWarning = $('server-context-warning');
+        if (serverWarning) {
+          const staleServer = app.serverVersion && app.serverVersion !== EXPECTED_SERVER_VERSION;
+          if (staleServer) {
+            serverWarning.style.display = '';
+            serverWarning.textContent = `目前 localhost server 版本過舊（${app.serverVersion}），不要沿用此分頁做資料/新聞 connector 驗收。請關閉舊分頁，從 Windows 資料夾直接雙擊 P1008_APP.bat 重新啟動。`;
+          } else if (serverContext.codexNetworkSandbox) {
+            serverWarning.style.display = '';
+            serverWarning.textContent = '目前 Launcher server 是從 Codex 沙盒啟動，外網 connector 可能被禁用；0/16 不代表新聞或總經來源不存在。Owner 驗收請從 Windows 資料夾直接雙擊 P1008_APP.bat 後重跑，讓 server 走本機網路/proxy。';
+          } else {
+            serverWarning.style.display = 'none';
+            serverWarning.textContent = '';
+          }
+        }
+        addPublishStandards(readiness, review, networkSummary);
+      }
+      const originalRenderStatus = renderStatus;
+      renderStatus = function patchedRenderStatus() {
+        originalRenderStatus();
+        polishDecisionUi();
+      };
+      polishDecisionUi();
+    }());
+  </script>
+</body>
+</html>

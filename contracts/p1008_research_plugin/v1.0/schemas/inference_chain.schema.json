@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v1.0/schemas/inference_chain.schema.json",
+  "title": "P1008 Inference Chain",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["chain_id", "observation_claim_ids", "hypothesis_claim_ids", "mechanism_claim_ids", "interpretation_ids", "research_status", "report_conclusion_claim_ids", "validation_status", "actionable"],
+  "properties": {
+    "chain_id": {"type": "string", "minLength": 1},
+    "observation_claim_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "hypothesis_claim_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "mechanism_claim_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "interpretation_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "research_status": {"enum": ["ACTIVE", "CHALLENGED", "INSUFFICIENT_DATA", "OWNER_REVIEW_REQUIRED", "REJECTED"]},
+    "report_conclusion_claim_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "validation_status": {"enum": ["NOT_DUE", "DUE", "SUPPORTED", "PARTIALLY_SUPPORTED", "REFUTED", "CONFOUNDED", "INSUFFICIENT_DATA"]},
+    "knowledge_gap_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "actionable": {"const": false}
+  }
+}

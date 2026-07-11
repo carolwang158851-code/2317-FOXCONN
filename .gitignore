@@ -1,0 +1,25 @@
+# P1008 generated and local runtime outputs
+logs/
+runtime/
+staging/
+output/
+backups/
+
+# Generated periodic reports. Source report standards remain under reports/*.md.
+reports/generated/
+reports/P1008_REPORT_MANIFEST.json
+
+# Python and tool caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local OS/editor files
+Thumbs.db
+Desktop.ini
+*.tmp
+*.bak
+
+# Keep formal CSV data visible to review unless Owner decides otherwise.
+!data/*.csv
+!data/*.json

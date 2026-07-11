@@ -1,0 +1,26 @@
+{
+  "validationId": "P1008_RESEARCH_CONTRACT_GOVERNANCE_VALIDATION",
+  "contractVersion": "1.0",
+  "phase": "PHASE_1A_RESEARCH_CONTRACT_LAYER",
+  "actionable": false,
+  "checks": [
+    {"id": "GV-001", "severity": "CRITICAL", "rule": "Every JSON artifact parses successfully."},
+    {"id": "GV-002", "severity": "CRITICAL", "rule": "Every schema uses JSON Schema Draft 2020-12, has a stable $id and rejects additional top-level properties."},
+    {"id": "GV-003", "severity": "CRITICAL", "rule": "All relative schema references resolve to frozen contract files."},
+    {"id": "GV-004", "severity": "CRITICAL", "rule": "Plugin policy permanently forbids auto trade, formal CSV write, rule enablement, Runtime SQLite write, HOLD/MIDR change and publish."},
+    {"id": "GV-005", "severity": "CRITICAL", "rule": "All schedules and hooks are disabled."},
+    {"id": "GV-006", "severity": "CRITICAL", "rule": "No API path exposes publish, trading, position, rule enablement or arbitrary command execution."},
+    {"id": "GV-007", "severity": "HIGH", "rule": "All POST API operations require the local session security scheme."},
+    {"id": "GV-008", "severity": "CRITICAL", "rule": "Owner thesis approval records candidate disposition only and effective_change_applied remains false."},
+    {"id": "GV-009", "severity": "CRITICAL", "rule": "Ledger policy is JSONL append-only with hash chain; update, delete and truncate are forbidden."},
+    {"id": "GV-010", "severity": "HIGH", "rule": "Knowledge gaps cannot be resolved without evidence and cannot be resolved finally by a model actor."},
+    {"id": "GV-011", "severity": "HIGH", "rule": "Research debt cannot auto-resolve or auto-delete and overdue debt cannot change HOLD."},
+    {"id": "GV-012", "severity": "HIGH", "rule": "Research Health weights sum to 100 and RHS is separate from RQS and investment ICs."},
+    {"id": "GV-013", "severity": "HIGH", "rule": "Source policy forbids DefaultFill, unregistered knowledge-base input and model-driven tier upgrade."},
+    {"id": "GV-014", "severity": "CRITICAL", "rule": "Phase 1A contains no Python, OpenAI runtime, module implementation, Launcher or report integration."},
+    {"id": "GV-015", "severity": "CRITICAL", "rule": "Formal CSV, authority manifest, rule manifest and Runtime SQLite remain outside the contract write scope."},
+    {"id": "GV-016", "severity": "HIGH", "rule": "Contract manifest records SHA-256 for every frozen artifact except itself."}
+  ],
+  "passCondition": "All CRITICAL and HIGH checks PASS.",
+  "failureBehavior": "Do not enter Phase 1B; preserve core war room and request Owner review."
+}

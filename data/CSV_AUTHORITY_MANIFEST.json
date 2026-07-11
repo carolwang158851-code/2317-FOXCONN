@@ -1,0 +1,383 @@
+{
+  "manifestVersion": "1.2.2",
+  "approvedAt": "2026-07-10",
+  "approvedBy": "Owner",
+  "approvalSource": "Owner conversation approvals P1008 items 16-18, 25-29, 75, 77, 80 and approved P2-03B-07 Release Manifest; Owner approval 2026-06-29 for 2317_daily_price.csv PB correction and formal daily CSV authority; Owner approval 2026-06-29 for MARKET INTELLIGENCE observation boundary; Owner approval 2026-06-29 via owner_publish_csv_v2.py; appended 2 row(s); Owner approval 2026-06-29 for macro_snapshot.csv historical format correction and manifest hash update; Owner approval 2026-06-30 via owner_publish_csv_v2.py; appended 2 row(s); 2026-06-30 TWSE official close correction, no new row appended; Owner approval 2026-07-03 for macro_event_observations.csv and fx_trend_observations.csv observation-only sidecar contracts; Owner approval 2026-07-05 via owner_publish_csv_v2.py; appended 48 row(s); Owner approval 2026-07-06 via owner_publish_csv_v2.py; appended 49 row(s); Owner approval 2026-07-07 via owner_publish_csv_v2.py; appended 43 row(s); Owner approval 2026-07-08 via owner_publish_csv_v2.py; appended 50 row(s); Owner approval 2026-07-10 via owner_publish_csv_v2.py; appended 44 row(s)",
+  "authorityPolicy": {
+    "hashAlgorithm": "SHA-256",
+    "hashMismatchStatus": "APPROVAL_EXPIRED",
+    "hashMismatchZh": "檔案內容與核准版本不符，權威資格已失效",
+    "automaticRecovery": false,
+    "csvWritePolicy": "READ_ONLY",
+    "csvWritePolicyZh": "正式 CSV 維持唯讀，不得由程式自動修改"
+  },
+  "authoritativeFiles": [
+    {
+      "path": "data/2317_master_v9.csv",
+      "fileName": "2317_master_v9.csv",
+      "fileVersion": "v9.3",
+      "schemaVersion": "v9.0-54-columns",
+      "sha256": "0BB2FEC6FA3035AC642738BC12EA6959C81C8A79D5221E694BF780427051CF79",
+      "fileSizeBytes": 12782,
+      "rowCount": 21,
+      "columnCount": 54,
+      "validationStatus": "PASS_WITH_WARNINGS",
+      "validationStatusZh": "結構驗證通過，但部分欄位仍屬估算、近似或僅供觀察",
+      "fileAuthority": "CSV_AUTHORITY",
+      "fileAuthorityZh": "此檔案版本已由 Owner 核准並以 SHA-256 鎖定",
+      "dataProvenance": "USER_CURATED_WEB_DATA",
+      "dataProvenanceZh": "內容原始來源包含使用者整理及查核的網路資料",
+      "dataSupportLevel": "L3",
+      "dataSupportLevelZh": "第三級條件性資料支援",
+      "requiredColumns": [
+        "Quarter",
+        "QuarterEndDate",
+        "EstimatedEffectiveDate",
+        "EPS_Q",
+        "EPS_TTM",
+        "BVPS",
+        "TaxRev_Pct",
+        "CashDividend",
+        "ROE_TTM_Pct",
+        "OperatingMarginPct",
+        "ROIC_Precise_Pct",
+        "DataSource",
+        "DataSupportLevel"
+      ],
+      "columns": [
+        "Quarter",
+        "QuarterEndDate",
+        "EstimatedEffectiveDate",
+        "Revenue_Q_100M",
+        "GrossMarginPct",
+        "OperatingIncome_Q_100M",
+        "OperatingMarginPct",
+        "OperatingMarginStatus",
+        "TaxExpense_Q_1M",
+        "TaxRev_Pct",
+        "TaxRevMean_Pct",
+        "TaxRevStd_Pct",
+        "TaxZ",
+        "TaxZ_Status",
+        "EPS_Q",
+        "EPS_YoY_Pct",
+        "EPS_TTM",
+        "BVPS",
+        "QuarterEndClose",
+        "CloseAdjusted",
+        "ROE_Annual_Pct",
+        "ROE_TTM_Pct",
+        "PB_QuarterEnd",
+        "PB_Adjusted",
+        "PB_Zone",
+        "ROE_Signal",
+        "payoutRatio_Pct",
+        "CashDividend",
+        "DividendYield_Pct",
+        "FCF_Annual_100M",
+        "MarketCap_100M",
+        "FCFYield_Annual_Pct",
+        "ROIC_Approx_Pct",
+        "ROIC_Precise_Pct",
+        "ROIC_Status",
+        "NOPAT_Annual_100M",
+        "InvestedCapital_100M",
+        "Cash_100M",
+        "InterestBearingDebt_100M",
+        "NetDebt_100M",
+        "NetDebtStatus",
+        "EBITDA_Approx_100M",
+        "DA_Est_100M",
+        "NetDebtToEBITDA_Approx",
+        "NetDebtToEBITDA_Status",
+        "BalanceSheetDataQuality",
+        "DataSource",
+        "DataSupportLevel",
+        "LookaheadRisk",
+        "Notes",
+        "ForeignHoldRatio_Pct",
+        "ForeignHoldChange_Pct",
+        "ForeignHoldTrend",
+        "AI_Revenue_Pct"
+      ],
+      "fieldOverrides": {
+        "CashDividend": {
+          "quality": "MIXED_BY_PERIOD",
+          "2026Q1Quality": "OFFICIAL_MOPS_TWSE_A1_L1",
+          "2026Q1Value": "7.17179227",
+          "2026Q1Evidence": [
+            "MOPS重大訊息2026-06-12序號2",
+            "TWSE_TWT48U_ALL_2026-07-02"
+          ],
+          "adjustmentReasonZh": "海外第一次無擔保轉換公司債債權人轉換普通股，流通在外股數增加；現金股利總額不變，每股配息由7.2調整為7.17179227",
+          "zh": "2026Q1列的CashDividend代表2025年度現金股利最終調整值"
+        },
+        "EPS_Q": {
+          "quality": "MIXED_BY_PERIOD",
+          "2026Q1Quality": "OFFICIAL_MOPS_A1_L1",
+          "2026Q1EvidenceId": "EVD-MOPS-TWSE_2317-CUM_BASIC_EPS-2026Q1-R01-630B77F9",
+          "zh": "2026Q1 EPS_Q已依TWSE/MOPS官方基本每股盈餘修正為3.56元；其他期間仍維持原資料來源等級"
+        },
+        "AI_Revenue_Pct": {
+          "quality": "USER_CURATED",
+          "ruleUsage": "OBSERVATION_ONLY",
+          "zh": "AI 營收占比為使用者整理資料，僅供觀察，不得觸發正式規則"
+        },
+        "EstimatedEffectiveDate": {
+          "quality": "ESTIMATED",
+          "verification": "NOT_MOPS_VERIFIED",
+          "zh": "有效日期為估算值，尚未經 MOPS 驗證，回測必須揭露前視偏誤風險"
+        },
+        "ForeignHoldRatio_Pct": {
+          "quality": "OFFICIAL_TWSE_A1_L1",
+          "ruleUsage": "OBSERVATION_ONLY",
+          "sourceMetricZh": "全體外資及陸資持股比率",
+          "technicalColumnCompatibility": "ForeignHoldRatio_Pct",
+          "periodCoverage": "2021Q1~2026Q1",
+          "derivationBaseline": "2020Q4",
+          "zh": "技術欄名維持相容；內容已改為TWSE官方外資及陸資合計持股比率"
+        },
+        "ForeignHoldChange_Pct": {
+          "quality": "DERIVED_FROM_OFFICIAL_TWSE_A1_L1",
+          "ruleUsage": "OBSERVATION_ONLY",
+          "formula": "CURRENT_OFFICIAL_RATIO_MINUS_PRIOR_OFFICIAL_RATIO",
+          "unitZh": "百分點",
+          "zh": "依相鄰季TWSE官方持股比率計算，僅供觀察"
+        },
+        "ForeignHoldTrend": {
+          "quality": "DERIVED_FROM_OFFICIAL_TWSE_A1_L1",
+          "ruleUsage": "OBSERVATION_ONLY",
+          "formula": "RISING_GT_0.5PP_STABLE_WITHIN_0.5PP_DECLINING_LT_NEG_0.5PP",
+          "zh": "依官方季度變化重算，未接入品質分、回測或交易規則"
+        }
+      },
+      "warnings": [
+        {
+          "code": "HEADER_METADATA_COLUMN_COUNT_MISMATCH",
+          "zh": "CSV 註解宣稱 53 欄，實際表頭為 54 欄；以實際 54 欄 Schema 為核准基準"
+        },
+        {
+          "code": "ESTIMATED_EFFECTIVE_DATE",
+          "zh": "EstimatedEffectiveDate 尚未經 MOPS 驗證"
+        },
+        {
+          "code": "MIXED_FIELD_QUALITY",
+          "zh": "檔案包含 PRECISE、ESTIMATED、APPROX 與 OBSERVATION_ONLY 欄位，權威資格不代表所有欄位均為精確官方資料"
+        },
+        {
+          "code": "EPS_2026Q1_OFFICIAL_CORRECTION",
+          "zh": "2026Q1 EPS_Q已由3.59修正為TWSE/MOPS官方基本每股盈餘3.56；EPS_YoY、EPS_TTM及ROE_TTM同步重算"
+        },
+        {
+          "code": "DIVIDEND_2025_OFFICIAL_ADJUSTMENT",
+          "zh": "2025年度現金股利因海外可轉債轉換普通股而由每股7.2元調整為7.17179227元；總發放金額不變"
+        },
+        {
+          "code": "FOREIGN_HOLDING_OFFICIAL_SERIES_CORRECTION",
+          "zh": "2021Q1至2026Q1外資欄位已改用TWSE官方外資及陸資合計持股序列；技術欄名暫時保留相容性"
+        }
+      ]
+    },
+    {
+      "path": "data/2317_daily_price.csv",
+      "fileName": "2317_daily_price.csv",
+      "fileVersion": "daily-v1.0",
+      "schemaVersion": "daily-price-v1-7-columns",
+      "sha256": "3329E871C997E983D3C279996F426736BD0A288ACF2769552C964F1AE6CF8ED1",
+      "fileSizeBytes": 5833,
+      "rowCount": 104,
+      "columnCount": 7,
+      "dateRange": {
+        "start": "2026-01-28",
+        "end": "2026-07-10"
+      },
+      "validationStatus": "PASS",
+      "validationStatusZh": "欄位完整、日期未重複、PB_daily已依Close/BVPS_ref三位小數重算通過",
+      "fileAuthority": "CSV_AUTHORITY",
+      "fileAuthorityZh": "此每日價格CSV版本已由Owner核准並以SHA-256鎖定",
+      "dataProvenance": "USER_CURATED_WEB_DATA",
+      "dataProvenanceZh": "使用者整理並核准的每日收盤與PB資料",
+      "dataSupportLevel": "L3",
+      "dataSupportLevelZh": "第三級條件性資料支援；可作UI與正式日價格基準，但不自動觸發交易規則",
+      "requiredColumns": [
+        "Date",
+        "Close",
+        "QuarterKey",
+        "BVPS_ref",
+        "PB_daily",
+        "DataSupportLevel",
+        "Status"
+      ],
+      "columns": [
+        "Date",
+        "Close",
+        "QuarterKey",
+        "BVPS_ref",
+        "PB_daily",
+        "DataSupportLevel",
+        "Status"
+      ],
+      "fieldRules": {
+        "PB_daily": {
+          "formula": "round(Close / BVPS_ref, 3)",
+          "unitZh": "倍",
+          "zh": "PB_daily以每日收盤價除以BVPS_ref並四捨五入至三位小數"
+        },
+        "Status": {
+          "allowedValues": [
+            "BACKFILLED",
+            "OK"
+          ],
+          "zh": "BACKFILLED為歷史補齊資料，OK為核准日資料"
+        }
+      },
+      "corrections": [
+        {
+          "date": "2026-06-25",
+          "field": "PB_daily",
+          "before": "1.983",
+          "after": "1.982",
+          "reasonZh": "Close 252.0 / BVPS 127.12 = 1.9824，依三位小數為1.982"
+        },
+        {
+          "date": "2026-06-29",
+          "field": "Status",
+          "before": "STAGING_CANDIDATE",
+          "after": "OK",
+          "reasonZh": "Owner publish completed; formal CSV row status normalized. No numeric data changed.",
+          "correctedAt": "2026-06-30T06:29:29Z"
+        },
+        {
+          "date": "2026-06-30",
+          "field": "Status",
+          "before": "STAGING_CANDIDATE",
+          "after": "OK",
+          "reasonZh": "Owner publish completed; formal CSV row status normalized. No numeric data changed.",
+          "correctedAt": "2026-06-30T06:29:29Z"
+        },
+        {
+          "date": "2026-06-30",
+          "field": "Close",
+          "before": "246.5",
+          "after": "251.0",
+          "sourceUrl": "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260630&stockNo=2317&response=json",
+          "reasonZh": "TWSE 2026-06-30 ??????????????? 251.00?? 246.50 ?? STOCK_DAY_ALL ? 2026-06-29 ??????????? Close ? PB_daily?",
+          "correctedAt": "2026-06-30T06:57:47Z"
+        },
+        {
+          "date": "2026-06-30",
+          "field": "PB_daily",
+          "before": "1.939",
+          "after": "1.975",
+          "sourceUrl": "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260630&stockNo=2317&response=json",
+          "reasonZh": "TWSE 2026-06-30 ??????????????? 251.00?? 246.50 ?? STOCK_DAY_ALL ? 2026-06-29 ??????????? Close ? PB_daily?",
+          "correctedAt": "2026-06-30T06:57:47Z"
+        },
+        {
+          "date": "2026-06-30",
+          "field": "DataSupportLevel",
+          "before": "OFFICIAL_TWSE_A1",
+          "after": "OFFICIAL_TWSE_STOCK_DAY",
+          "sourceUrl": "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260630&stockNo=2317&response=json",
+          "reasonZh": "TWSE 2026-06-30 ??????????????? 251.00?? 246.50 ?? STOCK_DAY_ALL ? 2026-06-29 ??????????? Close ? PB_daily?",
+          "correctedAt": "2026-06-30T06:57:47Z"
+        }
+      ],
+      "warnings": [
+        {
+          "code": "L3_USER_CURATED_DAILY_PRICE",
+          "zh": "此檔案已由Owner核准為正式日價格CSV，但原始來源仍需在報告中標示為USER_CURATED_WEB_DATA/L3"
+        },
+        {
+          "code": "NO_AUTOMATIC_TRADING_RULE",
+          "zh": "此權威資格只代表檔案版本與PB計算被核准，不代表任何買賣規則啟用"
+        }
+      ],
+      "lastPublishedAt": "2026-07-10T09:34:09Z",
+      "publishApprovalZh": "Owner approved append; MARKET INTELLIGENCE sidecar remains observation only; actionable:false.",
+      "statusNormalizationAt": "2026-06-30T06:29:29Z",
+      "statusNormalizationZh": "Owner ???????? append ???? Status ? STAGING_CANDIDATE ???? OK??????? PB ???",
+      "lastCorrectionAt": "2026-06-30T06:57:47Z",
+      "lastCorrectionZh": "TWSE 2026-06-30 ??????????????? 251.00?? 246.50 ?? STOCK_DAY_ALL ? 2026-06-29 ??????????? Close ? PB_daily?"
+    }
+  ],
+  "nonAuthoritativeFiles": [
+    {
+      "path": "data/macro_snapshot.csv",
+      "status": "USER_CURATED_WEB_DATA",
+      "supportLevel": "L3",
+      "approvedUse": "MARKET_INTELLIGENCE_OBSERVATION_ONLY",
+      "approvedUseZh": "Owner於2026-06-29核准作為MARKET INTELLIGENCE每日收盤後與盤中觀察模組資料；只影響風險提醒與重審提示",
+      "publishRuleZh": "正式macro_snapshot.csv原則上僅能append新日期行；歷史格式修正須由Owner明確核准，並同步更新SHA-256與manifest",
+      "actionable": false,
+      "zh": "使用者整理資料，尚未完成CSV_AUTHORITY權威驗證；可供市場情報觀察，不啟用交易規則；2026-06-29已由Owner核准修正7筆歷史欄位錯位",
+      "sha256": "5F81C052FD1DD16923FAEB11DC9069B26408CCCA967DA34B0F796091A2F8F6C7",
+      "fileSizeBytes": 9123,
+      "rowCount": 39,
+      "lastPublishedAt": "2026-07-10T09:34:09Z",
+      "publishApprovalZh": "Owner approved append; MARKET INTELLIGENCE sidecar remains observation only; actionable:false."
+    },
+    {
+      "path": "data/macro_event_observations.csv",
+      "status": "OBSERVATION_ONLY_SIDECAR",
+      "supportLevel": "OWNER_REVIEW_ONLY",
+      "approvedUse": "MACRO_EVENT_OBSERVATION_ONLY",
+      "approvedUseZh": "新聞、黑天鵝、地緣政治、Fed/CPI/油價事件只作重審提示與反證材料；不得輸出買賣；不得改 HOLD。",
+      "publishRuleZh": "僅由 staging/macro_event_observations_candidate.csv 經 Owner publish gate append；Actionable 必須為 false；同 Date+EventTitle+SourceUrl 不可重複。",
+      "actionable": false,
+      "columns": [
+        "Date",
+        "EventType",
+        "EventTitle",
+        "Region",
+        "SourceTier",
+        "SourceName",
+        "SourceUrl",
+        "EvidenceStatus",
+        "RiskTag",
+        "BlackSwanLevel",
+        "RelatedMetrics",
+        "SummaryZh",
+        "DecisionImpactZh",
+        "Actionable"
+      ],
+      "sha256": "CF539271D2E6586DC7B35973928FA1FC1FA45F810AEAD53DD2F57F1201BFAAA1",
+      "fileSizeBytes": 141221,
+      "rowCount": 219,
+      "publishApprovalZh": "Owner approved append; MARKET INTELLIGENCE sidecar remains observation only; actionable:false.",
+      "lastPublishedAt": "2026-07-10T09:34:09Z"
+    },
+    {
+      "path": "data/fx_trend_observations.csv",
+      "status": "OBSERVATION_ONLY_SIDECAR",
+      "supportLevel": "OWNER_REVIEW_ONLY",
+      "approvedUse": "FX_TREND_OBSERVATION_ONLY",
+      "approvedUseZh": "TWD/USD、DXY、JPY/USD、Fed/BOJ 利差與匯率壓力只作重審提示；不得輸出買賣；不得改 HOLD。",
+      "publishRuleZh": "僅由 staging/fx_trend_observations_candidate.csv 經 Owner publish gate append；Actionable 必須為 false；同 Date 不可重複。",
+      "actionable": false,
+      "columns": [
+        "Date",
+        "TWD_USD",
+        "DXY",
+        "JPY_USD",
+        "US_10Y_Yield",
+        "Fed_Rate",
+        "BOJ_Rate",
+        "RateSpread_US_JP",
+        "FxTrend",
+        "FxPressureLevel",
+        "EPSImpactEstimateZh",
+        "SourceTier",
+        "SourceUrl",
+        "SummaryZh",
+        "Actionable"
+      ],
+      "sha256": "237482A432354DF89ADCAB845FC8878D4099F1CF85B7D4B3998E2FFA5774E1E6",
+      "fileSizeBytes": 2591,
+      "rowCount": 5,
+      "publishApprovalZh": "Owner approved append; MARKET INTELLIGENCE sidecar remains observation only; actionable:false.",
+      "lastPublishedAt": "2026-07-10T09:34:09Z"
+    }
+  ],
+  "lastIntegritySyncAt": "2026-07-03T09:49:16Z"
+}

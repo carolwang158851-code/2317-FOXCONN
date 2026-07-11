@@ -1,0 +1,18 @@
+{
+  "policyId": "P1008_RESEARCH_TOKEN_BUDGET",
+  "version": "1.0",
+  "frozen": true,
+  "actionable": false,
+  "phase1AOpenaiCalls": 0,
+  "budgetsAreProductionApproved": false,
+  "planningCaps": {
+    "daily": {"maxInputTokens": 45000, "maxOutputTokens": 8000, "maxModelCalls": 4},
+    "weekly": {"maxInputTokens": 120000, "maxOutputTokens": 24000, "maxModelCalls": 12},
+    "monthly": {"maxInputTokens": 220000, "maxOutputTokens": 40000, "maxModelCalls": 20}
+  },
+  "onBudgetExceeded": "STOP_REMAINING_CAPABILITIES_AND_EMIT_WARNING",
+  "mayBypassEvidenceGate": false,
+  "mayCreateOwnerQueueItem": true,
+  "contextOrder": ["static_governance", "schemas", "approved_knowledge", "dynamic_data"],
+  "researchOsMaintenanceConsumesModelTokensByDefault": false
+}

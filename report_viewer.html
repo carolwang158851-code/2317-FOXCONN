@@ -1,0 +1,1060 @@
+﻿<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>研報閱讀器</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    body{background:#020617;color:#e2e8f0}
+    .glass{background:rgba(15,23,42,.6);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.08);border-radius:1rem}
+    .mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+    .md h1{font-size:2rem;font-weight:900;margin:1.2rem 0 .6rem;color:#34d399}
+    .md h2{font-size:1.4rem;font-weight:900;margin:1.1rem 0 .5rem;color:#38bdf8}
+    .md h3{font-size:1.1rem;font-weight:900;margin:1rem 0 .4rem;color:#fbbf24}
+    .md p{margin:.6rem 0;color:#cbd5e1;line-height:1.85}
+    .md ul,.md ol{margin:.6rem 0;padding-left:1.2rem;color:#cbd5e1}
+    .md ul{list-style:disc}
+    .md ol{list-style:decimal}
+    .md li{margin:.25rem 0}
+    .md strong{color:#f8fafc;font-weight:900}
+    .md code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#67e8f9;background:rgba(2,6,23,.72);border:1px solid rgba(56,189,248,.18);border-radius:.35rem;padding:.08rem .32rem}
+    .md pre{margin:1rem 0;padding:1rem;overflow:auto;background:rgba(2,6,23,.82);border:1px solid rgba(51,65,85,.75);border-radius:.9rem;color:#cbd5e1;line-height:1.65}
+    .md pre code{background:transparent;border:0;padding:0;color:inherit}
+    .md figure.chart-figure{margin:1rem 0 1.2rem;padding:1rem;border-radius:1rem;border:1px solid rgba(56,189,248,.28);background:rgba(2,6,23,.62)}
+    .md figure.chart-figure img{display:block;width:100%;height:auto;border-radius:.85rem;background:#0f172a}
+    .md figure.chart-figure figcaption{margin-top:.55rem;color:#93c5fd;font-size:.85rem;font-weight:900}
+    .md table{width:100%;border-collapse:collapse;margin:1rem 0;border:1px solid rgba(51,65,85,.7);border-radius:1rem;overflow:hidden}
+    .md th,.md td{padding:.6rem .7rem;border-bottom:1px solid rgba(51,65,85,.4);vertical-align:top}
+    .md th{background:rgba(2,6,23,.8);color:#94a3b8;font-size:.8rem;letter-spacing:.12em;text-transform:uppercase}
+    .formula-block{margin:1rem 0;padding:1rem;border-radius:.9rem;border:1px solid rgba(56,189,248,.28);background:linear-gradient(180deg,rgba(14,116,144,.18),rgba(2,6,23,.78));color:#d9f99d;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;line-height:1.7}
+    .code-label{display:inline-flex;margin-bottom:.45rem;padding:.1rem .45rem;border-radius:.4rem;border:1px solid rgba(148,163,184,.22);color:#94a3b8;font-size:.7rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+    .flowchart-wrap{margin:1.2rem 0;padding:1rem;border-radius:1rem;border:1px solid rgba(56,189,248,.30);background:rgba(2,6,23,.62);overflow-x:auto}
+    .flowchart-title{font-weight:900;color:#7dd3fc;margin-bottom:.65rem}
+    .decision-tree-svg{display:block;min-width:920px;width:100%;height:auto}
+    .tree-edge{fill:none;stroke:rgba(148,163,184,.82);stroke-width:1.6}
+    .tree-edge-marker{fill:rgba(148,163,184,.92)}
+    .tree-node-rect{fill:rgba(15,23,42,.96);stroke:rgba(56,189,248,.45);stroke-width:1.6;rx:8;ry:8}
+    .tree-node-decision{fill:rgba(15,23,42,.98);stroke:rgba(251,191,36,.78)}
+    .tree-node-result{fill:rgba(24,24,27,.95);stroke:rgba(251,191,36,.72)}
+    .tree-node-final{fill:rgba(2,6,23,.92);stroke:rgba(148,163,184,.80);stroke-dasharray:6 4}
+    .tree-node-event{fill:rgba(30,41,59,.98);stroke:rgba(129,140,248,.78)}
+    .tree-node-text{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:8px 10px;color:#e2e8f0;font-weight:900;font-size:12px;line-height:1.35;word-break:break-word}
+    .tree-node-decision-text{color:#fde68a}
+    .tree-node-result-text{color:#fed7aa}
+    .tree-node-final-text{color:#cbd5e1}
+    .tree-label-bg{fill:rgba(2,6,23,.92);stroke:rgba(56,189,248,.24);rx:11;ry:11}
+    .tree-label-text{fill:#67e8f9;font-size:11px;font-weight:900}
+    .tree-label-yes{fill:#86efac}
+    .tree-label-no{fill:#fda4af}
+    .tree-label-option{fill:#fde68a}
+    .flow-note{margin-top:.85rem;color:#94a3b8;font-size:.82rem;line-height:1.6}
+    @media (max-width: 720px){
+      .flowchart-wrap{padding:.75rem}
+      .decision-tree-svg{min-width:860px}
+    }
+    .kpi{background:rgba(2,6,23,.55);border:1px solid rgba(51,65,85,.7);border-radius:1rem;padding:1rem}
+    .note{background:rgba(2,132,199,.10);border:1px solid rgba(56,189,248,.28);border-radius:1rem;padding:1rem;color:#bae6fd}
+    .warn{background:rgba(127,29,29,.18);border:1px solid rgba(239,68,68,.28);border-radius:1rem;padding:1rem;color:#fecaca}
+    .good{background:rgba(6,95,70,.20);border:1px solid rgba(16,185,129,.28);border-radius:1rem;padding:1rem;color:#a7f3d0}
+    .pill{display:inline-flex;align-items:center;gap:.4rem;padding:.2rem .6rem;border-radius:999px;font-size:.75rem;font-weight:900;letter-spacing:.06em;border:1px solid rgba(148,163,184,.25);background:rgba(2,6,23,.55);color:#cbd5e1}
+    .divider{height:1px;background:rgba(51,65,85,.45);margin:1rem 0}
+.fullscreen-toggle:disabled{opacity:.48;cursor:not-allowed}
+.fullscreen-toggle[aria-pressed="true"]{border-color:rgba(52,211,153,.58);color:#a7f3d0;background:rgba(6,78,59,.35)}
+:fullscreen{background:#020617}
+body.p1008-focus-mode{background:#020617}
+body.p1008-focus-mode>div{max-width:none!important;min-height:100vh}
+  </style>
+  <script>
+    function sourceParam() {
+      return new URLSearchParams(location.search).get("from") || "";
+    }
+    function sourceHomeHref() {
+      const from = sourceParam();
+      if (from === "launcher") return "./launcher.html?stay=1&from=report_viewer";
+      if (from === "newui") return "./output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html?from=report_viewer&ts=" + Date.now();
+      if (from === "oldui") return "./index_p1008_v7.html?from=report_viewer&ts=" + Date.now();
+      return "./launcher.html?stay=1&from=report_viewer";
+    }
+    const P1008_IMMERSIVE_KEY = "p1008_immersive_mode";
+    function readImmersivePref() {
+      try { return localStorage.getItem(P1008_IMMERSIVE_KEY) === "1"; } catch (err) { return false; }
+    }
+    function writeImmersivePref(active) {
+      try { localStorage.setItem(P1008_IMMERSIVE_KEY, active ? "1" : "0"); } catch (err) {}
+    }
+    function immersiveRequested() {
+      return new URLSearchParams(window.location.search).get("fs") === "1" || readImmersivePref();
+    }
+    function immersiveActive() {
+      return document.body.classList.contains("p1008-focus-mode") || immersiveRequested();
+    }
+    function applyImmersiveMode(active, persist = true) {
+      document.body.classList.toggle("p1008-focus-mode", active);
+      if (persist) writeImmersivePref(active);
+      updateFullscreenButton();
+    }
+    function withImmersive(href) {
+      const url = new URL(href, window.location.href);
+      if (immersiveActive()) url.searchParams.set("fs", "1");
+      else url.searchParams.delete("fs");
+      return url.href;
+    }
+    function withSource(href) {
+      const from = sourceParam();
+      const url = new URL(href, window.location.href);
+      if (from) url.searchParams.set("from", from);
+      return withImmersive(url.href);
+    }
+    function goMainProgram(event) {
+      if (event) event.preventDefault();
+      window.location.assign(withImmersive(sourceHomeHref()));
+    }
+    async function toggleFullscreen() {
+      const next = !document.body.classList.contains("p1008-focus-mode");
+      if (!next && document.fullscreenElement) {
+        try { await document.exitFullscreen(); } catch (err) {}
+      }
+      applyImmersiveMode(next, true);
+    }
+    function updateFullscreenButton() {
+      const btn = document.getElementById("fullscreen-toggle");
+      if (!btn) return;
+      const active = Boolean(document.body.classList.contains("p1008-focus-mode") || document.fullscreenElement);
+      btn.disabled = false;
+      btn.textContent = active ? "退出全螢幕" : "全螢幕";
+      btn.setAttribute("aria-pressed", active ? "true" : "false");
+      btn.title = "切換戰情室沉浸模式；內部跳轉會保持此狀態";
+    }
+    function syncSourceLinks() {
+      if (immersiveRequested()) document.body.classList.add("p1008-focus-mode");
+      const reports = document.getElementById("back-reports");
+      const home = document.getElementById("back-home");
+      if (reports) reports.setAttribute("href", withSource("./reports.html"));
+      if (home) home.setAttribute("href", sourceHomeHref());
+      syncImmersiveLinks();
+      updateFullscreenButton();
+    }
+    function syncImmersiveLinks() {
+      document.querySelectorAll("a[href]").forEach((link) => {
+        const raw = link.getAttribute("href");
+        if (!raw || /^(#|mailto:|tel:|javascript:)/i.test(raw)) return;
+        const url = new URL(raw, window.location.href);
+        if (url.protocol === window.location.protocol && url.host === window.location.host) {
+          link.setAttribute("href", withImmersive(raw));
+        }
+      });
+    }
+    document.addEventListener("click", (event) => {
+      const link = event.target.closest?.("a[href]");
+      if (!link) return;
+      const raw = link.getAttribute("href");
+      if (!raw || /^(#|mailto:|tel:|javascript:)/i.test(raw)) return;
+      const url = new URL(raw, window.location.href);
+      if (url.protocol === window.location.protocol && url.host === window.location.host) {
+        link.setAttribute("href", withImmersive(raw));
+      }
+    }, true);
+    document.addEventListener("fullscreenchange", updateFullscreenButton);
+    document.addEventListener("DOMContentLoaded", syncSourceLinks);
+  </script>
+</head>
+
+<body class="min-h-screen">
+  <div class="max-w-[1500px] mx-auto px-4 py-6">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <div>
+        <div id="metaDate" class="text-xs font-black text-emerald-400"></div>
+        <h1 id="metaTitle" class="text-2xl md:text-4xl font-black text-white"></h1>
+        <div id="metaTags" class="flex flex-wrap gap-2 mt-2"></div>
+      </div>
+      <div class="flex flex-wrap justify-end gap-2">
+        <button id="fullscreen-toggle" type="button" onclick="toggleFullscreen()" class="fullscreen-toggle px-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-cyan-200 font-black hover:text-emerald-300 hover:border-emerald-500/40 transition">
+          全螢幕
+        </button>
+        <a id="back-reports" href="./reports.html" onclick="this.href=withSource('./reports.html')" class="px-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 font-black hover:text-emerald-300 hover:border-emerald-500/40 transition">
+          ← 回研報庫
+        </a>
+        <a id="back-home" href="./index_p1008_v7.html" target="_self" onclick="goMainProgram(event)" class="px-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-sky-300 font-black hover:text-emerald-300 hover:border-emerald-500/40 transition">
+          回來源入口
+        </a>
+      </div>
+    </div>
+
+    <div class="warn mb-4">
+      <div class="font-black mb-1">治理狀態：僅供研究閱讀</div>
+      <div class="text-sm">本頁舊研報中的 BUY、ADD、TRIM 等字樣不具執行效力；P1008 規則目前 actionable:false，正式輸出一律以主系統結論／資料不足判定為準。</div>
+    </div>
+
+    <!-- VIII 標準互動面板：依不同報告 id 顯示不同 KPI / 場景 / 決策流程 -->
+    <div id="panel" class="hidden glass p-6 border border-slate-700 mb-6"></div>
+
+    <div class="glass p-6 border border-slate-700">
+      <div id="content" class="md"></div>
+    </div>
+  </div>
+
+  <script>
+    const LOCAL_REPORT_CATALOG = [
+      {
+        id: "P1008_DECISION_AUDIT_REPORT_STANDARD_20260701",
+        date: "2026-07-01",
+        title: "P1008 戰報輸出標準：持股風險與決策邏輯稽核",
+        tags: ["戰報標準", "持股風險", "決策邏輯", "actionable:false"],
+        md: "P1008_DECISION_AUDIT_REPORT_STANDARD_20260701.md"
+      },
+      {
+        id: "P1008_DATABASE_KPI_GUIDE_20260629",
+        date: "2026-06-29",
+        title: "P1008 數據庫架構與 KPI 說明",
+        tags: ["資料治理", "KPI", "計算範例", "actionable:false"],
+        md: "P1008_DATABASE_KPI_GUIDE_20260629.md"
+      },
+      {
+        id: "P1008_BLACK_SWAN_BACKTEST_LOGIC_20260629",
+        date: "2026-06-29",
+        title: "P1008 黑天鵝事件與回測引擎邏輯",
+        tags: ["黑天鵝", "回測引擎", "流程圖", "actionable:false"],
+        md: "P1008_BLACK_SWAN_BACKTEST_LOGIC_DECISION_TREE_20260629.md"
+      },
+      {
+        id: "P1008_MACRO_FRAMEWORK_20260618",
+        date: "2026-06-18",
+        title: "戰情室宏觀框架：六大力量交織分析與行動方案",
+        tags: ["宏觀框架", "來源分級", "actionable:false"],
+        md: "戰情室宏觀框架：六大力量交織分析與行動方案.md"
+      },
+      {
+        id: "P1008_DAILY_20260617",
+        date: "2026-06-17",
+        title: "戰情室日報 2026-06-17",
+        tags: ["日報", "資料快照", "actionable:false"],
+        md: "戰情室日報_2026-06-17.md"
+      }
+    ];
+    // -------------------------
+    // Safe subset markdown renderer (headings, bold, lists, simple pipe tables)
+    // -------------------------
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+    }
+
+    function formatInline(s){
+      return escapeHtml(s)
+        .replace(/`([^`]+?)`/g, "<code>$1</code>")
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    }
+
+    function splitTableRow(line){
+      return line.trim().replace(/^\|/,"").replace(/\|$/,"").split("|").map(x=>x.trim());
+    }
+
+    function renderFlowchart(code){
+      const nodes = new Map();
+      const edges = [];
+      const explicitRoots = [];
+      const parseNode = token => {
+        const trimmed = token.trim();
+        const match = trimmed.match(/^([A-Za-z0-9_]+)([\[\{\(\<])(.+)([\]\}\)\>])$/);
+        if(match){
+          const marker = match[2];
+          const type = marker === "{" ? "decision" : marker === "(" ? "result" : marker === "<" ? "event" : "action";
+          return { id: match[1], label: match[3], type };
+        }
+        const id = trimmed.replace(/[^A-Za-z0-9_]/g, "") || trimmed;
+        return { id, label: nodes.get(id)?.label || trimmed, type: nodes.get(id)?.type || "action" };
+      };
+      const keepNode = node => {
+        if(!nodes.has(node.id)) nodes.set(node.id, node);
+        else nodes.set(node.id, { ...nodes.get(node.id), ...node });
+        return nodes.get(node.id);
+      };
+      const edgeTone = label => {
+        const upper = String(label || "").toUpperCase();
+        if(upper.includes("YES") || upper.includes("通過") || upper.includes("是")) return "yes";
+        if(upper.includes("NO") || upper.includes("否") || upper.includes("不通過") || upper.includes("阻斷")) return "no";
+        if(upper.includes("OPTION") || upper.includes("觀察") || upper.includes("重審") || upper.includes("暫停")) return "option";
+        return "";
+      };
+      const labelText = value => String(value || "").replace(/^YES:\s*/i, "YES：").replace(/^NO:\s*/i, "NO：").replace(/^Option:\s*/i, "Option：");
+      const escapeAttr = s => escapeHtml(s).replace(/'/g,"&#39;");
+
+      code.replace(/\r\n/g,"\n").split("\n").forEach(raw => {
+        const line = raw.trim();
+        if(!line || line.startsWith("#")) return;
+        if(line.startsWith("root:")){
+          const rootNode = keepNode(parseNode(line.slice(5).trim()));
+          explicitRoots.push(rootNode.id);
+          return;
+        }
+        if(!line.includes("->")) return;
+        const match = line.match(/^(.+?)\s*(?:--\s*(.+?)\s*-->|->)\s*(.+)$/);
+        if(!match) return;
+        const from = keepNode(parseNode(match[1]));
+        const to = keepNode(parseNode(match[3]));
+        edges.push({ from: from.id, to: to.id, label: match[2] ? match[2].trim() : "→" });
+      });
+
+      if(!edges.length){
+        return `<pre><code>${escapeHtml(code)}</code></pre>`;
+      }
+
+      const children = new Map();
+      const indegree = new Map();
+      nodes.forEach((_, id) => { children.set(id, []); indegree.set(id, 0); });
+      edges.forEach(edge => {
+        children.get(edge.from)?.push(edge);
+        indegree.set(edge.to, (indegree.get(edge.to) || 0) + 1);
+      });
+
+      const roots = explicitRoots.length
+        ? explicitRoots
+        : Array.from(nodes.keys()).filter(id => (indegree.get(id) || 0) === 0);
+      const rootIds = roots.length ? roots : [edges[0].from];
+
+      const layout = new Map();
+      const positioned = new Set();
+      let leafCursor = 0;
+      const hGap = 245, vGap = 104, nodeW = 180, nodeH = 58, marginX = 28, marginY = 28;
+      let maxDepth = 0;
+      const place = (id, depth, trail = new Set()) => {
+        maxDepth = Math.max(maxDepth, depth);
+        if(positioned.has(id)) return layout.get(id).y;
+        if(trail.has(id)){
+          const y = leafCursor++ * vGap;
+          layout.set(id, { x: depth * hGap, y, depth });
+          positioned.add(id);
+          return y;
+        }
+        const nextTrail = new Set(trail);
+        nextTrail.add(id);
+        const out = (children.get(id) || []).filter(edge => nodes.has(edge.to));
+        let y;
+        if(!out.length){
+          y = leafCursor++ * vGap;
+        } else {
+          const ys = out.map(edge => place(edge.to, depth + 1, nextTrail));
+          y = ys.reduce((sum, value) => sum + value, 0) / ys.length;
+        }
+        layout.set(id, { x: depth * hGap, y, depth });
+        positioned.add(id);
+        return y;
+      };
+      rootIds.forEach(root => place(root, 0));
+
+      const width = marginX * 2 + maxDepth * hGap + nodeW + 36;
+      const height = Math.max(260, marginY * 2 + Math.max(leafCursor - 1, 1) * vGap + nodeH + 36);
+      const nodeRectClass = id => {
+        const type = nodes.get(id)?.type || "action";
+        const outCount = (children.get(id) || []).length;
+        if(type === "event") return "tree-node-rect tree-node-event";
+        if(type === "decision") return "tree-node-rect tree-node-decision";
+        if(type === "result") return "tree-node-rect tree-node-result";
+        if(outCount === 0) return "tree-node-rect tree-node-final";
+        return "tree-node-rect";
+      };
+      const nodeTextClass = id => {
+        const type = nodes.get(id)?.type || "action";
+        const outCount = (children.get(id) || []).length;
+        if(type === "decision") return "tree-node-text tree-node-decision-text";
+        if(type === "result") return "tree-node-text tree-node-result-text";
+        if(outCount === 0) return "tree-node-text tree-node-final-text";
+        return "tree-node-text";
+      };
+      const nodeSvg = Array.from(layout.entries()).map(([id, pos]) => {
+        const x = marginX + pos.x, y = marginY + pos.y;
+        return `
+          <g>
+            <rect class="${nodeRectClass(id)}" x="${x}" y="${y}" width="${nodeW}" height="${nodeH}"></rect>
+            <foreignObject x="${x}" y="${y}" width="${nodeW}" height="${nodeH}">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="${nodeTextClass(id)}">${formatInline(nodes.get(id)?.label || id)}</div>
+            </foreignObject>
+          </g>
+        `;
+      }).join("");
+      const edgeSvg = edges.filter(edge => layout.has(edge.from) && layout.has(edge.to)).map((edge, idx) => {
+        const a = layout.get(edge.from), b = layout.get(edge.to);
+        const x1 = marginX + a.x + nodeW;
+        const y1 = marginY + a.y + nodeH / 2;
+        const x2 = marginX + b.x;
+        const y2 = marginY + b.y + nodeH / 2;
+        const midX = x1 + Math.max(36, (x2 - x1) / 2);
+        const path = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`;
+        const lx = midX - 44;
+        const ly = (y1 + y2) / 2 - 12;
+        const tone = edgeTone(edge.label);
+        const cleanLabel = labelText(edge.label);
+        return `
+          <path class="tree-edge" marker-end="url(#arrowHead)" d="${path}"></path>
+          ${cleanLabel !== "→" ? `
+            <g>
+              <rect class="tree-label-bg" x="${lx}" y="${ly}" width="88" height="24"></rect>
+              <text class="tree-label-text ${tone ? `tree-label-${tone}` : ""}" x="${midX}" y="${ly + 16}" text-anchor="middle">${escapeHtml(cleanLabel)}</text>
+            </g>
+          ` : ""}
+        `;
+      }).join("");
+
+      return `
+        <div class="flowchart-wrap" role="img" aria-label="戰情室流程圖">
+          <div class="flowchart-title">決策樹</div>
+          <svg class="decision-tree-svg" viewBox="0 0 ${width} ${height}" aria-label="決策樹圖">
+            <defs>
+              <marker id="arrowHead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+                <path class="tree-edge-marker" d="M 0 0 L 8 4 L 0 8 z"></path>
+              </marker>
+            </defs>
+            ${edgeSvg}
+            ${nodeSvg}
+          </svg>
+          <div class="flow-note">中文備註：此圖為判讀流程，不代表交易流程；正式輸出維持 actionable:false。</div>
+        </div>
+      `;
+    }
+
+    function renderCodeBlock(lang, code){
+      const safeLang = String(lang || "").trim().toLowerCase();
+      if(safeLang === "flowchart") return renderFlowchart(code);
+      if(safeLang === "formula"){
+        return `<div class="formula-block">${escapeHtml(code)}</div>`;
+      }
+      const label = safeLang ? `<div class="code-label">${escapeHtml(safeLang)}</div>` : "";
+      return `${label}<pre><code>${escapeHtml(code)}</code></pre>`;
+    }
+
+    function resolveMarkdownAsset(mdPath, src){
+      const raw = String(src || "").trim();
+      if(!raw) return "";
+      if(/^(https?:|data:|blob:|file:|#|\/)/i.test(raw)) return raw;
+      const base = String(mdPath || "");
+      const baseDir = base.includes("/") ? base.slice(0, base.lastIndexOf("/") + 1) : "./";
+      try{
+        return new URL(raw, new URL(baseDir, location.href)).href;
+      }catch(_){
+        return baseDir + raw;
+      }
+    }
+
+    function renderMarkdownImage(line, mdPath){
+      const match = line.match(/^!\[([^\]]*)\]\((\S+?)(?:\s+["'][^"']*["'])?\)$/);
+      if(!match) return "";
+      const alt = match[1] || "report chart";
+      const src = resolveMarkdownAsset(mdPath, match[2]);
+      return `<figure class="chart-figure"><img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" loading="lazy" /><figcaption>${escapeHtml(alt)}</figcaption></figure>`;
+    }
+
+    function mdToHtml(md, mdPath=""){
+      const lines = md.replace(/\r\n/g,"\n").split("\n");
+      let html = "", listType=null, inTable=false, tableBuf=[], inCode=false, codeLang="", codeBuf=[];
+
+      const flushList=()=>{ if(listType){ html+=`</${listType}>`; listType=null; } };
+      const startList=(type)=>{ if(listType !== type){ flushList(); html+=`<${type}>`; listType=type; } };
+
+      const flushTable=()=>{
+        if(!inTable) return;
+        const rows = tableBuf.filter(l=>l.trim().startsWith("|"));
+        if(rows.length < 2){ inTable=false; tableBuf=[]; return; }
+
+        const head = splitTableRow(rows[0]);
+        html += "<table><thead><tr>" + head.map(h=>`<th>${formatInline(h)}</th>`).join("") + "</tr></thead><tbody>";
+
+        const start = /^[:\-\s|]+$/.test(rows[1]) ? 2 : 1;
+        for(let i=start;i<rows.length;i++){
+          const cols = splitTableRow(rows[i]);
+          html += "<tr>" + cols.map(c=>`<td>${formatInline(c)}</td>`).join("") + "</tr>";
+        }
+        html += "</tbody></table>";
+        inTable=false; tableBuf=[];
+      };
+
+      const flushCode=()=>{
+        if(!inCode) return;
+        html += renderCodeBlock(codeLang, codeBuf.join("\n"));
+        inCode=false; codeLang=""; codeBuf=[];
+      };
+
+      for(const raw of lines){
+        const line = raw.trimEnd();
+        const trimmed = line.trim();
+
+        if(inCode){
+          if(trimmed.startsWith("```")) { flushCode(); }
+          else { codeBuf.push(raw); }
+          continue;
+        }
+
+        const fence = trimmed.match(/^```(.*)$/);
+        if(fence){
+          flushList(); flushTable();
+          inCode = true;
+          codeLang = fence[1].trim();
+          codeBuf = [];
+          continue;
+        }
+
+        if(!trimmed){
+          flushList(); flushTable();
+          continue;
+        }
+
+        if(trimmed.startsWith("|") && trimmed.includes("|")){
+          inTable = true;
+          tableBuf.push(line);
+          continue;
+        } else {
+          flushTable();
+        }
+
+        const h1=line.match(/^#\s+(.+)/);
+        const h2=line.match(/^##\s+(.+)/);
+        const h3=line.match(/^###\s+(.+)/);
+        if(h1){ flushList(); html += `<h1>${formatInline(h1[1])}</h1>`; continue; }
+        if(h2){ flushList(); html += `<h2>${formatInline(h2[1])}</h2>`; continue; }
+        if(h3){ flushList(); html += `<h3>${formatInline(h3[1])}</h3>`; continue; }
+
+        const imageHtml = renderMarkdownImage(trimmed, mdPath);
+        if(imageHtml){
+          flushList(); flushTable();
+          html += imageHtml;
+          continue;
+        }
+
+        const unordered=line.match(/^[-*]\s+(.+)/);
+        if(unordered){
+          startList("ul");
+          html += `<li>${formatInline(unordered[1])}</li>`;
+          continue;
+        }
+
+        const ordered=line.match(/^\d+\.\s+(.+)/);
+        if(ordered){
+          startList("ol");
+          html += `<li>${formatInline(ordered[1])}</li>`;
+          continue;
+        }
+
+        flushList();
+        html += `<p>${formatInline(line)}</p>`;
+      }
+
+      flushCode(); flushList(); flushTable();
+      return html;
+    }
+
+    // -------------------------
+    // Shared panel helper
+    // -------------------------
+    function showPanel(html){
+      const panel = document.getElementById("panel");
+      panel.classList.remove("hidden");
+      panel.innerHTML = html;
+    }
+
+    // -------------------------
+    // Boot
+    // -------------------------
+    let item = null;
+    function periodLabel(period) {
+      return ({ daily: "日報", weekly: "週報", monthly: "月報" })[period] || "產生戰報";
+    }
+
+    async function loadReportCatalog(){
+      try{
+        const res = await fetch("./reports/P1008_REPORT_MANIFEST.json", { cache: "no-store" });
+        if(!res.ok) return LOCAL_REPORT_CATALOG;
+        const manifest = await res.json();
+        const generated = (manifest.reports || []).map(r => ({
+          id: r.id,
+          date: r.date,
+          title: r.title,
+          tags: [...(r.tags || []), r.period ? periodLabel(r.period) : "產生戰報"],
+          md: r.md,
+          html: r.html,
+          generated: true,
+          status: r.status || "GENERATED"
+        }));
+        const seen = new Set();
+        return [...generated, ...LOCAL_REPORT_CATALOG].filter(r => {
+          if(!r || !r.id || seen.has(r.id)) return false;
+          seen.add(r.id);
+          return true;
+        });
+      }catch(_){
+        return LOCAL_REPORT_CATALOG;
+      }
+    }
+
+    function setReportMeta(selected){
+      document.getElementById("metaTitle").textContent = selected ? selected.title : "研報";
+      document.getElementById("metaDate").textContent = selected ? selected.date : "";
+      document.getElementById("metaTags").innerHTML = (selected?.tags||[])
+        .map(t=>`<span class="text-[11px] font-black px-2 py-1 rounded-full border border-slate-700 bg-slate-900 text-slate-300">${escapeHtml(t)}</span>`)
+        .join("");
+    }
+
+    // -------------------------
+    // Panel: shared constants (from your md for matrix logic)
+    // -------------------------
+    const TAX_REV_MEAN = 0.55, TAX_REV_STD = 0.15, GM_5Y_MEAN = 6.17;
+    const zScore = (x) => (x - TAX_REV_MEAN) / TAX_REV_STD;
+
+    async function run(){
+      const contentEl = document.getElementById("content");
+      try{
+        const mdPath = "./reports/" + item.md;
+        const res = await fetch(mdPath, { cache: "no-store" });
+        if(!res.ok) throw new Error("無法載入研報檔案：" + mdPath);
+        const md = await res.text();
+        contentEl.innerHTML = mdToHtml(md, mdPath);
+
+        // =========================
+        // P1008_DATABASE_KPI_GUIDE_20260629 panel
+        // =========================
+        if(item.id === "P1008_DATABASE_KPI_GUIDE_20260629"){
+          showPanel(`
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Formal CSV</div>
+                <div class="mt-2 text-lg font-black text-emerald-200">正式資料優先</div>
+                <div class="mt-2 text-sm text-slate-300 leading-relaxed">主畫面 KPI 以已核准 CSV、manifest/hash 與 schema 檢核為基準。</div>
+              </div>
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Staging</div>
+                <div class="mt-2 text-lg font-black text-sky-200">候選資料先審查</div>
+                <div class="mt-2 text-sm text-slate-300 leading-relaxed">DRY_RUN 與 candidate CSV 只供 Owner 發布前檢查，不直接覆寫正式資料。</div>
+              </div>
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Runtime</div>
+                <div class="mt-2 text-lg font-black text-amber-200">臨時快照需註記</div>
+                <div class="mt-2 text-sm text-slate-300 leading-relaxed">盤中觀察可用 runtime snapshot，但 UI 與報告必須標示中文資料狀態。</div>
+              </div>
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Confidence</div>
+                <div class="mt-2 text-lg font-black text-purple-200">信心度不是勝率</div>
+                <div class="mt-2 text-sm text-slate-300 leading-relaxed">判讀信心反映資料鏈品質、完整度、新鮮度與風險扣分。</div>
+              </div>
+            </div>
+          `);
+        }
+
+        // =========================
+        // P1008_BLACK_SWAN_BACKTEST_LOGIC_20260629 panel
+        // =========================
+        if(item.id === "P1008_BLACK_SWAN_BACKTEST_LOGIC_20260629"){
+          showPanel(`
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Trigger</div>
+                <div class="mt-2 text-lg font-black text-rose-200">SYSTEMIC / VIX>=40</div>
+                <div class="mt-2 text-sm text-slate-300 leading-relaxed">觸發極端市場提示，要求重新做人工紀律評估。</div>
+              </div>
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Fuse</div>
+                <div class="mt-2 text-lg font-black text-amber-200">PB>=1.923 / VIX>25</div>
+                <div class="mt-2 text-sm text-slate-300 leading-relaxed">啟動熔斷保護與重審，不是自動交易訊號。</div>
+              </div>
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Backtest</div>
+                <div class="mt-2 text-lg font-black text-sky-200">季度觀察版</div>
+                <div class="mt-2 text-sm text-slate-300 leading-relaxed">每季財報或重大事件後，需檢查舊門檻是否仍有效。</div>
+              </div>
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Output</div>
+                <div class="mt-2 text-lg font-black text-emerald-200">HOLD / actionable:false</div>
+                <div class="mt-2 text-sm text-slate-300 leading-relaxed">黑天鵝只提高風險提醒，不解除 KEEP_DISABLED。</div>
+              </div>
+            </div>
+          `);
+        }
+
+        // =========================
+        // (A) R8_REALDATA_MATRIX panel (VIII standard)
+        // =========================
+        if(item.id === "R8_REALDATA_MATRIX"){
+          const q4TaxRev = 1.099; // from md dataset 
+          const z = zScore(q4TaxRev);
+          const zBadge = (z>=2) ? "Z>=2 (Structural anomaly)" : (z>=1) ? "1<=Z<2 (Mild drag)" : "Z<1 (Normal)";
+
+          showPanel(`
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">GM 5Y Mean</div>
+                <div class="mt-2 text-3xl font-black text-emerald-300 mono">${GM_5Y_MEAN.toFixed(2)}%</div>
+                <div class="mt-2 text-sm text-slate-300">5Y GM mean is stable (matrix insight).</div>
+              </div>
+
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Tax/Rev 2025Q4</div>
+                <div class="mt-2 text-3xl font-black text-red-300 mono">${q4TaxRev.toFixed(3)}%</div>
+                <div class="mt-2 text-sm text-slate-300">Matrix flagged as abnormal spike.</div>
+              </div>
+
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Z-score</div>
+                <div class="mt-2 text-3xl font-black text-amber-300 mono">${z.toFixed(2)}</div>
+                <div class="mt-2 text-sm text-slate-300">${zBadge} (mu=${TAX_REV_MEAN}%, sigma=${TAX_REV_STD}%)</div>
+              </div>
+
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Decision cheat-sheet</div>
+                <div class="mt-2 text-sm text-slate-300">
+                  <div class="mb-2"><span class="pill">RED</span> High valuation -> TRIM/REDUCE first</div>
+                  <div><span class="pill">GREEN</span> Low valuation + liquidity improving -> BUY/ADD</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="warn">
+                <div class="font-black text-red-200 mb-2">Scenario A: Z>=2 + high valuation</div>
+                <div class="text-red-100 text-sm leading-relaxed">
+                  Prioritize capital protection: TRIM/REDUCE, downgrade adds (STRONG_ADD -> ADD/HOLD).
+                </div>
+              </div>
+              <div class="good">
+                <div class="font-black text-emerald-200 mb-2">Scenario B: Z normal + liquidity improving + low valuation</div>
+                <div class="text-emerald-100 text-sm leading-relaxed">
+                  Allow staging: BUY/ADD. If Z in 1~2, still stage but downgrade intensity (ADD -> BUY).
+                </div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="note">
+              <div class="font-black text-sky-200 mb-2">How to apply matrix in your war-room (4 steps)</div>
+              <ol class="list-decimal pl-6 space-y-1 text-sky-100 text-sm">
+                <li>Tax/Rev -> Z grading (decide whether to apply EPS/PEG conservatism).</li>
+                <li>Liquidity overlay (foreign/sbl/whales) to decide stricter ROE gate or block.</li>
+                <li>Return to valuation zone (PB) to decide action direction.</li>
+                <li>Finally use ROE x EPS momentum to size BUY/ADD/STRONG_ADD.</li>
+              </ol>
+            </div>
+          `);
+        }
+
+        // =========================
+        // (B) R_PB_DYNAMIC_RISK panel (Dynamic PB report)
+        // =========================
+        if(item.id === "R_PB_DYNAMIC_RISK"){
+          showPanel(`
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Core warning</div>
+                <div class="mt-2 text-lg font-black text-red-200">EPS != ROE</div>
+                <div class="mt-2 text-sm text-slate-300 leading-relaxed">
+                  PB is driven by ROE more than raw EPS growth; using EPS alone can create valuation traps.
+                </div>
+              </div>
+
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Anchor</div>
+                <div class="mt-2 text-lg font-black text-emerald-200">Forward ROE</div>
+                <div class="mt-2 text-sm text-slate-300 leading-relaxed">
+                  Use forecast ROE to unlock PB bands (base vs optimistic script), not just EPS.
+                </div>
+              </div>
+
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Smoothing</div>
+                <div class="mt-2 text-lg font-black text-sky-200">Zone Scaling</div>
+                <div class="mt-2 text-sm text-slate-300 leading-relaxed">
+                  Move resistance gradually (e.g., 1.5 -> 1.8) when forward ROE keeps upgrading.
+                </div>
+              </div>
+
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Fail-safe</div>
+                <div class="mt-2 text-lg font-black text-amber-200">FCF light</div>
+                <div class="mt-2 text-sm text-slate-300 leading-relaxed">
+                  If FCF turns negative, lock PB cap to conservative range and show warning message.
+                </div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="good">
+                <div class="font-black text-emerald-200 mb-2">Scenario A: avoid selling too early</div>
+                <div class="text-emerald-100 text-sm leading-relaxed">
+                  Old rule trims at PB~1.5; with Forward ROE=12% script, unlock PB cap (e.g., 2.1) to stay in trend.
+                </div>
+              </div>
+              <div class="warn">
+                <div class="font-black text-red-200 mb-2">Scenario B: FCF negative -> lock PB</div>
+                <div class="text-red-100 text-sm leading-relaxed">
+                  Revenue spikes but cash drains; FCF red light -> PB cap locked (e.g., 1.6) to prevent chasing.
+                </div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="note">
+              <div class="font-black text-sky-200 mb-2">Apply in war-room (4 steps)</div>
+              <ol class="list-decimal pl-6 space-y-1 text-sky-100 text-sm">
+                <li>Use Forward ROE to decide PB unlocking, not EPS alone.</li>
+                <li>Use after-tax EPS (tax drag aware) when evaluating momentum.</li>
+                <li>Use FCF light as hard gate for PB cap unlock.</li>
+                <li>Use zone scaling to preserve attack power in transition band.</li>
+              </ol>
+            </div>
+          `);
+        }
+
+        // =========================
+        // (C) R1_CORE_LIBRARY panel (core library quick exec)
+        // =========================
+        if(item.id === "R1_CORE_LIBRARY"){
+          showPanel(`
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">ROE tiers</div>
+                <div class="mt-2 text-sm text-slate-300">
+                  <div><span class="pill">ROE<8%</span> BLOCK</div>
+                  <div class="mt-1"><span class="pill">ROE>=10%</span> ADD</div>
+                  <div class="mt-1"><span class="pill">ROE>=11.5%</span> STRONG_ADD</div>
+                </div>
+                <div class="mt-2 text-xs text-slate-500">From core library tiers.</div>
+              </div>
+
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Dynamic PB tolerance</div>
+                <div class="mt-2 text-sm text-slate-300">
+                  D>=15% OR (D>=10% and ROE>=11.5%) -> raise buy PB threshold (avoid missing trend).
+                </div>
+                <div class="mt-2 text-xs text-slate-500">From core library dynamic premium.</div>
+              </div>
+
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Risk overlay</div>
+                <div class="mt-2 text-sm text-slate-300">
+                  Liquidity warning -> raise low-zone ROE gate to 10% and downgrade high-zone to TRIM.
+                </div>
+                <div class="mt-2 text-xs text-slate-500">From core library risk overlay.</div>
+              </div>
+
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Forward PEG</div>
+                <div class="mt-2 text-sm text-slate-300">
+                  Overheat risk -> low zone can BLOCK; high zone -> TRIM to take principal back.
+                </div>
+                <div class="mt-2 text-xs text-slate-500">From core library PEG section.</div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="warn">
+                <div class="font-black text-red-200 mb-2">Scenario A: cheap but ROE below floor</div>
+                <div class="text-red-100 text-sm">PB low does not matter if ROE<8% -> BLOCK (avoid value trap).</div>
+              </div>
+              <div class="good">
+                <div class="font-black text-emerald-200 mb-2">Scenario B: mid-zone breakout with top momentum</div>
+                <div class="text-emerald-100 text-sm">Mid zone + ROE strong + D strong + risk ok -> BUY/ADD authorized.</div>
+              </div>
+            </div>
+          `);
+        }
+
+        // =========================
+        // (D) R_AI_REPRICING panel (YOU REQUESTED)
+        // =========================
+        if (item.id === "R_AI_REPRICING") {
+          showPanel(`
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Unlock core</div>
+                <div class="mt-2 text-lg font-black text-emerald-200">Relative PB exemption</div>
+                <div class="mt-2 text-sm text-slate-300 leading-relaxed">
+                  Use peer PB to compute Relative_PB = Foxconn_PB / PeerAvg_PB.
+                  If Relative_PB < 0.7 and AI cloud/network revenue share stays high, treat as catch-up re-rating and allow ADD to avoid selling too early. 
+                </div>
+              </div>
+
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Peer anchors (from report)</div>
+                <div class="mt-2 text-sm text-slate-300 leading-relaxed">
+                  The report cites peer PB examples: Wistron ~2.53x, Quanta ~5.12x; Foxconn PB around ~1.74x (example).
+                  Idea: focus on relative gap vs peers rather than absolute PB alone.
+                </div>
+                <div class="mt-3 note text-sm">
+                  Key: "absolute PB looks high" may still be "relative undervaluation" in AI re-rating phase.
+                </div>
+              </div>
+
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Seasonality</div>
+                <div class="mt-2 text-lg font-black text-sky-200">Seasonality modifier</div>
+                <div class="mt-2 text-sm text-slate-300 leading-relaxed">
+                  Green months (higher win-rate): 3,5,6,10 -> keep STRONG_ADD/ADD.
+                  Red months (lower win-rate): 1,8,9,11 -> auto downgrade (STRONG_ADD->ADD, ADD->BUY) to avoid seasonal traps.
+                </div>
+              </div>
+
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">FCF / Debt guard</div>
+                <div class="mt-2 text-lg font-black text-amber-200">Fail-safe overlay</div>
+                <div class="mt-2 text-sm text-slate-300 leading-relaxed">
+                  Add FCF<0 or Debt/EBITDA>1x into Risk Overlay. If triggered, block STRONG_ADD and downgrade to ADD/HOLD even with strong EPS.
+                </div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="good">
+                <div class="font-black text-emerald-200 mb-2">Scenario A: Relative PB low + AI purity high</div>
+                <div class="text-emerald-100 text-sm leading-relaxed">
+                  Relative_PB still <0.7 and AI cloud/network share remains high.
+                  Even if absolute PB is 1.7~1.9, treat as catch-up and allow ADD to avoid being shaken out.
+                </div>
+              </div>
+
+              <div class="warn">
+                <div class="font-black text-red-200 mb-2">Scenario B: red months -> auto downgrade</div>
+                <div class="text-red-100 text-sm leading-relaxed">
+                  In 1/8/9/11, even if model outputs strong add, apply seasonality downgrade guardrail to avoid wrong-month heavy exposure.
+                </div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="note">
+              <div class="font-black text-sky-200 mb-2">Apply to war-room (order)</div>
+              <ol class="list-decimal pl-6 space-y-1 text-sky-100 text-sm">
+                <li>Compute Relative_PB vs peer avg -> decide exemption.</li>
+                <li>Apply seasonality modifier -> possible downgrade.</li>
+                <li>Apply FCF/Debt fail-safe -> final gate for adds.</li>
+              </ol>
+            </div>
+          `);
+        }
+
+        // =========================
+        // (E) R_ADV_STRATEGY panel (YOU REQUESTED)
+        // =========================
+        if (item.id === "R_ADV_STRATEGY") {
+          showPanel(`
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Operating leverage</div>
+                <div class="mt-2 text-lg font-black text-emerald-200">Profit grows faster</div>
+                <div class="mt-2 text-sm text-slate-300 leading-relaxed">
+                  Report highlights: revenue +18% while operating profit +29%, op margin up to ~3.20%.
+                  This indicates operating leverage; do not judge only by GM.
+                </div>
+              </div>
+
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">GM misconception</div>
+                <div class="mt-2 text-lg font-black text-sky-200">Pass-through dilution</div>
+                <div class="mt-2 text-sm text-slate-300 leading-relaxed">
+                  In AI server pass-through accounting, high ASP components can dilute GM mathematically.
+                  Slight GM drop is not necessarily value deterioration; validate with op margin and net profit quality.
+                </div>
+              </div>
+
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Asset efficiency</div>
+                <div class="mt-2 text-lg font-black text-amber-200">TAT up</div>
+                <div class="mt-2 text-sm text-slate-300 leading-relaxed">
+                  Report cites total asset turnover rising from ~0.37 to ~0.52, improving revenue per asset.
+                  This supports ROE structurally.
+                </div>
+              </div>
+
+              <div class="kpi">
+                <div class="text-xs text-slate-400 font-black tracking-widest uppercase">Forward PEG</div>
+                <div class="mt-2 text-lg font-black text-purple-200">Time-misalignment fix</div>
+                <div class="mt-2 text-sm text-slate-300 leading-relaxed">
+                  Stock price leads (future 6~12m) while EPS growth is forecast.
+                  Using past 1y price gain vs future EPS growth directly causes misalignment and can "wrongly kill" winners.
+                  Use forward PEG calibration to avoid selling too early.
+                </div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="good">
+                <div class="font-black text-emerald-200 mb-2">Scenario A: GM down but leverage up</div>
+                <div class="text-emerald-100 text-sm leading-relaxed">
+                  If GM dips slightly but op margin and operating profit growth outpace revenue, treat as value-chain upgrade not deterioration.
+                  Avoid premature downgrade.
+                </div>
+              </div>
+
+              <div class="warn">
+                <div class="font-black text-red-200 mb-2">Scenario B: overheat confirmed after forward PEG</div>
+                <div class="text-red-100 text-sm leading-relaxed">
+                  If forward PEG calibration still flags overheat (price truly over-discounting), prefer TRIM/REDUCE at high zone to protect principal.
+                </div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="note">
+              <div class="font-black text-sky-200 mb-2">Apply to war-room (order)</div>
+              <ol class="list-decimal pl-6 space-y-1 text-sky-100 text-sm">
+                <li>Check operating leverage: op profit growth vs revenue, op margin direction.</li>
+                <li>Check asset efficiency: TAT trend as ROE support.</li>
+                <li>Finally use forward PEG calibration to avoid time-misalignment mistakes.</li>
+              </ol>
+            </div>
+          `);
+        }
+
+      }catch(e){
+        const mdPath = item?.md ? "./reports/" + item.md : "";
+        const htmlPath = item?.html ? "./reports/" + item.html : "";
+        const fileMode = location.protocol === "file:";
+        contentEl.innerHTML = `
+          <div class="warn">
+            <div class="font-black mb-2">載入失敗</div>
+            <div class="text-sm">${escapeHtml(String(e && (e.message||e) || e))}</div>
+            <div class="text-xs mt-2 text-slate-300">
+              ${fileMode
+                ? "目前是資料夾雙擊 file:// 模式，部分瀏覽器會阻擋 markdown/manifest 讀取。"
+                : "請檢查：1) 套件內 reports/ 是否存在 2) 報告檔名是否完全一致 3) 是否用 http/https 開啟"}
+            </div>
+            <div class="mt-4 flex flex-wrap gap-2">
+              ${htmlPath ? `<a class="px-3 py-2 rounded-lg border border-emerald-500/40 bg-emerald-950/35 text-emerald-100 font-black" href="${escapeHtml(withSource(htmlPath))}">直接開啟 HTML 戰報</a>` : ""}
+              ${mdPath ? `<a class="px-3 py-2 rounded-lg border border-sky-500/40 bg-sky-950/35 text-sky-100 font-black" href="${escapeHtml(mdPath)}">直接開啟 Markdown 檔</a>` : ""}
+              <a class="px-3 py-2 rounded-lg border border-slate-600 bg-slate-900 text-slate-100 font-black" href="${escapeHtml(withSource('./reports/generated/latest_report.html'))}">最新本機戰報 HTML</a>
+            </div>
+            <div class="text-xs mt-3 text-slate-300">
+              完整互動閱讀建議用 <code>P1008_2_OPEN_WARROOM.bat</code> 開啟本機伺服器後再進入研報庫。
+            </div>
+          </div>`;
+      }
+    }
+
+    async function boot(){
+      const params = new URLSearchParams(location.search);
+      const id = params.get("id");
+      const catalog = await loadReportCatalog();
+      item = catalog.find(x=>x.id===id) || catalog[0];
+      setReportMeta(item);
+      run();
+    }
+
+    boot();
+  </script>
+</body>
+</html>
+
+
+
+
+

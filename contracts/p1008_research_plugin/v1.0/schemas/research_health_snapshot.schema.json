@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v1.0/schemas/research_health_snapshot.schema.json",
+  "title": "P1008 Research Health Snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["snapshot_id", "as_of_date", "policy_version", "overall_score", "health_state", "evidence_linkage_score", "gap_hygiene_score", "debt_hygiene_score", "agenda_execution_score", "freshness_score", "calibration_score", "open_gap_count", "overdue_debt_count", "blocked_agenda_count", "data_quality_notes", "owner_review_required", "actionable"],
+  "properties": {
+    "snapshot_id": {"type": "string", "minLength": 1},
+    "as_of_date": {"type": "string", "format": "date"},
+    "policy_version": {"const": "1.0"},
+    "overall_score": {"type": "number", "minimum": 0, "maximum": 100},
+    "health_state": {"enum": ["HEALTHY", "WATCH", "DEGRADED"]},
+    "evidence_linkage_score": {"type": "number", "minimum": 0, "maximum": 100},
+    "gap_hygiene_score": {"type": "number", "minimum": 0, "maximum": 100},
+    "debt_hygiene_score": {"type": "number", "minimum": 0, "maximum": 100},
+    "agenda_execution_score": {"type": "number", "minimum": 0, "maximum": 100},
+    "freshness_score": {"type": "number", "minimum": 0, "maximum": 100},
+    "calibration_score": {"type": "number", "minimum": 0, "maximum": 100},
+    "open_gap_count": {"type": "integer", "minimum": 0},
+    "overdue_debt_count": {"type": "integer", "minimum": 0},
+    "blocked_agenda_count": {"type": "integer", "minimum": 0},
+    "data_quality_notes": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "owner_review_required": {"type": "boolean"},
+    "actionable": {"const": false}
+  }
+}

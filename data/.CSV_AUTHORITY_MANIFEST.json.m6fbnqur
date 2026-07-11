@@ -1,0 +1,175 @@
+{
+  "manifestVersion": "1.0.0",
+  "approvedAt": "2026-06-20",
+  "approvedBy": "Owner",
+  "approvalSource": "Owner conversation approvals P1008 items 16-18, 25-29, 75, 77 and direct correction item 80",
+  "authorityPolicy": {
+    "hashAlgorithm": "SHA-256",
+    "hashMismatchStatus": "APPROVAL_EXPIRED",
+    "hashMismatchZh": "檔案內容與核准版本不符，權威資格已失效",
+    "automaticRecovery": false,
+    "csvWritePolicy": "READ_ONLY",
+    "csvWritePolicyZh": "正式 CSV 維持唯讀，不得由程式自動修改"
+  },
+  "authoritativeFiles": [
+    {
+      "path": "data/2317_master_v9.csv",
+      "fileName": "2317_master_v9.csv",
+      "fileVersion": "v9.2",
+      "schemaVersion": "v9.0-54-columns",
+      "sha256": "8CFBEAB2E4DECA2DC82493932DD32E1BBD68E315ACF908FF13638D14DBF049DE",
+      "fileSizeBytes": 12318,
+      "rowCount": 21,
+      "columnCount": 54,
+      "validationStatus": "PASS_WITH_WARNINGS",
+      "validationStatusZh": "結構驗證通過，但部分欄位仍屬估算、近似或僅供觀察",
+      "fileAuthority": "CSV_AUTHORITY",
+      "fileAuthorityZh": "此檔案版本已由 Owner 核准並以 SHA-256 鎖定",
+      "dataProvenance": "USER_CURATED_WEB_DATA",
+      "dataProvenanceZh": "內容原始來源包含使用者整理及查核的網路資料",
+      "dataSupportLevel": "L3",
+      "dataSupportLevelZh": "第三級條件性資料支援",
+      "requiredColumns": [
+        "Quarter",
+        "QuarterEndDate",
+        "EstimatedEffectiveDate",
+        "EPS_Q",
+        "EPS_TTM",
+        "BVPS",
+        "TaxRev_Pct",
+        "CashDividend",
+        "ROE_TTM_Pct",
+        "OperatingMarginPct",
+        "ROIC_Precise_Pct",
+        "DataSource",
+        "DataSupportLevel"
+      ],
+      "columns": [
+        "Quarter",
+        "QuarterEndDate",
+        "EstimatedEffectiveDate",
+        "Revenue_Q_100M",
+        "GrossMarginPct",
+        "OperatingIncome_Q_100M",
+        "OperatingMarginPct",
+        "OperatingMarginStatus",
+        "TaxExpense_Q_1M",
+        "TaxRev_Pct",
+        "TaxRevMean_Pct",
+        "TaxRevStd_Pct",
+        "TaxZ",
+        "TaxZ_Status",
+        "EPS_Q",
+        "EPS_YoY_Pct",
+        "EPS_TTM",
+        "BVPS",
+        "QuarterEndClose",
+        "CloseAdjusted",
+        "ROE_Annual_Pct",
+        "ROE_TTM_Pct",
+        "PB_QuarterEnd",
+        "PB_Adjusted",
+        "PB_Zone",
+        "ROE_Signal",
+        "payoutRatio_Pct",
+        "CashDividend",
+        "DividendYield_Pct",
+        "FCF_Annual_100M",
+        "MarketCap_100M",
+        "FCFYield_Annual_Pct",
+        "ROIC_Approx_Pct",
+        "ROIC_Precise_Pct",
+        "ROIC_Status",
+        "NOPAT_Annual_100M",
+        "InvestedCapital_100M",
+        "Cash_100M",
+        "InterestBearingDebt_100M",
+        "NetDebt_100M",
+        "NetDebtStatus",
+        "EBITDA_Approx_100M",
+        "DA_Est_100M",
+        "NetDebtToEBITDA_Approx",
+        "NetDebtToEBITDA_Status",
+        "BalanceSheetDataQuality",
+        "DataSource",
+        "DataSupportLevel",
+        "LookaheadRisk",
+        "Notes",
+        "ForeignHoldRatio_Pct",
+        "ForeignHoldChange_Pct",
+        "ForeignHoldTrend",
+        "AI_Revenue_Pct"
+      ],
+      "fieldOverrides": {
+        "CashDividend": {
+          "quality": "MIXED_BY_PERIOD",
+          "2026Q1Quality": "OFFICIAL_MOPS_TWSE_A1_L1",
+          "2026Q1Value": "7.17179227",
+          "2026Q1Evidence": [
+            "MOPS重大訊息2026-06-12序號2",
+            "TWSE_TWT48U_ALL_2026-07-02"
+          ],
+          "adjustmentReasonZh": "海外第一次無擔保轉換公司債債權人轉換普通股，流通在外股數增加；現金股利總額不變，每股配息由7.2調整為7.17179227",
+          "zh": "2026Q1列的CashDividend代表2025年度現金股利最終調整值"
+        },
+        "EPS_Q": {
+          "quality": "MIXED_BY_PERIOD",
+          "2026Q1Quality": "OFFICIAL_MOPS_A1_L1",
+          "2026Q1EvidenceId": "EVD-MOPS-TWSE_2317-CUM_BASIC_EPS-2026Q1-R01-630B77F9",
+          "zh": "2026Q1 EPS_Q已依TWSE/MOPS官方基本每股盈餘修正為3.56元；其他期間仍維持原資料來源等級"
+        },
+        "AI_Revenue_Pct": {
+          "quality": "USER_CURATED",
+          "ruleUsage": "OBSERVATION_ONLY",
+          "zh": "AI 營收占比為使用者整理資料，僅供觀察，不得觸發正式規則"
+        },
+        "EstimatedEffectiveDate": {
+          "quality": "ESTIMATED",
+          "verification": "NOT_MOPS_VERIFIED",
+          "zh": "有效日期為估算值，尚未經 MOPS 驗證，回測必須揭露前視偏誤風險"
+        },
+        "ForeignHoldRatio_Pct": {
+          "quality": "ESTIMATED",
+          "ruleUsage": "OBSERVATION_ONLY",
+          "zh": "外資持股多數為年度資料插值，僅供趨勢觀察"
+        }
+      },
+      "warnings": [
+        {
+          "code": "HEADER_METADATA_COLUMN_COUNT_MISMATCH",
+          "zh": "CSV 註解宣稱 53 欄，實際表頭為 54 欄；以實際 54 欄 Schema 為核准基準"
+        },
+        {
+          "code": "ESTIMATED_EFFECTIVE_DATE",
+          "zh": "EstimatedEffectiveDate 尚未經 MOPS 驗證"
+        },
+        {
+          "code": "MIXED_FIELD_QUALITY",
+          "zh": "檔案包含 PRECISE、ESTIMATED、APPROX 與 OBSERVATION_ONLY 欄位，權威資格不代表所有欄位均為精確官方資料"
+        },
+        {
+          "code": "EPS_2026Q1_OFFICIAL_CORRECTION",
+          "zh": "2026Q1 EPS_Q已由3.59修正為TWSE/MOPS官方基本每股盈餘3.56；EPS_YoY、EPS_TTM及ROE_TTM同步重算"
+        },
+        {
+          "code": "DIVIDEND_2025_OFFICIAL_ADJUSTMENT",
+          "zh": "2025年度現金股利因海外可轉債轉換普通股而由每股7.2元調整為7.17179227元；總發放金額不變"
+        }
+      ]
+    }
+  ],
+  "nonAuthoritativeFiles": [
+    {
+      "path": "data/2317_daily_price.csv",
+      "status": "USER_CURATED_WEB_DATA",
+      "supportLevel": "L3",
+      "zh": "使用者整理資料，尚未完成權威驗證"
+    },
+    {
+      "path": "data/macro_snapshot.csv",
+      "status": "USER_CURATED_WEB_DATA",
+      "supportLevel": "L3",
+      "zh": "使用者整理資料，尚未完成權威驗證；異常資料列必須排除"
+    }
+  ]
+}

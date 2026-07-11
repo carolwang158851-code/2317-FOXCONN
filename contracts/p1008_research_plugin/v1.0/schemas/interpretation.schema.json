@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v1.0/schemas/interpretation.schema.json",
+  "title": "P1008 Outcome Interpretation Candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["interpretation_id", "linked_decision_record", "original_hypothesis", "original_mechanism_chain", "surface_result", "causal_result", "alternative_explanations", "confounders", "causal_validity", "learning_action", "do_not_learn", "warroom_admissibility", "actionable"],
+  "properties": {
+    "interpretation_id": {"type": "string", "minLength": 1},
+    "linked_decision_record": {"type": "string", "minLength": 1},
+    "original_hypothesis": {"type": "string", "minLength": 1},
+    "original_mechanism_chain": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "surface_result": {"type": "string", "minLength": 1},
+    "causal_result": {"type": "string", "minLength": 1},
+    "alternative_explanations": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "confounders": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "causal_validity": {"enum": ["supported", "partially_supported", "refuted", "confounded", "insufficient_data"]},
+    "learning_action": {"enum": ["preserve", "lower_weight_candidate", "quarantine_candidate", "no_learning"]},
+    "do_not_learn": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "post_hoc_candidate": {"type": "boolean"},
+    "warroom_admissibility": {"const": "owner_review_required"},
+    "actionable": {"const": false}
+  }
+}

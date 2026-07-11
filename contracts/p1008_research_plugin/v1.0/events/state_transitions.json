@@ -1,0 +1,46 @@
+{
+  "contractVersion": "1.0",
+  "actionable": false,
+  "transitionRule": "Every transition requires an append-only event. Missing transitions are forbidden.",
+  "aggregates": {
+    "KNOWLEDGE_GAP": {
+      "initial": "OPEN",
+      "transitions": {
+        "OPEN": ["INVESTIGATING", "ACCEPTED_UNKNOWN", "RETIRED"],
+        "INVESTIGATING": ["PARTIALLY_RESOLVED", "RESOLVED", "ACCEPTED_UNKNOWN", "RETIRED"],
+        "PARTIALLY_RESOLVED": ["INVESTIGATING", "RESOLVED", "ACCEPTED_UNKNOWN", "RETIRED"],
+        "RESOLVED": ["INVESTIGATING", "RETIRED"],
+        "ACCEPTED_UNKNOWN": ["INVESTIGATING", "RETIRED"],
+        "RETIRED": []
+      },
+      "resolutionRequiresEvidence": true,
+      "modelFinalTransitionAllowed": false
+    },
+    "RESEARCH_AGENDA": {
+      "initial": "PROPOSED",
+      "transitions": {
+        "PROPOSED": ["ACTIVE", "RETIRED"],
+        "ACTIVE": ["BLOCKED", "ANSWERED", "RETIRED"],
+        "BLOCKED": ["ACTIVE", "ANSWERED", "RETIRED"],
+        "ANSWERED": ["ACTIVE", "RETIRED"],
+        "RETIRED": []
+      },
+      "answerRequiresEvidence": true,
+      "modelFinalTransitionAllowed": false
+    },
+    "RESEARCH_DEBT": {
+      "initial": "OPEN",
+      "transitions": {
+        "OPEN": ["WAITING_EVENT", "WAITING_DATA", "OVERDUE", "RESOLVED", "ACCEPTED_DEBT", "RETIRED"],
+        "WAITING_EVENT": ["OVERDUE", "RESOLVED", "ACCEPTED_DEBT", "RETIRED"],
+        "WAITING_DATA": ["OVERDUE", "RESOLVED", "ACCEPTED_DEBT", "RETIRED"],
+        "OVERDUE": ["WAITING_EVENT", "WAITING_DATA", "RESOLVED", "ACCEPTED_DEBT", "RETIRED"],
+        "RESOLVED": ["OPEN", "RETIRED"],
+        "ACCEPTED_DEBT": ["OPEN", "RETIRED"],
+        "RETIRED": []
+      },
+      "resolutionRequiresEvidence": true,
+      "modelFinalTransitionAllowed": false
+    }
+  }
+}

@@ -1,0 +1,268 @@
+﻿<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>量化深度研報庫中心</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background:#020617; color:#e2e8f0; }
+    .glass { background: rgba(15,23,42,.6); backdrop-filter: blur(12px); border:1px solid rgba(255,255,255,.08); border-radius: 1rem; }
+.fullscreen-toggle:disabled{opacity:.48;cursor:not-allowed}
+.fullscreen-toggle[aria-pressed="true"]{border-color:rgba(52,211,153,.58);color:#a7f3d0;background:rgba(6,78,59,.35)}
+:fullscreen{background:#020617}
+body.p1008-focus-mode{background:#020617}
+body.p1008-focus-mode>div{max-width:none!important;min-height:100vh}
+  </style>
+  <script>
+    function sourceParam() {
+      return new URLSearchParams(location.search).get("from") || "";
+    }
+    function sourceHomeHref() {
+      const from = sourceParam();
+      if (from === "launcher") return "./launcher.html?stay=1&from=reports";
+      if (from === "newui") return "./output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html?from=reports&ts=" + Date.now();
+      if (from === "oldui") return "./index_p1008_v7.html?from=reports&ts=" + Date.now();
+      return "./launcher.html?stay=1&from=reports";
+    }
+    const P1008_IMMERSIVE_KEY = "p1008_immersive_mode";
+    function readImmersivePref() {
+      try { return localStorage.getItem(P1008_IMMERSIVE_KEY) === "1"; } catch (err) { return false; }
+    }
+    function writeImmersivePref(active) {
+      try { localStorage.setItem(P1008_IMMERSIVE_KEY, active ? "1" : "0"); } catch (err) {}
+    }
+    function immersiveRequested() {
+      return new URLSearchParams(window.location.search).get("fs") === "1" || readImmersivePref();
+    }
+    function immersiveActive() {
+      return document.body.classList.contains("p1008-focus-mode") || immersiveRequested();
+    }
+    function applyImmersiveMode(active, persist = true) {
+      document.body.classList.toggle("p1008-focus-mode", active);
+      if (persist) writeImmersivePref(active);
+      updateFullscreenButton();
+    }
+    function withImmersive(href) {
+      const url = new URL(href, window.location.href);
+      if (immersiveActive()) url.searchParams.set("fs", "1");
+      else url.searchParams.delete("fs");
+      return url.href;
+    }
+    function withSource(href) {
+      const from = sourceParam();
+      const url = new URL(href, window.location.href);
+      if (from) url.searchParams.set("from", from);
+      return withImmersive(url.href);
+    }
+    function goMainProgram(event) {
+      if (event) event.preventDefault();
+      window.location.assign(withImmersive(sourceHomeHref()));
+    }
+    async function toggleFullscreen() {
+      const next = !document.body.classList.contains("p1008-focus-mode");
+      if (!next && document.fullscreenElement) {
+        try { await document.exitFullscreen(); } catch (err) {}
+      }
+      applyImmersiveMode(next, true);
+    }
+    function updateFullscreenButton() {
+      const btn = document.getElementById("fullscreen-toggle");
+      if (!btn) return;
+      const active = Boolean(document.body.classList.contains("p1008-focus-mode") || document.fullscreenElement);
+      btn.disabled = false;
+      btn.textContent = active ? "退出全螢幕" : "全螢幕";
+      btn.setAttribute("aria-pressed", active ? "true" : "false");
+      btn.title = "切換戰情室沉浸模式；內部跳轉會保持此狀態";
+    }
+    function syncSourceLinks() {
+      if (immersiveRequested()) document.body.classList.add("p1008-focus-mode");
+      const home = document.querySelector("[data-source-home]");
+      if (home) home.setAttribute("href", sourceHomeHref());
+      syncImmersiveLinks();
+      updateFullscreenButton();
+    }
+    function syncImmersiveLinks() {
+      document.querySelectorAll("a[href]").forEach((link) => {
+        const raw = link.getAttribute("href");
+        if (!raw || /^(#|mailto:|tel:|javascript:)/i.test(raw)) return;
+        const url = new URL(raw, window.location.href);
+        if (url.protocol === window.location.protocol && url.host === window.location.host) {
+          link.setAttribute("href", withImmersive(raw));
+        }
+      });
+    }
+    document.addEventListener("click", (event) => {
+      const link = event.target.closest?.("a[href]");
+      if (!link) return;
+      const raw = link.getAttribute("href");
+      if (!raw || /^(#|mailto:|tel:|javascript:)/i.test(raw)) return;
+      const url = new URL(raw, window.location.href);
+      if (url.protocol === window.location.protocol && url.host === window.location.host) {
+        link.setAttribute("href", withImmersive(raw));
+      }
+    }, true);
+    document.addEventListener("fullscreenchange", updateFullscreenButton);
+    document.addEventListener("DOMContentLoaded", syncSourceLinks);
+  </script>
+</head>
+
+<body class="min-h-screen">
+  <div class="max-w-[1500px] mx-auto px-4 py-8">
+    <div class="flex items-center justify-between gap-4 mb-6">
+      <div>
+        <h1 class="text-2xl md:text-4xl font-black text-emerald-400 tracking-wider">量化深度研報庫中心</h1>
+        <p class="text-slate-400 font-bold mt-2">以持股風險與決策邏輯稽核為核心：圖表必須支撐結論、反證與 Owner 待決。</p>
+      </div>
+      <div class="flex flex-wrap justify-end gap-2">
+        <button id="fullscreen-toggle" type="button" onclick="toggleFullscreen()" class="fullscreen-toggle px-4 py-2 rounded-lg bg-slate-900/60 border border-slate-700 hover:border-emerald-500/40 text-cyan-200 font-black">
+          全螢幕
+        </button>
+        <a data-source-home class="px-4 py-2 rounded-lg bg-slate-900/60 border border-slate-700 hover:border-sky-500 text-sky-300 font-black"
+           href="./index_p1008_v7.html" target="_self" onclick="goMainProgram(event)">回來源入口</a>
+      </div>
+    </div>
+
+    <div id="list" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"></div>
+
+    <div id="fileModeNotice" class="hidden mt-6 glass p-5 border border-amber-500/40 bg-amber-950/20">
+      <div class="font-black text-amber-200 mb-2">資料夾雙擊模式</div>
+      <div class="text-sm text-amber-50 leading-relaxed">
+        直接從資料夾開啟 <code>reports.html</code> 時，瀏覽器可能阻擋讀取 manifest 或 markdown。
+        下方「最新本機定期戰報」會直接開啟 HTML 產物；若要使用完整研報閱讀器與首頁互動，請改用
+        <code>P1008_2_OPEN_WARROOM.bat</code> 開啟本機戰情室。
+      </div>
+    </div>
+
+    <div class="mt-10 glass p-6 border border-slate-700">
+      <div class="font-black text-sky-300 mb-2">📌 研報庫怎麼「活起來」</div>
+      <ol class="list-decimal pl-6 space-y-2 text-slate-300">
+        <li>每篇研報內容保留在 md（可版本控管、可多人協作）。</li>
+        <li>Viewer 以同一模板渲染 md，並為不同報告掛上「VIII 等級」互動面板。</li>
+        <li>本頁只讀取套件內 <code class="text-emerald-300">/reports/</code> 的核准報告。</li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
+    const LOCAL_REPORT_CATALOG = [
+      {
+        id: "P1008_DECISION_AUDIT_REPORT_STANDARD_20260701",
+        date: "2026-07-01",
+        title: "P1008 戰報輸出標準：持股風險與決策邏輯稽核",
+        tags: ["戰報標準", "持股風險", "決策邏輯", "actionable:false"],
+        md: "P1008_DECISION_AUDIT_REPORT_STANDARD_20260701.md"
+      },
+      {
+        id: "P1008_DATABASE_KPI_GUIDE_20260629",
+        date: "2026-06-29",
+        title: "P1008 數據庫架構與 KPI 說明",
+        tags: ["資料治理", "KPI", "計算範例", "actionable:false"],
+        md: "P1008_DATABASE_KPI_GUIDE_20260629.md"
+      },
+      {
+        id: "P1008_BLACK_SWAN_BACKTEST_LOGIC_20260629",
+        date: "2026-06-29",
+        title: "P1008 黑天鵝事件與回測引擎邏輯",
+        tags: ["黑天鵝", "回測引擎", "流程圖", "actionable:false"],
+        md: "P1008_BLACK_SWAN_BACKTEST_LOGIC_DECISION_TREE_20260629.md"
+      },
+      {
+        id: "P1008_MACRO_FRAMEWORK_20260618",
+        date: "2026-06-18",
+        title: "戰情室宏觀框架：六大力量交織分析與行動方案",
+        tags: ["宏觀框架", "來源分級", "actionable:false"],
+        md: "戰情室宏觀框架：六大力量交織分析與行動方案.md"
+      },
+      {
+        id: "P1008_DAILY_20260617",
+        date: "2026-06-17",
+        title: "戰情室日報 2026-06-17",
+        tags: ["日報", "資料快照", "actionable:false"],
+        md: "戰情室日報_2026-06-17.md"
+      }
+    ];
+    const DIRECT_FILE_REPORT_CATALOG = [
+      {
+        id: "P1008_LATEST_GENERATED_REPORT_DIRECT",
+        date: "最新",
+        title: "最新本機定期戰報（資料夾雙擊可開）",
+        tags: ["最新戰報", "HTML直開", "actionable:false"],
+        directHref: "./reports/generated/latest_report.html",
+        generated: true,
+        status: "GENERATED"
+      }
+    ];
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+    }
+    function periodLabel(period) {
+      return ({ daily: "日報", weekly: "週報", monthly: "月報" })[period] || "產生戰報";
+    }
+    function statusLabel(status) {
+      return ({ GENERATED: "已產生", GENERATED_WITH_WARNINGS: "已產生 / 有警示" })[status] || String(status || "已產生");
+    }
+
+    async function loadReportCatalog() {
+      const fileMode = location.protocol === "file:";
+      const notice = document.getElementById("fileModeNotice");
+      if (notice && fileMode) notice.classList.remove("hidden");
+      try {
+        const res = await fetch("./reports/P1008_REPORT_MANIFEST.json", { cache: "no-store" });
+        if (!res.ok) return fileMode ? [...DIRECT_FILE_REPORT_CATALOG, ...LOCAL_REPORT_CATALOG] : LOCAL_REPORT_CATALOG;
+        const manifest = await res.json();
+        const generated = (manifest.reports || []).map(r => ({
+          id: r.id,
+          date: r.date,
+          title: r.title,
+          tags: [...(r.tags || []), r.period ? periodLabel(r.period) : "產生戰報"],
+          md: r.md,
+          generated: true,
+          status: r.status || "GENERATED"
+        }));
+        const seen = new Set();
+        const merged = fileMode
+          ? [...DIRECT_FILE_REPORT_CATALOG, ...generated, ...LOCAL_REPORT_CATALOG]
+          : [...generated, ...LOCAL_REPORT_CATALOG];
+        return merged
+          .filter(r => {
+            if (!r || !r.id || seen.has(r.id)) return false;
+            seen.add(r.id);
+            return true;
+          })
+          .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+      } catch (_) {
+        return fileMode ? [...DIRECT_FILE_REPORT_CATALOG, ...LOCAL_REPORT_CATALOG] : LOCAL_REPORT_CATALOG;
+      }
+    }
+
+    function renderCatalog(catalog) {
+      const list = document.getElementById("list");
+      list.innerHTML = catalog.map(r => `
+      <a class="glass p-6 hover:-translate-y-1 transition-all block border border-slate-700 hover:border-emerald-500/50"
+         href="${escapeHtml(r.directHref ? withSource(r.directHref) : withSource(`./report_viewer.html?id=${encodeURIComponent(r.id)}`))}">
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <div class="text-xs font-black text-emerald-400">${escapeHtml(r.date || "")}</div>
+          ${r.generated ? `<span class="text-[10px] font-black px-2 py-1 rounded border border-sky-500/40 bg-sky-950/50 text-sky-200">${escapeHtml(statusLabel(r.status))}</span>` : ""}
+        </div>
+        <div class="text-xl font-black text-white mb-3">${escapeHtml(r.title || "Untitled report")}</div>
+        <div class="flex flex-wrap gap-2">
+          ${(r.tags || []).map(t=>`<span class="text-[11px] font-black px-2 py-1 rounded-full border border-slate-700 bg-slate-900 text-slate-300">${escapeHtml(t)}</span>`).join("")}
+        </div>
+      </a>
+      `).join("");
+    }
+
+    loadReportCatalog().then(renderCatalog);
+  </script>
+</body>
+</html>
+
+
+
+
+
+
+

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v1.0/schemas/ledger_record.schema.json",
+  "title": "P1008 Append-only Ledger Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ledger_id", "sequence", "contract_version", "recorded_at", "previous_hash", "record_hash", "event", "actionable"],
+  "properties": {
+    "ledger_id": {"type": "string", "minLength": 1, "maxLength": 160},
+    "sequence": {"type": "integer", "minimum": 1},
+    "contract_version": {"const": "1.0"},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "previous_hash": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+    "record_hash": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+    "event": {"$ref": "research_os_event.schema.json"},
+    "actionable": {"const": false}
+  }
+}

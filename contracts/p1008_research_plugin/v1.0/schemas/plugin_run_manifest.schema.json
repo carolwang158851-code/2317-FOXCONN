@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v1.0/schemas/plugin_run_manifest.schema.json",
+  "title": "P1008 Research Plugin Run Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "run_type", "started_at", "finished_at", "status", "contract_version", "input_manifest_hashes", "capabilities_requested", "capabilities_completed", "gate_results", "artifacts", "token_usage", "formal_csv_modified", "runtime_sqlite_modified", "rule_enablement_changed", "hold_changed", "midr_changed", "actionable"],
+  "properties": {
+    "run_id": {"type": "string", "minLength": 1},
+    "run_type": {"enum": ["DAILY", "WEEKLY", "MONTHLY", "EPISTEMIC_REVIEW", "AGENDA_REFRESH", "HEALTH_SNAPSHOT"]},
+    "started_at": {"type": "string", "format": "date-time"},
+    "finished_at": {"type": ["string", "null"], "format": "date-time"},
+    "status": {"enum": ["PENDING", "RUNNING", "COMPLETED", "INSUFFICIENT_DATA", "OWNER_REVIEW_REQUIRED", "REJECTED", "FAILED", "TOKEN_BUDGET_EXCEEDED"]},
+    "contract_version": {"const": "1.0"},
+    "model": {"type": ["string", "null"], "maxLength": 160},
+    "sdk_version": {"type": ["string", "null"], "maxLength": 80},
+    "prompt_version": {"type": ["string", "null"], "maxLength": 80},
+    "input_manifest_hashes": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[A-F0-9]{64}$"}},
+    "capabilities_requested": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "capabilities_completed": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "gate_results": {"type": "array", "items": {"$ref": "gate_result.schema.json"}},
+    "artifacts": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "token_usage": {"type": "object", "additionalProperties": false, "required": ["input", "output", "total"], "properties": {"input": {"type": "integer", "minimum": 0}, "output": {"type": "integer", "minimum": 0}, "total": {"type": "integer", "minimum": 0}}},
+    "formal_csv_modified": {"const": false},
+    "runtime_sqlite_modified": {"const": false},
+    "rule_enablement_changed": {"const": false},
+    "hold_changed": {"const": false},
+    "midr_changed": {"const": false},
+    "actionable": {"const": false}
+  }
+}

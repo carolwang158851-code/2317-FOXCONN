@@ -1,0 +1,20 @@
+{
+  "policyId": "P1008_RESEARCH_SOURCE_POLICY",
+  "version": "1.0",
+  "frozen": true,
+  "actionable": false,
+  "authorityResolution": "CSV_AUTHORITY_MANIFEST_ONLY",
+  "allowedSourceTiers": ["CSV_AUTHORITY", "OFFICIAL", "PUBLIC_MARKET", "MEDIA", "OWNER_NOTE", "UNVERIFIED"],
+  "mainConclusionMinimumTier": "OFFICIAL_OR_CORROBORATED",
+  "singleMediaMainConclusionAllowed": false,
+  "unverifiedMainConclusionAllowed": false,
+  "l4MainConclusionAllowed": false,
+  "allSourcesRequire": ["source_id", "source_tier", "as_of_date", "retrieved_at", "locator"],
+  "freshnessRequired": true,
+  "missingDataBehavior": "CREATE_KNOWLEDGE_GAP",
+  "defaultFillAllowed": false,
+  "modelCitationMayUpgradeTier": false,
+  "arbitraryHostedWebSearchApproved": false,
+  "ownerApprovedKnowledgeBaseRegistryRequired": true,
+  "unregisteredKnowledgeBaseUse": "REJECT"
+}

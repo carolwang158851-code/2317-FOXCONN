@@ -1,0 +1,28 @@
+{
+  "contractVersion": "1.0",
+  "recordSchema": "../schemas/ledger_record.schema.json",
+  "format": "JSONL",
+  "encoding": "UTF-8",
+  "appendOnly": true,
+  "inPlaceUpdateAllowed": false,
+  "deleteAllowed": false,
+  "truncateAllowed": false,
+  "hashAlgorithm": "SHA-256",
+  "canonicalization": "RFC8785_JSON_CANONICALIZATION_SCHEME",
+  "genesisPreviousHash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "sequenceRule": "strictly_monotonic_starting_at_1_per_ledger",
+  "recordHashInput": ["ledger_id", "sequence", "contract_version", "recorded_at", "previous_hash", "event"],
+  "actionable": false,
+  "ledgers": [
+    {"ledgerId": "inference_chain", "relativePath": "runtime/research_plugin/inference_chain_ledger.jsonl", "aggregateTypes": ["CLAIM", "RUN"]},
+    {"ledgerId": "decision_memory", "relativePath": "runtime/research_plugin/decision_memory_ledger.jsonl", "aggregateTypes": ["DECISION_MEMORY"]},
+    {"ledgerId": "thesis_lineage", "relativePath": "runtime/research_plugin/thesis_lineage_ledger.jsonl", "aggregateTypes": ["THESIS", "LEGACY_REUSE"]},
+    {"ledgerId": "research_agenda", "relativePath": "runtime/research_plugin/research_os/research_agenda_events.jsonl", "aggregateTypes": ["AGENDA"]},
+    {"ledgerId": "knowledge_gap", "relativePath": "runtime/research_plugin/research_os/knowledge_gap_events.jsonl", "aggregateTypes": ["GAP"]},
+    {"ledgerId": "research_debt", "relativePath": "runtime/research_plugin/research_os/research_debt_events.jsonl", "aggregateTypes": ["DEBT"]},
+    {"ledgerId": "owner_review", "relativePath": "runtime/research_plugin/owner_review_ledger.jsonl", "aggregateTypes": ["OWNER_REVIEW"]},
+    {"ledgerId": "research_health", "relativePath": "runtime/research_plugin/research_os/research_health_events.jsonl", "aggregateTypes": ["HEALTH"]}
+  ],
+  "projectionRule": "Current state is derived from validated ledger records; snapshots are disposable projections and never authority.",
+  "corruptionBehavior": "STOP_PLUGIN_AND_PRESERVE_CORE_WARROOM"
+}

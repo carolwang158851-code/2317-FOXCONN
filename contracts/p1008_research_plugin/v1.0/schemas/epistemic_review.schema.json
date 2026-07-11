@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v1.0/schemas/epistemic_review.schema.json",
+  "title": "P1008 Epistemic Review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["review_id", "as_of_date", "observation_validation", "hypothesis_surface_validation", "mechanism_validation", "decision_relevance_validation", "learning_validation", "overall_status", "knowledge_gap_ids", "owner_review_required", "actionable"],
+  "properties": {
+    "review_id": {"type": "string", "minLength": 1},
+    "as_of_date": {"type": "string", "format": "date"},
+    "observation_validation": {"enum": ["supported", "partially_supported", "refuted", "confounded", "insufficient_data", "unresolved"]},
+    "hypothesis_surface_validation": {"enum": ["supported", "partially_supported", "refuted", "confounded", "insufficient_data", "unresolved"]},
+    "mechanism_validation": {"enum": ["supported", "partially_supported", "refuted", "confounded", "insufficient_data", "unresolved"]},
+    "decision_relevance_validation": {"enum": ["supported", "partially_supported", "refuted", "confounded", "insufficient_data", "unresolved"]},
+    "learning_validation": {"enum": ["supported", "partially_supported", "refuted", "confounded", "insufficient_data", "unresolved"]},
+    "overall_status": {"enum": ["SUPPORTED", "PARTIALLY_SUPPORTED", "REFUTED", "CONFOUNDED", "INSUFFICIENT_DATA", "UNRESOLVED"]},
+    "knowledge_gap_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "owner_review_required": {"const": true},
+    "actionable": {"const": false}
+  }
+}

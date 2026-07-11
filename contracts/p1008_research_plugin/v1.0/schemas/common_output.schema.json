@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v1.0/schemas/common_output.schema.json",
+  "title": "P1008 Capability Structured Output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "skill_name", "run_id", "run_date", "symbol", "actionable", "status",
+    "claims", "evidence", "counter_evidence", "confidence", "data_quality_notes",
+    "owner_review_required", "rejected_claims", "sources", "no_auto_trade",
+    "no_formal_csv_write", "no_rule_enablement"
+  ],
+  "properties": {
+    "skill_name": {"type": "string", "minLength": 1, "maxLength": 120},
+    "run_id": {"type": "string", "minLength": 1, "maxLength": 160},
+    "run_date": {"type": "string", "format": "date"},
+    "symbol": {"const": "2317.TW"},
+    "actionable": {"const": false},
+    "status": {"enum": ["completed", "insufficient_data", "owner_review_required", "rejected"]},
+    "claims": {"type": "array", "items": {"$ref": "claim.schema.json"}},
+    "evidence": {"type": "array", "items": {"$ref": "evidence.schema.json"}},
+    "counter_evidence": {"type": "array", "items": {"$ref": "evidence.schema.json"}},
+    "confidence": {"enum": ["high", "medium", "low", "insufficient_data"]},
+    "data_quality_notes": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "owner_review_required": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "rejected_claims": {"type": "array", "items": {"$ref": "claim.schema.json"}},
+    "sources": {"type": "array", "items": {"$ref": "source.schema.json"}},
+    "knowledge_gap_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "research_agenda_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "no_auto_trade": {"const": true},
+    "no_formal_csv_write": {"const": true},
+    "no_rule_enablement": {"const": true}
+  }
+}
