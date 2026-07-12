@@ -1,0 +1,261 @@
+name: P1008 Phase 3A-R dual-platform verification
+
+on:
+  push:
+    branches:
+      - p1008-phase3a-r-ci-runner
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p1008-phase3a-r-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-phase3a-r:
+    name: Verify Phase 3A-R on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            autocrlf: "true"
+          - os: ubuntu-latest
+            autocrlf: "false"
+
+    env:
+      PHASE3A_R_SHA: e60fa5dec6ae4e390f7f84679550560c9fe69910
+      PHASE3A_PARENT_SHA: 47dea688ad1e2041b24116b00d58281380700bd8
+      PYTHONDONTWRITEBYTECODE: "1"
+
+    steps:
+      - name: Configure Windows line endings before checkout
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf true
+          $actual = git config --global --get core.autocrlf
+          if ($actual -ne "true") {
+            throw "Expected core.autocrlf=true, got $actual"
+          }
+
+      - name: Configure Ubuntu line endings before checkout
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --global core.autocrlf false
+          test "$(git config --global --get core.autocrlf)" = "false"
+
+      - name: Checkout exact Phase 3A-R candidate
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: e60fa5dec6ae4e390f7f84679550560c9fe69910
+          fetch-depth: 2
+          persist-credentials: false
+          clean: true
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+          cache: ""
+
+      - name: Verify SHA, parent, scope, and raw LF bytes
+        shell: python
+        env:
+          EXPECTED_AUTOCRLF: ${{ matrix.autocrlf }}
+        run: |
+          import os
+          import pathlib
+          import subprocess
+
+          EXPECTED_HEAD = os.environ["PHASE3A_R_SHA"]
+          EXPECTED_PARENT = os.environ["PHASE3A_PARENT_SHA"]
+          EXPECTED_AUTOCRLF = os.environ["EXPECTED_AUTOCRLF"]
+
+          EXPECTED_FILES = {
+              ".gitattributes",
+              (
+                  "contracts/p1008_research_plugin/acceptance/errata/"
+                  "v2.0/OWNER_ACCEPTANCE_HASH_ERRATA.json"
+              ),
+              "data/CSV_AUTHORITY_MANIFEST.json",
+              (
+                  "modules/p1008_research_plugin/src/"
+                  "p1008_research_plugin/runtime/runtime_validator.py"
+              ),
+              (
+                  "modules/p1008_research_plugin/tests/governance/"
+                  "test_phase2a_boundaries.py"
+              ),
+              (
+                  "modules/p1008_research_plugin/tests/"
+                  "test_governance_boundaries.py"
+              ),
+          }
+
+          def git(*args):
+              return subprocess.check_output(
+                  ["git", *args],
+                  text=True,
+                  encoding="utf-8",
+              ).strip()
+
+          autocrlf = git("config", "--global", "--get", "core.autocrlf")
+          if autocrlf != EXPECTED_AUTOCRLF:
+              raise SystemExit(
+                  f"core.autocrlf mismatch: {autocrlf} "
+                  f"!= {EXPECTED_AUTOCRLF}"
+              )
+
+          head = git("rev-parse", "HEAD")
+          if head != EXPECTED_HEAD:
+              raise SystemExit(f"HEAD mismatch: {head} != {EXPECTED_HEAD}")
+
+          parent = git("rev-parse", "HEAD^")
+          if parent != EXPECTED_PARENT:
+              raise SystemExit(
+                  f"Parent mismatch: {parent} != {EXPECTED_PARENT}"
+              )
+
+          changed = {
+              line
+              for line in git(
+                  "diff",
+                  "--name-only",
+                  f"{EXPECTED_PARENT}..{EXPECTED_HEAD}",
+              ).splitlines()
+              if line
+          }
+          if changed != EXPECTED_FILES:
+              missing = sorted(EXPECTED_FILES - changed)
+              extra = sorted(changed - EXPECTED_FILES)
+              raise SystemExit(
+                  f"TargetFiles mismatch; missing={missing}; extra={extra}"
+              )
+
+          attributes_path = pathlib.Path(".gitattributes")
+          attributes_bytes = attributes_path.read_bytes()
+          if b"\r" in attributes_bytes:
+              raise SystemExit(".gitattributes contains CR bytes")
+
+          lines = attributes_bytes.decode("ascii").splitlines()
+          entries = []
+          for line in lines:
+              if not line or line.startswith("#"):
+                  continue
+              path, attributes = line.split(" ", 1)
+              if attributes != "text eol=lf":
+                  raise SystemExit(
+                      f"Unexpected attributes for {path}: {attributes}"
+                  )
+              if any(character in path for character in "*?["):
+                  raise SystemExit(f"Wildcard path is forbidden: {path}")
+              entries.append(path)
+
+          if len(entries) != 82:
+              raise SystemExit(
+                  f"Expected 82 governed paths, found {len(entries)}"
+              )
+          if len(set(entries)) != 82:
+              raise SystemExit("Duplicate governed path detected")
+
+          cr_failures = []
+          missing_paths = []
+          for relative in entries:
+              path = pathlib.Path(relative)
+              if not path.is_file():
+                  missing_paths.append(relative)
+                  continue
+              if b"\r" in path.read_bytes():
+                  cr_failures.append(relative)
+
+          if missing_paths:
+              raise SystemExit(
+                  f"Governed files are missing: {sorted(missing_paths)}"
+              )
+          if cr_failures:
+              raise SystemExit(
+                  f"CR bytes found in governed files: {sorted(cr_failures)}"
+              )
+
+          if git("status", "--porcelain=v1", "-uall"):
+              raise SystemExit("Fresh checkout is not clean")
+
+          print(f"HEAD={head}")
+          print(f"PARENT={parent}")
+          print(f"TARGETFILES={len(changed)}")
+          print(f"GOVERNED_PATHS={len(entries)}")
+          print("CR_BYTE_FAILURES=0")
+
+      - name: Discover and run exactly 70 tests
+        shell: python
+        run: |
+          import subprocess
+          import unittest
+
+          loader = unittest.defaultTestLoader
+          suite = loader.discover(
+              "modules/p1008_research_plugin/tests",
+              pattern="test_*.py",
+          )
+          discovered = suite.countTestCases()
+
+          if discovered != 70:
+              raise SystemExit(
+                  f"Expected 70 discovered tests, found {discovered}"
+              )
+
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+
+          failures = len(result.failures)
+          errors = len(result.errors)
+          skipped = len(getattr(result, "skipped", ()))
+          expected_failures = len(
+              getattr(result, "expectedFailures", ())
+          )
+          unexpected_successes = len(
+              getattr(result, "unexpectedSuccesses", ())
+          )
+          passed = (
+              result.testsRun
+              - failures
+              - errors
+              - skipped
+              - expected_failures
+              - unexpected_successes
+          )
+
+          print(f"DISCOVERED={discovered}")
+          print(f"RUN={result.testsRun}")
+          print(f"PASSED={passed}")
+          print(f"FAILED={failures}")
+          print(f"ERRORS={errors}")
+          print(f"SKIPPED={skipped}")
+
+          if (
+              result.testsRun != 70
+              or passed != 70
+              or failures != 0
+              or errors != 0
+              or skipped != 0
+              or expected_failures != 0
+              or unexpected_successes != 0
+              or not result.wasSuccessful()
+          ):
+              raise SystemExit("Phase 3A-R test acceptance failed")
+
+          status = subprocess.check_output(
+              ["git", "status", "--porcelain=v1", "-uall"],
+              text=True,
+              encoding="utf-8",
+          ).strip()
+          if status:
+              raise SystemExit(
+                  f"Tests changed the checkout: {status}"
+              )
