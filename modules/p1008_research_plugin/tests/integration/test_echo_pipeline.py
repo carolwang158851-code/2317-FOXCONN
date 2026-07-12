@@ -52,7 +52,7 @@ class EchoPipelineTests(unittest.TestCase):
             writer.write_test_only(envelope, MODULE_ROOT)
         with tempfile.TemporaryDirectory(prefix="p1008-p2a-") as temp_dir:
             path = writer.write_test_only(envelope, Path(temp_dir))
-            self.assertTrue(path.is_relative_to(Path(temp_dir)))
+            self.assertTrue(path.is_relative_to(Path(temp_dir).resolve()))
             self.assertEqual(json.loads(path.read_text(encoding="utf-8")), output)
 
 
