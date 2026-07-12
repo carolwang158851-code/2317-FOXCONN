@@ -26,6 +26,12 @@ jobs:
       PYTHONDONTWRITEBYTECODE: "1"
 
     steps:
+      - name: Preserve repository byte content
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
       - name: Checkout exact Phase 3A commit
         uses: actions/checkout@v4
         with:
