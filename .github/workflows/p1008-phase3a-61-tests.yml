@@ -1,0 +1,71 @@
+name: P1008 Phase 3A - 61 Test Verification
+
+on:
+  push:
+    branches:
+      - p1008-phase3a-ci-runner
+    paths:
+      - ".github/workflows/p1008-phase3a-61-tests.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p1008-phase3a-47dea688
+  cancel-in-progress: false
+
+jobs:
+  phase3a-tests:
+    name: Verify immutable Phase 3A
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    env:
+      EXPECTED_PHASE3A_SHA: 47dea688ad1e2041b24116b00d58281380700bd8
+      EXPECTED_TEST_COUNT: "61"
+      PYTHONDONTWRITEBYTECODE: "1"
+
+    steps:
+      - name: Checkout exact Phase 3A commit
+        uses: actions/checkout@v4
+        with:
+          ref: 47dea688ad1e2041b24116b00d58281380700bd8
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify immutable HEAD
+        shell: pwsh
+        run: |
+          $actual = (git rev-parse HEAD).Trim()
+          Write-Host "Expected: $env:EXPECTED_PHASE3A_SHA"
+          Write-Host "Actual:   $actual"
+
+          if ($actual -ne $env:EXPECTED_PHASE3A_SHA) {
+            throw "HEAD does not equal the approved Phase 3A SHA."
+          }
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: ""
+
+      - name: Verify discovered test count
+        shell: pwsh
+        run: |
+          $count = & python -c "import unittest; print(unittest.TestLoader().discover(r'modules/p1008_research_plugin/tests', pattern='test_*.py').countTestCases())"
+
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+          if ([int]$count -ne [int]$env:EXPECTED_TEST_COUNT) {
+            throw "Expected 61 tests, discovered $count."
+          }
+
+          Write-Host "Discovered exactly $count tests."
+
+      - name: Run Phase 1B, Phase 2A and Phase 3A tests
+        shell: pwsh
+        run: |
+          python -m unittest discover -s modules/p1008_research_plugin/tests -p "test_*.py" -v
