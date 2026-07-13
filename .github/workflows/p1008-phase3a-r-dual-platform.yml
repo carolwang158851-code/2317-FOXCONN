@@ -28,8 +28,8 @@ jobs:
             autocrlf: "false"
 
     env:
-      PHASE3A_R_SHA: e60fa5dec6ae4e390f7f84679550560c9fe69910
-      PHASE3A_PARENT_SHA: 47dea688ad1e2041b24116b00d58281380700bd8
+      PHASE3A_R_SHA: a60d94c3016f4e551d07082f398d03ed04164572
+      PHASE3A_PARENT_SHA: e60fa5dec6ae4e390f7f84679550560c9fe69910
       PYTHONDONTWRITEBYTECODE: "1"
 
     steps:
@@ -54,7 +54,7 @@ jobs:
       - name: Checkout exact Phase 3A-R candidate
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: e60fa5dec6ae4e390f7f84679550560c9fe69910
+          ref: a60d94c3016f4e551d07082f398d03ed04164572
           fetch-depth: 2
           persist-credentials: false
           clean: true
@@ -79,23 +79,9 @@ jobs:
           EXPECTED_AUTOCRLF = os.environ["EXPECTED_AUTOCRLF"]
 
           EXPECTED_FILES = {
-              ".gitattributes",
-              (
-                  "contracts/p1008_research_plugin/acceptance/errata/"
-                  "v2.0/OWNER_ACCEPTANCE_HASH_ERRATA.json"
-              ),
-              "data/CSV_AUTHORITY_MANIFEST.json",
-              (
-                  "modules/p1008_research_plugin/src/"
-                  "p1008_research_plugin/runtime/runtime_validator.py"
-              ),
-              (
-                  "modules/p1008_research_plugin/tests/governance/"
-                  "test_phase2a_boundaries.py"
-              ),
               (
                   "modules/p1008_research_plugin/tests/"
-                  "test_governance_boundaries.py"
+                  "integration/test_echo_pipeline.py"
               ),
           }
 
