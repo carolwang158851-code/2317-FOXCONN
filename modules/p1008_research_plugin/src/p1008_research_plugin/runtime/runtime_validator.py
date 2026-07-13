@@ -19,6 +19,29 @@ class RuntimeContractVerifier:
     ACCEPTANCE_RELATIVE = Path(
         "contracts/p1008_research_plugin/acceptance/v2.0/OWNER_ACCEPTANCE_RECORD.json"
     )
+    ERRATA_RELATIVE = Path(
+        "contracts/p1008_research_plugin/acceptance/errata/v2.0/"
+        "OWNER_ACCEPTANCE_HASH_ERRATA.json"
+    )
+    PHASE3A_PARENT_SHA = "47dea688ad1e2041b24116b00d58281380700bd8"
+    ACCEPTANCE_SHA256 = (
+        "A056D8C139C254D04BEF9298DA34152D0CF5A18864D040E5B9B3FE7A226E0533"
+    )
+    OLD_MANIFEST_SHA256 = (
+        "2686D044714E435CB4C1E63CB26B3BB555190F9A5BD21FE2C9439473DA998BE6"
+    )
+    MANIFEST_GIT_LF_SHA256 = (
+        "6A1DFE54BA4FCA749C18FDA747969473A4903CF21001AAACA6078C6CC8FEB75F"
+    )
+    ERRATA_APPROVAL_REFERENCE = (
+        "OWNER_APPROVE_P1008_PHASE3A_R_LINE_ENDING_"
+        "REPRODUCIBILITY_REMEDIATION_TARGETFILES"
+    )
+    ERRATA_REASON = (
+        "The accepted hash was calculated from a mixed LF/CRLF worktree; "
+        "the replacement is the SHA-256 of the unchanged Phase 3A Git blob "
+        "raw LF bytes."
+    )
 
     def __init__(self, package_root: Path) -> None:
         self.package_root = package_root.resolve()
@@ -37,13 +60,58 @@ class RuntimeContractVerifier:
     def _sha(path: Path) -> str:
         return hashlib.sha256(path.read_bytes()).hexdigest().upper()
 
+    @classmethod
+    def _expected_manifest_errata(cls) -> dict[str, Any]:
+        return {
+            "schemaVersion": "1.0",
+            "recordId": "P1008_PHASE3A_R_LINE_ENDING_REPRODUCIBILITY_ERRATA",
+            "phase": "Phase 3A-R Line-Ending Reproducibility Remediation",
+            "phase3aParentSha": cls.PHASE3A_PARENT_SHA,
+            "ownerAcceptancePath": cls.ACCEPTANCE_RELATIVE.as_posix(),
+            "ownerAcceptanceSha256": cls.ACCEPTANCE_SHA256,
+            "correction": {
+                "fieldPath": "manifestSha256",
+                "targetFile": (
+                    "contracts/p1008_research_plugin/v2.0/contract.manifest.json"
+                ),
+                "oldSha256": cls.OLD_MANIFEST_SHA256,
+                "newGitLfSha256": cls.MANIFEST_GIT_LF_SHA256,
+                "reasonCode": "LINE_ENDING_REPRODUCIBILITY_DEFECT",
+                "reason": cls.ERRATA_REASON,
+            },
+            "ownerApprovalReference": cls.ERRATA_APPROVAL_REFERENCE,
+            "actionable": False,
+        }
+
+    @classmethod
+    def _validate_manifest_errata(
+        cls,
+        errata: Mapping[str, Any],
+        *,
+        acceptance_sha: str,
+        acceptance_manifest_sha: Any,
+        manifest_sha: str,
+    ) -> None:
+        if dict(errata) != cls._expected_manifest_errata():
+            raise RuntimeValidationError(
+                "Manifest hash errata contains unsupported fields or values"
+            )
+        if acceptance_sha != cls.ACCEPTANCE_SHA256:
+            raise RuntimeValidationError("Original Owner acceptance record drift")
+        if acceptance_manifest_sha != cls.OLD_MANIFEST_SHA256:
+            raise RuntimeValidationError("Original Owner acceptance binding drift")
+        if manifest_sha != cls.MANIFEST_GIT_LF_SHA256:
+            raise RuntimeValidationError("Frozen v2 manifest raw-byte drift")
+
     def verify(self) -> dict[str, Any]:
         v1 = ContractLoader(self.package_root).verify_manifest()
         root = (self.package_root / self.V2_RELATIVE).resolve()
         manifest_path = root / "contract.manifest.json"
         acceptance_path = (self.package_root / self.ACCEPTANCE_RELATIVE).resolve()
+        errata_path = (self.package_root / self.ERRATA_RELATIVE).resolve()
         manifest = self._json(manifest_path)
         acceptance = self._json(acceptance_path)
+        errata = self._json(errata_path)
         lines: list[str] = []
         artifacts = manifest.get("artifacts")
         if not isinstance(artifacts, list) or len(artifacts) != manifest.get("artifactCount"):
@@ -88,9 +156,14 @@ class RuntimeContractVerifier:
             "failed"
         ) != 0:
             raise RuntimeValidationError("v2 conformance evidence drift")
+        self._validate_manifest_errata(
+            errata,
+            acceptance_sha=self._sha(acceptance_path),
+            acceptance_manifest_sha=acceptance.get("manifestSha256"),
+            manifest_sha=self._sha(manifest_path),
+        )
         bindings = {
             "acceptedRootHash": v2_root,
-            "manifestSha256": self._sha(manifest_path),
             "conformanceEvidenceSha256": self._sha(evidence_path),
         }
         for key, expected in bindings.items():

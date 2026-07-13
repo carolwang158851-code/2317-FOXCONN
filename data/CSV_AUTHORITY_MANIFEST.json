@@ -311,8 +311,8 @@
       "publishRuleZh": "正式macro_snapshot.csv原則上僅能append新日期行；歷史格式修正須由Owner明確核准，並同步更新SHA-256與manifest",
       "actionable": false,
       "zh": "使用者整理資料，尚未完成CSV_AUTHORITY權威驗證；可供市場情報觀察，不啟用交易規則；2026-06-29已由Owner核准修正7筆歷史欄位錯位",
-      "sha256": "5F81C052FD1DD16923FAEB11DC9069B26408CCCA967DA34B0F796091A2F8F6C7",
-      "fileSizeBytes": 9123,
+      "sha256": "353025C29D678488F7022939C86C36CB15D3B348DC5876909D6779E56CFE213B",
+      "fileSizeBytes": 9075,
       "rowCount": 39,
       "lastPublishedAt": "2026-07-10T09:34:09Z",
       "publishApprovalZh": "Owner approved append; MARKET INTELLIGENCE sidecar remains observation only; actionable:false."
