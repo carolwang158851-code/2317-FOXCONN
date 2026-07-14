@@ -1,0 +1,414 @@
+"""Single-agent typed synthesis with a deterministic, no-network mock client."""
+
+from __future__ import annotations
+
+import hashlib
+import importlib
+import json
+from pathlib import Path
+from typing import Any, Protocol
+
+from ..openai.model_registry import ModelDefinition
+from ..openai.tool_registry import ToolRegistry
+from ..runtime.runtime_config import RuntimeConfig
+from .contracts import (
+    BaselineSnapshot,
+    Confidence,
+    EvidenceItem,
+    ExecutionStep,
+    FinancialBriefReport,
+    FinancialBriefSynthesis,
+    MetricImpact,
+    MetricSynthesis,
+    PluginId,
+    PluginTrace,
+    RoutePlan,
+    Sentiment,
+    SourceLocator,
+    TokenUsage,
+    ToolUsage,
+    ValidatedEvidence,
+    canonical_json_ready,
+)
+
+
+class AgentExecutionError(RuntimeError):
+    """Raised before or after an invalid synthesis; never repaired with guessed data."""
+
+
+class SynthesisClient(Protocol):
+    mode: str
+    synthesis_calls: int
+
+    def synthesize(
+        self,
+        *,
+        baseline: BaselineSnapshot,
+        validated: ValidatedEvidence,
+        plan: RoutePlan,
+    ) -> tuple[FinancialBriefSynthesis, TokenUsage]: ...
+
+
+METRIC_FIELDS = ("revenue", "EPS", "margins", "valuation", "fx_impact")
+STEP_FOR_PLUGIN = {
+    PluginId.WEB_SEARCH: ExecutionStep.WEB_SEARCH,
+    PluginId.DATA_ANALYTICS: ExecutionStep.DATA_ANALYTICS,
+    PluginId.INVESTMENT_BANKING: ExecutionStep.INVESTMENT_BANKING,
+}
+
+
+def _unique(values: list[str]) -> list[str]:
+    return list(dict.fromkeys(value for value in values if value))
+
+
+def _metric_synthesis(field_name: str, evidence: list[EvidenceItem]) -> MetricSynthesis:
+    relevant = [item for item in evidence if field_name in item.changed_fields]
+    if not relevant:
+        return MetricSynthesis(
+            new_evidence=["No validated new evidence for this field."],
+            investment_impact="War-room baseline retained without a field-level change.",
+        )
+    summaries = [
+        f"{item.summary} [{field_name}={item.field_values[field_name]}]"
+        for item in relevant
+    ]
+    return MetricSynthesis(
+        new_evidence=_unique(summaries),
+        investment_impact=" ".join(_unique([item.investment_impact for item in relevant])),
+    )
+
+
+def deterministic_synthesis(validated: ValidatedEvidence) -> FinancialBriefSynthesis:
+    evidence = list(validated.evidence)
+    if not evidence:
+        return FinancialBriefSynthesis(
+            investment_impact="No validated material change; war-room baseline retained.",
+            revenue=_metric_synthesis("revenue", evidence),
+            EPS=_metric_synthesis("EPS", evidence),
+            margins=_metric_synthesis("margins", evidence),
+            valuation=_metric_synthesis("valuation", evidence),
+            fx_impact=_metric_synthesis("fx_impact", evidence),
+            catalysts=[],
+            risks=[],
+            sentiment=Sentiment.NEUTRAL,
+            confidence=Confidence.LOW,
+            data_quality_notes=["No new evidence packet claimed a material change."],
+        )
+
+    directions = {item.impact_direction for item in evidence}
+    sentiment = next(iter(directions)) if len(directions) == 1 else Sentiment.NEUTRAL
+    confidence_rank = {Confidence.LOW: 0, Confidence.MEDIUM: 1, Confidence.HIGH: 2}
+    confidence = min(
+        (item.confidence for item in evidence), key=lambda value: confidence_rank[value]
+    )
+    return FinancialBriefSynthesis(
+        investment_impact=" ".join(
+            _unique([item.investment_impact for item in evidence])
+        ),
+        revenue=_metric_synthesis("revenue", evidence),
+        EPS=_metric_synthesis("EPS", evidence),
+        margins=_metric_synthesis("margins", evidence),
+        valuation=_metric_synthesis("valuation", evidence),
+        fx_impact=_metric_synthesis("fx_impact", evidence),
+        catalysts=_unique([value for item in evidence for value in item.catalysts]),
+        risks=_unique([value for item in evidence for value in item.risks]),
+        sentiment=sentiment,
+        confidence=confidence,
+        data_quality_notes=(
+            list(validated.data_quality_notes)
+            or ["Validated packets reported no additional data-quality warning."]
+        ),
+    )
+
+
+class DeterministicMockClient:
+    """Deterministic typed client; it never reads credentials or opens a network."""
+
+    mode = "DETERMINISTIC_MOCK"
+
+    def __init__(self, model_id: str = "phase3b-deterministic-mock") -> None:
+        self.model_id = model_id
+        self.synthesis_calls = 0
+
+    def synthesize(
+        self,
+        *,
+        baseline: BaselineSnapshot,
+        validated: ValidatedEvidence,
+        plan: RoutePlan,
+    ) -> tuple[FinancialBriefSynthesis, TokenUsage]:
+        if self.synthesis_calls >= 1:
+            raise AgentExecutionError("A Shadow run cannot synthesize more than once")
+        self.synthesis_calls += 1
+        synthesis = deterministic_synthesis(validated)
+        prompt_payload = {
+            "baseline": canonical_json_ready(baseline),
+            "evidence": canonical_json_ready(validated),
+            "route": canonical_json_ready(plan),
+        }
+        input_size = len(
+            json.dumps(prompt_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        )
+        output_size = len(
+            json.dumps(
+                canonical_json_ready(synthesis),
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
+        input_tokens = (input_size + 3) // 4
+        output_tokens = (output_size + 3) // 4
+        return synthesis, TokenUsage(
+            source="DETERMINISTIC_ESTIMATE",
+            model_id=self.model_id,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=input_tokens + output_tokens,
+        )
+
+
+class LiveAgentsSdkClient:
+    """Official Agents SDK path. Construction is inert; synthesis requires credentials."""
+
+    mode = "AGENTS_SDK"
+
+    def __init__(
+        self,
+        *,
+        config: RuntimeConfig,
+        model: ModelDefinition,
+        prompt_path: Path,
+        tool_registry: ToolRegistry,
+    ) -> None:
+        self.config = config
+        self.model = model
+        self.prompt_path = prompt_path.resolve()
+        self.tool_registry = tool_registry
+        self.synthesis_calls = 0
+
+    def synthesize(
+        self,
+        *,
+        baseline: BaselineSnapshot,
+        validated: ValidatedEvidence,
+        plan: RoutePlan,
+    ) -> tuple[FinancialBriefSynthesis, TokenUsage]:
+        configured_model = self.config.require_live_credentials()
+        if configured_model != self.model.model_id or not self.model.network_required:
+            raise AgentExecutionError("Live model registry binding is invalid")
+        if self.synthesis_calls >= 1:
+            raise AgentExecutionError("A Shadow run cannot synthesize more than once")
+        if not self.prompt_path.is_file():
+            raise AgentExecutionError("Financial Brief prompt is unavailable")
+
+        try:
+            sdk = importlib.import_module("".join(("ag", "ents")))
+            agent_class = getattr(sdk, "Agent")
+            runner_class = getattr(sdk, "Runner")
+        except (ImportError, AttributeError) as exc:
+            raise AgentExecutionError("OpenAI Agents SDK is unavailable") from exc
+
+        tools = []
+        if plan.calls_for(ExecutionStep.WEB_SEARCH) == 1:
+            tools.append(self.tool_registry.build_hosted_web_search())
+        instructions = self.prompt_path.read_text(encoding="utf-8")
+        payload = {
+            "run_type": plan.run_type.value,
+            "baseline": canonical_json_ready(baseline),
+            "validated_evidence": canonical_json_ready(validated),
+            "route": canonical_json_ready(plan),
+        }
+        agent = agent_class(
+            name="P1008 Financial Brief Agent",
+            instructions=instructions,
+            model=self.model.model_id,
+            tools=tools,
+            output_type=FinancialBriefSynthesis,
+        )
+        self.synthesis_calls += 1
+        result = runner_class.run_sync(
+            agent,
+            json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+        )
+        output = result.final_output
+        synthesis = (
+            output
+            if isinstance(output, FinancialBriefSynthesis)
+            else FinancialBriefSynthesis.model_validate(output)
+        )
+        usage = getattr(getattr(result, "context_wrapper", None), "usage", None)
+        input_tokens = int(getattr(usage, "input_tokens", 0) or 0)
+        output_tokens = int(getattr(usage, "output_tokens", 0) or 0)
+        return synthesis, TokenUsage(
+            source="AGENTS_SDK",
+            model_id=self.model.model_id,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=input_tokens + output_tokens,
+        )
+
+
+class AgentRunner:
+    def __init__(self, client: SynthesisClient, model: ModelDefinition) -> None:
+        self.client = client
+        self.model = model
+
+    @staticmethod
+    def _run_id(
+        baseline: BaselineSnapshot, validated: ValidatedEvidence, plan: RoutePlan
+    ) -> str:
+        material = json.dumps(
+            {
+                "run_type": plan.run_type.value,
+                "as_of_date": baseline.as_of_date.isoformat(),
+                "baseline_hash": baseline.baseline_hash,
+                "evidence_ids": validated.evidence_ids,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        digest = hashlib.sha256(material).hexdigest().upper()[:16]
+        run_label = plan.run_type.value.replace("_", "-")
+        return f"P3B-{run_label}-{baseline.as_of_date:%Y%m%d}-{digest}"
+
+    @staticmethod
+    def _metric_impact(
+        field_name: str,
+        baseline: BaselineSnapshot,
+        validated: ValidatedEvidence,
+        synthesis: FinancialBriefSynthesis,
+    ) -> MetricImpact:
+        attribute = "eps" if field_name == "EPS" else field_name
+        narrative: MetricSynthesis = getattr(synthesis, attribute)
+        evidence_ids = [
+            item.evidence_id
+            for item in validated.evidence
+            if field_name in item.changed_fields
+        ]
+        baseline_value = baseline.data.get(field_name, {})
+        return MetricImpact(
+            baseline=baseline_value if isinstance(baseline_value, dict) else {"value": baseline_value},
+            new_evidence=narrative.new_evidence,
+            investment_impact=narrative.investment_impact,
+            evidence_ids=evidence_ids,
+        )
+
+    @staticmethod
+    def _trace(
+        plan: RoutePlan,
+        validated: ValidatedEvidence,
+        synthesis_mode: str,
+    ) -> tuple[list[PluginTrace], list[ToolUsage]]:
+        evidence_by_step: dict[ExecutionStep, list[str]] = {
+            step: [] for step in ExecutionStep
+        }
+        packet_counts = {step: 0 for step in ExecutionStep}
+        for packet in validated.packets:
+            step = STEP_FOR_PLUGIN[packet.plugin]
+            packet_counts[step] += 1
+            evidence_by_step[step].extend(item.evidence_id for item in packet.evidence)
+
+        traces = []
+        usages = []
+        for step in ExecutionStep:
+            if step is ExecutionStep.OPENAI_SYNTHESIS:
+                count = int(validated.material_delta)
+                status = (
+                    "LIVE_SYNTHESIZED"
+                    if count and synthesis_mode == "AGENTS_SDK"
+                    else "MOCK_SYNTHESIZED"
+                    if count
+                    else "NOT_ROUTED"
+                )
+                mode = synthesis_mode if count else "NOT_ROUTED"
+                ids = list(validated.evidence_ids) if count else []
+            else:
+                count = packet_counts[step]
+                status = "PACKET_VALIDATED" if count else "NOT_ROUTED"
+                mode = "EXECUTOR_PACKET" if count else "NOT_ROUTED"
+                ids = sorted(set(evidence_by_step[step]))
+            traces.append(
+                PluginTrace(
+                    plugin=step,
+                    status=status,
+                    call_count=count,
+                    evidence_ids=ids,
+                )
+            )
+            usages.append(ToolUsage(tool=step, mode=mode, call_count=count))
+        return traces, usages
+
+    def run(
+        self,
+        *,
+        baseline: BaselineSnapshot,
+        validated: ValidatedEvidence,
+        plan: RoutePlan,
+    ) -> FinancialBriefReport:
+        if validated.material_delta:
+            synthesis, token_usage = self.client.synthesize(
+                baseline=baseline, validated=validated, plan=plan
+            )
+        else:
+            synthesis = deterministic_synthesis(validated)
+            token_usage = TokenUsage(
+                source="NOT_CALLED",
+                model_id=self.model.model_id,
+                input_tokens=0,
+                output_tokens=0,
+                total_tokens=0,
+            )
+        if self.client.synthesis_calls > 1:
+            raise AgentExecutionError("Synthesis call ceiling exceeded")
+
+        change_evidence = {
+            field_name: [
+                item.evidence_id
+                for item in validated.evidence
+                if field_name in item.changed_fields
+            ]
+            for field_name in validated.changed_fields
+        }
+        locators: list[SourceLocator] = []
+        seen_locators: set[tuple[str, str]] = set()
+        for item in validated.evidence:
+            for locator in item.source_locators:
+                key = (locator.source_id, locator.locator)
+                if key not in seen_locators:
+                    locators.append(locator)
+                    seen_locators.add(key)
+
+        traces, tool_usage = self._trace(plan, validated, self.client.mode)
+        material = validated.material_delta
+        return FinancialBriefReport(
+            run_id=self._run_id(baseline, validated, plan),
+            run_type=plan.run_type,
+            as_of_date=baseline.as_of_date,
+            baseline_hash=baseline.baseline_hash,
+            plugin_trace=traces,
+            war_room_baseline=baseline.data,
+            new_evidence=validated.evidence,
+            investment_impact=synthesis.investment_impact,
+            revenue=self._metric_impact("revenue", baseline, validated, synthesis),
+            EPS=self._metric_impact("EPS", baseline, validated, synthesis),
+            margins=self._metric_impact("margins", baseline, validated, synthesis),
+            valuation=self._metric_impact("valuation", baseline, validated, synthesis),
+            fx_impact=self._metric_impact("fx_impact", baseline, validated, synthesis),
+            catalysts=synthesis.catalysts,
+            risks=synthesis.risks,
+            sentiment=synthesis.sentiment,
+            confidence=synthesis.confidence,
+            changed_fields=validated.changed_fields,
+            change_evidence=change_evidence,
+            evidence_ids=validated.evidence_ids,
+            source_locators=locators,
+            data_quality_notes=synthesis.data_quality_notes,
+            token_usage=token_usage,
+            tool_usage=tool_usage,
+            no_material_change=not material,
+            status=("MATERIAL_CHANGE_CANDIDATE" if material else "NO_MATERIAL_CHANGE"),
+            synthesis_count=int(material),
+            manual_shadow=True,
+            actionable=False,
+        )

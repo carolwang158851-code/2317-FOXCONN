@@ -28,6 +28,7 @@ class CapabilityRegistry:
             "news",
             "ic_debate",
             "decision_engine",
+            "financial_brief_shadow",
         }
     )
 
@@ -37,6 +38,14 @@ class CapabilityRegistry:
                 capability_id="echo_research",
                 enabled=True,
                 provider="phase2a-mock",
+            )
+        }
+        self._shadow_definitions = {
+            "financial_brief_shadow": CapabilityDefinition(
+                capability_id="financial_brief_shadow",
+                enabled=True,
+                provider="phase3b-manual-shadow",
+                actionable=False,
             )
         }
 
@@ -51,6 +60,21 @@ class CapabilityRegistry:
             "enabled": sorted(self._definitions),
             "deferred": sorted(self.DEFERRED),
             "default_enabled": False,
+            "actionable": False,
+        }
+
+    def require_shadow_enabled(self, capability_id: str) -> CapabilityDefinition:
+        definition = self._shadow_definitions.get(capability_id)
+        if definition is None or not definition.enabled:
+            raise CapabilityError(f"Shadow capability is disabled: {capability_id}")
+        return definition
+
+    def shadow_snapshot(self) -> dict[str, Any]:
+        return {
+            "enabled": sorted(self._shadow_definitions),
+            "mode": "MANUAL_SHADOW",
+            "multi_agent": False,
+            "handoffs": False,
             "actionable": False,
         }
 

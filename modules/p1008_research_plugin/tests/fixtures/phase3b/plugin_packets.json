@@ -1,0 +1,483 @@
+{
+  "as_of_date": "2026-07-14",
+  "baseline": {
+    "source_files": [
+      "fixture://phase3b/war-room-baseline"
+    ],
+    "data": {
+      "revenue": {
+        "quarter": "2026Q1",
+        "revenue_q_100m": "20850",
+        "hon_hai_revenue_yoy": "12.4"
+      },
+      "EPS": {
+        "eps_q": "3.12",
+        "eps_ttm": "12.88",
+        "eps_yoy_pct": "8.7"
+      },
+      "margins": {
+        "gross_margin_pct": "6.35",
+        "operating_margin_pct": "3.18"
+      },
+      "valuation": {
+        "close": "165.0",
+        "bvps": "127.12",
+        "pb": "1.298",
+        "pb_zone": "MID"
+      },
+      "fx_impact": {
+        "twd_usd": "32.10",
+        "dxy": "101.20",
+        "fx_trend": "TWD_WEAKNESS_WATCH",
+        "fx_pressure_level": "WATCH",
+        "eps_impact_estimate": "Observation only"
+      }
+    }
+  },
+  "cases": {
+    "no_material_daily": {
+      "run_type": "DAILY",
+      "packets": [
+        {
+          "packet_id": "PKT-WEB-DAILY-NO-DELTA-20260714",
+          "plugin": "WEB_SEARCH",
+          "supported_run_types": ["DAILY"],
+          "as_of_date": "2026-07-14",
+          "expires_on": "2026-07-15",
+          "signals": {
+            "material_delta": false,
+            "numeric_anomaly": false,
+            "data_quality_warning": false,
+            "major_transaction": false,
+            "earnings_event": false,
+            "capital_allocation_event": false,
+            "financial_numbers": false
+          },
+          "evidence": [],
+          "executor": "OPENAI_HOSTED_TOOL",
+          "actionable": false
+        }
+      ]
+    },
+    "daily_numeric_anomaly": {
+      "run_type": "DAILY",
+      "packets": [
+        {
+          "packet_id": "PKT-WEB-DAILY-ANOMALY-20260714",
+          "plugin": "WEB_SEARCH",
+          "supported_run_types": ["DAILY"],
+          "as_of_date": "2026-07-14",
+          "expires_on": "2026-07-15",
+          "signals": {
+            "material_delta": true,
+            "numeric_anomaly": true,
+            "data_quality_warning": false,
+            "major_transaction": false,
+            "earnings_event": false,
+            "capital_allocation_event": false,
+            "financial_numbers": true
+          },
+          "evidence": [
+            {
+              "evidence_id": "E-WEB-DAILY-001",
+              "summary": "A newly published monthly sales release differs from the prior scan.",
+              "changed_fields": ["revenue"],
+              "field_values": {"revenue": "new monthly release detected"},
+              "investment_impact": "Revenue direction requires a bounded data check before interpretation.",
+              "impact_direction": "中性",
+              "confidence": "MEDIUM",
+              "catalysts": ["New monthly sales disclosure"],
+              "risks": ["Release-to-baseline period alignment"],
+              "source_locators": [
+                {
+                  "source_id": "SRC-WEB-DAILY-001",
+                  "locator": "https://example.invalid/official/monthly-sales-202607",
+                  "source_tier": "OFFICIAL_COMPANY_RELEASE_FIXTURE",
+                  "observed_at": "2026-07-14T01:00:00+00:00"
+                }
+              ],
+              "data_quality_notes": ["Fixture source; deterministic tests only."]
+            }
+          ],
+          "executor": "OPENAI_HOSTED_TOOL",
+          "actionable": false
+        },
+        {
+          "packet_id": "PKT-DA-DAILY-ANOMALY-20260714",
+          "plugin": "DATA_ANALYTICS",
+          "supported_run_types": ["DAILY"],
+          "as_of_date": "2026-07-14",
+          "expires_on": "2026-07-15",
+          "signals": {
+            "material_delta": true,
+            "numeric_anomaly": true,
+            "data_quality_warning": false,
+            "major_transaction": false,
+            "earnings_event": false,
+            "capital_allocation_event": false,
+            "financial_numbers": true
+          },
+          "evidence": [
+            {
+              "evidence_id": "E-DA-DAILY-001",
+              "summary": "Deterministic anomaly scoring confirms an unusual sequential revenue move.",
+              "changed_fields": ["revenue"],
+              "field_values": {"revenue": "sequential anomaly confirmed"},
+              "investment_impact": "The revenue delta is material enough for one Shadow synthesis.",
+              "impact_direction": "中性",
+              "confidence": "MEDIUM",
+              "catalysts": ["Sequential revenue normalization"],
+              "risks": ["One-period anomaly may not persist"],
+              "source_locators": [
+                {
+                  "source_id": "SRC-DA-DAILY-001",
+                  "locator": "fixture://phase3b/daily-anomaly-calculation",
+                  "source_tier": "DETERMINISTIC_ANALYTICS_FIXTURE",
+                  "observed_at": "2026-07-14T01:05:00+00:00"
+                }
+              ],
+              "data_quality_notes": ["Calculated only from the supplied fixture series."]
+            }
+          ],
+          "executor": "CODEX_PLUGIN_EXECUTOR",
+          "actionable": false
+        }
+      ]
+    },
+    "monthly_revenue": {
+      "run_type": "MONTHLY_REVENUE",
+      "packets": [
+        {
+          "packet_id": "PKT-WEB-MONTHLY-20260714",
+          "plugin": "WEB_SEARCH",
+          "supported_run_types": ["MONTHLY_REVENUE"],
+          "as_of_date": "2026-07-14",
+          "expires_on": "2026-07-31",
+          "signals": {
+            "material_delta": true,
+            "numeric_anomaly": false,
+            "data_quality_warning": false,
+            "major_transaction": false,
+            "earnings_event": false,
+            "capital_allocation_event": false,
+            "financial_numbers": true
+          },
+          "evidence": [
+            {
+              "evidence_id": "E-WEB-MONTHLY-001",
+              "summary": "The official monthly release provides a new revenue observation.",
+              "changed_fields": ["revenue"],
+              "field_values": {"revenue": "YoY 15.2%"},
+              "investment_impact": "The new release extends the revenue evidence window beyond the baseline.",
+              "impact_direction": "偏多",
+              "confidence": "HIGH",
+              "catalysts": ["Monthly revenue YoY acceleration"],
+              "risks": ["Monthly mix details remain limited"],
+              "source_locators": [
+                {
+                  "source_id": "SRC-WEB-MONTHLY-001",
+                  "locator": "https://example.invalid/official/revenue-202606",
+                  "source_tier": "OFFICIAL_COMPANY_RELEASE_FIXTURE",
+                  "observed_at": "2026-07-14T02:00:00+00:00"
+                }
+              ],
+              "data_quality_notes": ["Fixture source; deterministic tests only."]
+            }
+          ],
+          "executor": "OPENAI_HOSTED_TOOL",
+          "actionable": false
+        },
+        {
+          "packet_id": "PKT-DA-MONTHLY-20260714",
+          "plugin": "DATA_ANALYTICS",
+          "supported_run_types": ["MONTHLY_REVENUE"],
+          "as_of_date": "2026-07-14",
+          "expires_on": "2026-07-31",
+          "signals": {
+            "material_delta": true,
+            "numeric_anomaly": false,
+            "data_quality_warning": false,
+            "major_transaction": false,
+            "earnings_event": false,
+            "capital_allocation_event": false,
+            "financial_numbers": true
+          },
+          "evidence": [
+            {
+              "evidence_id": "E-DA-MONTHLY-001",
+              "summary": "Month-over-month, year-over-year, trend, and anomaly checks complete without schema warnings.",
+              "changed_fields": ["revenue"],
+              "field_values": {"revenue": "MoM 4.1%; YoY 15.2%; trend improving"},
+              "investment_impact": "Revenue momentum is stronger than the formal baseline while remaining an observation.",
+              "impact_direction": "偏多",
+              "confidence": "HIGH",
+              "catalysts": ["Revenue momentum improvement"],
+              "risks": ["Quarterly conversion into margins is unverified"],
+              "source_locators": [
+                {
+                  "source_id": "SRC-DA-MONTHLY-001",
+                  "locator": "fixture://phase3b/monthly-revenue-analysis",
+                  "source_tier": "DETERMINISTIC_ANALYTICS_FIXTURE",
+                  "observed_at": "2026-07-14T02:05:00+00:00"
+                }
+              ],
+              "data_quality_notes": ["No missing period in the deterministic fixture window."]
+            }
+          ],
+          "executor": "CODEX_PLUGIN_EXECUTOR",
+          "actionable": false
+        }
+      ]
+    },
+    "quarterly_earnings": {
+      "run_type": "QUARTERLY_EARNINGS",
+      "packets": [
+        {
+          "packet_id": "PKT-WEB-QUARTERLY-20260714",
+          "plugin": "WEB_SEARCH",
+          "supported_run_types": ["QUARTERLY_EARNINGS"],
+          "as_of_date": "2026-07-14",
+          "expires_on": "2026-07-31",
+          "signals": {
+            "material_delta": true,
+            "numeric_anomaly": false,
+            "data_quality_warning": false,
+            "major_transaction": false,
+            "earnings_event": true,
+            "capital_allocation_event": false,
+            "financial_numbers": true
+          },
+          "evidence": [
+            {
+              "evidence_id": "E-WEB-QUARTERLY-001",
+              "summary": "A new earnings release and investor briefing are available.",
+              "changed_fields": ["EPS"],
+              "field_values": {"EPS": "quarterly EPS 3.45"},
+              "investment_impact": "New earnings evidence updates the EPS observation set.",
+              "impact_direction": "偏多",
+              "confidence": "HIGH",
+              "catalysts": ["Quarterly EPS improvement"],
+              "risks": ["Briefing guidance requires follow-up"],
+              "source_locators": [
+                {
+                  "source_id": "SRC-WEB-QUARTERLY-001",
+                  "locator": "https://example.invalid/official/earnings-2026q2",
+                  "source_tier": "OFFICIAL_COMPANY_RELEASE_FIXTURE",
+                  "observed_at": "2026-07-14T03:00:00+00:00"
+                }
+              ],
+              "data_quality_notes": ["Fixture source; deterministic tests only."]
+            }
+          ],
+          "executor": "OPENAI_HOSTED_TOOL",
+          "actionable": false
+        },
+        {
+          "packet_id": "PKT-DA-QUARTERLY-20260714",
+          "plugin": "DATA_ANALYTICS",
+          "supported_run_types": ["QUARTERLY_EARNINGS"],
+          "as_of_date": "2026-07-14",
+          "expires_on": "2026-07-31",
+          "signals": {
+            "material_delta": true,
+            "numeric_anomaly": false,
+            "data_quality_warning": false,
+            "major_transaction": false,
+            "earnings_event": true,
+            "capital_allocation_event": false,
+            "financial_numbers": true
+          },
+          "evidence": [
+            {
+              "evidence_id": "E-DA-QUARTERLY-001",
+              "summary": "Margin and EPS bridge checks reconcile to the fixture release.",
+              "changed_fields": ["EPS", "margins"],
+              "field_values": {"EPS": "quarterly EPS 3.45", "margins": "gross 6.52%; operating 3.31%"},
+              "investment_impact": "Earnings quality improves modestly relative to the baseline.",
+              "impact_direction": "偏多",
+              "confidence": "MEDIUM",
+              "catalysts": ["Operating margin improvement"],
+              "risks": ["Margin bridge uses one reported quarter"],
+              "source_locators": [
+                {
+                  "source_id": "SRC-DA-QUARTERLY-001",
+                  "locator": "fixture://phase3b/quarterly-bridge",
+                  "source_tier": "DETERMINISTIC_ANALYTICS_FIXTURE",
+                  "observed_at": "2026-07-14T03:05:00+00:00"
+                }
+              ],
+              "data_quality_notes": ["Fixture bridge reconciles without residual."]
+            }
+          ],
+          "executor": "CODEX_PLUGIN_EXECUTOR",
+          "actionable": false
+        },
+        {
+          "packet_id": "PKT-IB-QUARTERLY-20260714",
+          "plugin": "INVESTMENT_BANKING",
+          "supported_run_types": ["QUARTERLY_EARNINGS"],
+          "as_of_date": "2026-07-14",
+          "expires_on": "2026-07-31",
+          "signals": {
+            "material_delta": true,
+            "numeric_anomaly": false,
+            "data_quality_warning": false,
+            "major_transaction": false,
+            "earnings_event": true,
+            "capital_allocation_event": true,
+            "financial_numbers": true
+          },
+          "evidence": [
+            {
+              "evidence_id": "E-IB-QUARTERLY-001",
+              "summary": "Profit quality, valuation context, and capital allocation were reviewed against the supplied release.",
+              "changed_fields": ["valuation"],
+              "field_values": {"valuation": "baseline multiple retained; evidence window updated"},
+              "investment_impact": "Valuation interpretation remains bounded by the existing multiple framework.",
+              "impact_direction": "中性",
+              "confidence": "MEDIUM",
+              "catalysts": ["Improved profit quality"],
+              "risks": ["Capital allocation detail remains preliminary"],
+              "source_locators": [
+                {
+                  "source_id": "SRC-IB-QUARTERLY-001",
+                  "locator": "fixture://phase3b/quarterly-banking-review",
+                  "source_tier": "CODEX_BANKING_ANALYSIS_FIXTURE",
+                  "observed_at": "2026-07-14T03:10:00+00:00"
+                }
+              ],
+              "data_quality_notes": ["No independent valuation target was created."]
+            }
+          ],
+          "executor": "CODEX_PLUGIN_EXECUTOR",
+          "actionable": false
+        }
+      ]
+    },
+    "major_event_financial": {
+      "run_type": "MAJOR_EVENT",
+      "packets": [
+        {
+          "packet_id": "PKT-WEB-MAJOR-20260714",
+          "plugin": "WEB_SEARCH",
+          "supported_run_types": ["MAJOR_EVENT"],
+          "as_of_date": "2026-07-14",
+          "expires_on": "2026-07-31",
+          "signals": {
+            "material_delta": true,
+            "numeric_anomaly": false,
+            "data_quality_warning": false,
+            "major_transaction": true,
+            "earnings_event": false,
+            "capital_allocation_event": true,
+            "financial_numbers": true
+          },
+          "evidence": [
+            {
+              "evidence_id": "E-WEB-MAJOR-001",
+              "summary": "A new official capital-allocation announcement is available.",
+              "changed_fields": ["valuation"],
+              "field_values": {"valuation": "capital-allocation event added"},
+              "investment_impact": "The event changes the valuation evidence set but not the formal baseline.",
+              "impact_direction": "中性",
+              "confidence": "HIGH",
+              "catalysts": ["Capital-allocation execution"],
+              "risks": ["Transaction completion conditions"],
+              "source_locators": [
+                {
+                  "source_id": "SRC-WEB-MAJOR-001",
+                  "locator": "https://example.invalid/official/capital-event-20260714",
+                  "source_tier": "OFFICIAL_COMPANY_RELEASE_FIXTURE",
+                  "observed_at": "2026-07-14T04:00:00+00:00"
+                }
+              ],
+              "data_quality_notes": ["Fixture source; deterministic tests only."]
+            }
+          ],
+          "executor": "OPENAI_HOSTED_TOOL",
+          "actionable": false
+        },
+        {
+          "packet_id": "PKT-DA-MAJOR-20260714",
+          "plugin": "DATA_ANALYTICS",
+          "supported_run_types": ["MAJOR_EVENT"],
+          "as_of_date": "2026-07-14",
+          "expires_on": "2026-07-31",
+          "signals": {
+            "material_delta": true,
+            "numeric_anomaly": false,
+            "data_quality_warning": false,
+            "major_transaction": true,
+            "earnings_event": false,
+            "capital_allocation_event": true,
+            "financial_numbers": true
+          },
+          "evidence": [
+            {
+              "evidence_id": "E-DA-MAJOR-001",
+              "summary": "The announced financial amounts pass deterministic arithmetic checks.",
+              "changed_fields": ["valuation"],
+              "field_values": {"valuation": "financial amounts reconciled"},
+              "investment_impact": "Financial scale is now traceable for the event review.",
+              "impact_direction": "中性",
+              "confidence": "MEDIUM",
+              "catalysts": ["Disciplined transaction sizing"],
+              "risks": ["Pro forma assumptions are not yet audited"],
+              "source_locators": [
+                {
+                  "source_id": "SRC-DA-MAJOR-001",
+                  "locator": "fixture://phase3b/major-event-arithmetic",
+                  "source_tier": "DETERMINISTIC_ANALYTICS_FIXTURE",
+                  "observed_at": "2026-07-14T04:05:00+00:00"
+                }
+              ],
+              "data_quality_notes": ["Only announced amounts were checked."]
+            }
+          ],
+          "executor": "CODEX_PLUGIN_EXECUTOR",
+          "actionable": false
+        },
+        {
+          "packet_id": "PKT-IB-MAJOR-20260714",
+          "plugin": "INVESTMENT_BANKING",
+          "supported_run_types": ["MAJOR_EVENT"],
+          "as_of_date": "2026-07-14",
+          "expires_on": "2026-07-31",
+          "signals": {
+            "material_delta": true,
+            "numeric_anomaly": false,
+            "data_quality_warning": false,
+            "major_transaction": true,
+            "earnings_event": false,
+            "capital_allocation_event": true,
+            "financial_numbers": true
+          },
+          "evidence": [
+            {
+              "evidence_id": "E-IB-MAJOR-001",
+              "summary": "Transaction structure and capital-allocation implications were reviewed from the supplied announcement.",
+              "changed_fields": ["valuation"],
+              "field_values": {"valuation": "transaction structure reviewed"},
+              "investment_impact": "Completion and integration conditions remain the principal event risks.",
+              "impact_direction": "中性",
+              "confidence": "MEDIUM",
+              "catalysts": ["Successful transaction completion"],
+              "risks": ["Integration and closing conditions"],
+              "source_locators": [
+                {
+                  "source_id": "SRC-IB-MAJOR-001",
+                  "locator": "fixture://phase3b/major-event-banking-review",
+                  "source_tier": "CODEX_BANKING_ANALYSIS_FIXTURE",
+                  "observed_at": "2026-07-14T04:10:00+00:00"
+                }
+              ],
+              "data_quality_notes": ["No independent fairness opinion was created."]
+            }
+          ],
+          "executor": "CODEX_PLUGIN_EXECUTOR",
+          "actionable": false
+        }
+      ]
+    }
+  }
+}
