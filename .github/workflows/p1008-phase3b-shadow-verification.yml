@@ -1,0 +1,75 @@
+name: P1008 Phase 3B Shadow Verification
+
+on:
+  push:
+    branches:
+      - p1008-phase3b-ci-runner
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic-shadow-tests:
+    name: ${{ matrix.os }} / Python 3.11
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - ubuntu-latest
+    steps:
+      - name: Check out CI runner branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install declared plugin dependencies
+        run: python -m pip install --disable-pip-version-check ./modules/p1008_research_plugin
+
+      - name: Assert live API credentials are absent
+        shell: python
+        run: |
+          import os
+
+          if os.environ.get("OPENAI_API_KEY"):
+              raise SystemExit("OPENAI_API_KEY must not be provided to deterministic CI")
+          print("OPENAI_API_KEY is absent; live smoke remains disabled")
+
+      - name: Assert deterministic suite contains 87 tests
+        shell: python
+        run: |
+          import unittest
+
+          suite = unittest.defaultTestLoader.discover(
+              "modules/p1008_research_plugin/tests",
+              pattern="test_*.py",
+          )
+          count = suite.countTestCases()
+          if count != 87:
+              raise SystemExit(f"Expected 87 tests, discovered {count}")
+          print("Discovered 87 deterministic tests")
+
+      - name: Run Phase 3B deterministic regression suite
+        run: python -m unittest discover -s modules/p1008_research_plugin/tests -p "test_*.py" -v
+
+      - name: Verify tracked repository state is unchanged
+        shell: python
+        run: |
+          import subprocess
+
+          subprocess.run(["git", "diff", "--exit-code"], check=True)
+          status = subprocess.run(
+              ["git", "status", "--porcelain", "--untracked-files=all"],
+              check=True,
+              capture_output=True,
+              text=True,
+          ).stdout.strip()
+          if status:
+              raise SystemExit(f"Test run changed repository state:\n{status}")
+          print("Tracked and untracked repository state is unchanged")
