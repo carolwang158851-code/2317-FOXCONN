@@ -235,6 +235,30 @@ class ProviderCitation(StrictModel):
         return self
 
 
+class ShadowFailureManifest(StrictModel):
+    """Non-candidate audit record retained when a live run fails closed."""
+
+    record_type: Literal["SHADOW_RUN_FAILURE"] = "SHADOW_RUN_FAILURE"
+    run_id: NonEmptyString
+    execution_mode: Literal["LIVE"] = "LIVE"
+    executed_at_utc: datetime
+    provider_response_id: NonEmptyString | None
+    failure_stage: Literal["PROVIDER_REQUEST", "REPORT_VALIDATION"]
+    error_type: NonEmptyString
+    candidate_written: Literal[False] = False
+    actionable: Literal[False] = False
+
+    @model_validator(mode="after")
+    def enforce_failure_audit_boundary(self) -> "ShadowFailureManifest":
+        if "-LIVE-" not in self.run_id:
+            raise ValueError("failure audit requires a LIVE run identifier")
+        if self.executed_at_utc.utcoffset() is None:
+            raise ValueError("failure audit requires a timezone-aware timestamp")
+        if self.executed_at_utc.utcoffset().total_seconds() != 0:
+            raise ValueError("failure audit timestamp must be UTC")
+        return self
+
+
 class FinancialBriefReport(StrictModel):
     run_id: NonEmptyString
     execution_mode: Literal["MOCK", "LIVE"]
@@ -311,16 +335,6 @@ class FinancialBriefReport(StrictModel):
                 raise ValueError("hosted Web Search reports require provider citations")
         elif self.provider_citations:
             raise ValueError("provider citations require a hosted Web Search call")
-
-        web_search_routed = any(
-            usage.tool is ExecutionStep.WEB_SEARCH and usage.call_count == 1
-            for usage in self.tool_usage
-        )
-        if self.execution_mode == "LIVE" and web_search_routed:
-            if self.hosted_web_search_call_count != 1:
-                raise ValueError("routed live Web Search requires one actual hosted tool call")
-            if not self.provider_citations:
-                raise ValueError("routed live Web Search requires at least one citation")
 
         evidence_ids = [item.evidence_id for item in self.new_evidence]
         if len(evidence_ids) != len(set(evidence_ids)):

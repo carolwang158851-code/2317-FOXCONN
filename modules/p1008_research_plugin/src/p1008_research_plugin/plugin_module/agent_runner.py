@@ -29,6 +29,7 @@ from .contracts import (
     ProviderCitation,
     RoutePlan,
     Sentiment,
+    ShadowFailureManifest,
     SourceLocator,
     TokenUsage,
     ToolUsage,
@@ -40,6 +41,18 @@ from .packet_gateway import PacketGateway
 
 class AgentExecutionError(RuntimeError):
     """Raised before or after an invalid synthesis; never repaired with guessed data."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        failure_audit: ShadowFailureManifest | None = None,
+        failure_recorded: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.failure_audit = failure_audit
+        self.run_id = failure_audit.run_id if failure_audit else None
+        self.failure_recorded = failure_recorded
 
 
 class SynthesisClient(Protocol):
@@ -377,11 +390,43 @@ class AgentRunner:
         *,
         utc_now: Callable[[], datetime] | None = None,
         uuid_factory: Callable[[], UUID] | None = None,
+        failure_recorder: Callable[[ShadowFailureManifest], Any] | None = None,
     ) -> None:
         self.client = client
         self.model = model
         self.utc_now = utc_now or (lambda: datetime.now(timezone.utc))
         self.uuid_factory = uuid_factory or uuid4
+        self.failure_recorder = failure_recorder
+
+    def _raise_live_failure(
+        self,
+        *,
+        run_id: str,
+        executed_at_utc: datetime,
+        failure_stage: str,
+        cause: Exception,
+    ) -> None:
+        audit = ShadowFailureManifest(
+            run_id=run_id,
+            executed_at_utc=executed_at_utc,
+            provider_response_id=getattr(self.client, "provider_response_id", None),
+            failure_stage=failure_stage,
+            error_type=type(cause).__name__,
+            candidate_written=False,
+            actionable=False,
+        )
+        recorded = False
+        if self.failure_recorder is not None:
+            try:
+                self.failure_recorder(audit)
+                recorded = True
+            except Exception:
+                recorded = False
+        raise AgentExecutionError(
+            "Live Shadow failed closed after run identity creation",
+            failure_audit=audit,
+            failure_recorded=recorded,
+        ) from cause
 
     @staticmethod
     def _run_id(
@@ -524,9 +569,19 @@ class AgentRunner:
         if execution_mode == "LIVE":
             PacketGateway.validate_live_evidence(plan, validated)
         if validated.material_delta:
-            synthesis, token_usage = self.client.synthesize(
-                baseline=baseline, validated=validated, plan=plan
-            )
+            try:
+                synthesis, token_usage = self.client.synthesize(
+                    baseline=baseline, validated=validated, plan=plan
+                )
+            except Exception as exc:
+                if execution_mode == "LIVE" and executed_at_utc is not None:
+                    self._raise_live_failure(
+                        run_id=run_id,
+                        executed_at_utc=executed_at_utc,
+                        failure_stage="PROVIDER_REQUEST",
+                        cause=exc,
+                    )
+                raise
         else:
             synthesis = deterministic_synthesis(validated)
             token_usage = TokenUsage(
@@ -558,8 +613,9 @@ class AgentRunner:
 
         traces, tool_usage = self._trace(plan, validated, self.client.mode)
         material = validated.material_delta
-        return FinancialBriefReport(
-            run_id=run_id,
+        try:
+            return FinancialBriefReport(
+                run_id=run_id,
             execution_mode=execution_mode,
             executed_at_utc=executed_at_utc,
             provider_response_id=getattr(self.client, "provider_response_id", None),
@@ -602,5 +658,14 @@ class AgentRunner:
             status=("MATERIAL_CHANGE_CANDIDATE" if material else "NO_MATERIAL_CHANGE"),
             synthesis_count=int(material),
             manual_shadow=True,
-            actionable=False,
-        )
+                actionable=False,
+            )
+        except Exception as exc:
+            if execution_mode == "LIVE" and executed_at_utc is not None:
+                self._raise_live_failure(
+                    run_id=run_id,
+                    executed_at_utc=executed_at_utc,
+                    failure_stage="REPORT_VALIDATION",
+                    cause=exc,
+                )
+            raise

@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .contracts import FinancialBriefReport, canonical_json_ready
+from .contracts import FinancialBriefReport, ShadowFailureManifest, canonical_json_ready
 
 
 class ShadowWriteError(RuntimeError):
@@ -58,6 +58,28 @@ class ShadowWriter:
             "run": run_path.relative_to(self.package_root).as_posix(),
             "sha256": hashlib.sha256(raw).hexdigest().upper(),
             "persisted": True,
+            "formal_state_changed": False,
+            "actionable": False,
+        }
+
+    def write_failure(self, audit: ShadowFailureManifest) -> dict[str, Any]:
+        """Persist a non-candidate audit without changing the periodic-reader target."""
+
+        if audit.actionable or audit.candidate_written:
+            raise ShadowWriteError("Failure audit crossed its observation boundary")
+        if not re.fullmatch(r"[A-Z0-9-]{8,96}", audit.run_id):
+            raise ShadowWriteError("Unsafe Shadow run identifier")
+        payload = canonical_json_ready(audit)
+        raw = (
+            json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+        ).encode("utf-8")
+        failure_path = self.shadow_root / "failures" / f"{audit.run_id}.json"
+        self._write_atomic(failure_path, raw, replace=False)
+        return {
+            "failure": failure_path.relative_to(self.package_root).as_posix(),
+            "sha256": hashlib.sha256(raw).hexdigest().upper(),
+            "persisted": True,
+            "candidate_written": False,
             "formal_state_changed": False,
             "actionable": False,
         }
