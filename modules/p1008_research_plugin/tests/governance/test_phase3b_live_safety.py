@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import sys
 import types
@@ -36,11 +37,22 @@ from p1008_research_plugin.runtime.runtime_config import (
 )
 
 
-def monthly_inputs():
+OFFICIAL_URL = "https://www.honhai.com/en-us/investor-relations/monthly-revenues"
+
+
+def monthly_inputs(*, live: bool = False):
     payload = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
     case = payload["cases"]["monthly_revenue"]
+    packet_payloads = copy.deepcopy(case["packets"])
+    if live:
+        for packet in packet_payloads:
+            for item in packet["evidence"]:
+                item["data_quality_notes"] = ["Validated against a cited official release."]
+                for locator in item["source_locators"]:
+                    locator["locator"] = OFFICIAL_URL
+                    locator["source_tier"] = "OFFICIAL_COMPANY_RELEASE"
     gateway = PacketGateway()
-    packets = gateway.parse(case["packets"])
+    packets = gateway.parse(packet_payloads)
     plan = PluginRouter().route(case["run_type"], gateway.aggregate_signals(packets))
     validated = gateway.validate(plan, packets, payload["as_of_date"])
     baseline = BaselineReader.from_mapping(
@@ -68,7 +80,7 @@ class Phase3BLiveSafetyTests(unittest.TestCase):
                 )
 
     def test_live_client_wires_zero_retry_one_turn_and_one_tool_call(self) -> None:
-        baseline, validated, plan = monthly_inputs()
+        baseline, validated, plan = monthly_inputs(live=True)
         capture: dict[str, object] = {}
 
         class FakeAsyncOpenAI:
@@ -102,10 +114,36 @@ class Phase3BLiveSafetyTests(unittest.TestCase):
                 capture["runner_args"] = args
                 capture["runner_kwargs"] = kwargs
                 usage = types.SimpleNamespace(input_tokens=11, output_tokens=7)
+                web_action = types.SimpleNamespace(
+                    type="search",
+                    query="Hon Hai monthly revenue",
+                    queries=None,
+                    sources=[types.SimpleNamespace(url=OFFICIAL_URL)],
+                )
+                web_call = types.SimpleNamespace(
+                    type="web_search_call",
+                    id="ws_offline_trace",
+                    status="completed",
+                    action=web_action,
+                )
+                citation = types.SimpleNamespace(
+                    type="url_citation",
+                    url=OFFICIAL_URL,
+                    title="Hon Hai monthly revenue",
+                )
+                message = types.SimpleNamespace(
+                    type="message",
+                    content=[types.SimpleNamespace(annotations=[citation])],
+                )
+                raw_response = types.SimpleNamespace(
+                    request_id="req_offline_trace",
+                    output=[web_call, message],
+                )
                 return types.SimpleNamespace(
                     final_output=deterministic_synthesis(validated),
                     context_wrapper=types.SimpleNamespace(usage=usage),
                     last_response_id="resp_offline_trace",
+                    raw_responses=[raw_response],
                 )
 
         agents_module = types.SimpleNamespace(
@@ -176,6 +214,11 @@ class Phase3BLiveSafetyTests(unittest.TestCase):
         )
         self.assertEqual(client.synthesis_calls, 1)
         self.assertEqual(client.provider_response_id, "resp_offline_trace")
+        self.assertEqual(client.provider_request_ids, ["req_offline_trace"])
+        self.assertEqual(len(client.hosted_web_search_trace), 1)
+        self.assertEqual(client.hosted_web_search_trace[0].call_id, "ws_offline_trace")
+        self.assertEqual(len(client.provider_citations), 1)
+        self.assertEqual(client.provider_citations[0].url, OFFICIAL_URL)
         self.assertEqual(usage.total_tokens, 18)
         self.assertEqual(synthesis, deterministic_synthesis(validated))
 

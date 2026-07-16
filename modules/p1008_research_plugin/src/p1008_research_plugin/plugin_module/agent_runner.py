@@ -21,10 +21,12 @@ from .contracts import (
     ExecutionStep,
     FinancialBriefReport,
     FinancialBriefSynthesis,
+    HostedWebSearchTrace,
     MetricImpact,
     MetricSynthesis,
     PluginId,
     PluginTrace,
+    ProviderCitation,
     RoutePlan,
     Sentiment,
     SourceLocator,
@@ -33,6 +35,7 @@ from .contracts import (
     ValidatedEvidence,
     canonical_json_ready,
 )
+from .packet_gateway import PacketGateway
 
 
 class AgentExecutionError(RuntimeError):
@@ -43,6 +46,9 @@ class SynthesisClient(Protocol):
     mode: str
     synthesis_calls: int
     provider_response_id: str | None
+    provider_request_ids: list[str]
+    hosted_web_search_trace: list[HostedWebSearchTrace]
+    provider_citations: list[ProviderCitation]
 
     def synthesize(
         self,
@@ -66,6 +72,69 @@ STEP_FOR_PLUGIN = {
 
 def _unique(values: list[str]) -> list[str]:
     return list(dict.fromkeys(value for value in values if value))
+
+
+def _provider_trace(
+    result: Any,
+) -> tuple[list[str], list[HostedWebSearchTrace], list[ProviderCitation]]:
+    """Extract only public, non-sensitive Responses metadata exposed by SDK 0.18.2."""
+
+    request_ids: list[str] = []
+    search_traces: list[HostedWebSearchTrace] = []
+    citations: list[ProviderCitation] = []
+    citation_keys: set[tuple[str, str]] = set()
+    for response in list(getattr(result, "raw_responses", None) or []):
+        request_id = getattr(response, "request_id", None)
+        if isinstance(request_id, str) and request_id and request_id not in request_ids:
+            request_ids.append(request_id)
+        for output in list(getattr(response, "output", None) or []):
+            output_type = getattr(output, "type", None)
+            if output_type == "web_search_call":
+                action = getattr(output, "action", None)
+                action_type = str(getattr(action, "type", "unknown"))
+                queries = []
+                query = getattr(action, "query", None)
+                if isinstance(query, str) and query:
+                    queries.append(query)
+                for value in list(getattr(action, "queries", None) or []):
+                    if isinstance(value, str) and value and value not in queries:
+                        queries.append(value)
+                source_urls = []
+                action_url = getattr(action, "url", None)
+                if isinstance(action_url, str) and action_url:
+                    source_urls.append(action_url)
+                for source in list(getattr(action, "sources", None) or []):
+                    source_url = getattr(source, "url", None)
+                    if (
+                        isinstance(source_url, str)
+                        and source_url
+                        and source_url not in source_urls
+                    ):
+                        source_urls.append(source_url)
+                search_traces.append(
+                    HostedWebSearchTrace(
+                        call_id=str(getattr(output, "id", "")),
+                        status=str(getattr(output, "status", "")),
+                        action_type=action_type,
+                        queries=queries,
+                        source_urls=source_urls,
+                    )
+                )
+            elif output_type == "message":
+                for content in list(getattr(output, "content", None) or []):
+                    for annotation in list(getattr(content, "annotations", None) or []):
+                        if getattr(annotation, "type", None) != "url_citation":
+                            continue
+                        url = getattr(annotation, "url", None)
+                        title = getattr(annotation, "title", None)
+                        if not isinstance(url, str) or not isinstance(title, str):
+                            continue
+                        key = (url, title)
+                        if key in citation_keys:
+                            continue
+                        citations.append(ProviderCitation(url=url, title=title))
+                        citation_keys.add(key)
+    return request_ids, search_traces, citations
 
 
 def _metric_synthesis(field_name: str, evidence: list[EvidenceItem]) -> MetricSynthesis:
@@ -137,6 +206,9 @@ class DeterministicMockClient:
         self.model_id = model_id
         self.synthesis_calls = 0
         self.provider_response_id: str | None = None
+        self.provider_request_ids: list[str] = []
+        self.hosted_web_search_trace: list[HostedWebSearchTrace] = []
+        self.provider_citations: list[ProviderCitation] = []
 
     def synthesize(
         self,
@@ -195,6 +267,9 @@ class LiveAgentsSdkClient:
         self.tool_registry = tool_registry
         self.synthesis_calls = 0
         self.provider_response_id: str | None = None
+        self.provider_request_ids: list[str] = []
+        self.hosted_web_search_trace: list[HostedWebSearchTrace] = []
+        self.provider_citations: list[ProviderCitation] = []
 
     def synthesize(
         self,
@@ -203,6 +278,7 @@ class LiveAgentsSdkClient:
         validated: ValidatedEvidence,
         plan: RoutePlan,
     ) -> tuple[FinancialBriefSynthesis, TokenUsage]:
+        PacketGateway.validate_live_evidence(plan, validated)
         configured_model = self.config.require_live_credentials()
         if (
             configured_model != PHASE3B_LIVE_MODEL_ID
@@ -268,6 +344,13 @@ class LiveAgentsSdkClient:
         )
         response_id = getattr(result, "last_response_id", None)
         self.provider_response_id = response_id if isinstance(response_id, str) else None
+        (
+            self.provider_request_ids,
+            self.hosted_web_search_trace,
+            self.provider_citations,
+        ) = _provider_trace(result)
+        if len(self.hosted_web_search_trace) > RESPONSES_MAX_TOOL_CALLS:
+            raise AgentExecutionError("Hosted Web Search call ceiling exceeded")
         output = result.final_output
         synthesis = (
             output
@@ -438,6 +521,8 @@ class AgentRunner:
         execution_mode, executed_at_utc, run_id = self._execution_identity(
             baseline, validated, plan
         )
+        if execution_mode == "LIVE":
+            PacketGateway.validate_live_evidence(plan, validated)
         if validated.material_delta:
             synthesis, token_usage = self.client.synthesize(
                 baseline=baseline, validated=validated, plan=plan
@@ -478,6 +563,18 @@ class AgentRunner:
             execution_mode=execution_mode,
             executed_at_utc=executed_at_utc,
             provider_response_id=getattr(self.client, "provider_response_id", None),
+            provider_request_ids=list(
+                getattr(self.client, "provider_request_ids", [])
+            ),
+            hosted_web_search_call_count=len(
+                getattr(self.client, "hosted_web_search_trace", [])
+            ),
+            hosted_web_search_trace=list(
+                getattr(self.client, "hosted_web_search_trace", [])
+            ),
+            provider_citations=list(
+                getattr(self.client, "provider_citations", [])
+            ),
             run_type=plan.run_type,
             as_of_date=baseline.as_of_date,
             baseline_hash=baseline.baseline_hash,

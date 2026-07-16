@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import importlib.util
 import json
 import sys
@@ -22,17 +23,32 @@ from p1008_research_plugin.plugin_module.agent_runner import (
     deterministic_synthesis,
 )
 from p1008_research_plugin.plugin_module.baseline_reader import BaselineReader
-from p1008_research_plugin.plugin_module.contracts import TokenUsage
+from p1008_research_plugin.plugin_module.contracts import (
+    HostedWebSearchTrace,
+    ProviderCitation,
+    TokenUsage,
+)
 from p1008_research_plugin.plugin_module.packet_gateway import PacketGateway
 from p1008_research_plugin.plugin_module.router import PluginRouter
 from p1008_research_plugin.plugin_module.shadow_writer import ShadowWriteError, ShadowWriter
 
 
-def monthly_inputs():
+OFFICIAL_URL = "https://www.honhai.com/en-us/investor-relations/monthly-revenues"
+
+
+def monthly_inputs(*, live: bool = False):
     payload = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
     case = payload["cases"]["monthly_revenue"]
+    packet_payloads = copy.deepcopy(case["packets"])
+    if live:
+        for packet in packet_payloads:
+            for item in packet["evidence"]:
+                item["data_quality_notes"] = ["Validated against a cited official release."]
+                for locator in item["source_locators"]:
+                    locator["locator"] = OFFICIAL_URL
+                    locator["source_tier"] = "OFFICIAL_COMPANY_RELEASE"
     gateway = PacketGateway()
-    packets = gateway.parse(case["packets"])
+    packets = gateway.parse(packet_payloads)
     plan = PluginRouter().route(case["run_type"], gateway.aggregate_signals(packets))
     validated = gateway.validate(plan, packets, payload["as_of_date"])
     baseline = BaselineReader.from_mapping(
@@ -59,6 +75,19 @@ class OfflineLiveClient:
     def __init__(self, response_id: str) -> None:
         self.synthesis_calls = 0
         self.provider_response_id = response_id
+        self.provider_request_ids = ["req_offline_trace"]
+        self.hosted_web_search_trace = [
+            HostedWebSearchTrace(
+                call_id="ws_offline_trace",
+                status="completed",
+                action_type="search",
+                queries=["Hon Hai monthly revenue"],
+                source_urls=[OFFICIAL_URL],
+            )
+        ]
+        self.provider_citations = [
+            ProviderCitation(url=OFFICIAL_URL, title="Hon Hai monthly revenue")
+        ]
 
     def synthesize(self, *, baseline, validated, plan):
         self.synthesis_calls += 1
@@ -75,6 +104,7 @@ class OfflineLiveClient:
 class Phase3BRunIdentityTests(unittest.TestCase):
     def setUp(self) -> None:
         self.baseline, self.validated, self.plan = monthly_inputs()
+        _baseline, self.live_validated, _plan = monthly_inputs(live=True)
         self.mock_model = ModelDefinition(
             model_id="phase3b-deterministic-mock",
             provider="LOCAL_DETERMINISTIC_MOCK",
@@ -99,7 +129,7 @@ class Phase3BRunIdentityTests(unittest.TestCase):
             self.live_model,
             utc_now=lambda: datetime(2026, 7, 15, 13, 31, 31, 750216, tzinfo=timezone.utc),
             uuid_factory=lambda: UUID(hex=uuid_hex),
-        ).run(baseline=self.baseline, validated=self.validated, plan=self.plan)
+        ).run(baseline=self.baseline, validated=self.live_validated, plan=self.plan)
 
     def test_same_mock_inputs_produce_same_mode_qualified_run_id(self) -> None:
         first = self.mock_report()

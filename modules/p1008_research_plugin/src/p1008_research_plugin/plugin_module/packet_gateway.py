@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import date
 from typing import Any, Iterable, Mapping
+from urllib.parse import urlsplit
 
 from pydantic import ValidationError
 
@@ -13,7 +14,9 @@ from .contracts import (
     ExecutionStep,
     PluginId,
     RoutePlan,
+    RunType,
     ValidatedEvidence,
+    is_verifiable_https_url,
 )
 from .router import RouteSignals
 
@@ -28,6 +31,8 @@ STEP_FOR_PLUGIN = {
     PluginId.INVESTMENT_BANKING: ExecutionStep.INVESTMENT_BANKING,
 }
 ALLOWED_CHANGED_FIELDS = {"revenue", "EPS", "margins", "valuation", "fx_impact"}
+FORBIDDEN_LIVE_PROVENANCE_MARKERS = ("fixture", "mock", "deterministic")
+OFFICIAL_MONTHLY_REVENUE_HOSTS = ("honhai.com", "mops.twse.com.tw")
 
 
 class PacketGateway:
@@ -128,3 +133,52 @@ class PacketGateway:
             evidence_ids=[item.evidence_id for item in evidence],
             data_quality_notes=notes,
         )
+
+    @staticmethod
+    def validate_live_evidence(plan: RoutePlan, validated: ValidatedEvidence) -> None:
+        """Reject test provenance before a live synthesis can be requested."""
+
+        for packet in validated.packets:
+            for item in packet.evidence:
+                provenance_text = " ".join(
+                    [
+                        item.summary,
+                        *item.data_quality_notes,
+                        *(locator.source_tier for locator in item.source_locators),
+                        *(locator.locator for locator in item.source_locators),
+                    ]
+                ).lower()
+                if any(
+                    marker in provenance_text
+                    for marker in FORBIDDEN_LIVE_PROVENANCE_MARKERS
+                ):
+                    raise PacketValidationError(
+                        f"Live evidence cannot use test provenance: {item.evidence_id}"
+                    )
+
+                for locator in item.source_locators:
+                    if not is_verifiable_https_url(locator.locator):
+                        raise PacketValidationError(
+                            f"Live evidence requires a verifiable HTTPS locator: {item.evidence_id}"
+                        )
+
+                if (
+                    plan.run_type is RunType.MONTHLY_REVENUE
+                    and "revenue" in item.changed_fields
+                ):
+                    official = any(
+                        any(
+                            (urlsplit(locator.locator).hostname or "").lower()
+                            == host
+                            or (urlsplit(locator.locator).hostname or "").lower().endswith(
+                                "." + host
+                            )
+                            for host in OFFICIAL_MONTHLY_REVENUE_HOSTS
+                        )
+                        for locator in item.source_locators
+                    )
+                    if not official:
+                        raise PacketValidationError(
+                            "MONTHLY_REVENUE evidence must cite Hon Hai or MOPS for "
+                            f"every revenue claim: {item.evidence_id}"
+                        )
