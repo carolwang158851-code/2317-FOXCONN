@@ -32,8 +32,10 @@ class ShadowWriter:
         ).encode("utf-8")
         return payload, raw
 
-    def _write_atomic(self, path: Path, raw: bytes) -> None:
+    def _write_atomic(self, path: Path, raw: bytes, *, replace: bool) -> None:
         self._assert_shadow_path(path)
+        if not replace and path.exists():
+            raise ShadowWriteError("Shadow run artifact already exists")
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_suffix(path.suffix + ".tmp")
         self._assert_shadow_path(temporary)
@@ -49,8 +51,8 @@ class ShadowWriter:
         _payload, raw = self._serialize(report)
         run_path = self.shadow_root / "runs" / f"{report.run_id}.json"
         latest_path = self.shadow_root / "latest_report_candidate.json"
-        self._write_atomic(run_path, raw)
-        self._write_atomic(latest_path, raw)
+        self._write_atomic(run_path, raw, replace=False)
+        self._write_atomic(latest_path, raw, replace=True)
         return {
             "latest": latest_path.relative_to(self.package_root).as_posix(),
             "run": run_path.relative_to(self.package_root).as_posix(),

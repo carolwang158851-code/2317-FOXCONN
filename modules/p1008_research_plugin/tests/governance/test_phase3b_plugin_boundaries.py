@@ -91,7 +91,7 @@ class Phase3BPluginBoundaryTests(unittest.TestCase):
                     ModelRegistry().resolve_phase3b(config)
                 sdk_import.assert_not_called()
 
-    def test_phase3b_source_has_no_embedded_key_or_hardcoded_openai_model(self) -> None:
+    def test_phase3b_source_has_no_embedded_key_and_only_approved_openai_model(self) -> None:
         env_name = "_".join(("OPENAI", "API", "KEY"))
         files = [
             SRC_ROOT / "runtime" / "runtime_config.py",
@@ -100,7 +100,8 @@ class Phase3BPluginBoundaryTests(unittest.TestCase):
         ]
         combined = "\n".join(path.read_text(encoding="utf-8") for path in files)
         self.assertNotIn(env_name, combined)
-        self.assertIsNone(re.search(r"\bgpt-[a-z0-9.-]+", combined, re.IGNORECASE))
+        model_ids = re.findall(r"\bgpt-[a-z0-9.-]+", combined, re.IGNORECASE)
+        self.assertEqual(model_ids, ["gpt-5.6-sol"])
         self.assertNotIn("sk-" + "proj-", combined)
 
     def test_agents_sdk_contract_is_typed_single_agent_and_hosted_web_search(self) -> None:

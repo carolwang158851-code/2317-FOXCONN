@@ -181,7 +181,11 @@ def append_shadow_candidate(
             "## Plugin Module Shadow（Owner gate 前）",
             "",
             f"- Status: `{candidate.get('status', '')}`",
-            f"- Run: `{candidate.get('run_id', '')}` / `{candidate.get('run_type', '')}`",
+            (
+                f"- Run: `{candidate.get('run_id', '')}` / "
+                f"`{candidate.get('run_type', '')}` / "
+                f"`{candidate.get('execution_mode', 'LEGACY')}`"
+            ),
             "- Actionable: `false`",
             "",
             "### 戰情室基線",

@@ -190,6 +190,9 @@ class ToolUsage(StrictModel):
 
 class FinancialBriefReport(StrictModel):
     run_id: NonEmptyString
+    execution_mode: Literal["MOCK", "LIVE"]
+    executed_at_utc: datetime | None
+    provider_response_id: NonEmptyString | None
     run_type: RunType
     as_of_date: date
     baseline_hash: Annotated[str, StringConstraints(pattern=r"^[A-F0-9]{64}$")]
@@ -221,6 +224,14 @@ class FinancialBriefReport(StrictModel):
 
     @model_validator(mode="after")
     def enforce_evidence_and_observation_boundaries(self) -> "FinancialBriefReport":
+        if f"-{self.execution_mode}-" not in self.run_id:
+            raise ValueError("run_id must identify its execution mode")
+        if self.execution_mode == "LIVE" and self.executed_at_utc is None:
+            raise ValueError("live reports require a UTC execution timestamp")
+        if self.execution_mode == "MOCK":
+            if self.executed_at_utc is not None or self.provider_response_id is not None:
+                raise ValueError("mock reports cannot claim live trace metadata")
+
         evidence_ids = [item.evidence_id for item in self.new_evidence]
         if len(evidence_ids) != len(set(evidence_ids)):
             raise ValueError("evidence identifiers must be unique")

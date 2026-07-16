@@ -40,3 +40,12 @@ be detected after restart without a separately frozen external tail anchor.
 Phase 1B does not invent that authority. Tests requiring a known record count
 pass the expected count explicitly and surface the limitation for future
 contract review.
+
+## Phase 3B-P1 manual Shadow use
+
+- `MONTHLY_REVENUE`: run once manually after the monthly revenue release.
+- `QUARTERLY_EARNINGS`: run once manually after earnings or investor-briefing data is released.
+- `MAJOR_EVENT`: run once manually for a material transaction, company announcement, or other substantive event.
+- `DAILY`: disabled; do not schedule a daily run.
+- Every run requires an explicit Owner start, writes only to Shadow artifacts, and remains `actionable=false`.
+- Shadow output must never automatically update the formal decision layer.

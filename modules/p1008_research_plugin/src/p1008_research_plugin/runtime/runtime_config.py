@@ -6,6 +6,9 @@ import os
 from dataclasses import dataclass
 
 
+PHASE3B_LIVE_MODEL_ID = "gpt-5.6-sol"
+
+
 class RuntimeConfigurationError(RuntimeError):
     """Raised when configuration attempts to enable a deferred capability."""
 
@@ -56,6 +59,10 @@ class RuntimeConfig:
         model_id = self.configured_model()
         if not model_id:
             raise RuntimeConfigurationError("Live Shadow is closed: P1008_OPENAI_MODEL is unavailable")
+        if model_id != PHASE3B_LIVE_MODEL_ID:
+            raise RuntimeConfigurationError(
+                "Live Shadow is closed: P1008_OPENAI_MODEL is not the approved model"
+            )
         return model_id
 
     def validate(self) -> None:

@@ -5,12 +5,15 @@ from __future__ import annotations
 import hashlib
 import importlib
 import json
+from collections.abc import Callable
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
+from uuid import UUID, uuid4
 
 from ..openai.model_registry import ModelDefinition
 from ..openai.tool_registry import ToolRegistry
-from ..runtime.runtime_config import RuntimeConfig
+from ..runtime.runtime_config import PHASE3B_LIVE_MODEL_ID, RuntimeConfig
 from .contracts import (
     BaselineSnapshot,
     Confidence,
@@ -39,6 +42,7 @@ class AgentExecutionError(RuntimeError):
 class SynthesisClient(Protocol):
     mode: str
     synthesis_calls: int
+    provider_response_id: str | None
 
     def synthesize(
         self,
@@ -50,6 +54,9 @@ class SynthesisClient(Protocol):
 
 
 METRIC_FIELDS = ("revenue", "EPS", "margins", "valuation", "fx_impact")
+OPENAI_CLIENT_MAX_RETRIES = 0
+AGENT_RUN_MAX_TURNS = 1
+RESPONSES_MAX_TOOL_CALLS = 1
 STEP_FOR_PLUGIN = {
     PluginId.WEB_SEARCH: ExecutionStep.WEB_SEARCH,
     PluginId.DATA_ANALYTICS: ExecutionStep.DATA_ANALYTICS,
@@ -129,6 +136,7 @@ class DeterministicMockClient:
     def __init__(self, model_id: str = "phase3b-deterministic-mock") -> None:
         self.model_id = model_id
         self.synthesis_calls = 0
+        self.provider_response_id: str | None = None
 
     def synthesize(
         self,
@@ -186,6 +194,7 @@ class LiveAgentsSdkClient:
         self.prompt_path = prompt_path.resolve()
         self.tool_registry = tool_registry
         self.synthesis_calls = 0
+        self.provider_response_id: str | None = None
 
     def synthesize(
         self,
@@ -195,7 +204,11 @@ class LiveAgentsSdkClient:
         plan: RoutePlan,
     ) -> tuple[FinancialBriefSynthesis, TokenUsage]:
         configured_model = self.config.require_live_credentials()
-        if configured_model != self.model.model_id or not self.model.network_required:
+        if (
+            configured_model != PHASE3B_LIVE_MODEL_ID
+            or configured_model != self.model.model_id
+            or not self.model.network_required
+        ):
             raise AgentExecutionError("Live model registry binding is invalid")
         if self.synthesis_calls >= 1:
             raise AgentExecutionError("A Shadow run cannot synthesize more than once")
@@ -204,8 +217,14 @@ class LiveAgentsSdkClient:
 
         try:
             sdk = importlib.import_module("".join(("ag", "ents")))
+            openai_sdk = importlib.import_module("openai")
             agent_class = getattr(sdk, "Agent")
             runner_class = getattr(sdk, "Runner")
+            model_settings_class = getattr(sdk, "ModelSettings")
+            retry_settings_class = getattr(sdk, "ModelRetrySettings")
+            provider_class = getattr(sdk, "OpenAIProvider")
+            run_config_class = getattr(sdk, "RunConfig")
+            async_openai_class = getattr(openai_sdk, "AsyncOpenAI")
         except (ImportError, AttributeError) as exc:
             raise AgentExecutionError("OpenAI Agents SDK is unavailable") from exc
 
@@ -226,11 +245,29 @@ class LiveAgentsSdkClient:
             tools=tools,
             output_type=FinancialBriefSynthesis,
         )
+        openai_client = async_openai_class(max_retries=OPENAI_CLIENT_MAX_RETRIES)
+        model_settings = model_settings_class(
+            parallel_tool_calls=False,
+            extra_args={"max_tool_calls": RESPONSES_MAX_TOOL_CALLS},
+            retry=retry_settings_class(max_retries=OPENAI_CLIENT_MAX_RETRIES),
+        )
+        run_config = run_config_class(
+            model_provider=provider_class(
+                openai_client=openai_client,
+                use_responses=True,
+            ),
+            model_settings=model_settings,
+            tracing_disabled=True,
+        )
         self.synthesis_calls += 1
         result = runner_class.run_sync(
             agent,
             json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+            max_turns=AGENT_RUN_MAX_TURNS,
+            run_config=run_config,
         )
+        response_id = getattr(result, "last_response_id", None)
+        self.provider_response_id = response_id if isinstance(response_id, str) else None
         output = result.final_output
         synthesis = (
             output
@@ -250,13 +287,27 @@ class LiveAgentsSdkClient:
 
 
 class AgentRunner:
-    def __init__(self, client: SynthesisClient, model: ModelDefinition) -> None:
+    def __init__(
+        self,
+        client: SynthesisClient,
+        model: ModelDefinition,
+        *,
+        utc_now: Callable[[], datetime] | None = None,
+        uuid_factory: Callable[[], UUID] | None = None,
+    ) -> None:
         self.client = client
         self.model = model
+        self.utc_now = utc_now or (lambda: datetime.now(timezone.utc))
+        self.uuid_factory = uuid_factory or uuid4
 
     @staticmethod
     def _run_id(
-        baseline: BaselineSnapshot, validated: ValidatedEvidence, plan: RoutePlan
+        baseline: BaselineSnapshot,
+        validated: ValidatedEvidence,
+        plan: RoutePlan,
+        execution_mode: str,
+        executed_at_utc: datetime | None,
+        live_uuid: UUID | None,
     ) -> str:
         material = json.dumps(
             {
@@ -270,7 +321,45 @@ class AgentRunner:
         ).encode("utf-8")
         digest = hashlib.sha256(material).hexdigest().upper()[:16]
         run_label = plan.run_type.value.replace("_", "-")
-        return f"P3B-{run_label}-{baseline.as_of_date:%Y%m%d}-{digest}"
+        prefix = f"P3B-{run_label}-{baseline.as_of_date:%Y%m%d}-{execution_mode}"
+        if execution_mode == "MOCK":
+            return f"{prefix}-{digest}"
+        if executed_at_utc is None or live_uuid is None:
+            raise AgentExecutionError("Live run identity requires local UTC and UUID metadata")
+        timestamp = executed_at_utc.strftime("%Y%m%dT%H%M%S%fZ")
+        return f"{prefix}-{timestamp}-{live_uuid.hex[:8].upper()}"
+
+    def _execution_identity(
+        self,
+        baseline: BaselineSnapshot,
+        validated: ValidatedEvidence,
+        plan: RoutePlan,
+    ) -> tuple[str, datetime | None, str]:
+        if self.client.mode == "DETERMINISTIC_MOCK":
+            mode = "MOCK"
+            executed_at_utc = None
+            live_uuid = None
+        elif self.client.mode == "AGENTS_SDK":
+            mode = "LIVE"
+            observed = self.utc_now()
+            if observed.tzinfo is None or observed.utcoffset() is None:
+                raise AgentExecutionError("Live run identity requires a timezone-aware UTC clock")
+            executed_at_utc = observed.astimezone(timezone.utc)
+            live_uuid = self.uuid_factory()
+        else:
+            raise AgentExecutionError("Unknown synthesis execution mode")
+        return (
+            mode,
+            executed_at_utc,
+            self._run_id(
+                baseline,
+                validated,
+                plan,
+                mode,
+                executed_at_utc,
+                live_uuid,
+            ),
+        )
 
     @staticmethod
     def _metric_impact(
@@ -346,6 +435,9 @@ class AgentRunner:
         validated: ValidatedEvidence,
         plan: RoutePlan,
     ) -> FinancialBriefReport:
+        execution_mode, executed_at_utc, run_id = self._execution_identity(
+            baseline, validated, plan
+        )
         if validated.material_delta:
             synthesis, token_usage = self.client.synthesize(
                 baseline=baseline, validated=validated, plan=plan
@@ -382,7 +474,10 @@ class AgentRunner:
         traces, tool_usage = self._trace(plan, validated, self.client.mode)
         material = validated.material_delta
         return FinancialBriefReport(
-            run_id=self._run_id(baseline, validated, plan),
+            run_id=run_id,
+            execution_mode=execution_mode,
+            executed_at_utc=executed_at_utc,
+            provider_response_id=getattr(self.client, "provider_response_id", None),
             run_type=plan.run_type,
             as_of_date=baseline.as_of_date,
             baseline_hash=baseline.baseline_hash,
