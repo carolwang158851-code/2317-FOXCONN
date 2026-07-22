@@ -165,6 +165,21 @@ class PhaseRoutingConformanceTests(unittest.TestCase):
         self.assertEqual(command[:5], ["git", "-c", "core.autocrlf=false", "-c", "core.eol=lf"])
         self.assertEqual(command[-1], "legacy-commit")
 
+    def test_phase_lineage_records_match_canonical_git_blobs(self) -> None:
+        lineage = self.record["phaseLineage"]
+        for path_key, hash_key in (
+            ("phase1bAcceptanceRecord", "phase1bAcceptanceSha256"),
+            ("phase2aOwnerRecord", "phase2aOwnerRecordSha256"),
+            ("phase3aOwnerRecord", "phase3aOwnerRecordSha256"),
+        ):
+            with self.subTest(path_key=path_key):
+                self.runner.validate_committed_text_artifact(
+                    ROOT,
+                    lineage[path_key],
+                    lineage[hash_key],
+                    f"Phase lineage record {path_key}",
+                )
+
     def test_authority_current_baseline_is_six_files(self) -> None:
         current = self.record["authorityBaselines"]["currentSix"]
         self.assertEqual(len(current), 6)

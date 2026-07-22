@@ -83,6 +83,17 @@ def normalize_checkout_eol(value: bytes) -> bytes:
     return value.replace(b"\r\n", b"\n")
 
 
+def validate_committed_text_artifact(root: Path, relative_path: str, expected_hash: str, label: str) -> None:
+    path = root / relative_path
+    require(path.is_file(), f"{label} is missing: {relative_path}")
+    committed = git_blob_bytes(root, relative_path)
+    require(sha256_bytes(committed) == expected_hash, f"{label} Git blob changed: {relative_path}")
+    require(
+        normalize_checkout_eol(path.read_bytes()) == normalize_checkout_eol(committed),
+        f"{label} worktree content changed beyond checkout line endings: {relative_path}",
+    )
+
+
 def git_output(root: Path, *args: str) -> str:
     result = subprocess.run(
         ["git", "-C", str(root), *args],
@@ -227,14 +238,7 @@ def validate_immutable_v1(root: Path, record: dict[str, Any]) -> dict[str, Any]:
     artifacts = immutable.get("artifacts", {})
     require(artifacts, "Immutable v1 artifact metadata is missing")
     for relative_path, expected_hash in artifacts.items():
-        path = root / relative_path
-        require(path.is_file(), f"Frozen v1 artifact is missing: {relative_path}")
-        committed = git_blob_bytes(root, relative_path)
-        require(sha256_bytes(committed) == expected_hash, f"Frozen v1 Git blob changed: {relative_path}")
-        require(
-            normalize_checkout_eol(path.read_bytes()) == normalize_checkout_eol(committed),
-            f"Frozen v1 worktree content changed beyond checkout line endings: {relative_path}",
-        )
+        validate_committed_text_artifact(root, relative_path, expected_hash, "Frozen v1 artifact")
     manifest = read_json(root / "contracts" / "p1008_research_plugin" / "v1.0" / "contract.manifest.json")
     require(manifest["rootHash"] == immutable.get("contractRootHash"), "Frozen v1 root hash changed")
     return {"artifactCount": len(artifacts), "rootHash": manifest["rootHash"]}
@@ -273,8 +277,12 @@ def suite_phase_metadata() -> dict[str, Any]:
         ("phase2aOwnerRecord", "phase2aOwnerRecordSha256"),
         ("phase3aOwnerRecord", "phase3aOwnerRecordSha256"),
     ):
-        path = PACKAGE_ROOT / lineage[path_key]
-        require(path.is_file() and sha256_file(path) == lineage[hash_key], f"Phase lineage record mismatch: {path_key}")
+        validate_committed_text_artifact(
+            PACKAGE_ROOT,
+            lineage[path_key],
+            lineage[hash_key],
+            f"Phase lineage record {path_key}",
+        )
     return {"phase": record["currentPhase"], "moduleNamespaces": namespaces, "metadataDriven": True}
 
 
