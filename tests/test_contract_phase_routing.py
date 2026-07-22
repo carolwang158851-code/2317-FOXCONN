@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER_PATH = ROOT / "contracts" / "p1008_research_plugin" / "conformance" / "v1.1" / "run_contract_tests.py"
+ROUTER_PATH = ROOT / "contracts" / "p1008_research_plugin" / "conformance" / "run_phase_conformance.py"
 RECORD_PATH = ROOT / "contracts" / "p1008_research_plugin" / "acceptance" / "v1.1" / "PHASE_ROUTING_ACCEPTANCE_RECORD.json"
 
 
@@ -25,10 +26,21 @@ def load_runner():
     return module
 
 
+def load_router():
+    spec = importlib.util.spec_from_file_location("phase_routing_test_router", ROUTER_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Cannot load phase-aware conformance router")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 class PhaseRoutingConformanceTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.runner = load_runner()
+        cls.router = load_router()
         cls.record = json.loads(RECORD_PATH.read_text(encoding="utf-8"))
 
     def _tree(self, *, module: bool) -> tempfile.TemporaryDirectory[str]:
@@ -114,6 +126,11 @@ class PhaseRoutingConformanceTests(unittest.TestCase):
         self.assertNotIn("conformance/v1.0/run_contract_tests.py", workflow)
         self.assertIn("fetch-depth: 0", workflow)
         self.assertEqual(workflow.count('"data/2317_cash_flow_authority.csv"'), 2)
+
+    def test_legacy_archive_is_independent_of_runner_line_endings(self) -> None:
+        command = self.router.legacy_archive_command(Path("legacy.zip"), "legacy-commit")
+        self.assertEqual(command[:5], ["git", "-c", "core.autocrlf=false", "-c", "core.eol=lf"])
+        self.assertEqual(command[-1], "legacy-commit")
 
     def test_authority_current_baseline_is_six_files(self) -> None:
         current = self.record["authorityBaselines"]["currentSix"]
