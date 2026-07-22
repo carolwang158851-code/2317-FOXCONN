@@ -104,6 +104,7 @@ TEST_CONSTANT_PATHS = {
         "runtime/capability_registry.py"
     ),
     "modules/p1008_research_plugin/docs/phase2a/Phase2A_Closure_Report.md",
+    "modules/p1008_research_plugin/tests/fixtures/authority_baselines.json",
 }
 
 
@@ -189,7 +190,7 @@ class Phase2ABoundaryTests(unittest.TestCase):
             entries.append(path)
         self.assertEqual(len(entries), len(set(entries)))
         self.assertEqual(set(entries), expected_hash_governed_paths())
-        self.assertEqual(len(entries), 82)
+        self.assertEqual(len(entries), 84)
 
     def test_crlf_and_mixed_manifest_bytes_are_rejected(self) -> None:
         for rejected in (MANIFEST_CRLF_SHA256, MANIFEST_MIXED_SHA256):

@@ -1,0 +1,30 @@
+{
+  "legacy": {
+    "version": "PHASE_2A_FROZEN",
+    "manifestSha256": "8BA304C36C224F1F8ADF78CB871A8200FDA0656BD5824801330EAF6EAF855847",
+    "verifiedFileCount": 5,
+    "paths": [
+      "data/2317_daily_price.csv",
+      "data/2317_master_v9.csv",
+      "data/fx_trend_observations.csv",
+      "data/macro_event_observations.csv",
+      "data/macro_snapshot.csv"
+    ]
+  },
+  "current": {
+    "version": "P1008_AUTHORITY_2026-07-20_V1",
+    "manifestSha256": "8E15782AB300EDB1F17F5043CBAC1B888EFA7F1A2FD9CBB8B43814429949C953",
+    "verifiedFileCount": 6,
+    "addedPath": "data/2317_cash_flow_authority.csv",
+    "priceCutoff": "2026-07-20",
+    "cashFlowCutoff": "2026Q1",
+    "paths": [
+      "data/2317_cash_flow_authority.csv",
+      "data/2317_daily_price.csv",
+      "data/2317_master_v9.csv",
+      "data/fx_trend_observations.csv",
+      "data/macro_event_observations.csv",
+      "data/macro_snapshot.csv"
+    ]
+  }
+}

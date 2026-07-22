@@ -1,0 +1,29 @@
+Governance conflict: Phase 2A hash-governed path set lacks cash-flow authority
+Exact failing test: modules/p1008_research_plugin/tests/governance/test_phase2a_boundaries.py::Phase2ABoundaryTests::test_hash_governed_paths_are_exactly_lf_pinned
+Exact production/fixture files: .gitattributes; modules/p1008_research_plugin/tests/governance/test_phase2a_boundaries.py
+Proposed minimal change: add exact data/2317_cash_flow_authority.csv LF pin, preserve all existing pins, add the version fixture pin, and update the exact expected count.
+
+Governance conflict: governance test pins the legacy CSV authority manifest SHA
+Exact failing test: modules/p1008_research_plugin/tests/test_governance_boundaries.py::GovernanceBoundaryTests::test_no_non_target_baseline_changed_by_temp_ledger
+Exact production/fixture files: modules/p1008_research_plugin/tests/test_governance_boundaries.py; modules/p1008_research_plugin/tests/fixtures/authority_baselines.json
+Proposed minimal change: retain the legacy SHA as PHASE_2A_FROZEN evidence and pin the current P1008_AUTHORITY_2026-07-20_V1 SHA separately.
+
+Governance conflict: read-only adapter test assumes verified_files == 5 and production accepts arbitrary manifest expansion
+Exact failing test: modules/p1008_research_plugin/tests/test_read_only_adapters.py::ReadOnlyAdapterTests::test_rule_digest_and_keep_disabled_boundary
+Exact production/fixture files: modules/p1008_research_plugin/src/p1008_research_plugin/adapters/authority_adapter.py; modules/p1008_research_plugin/tests/test_read_only_adapters.py; data/CSV_AUTHORITY_MANIFEST.json
+Proposed minimal change: enforce exact five-path legacy and six-path current baseline sets, require semantic version metadata, validate declared CSV schema and hashes, and reject missing, hidden, mismatched, or seventh paths.
+
+Approved governance TargetFiles:
+.gitattributes
+data/2317_cash_flow_authority.csv
+data/2317_daily_price.csv
+data/CSV_AUTHORITY_MANIFEST.json
+docs/P1008_AUTHORITY_BASELINE_20260722.md
+docs/P1008_AUTHORITY_GOVERNANCE_AMENDMENT_20260722.md
+tests/test_authority_baseline_20260722.py
+modules/p1008_research_plugin/src/p1008_research_plugin/adapters/authority_adapter.py
+modules/p1008_research_plugin/tests/governance/test_phase2a_boundaries.py
+modules/p1008_research_plugin/tests/test_governance_boundaries.py
+modules/p1008_research_plugin/tests/test_read_only_adapters.py
+modules/p1008_research_plugin/tests/fixtures/authority_baselines.json
+resolved_governance_target_files.txt
