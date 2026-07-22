@@ -53,12 +53,29 @@ def run_command(command: list[str], cwd: Path) -> dict[str, Any]:
     return {"returnCode": result.returncode, "report": parsed, "stdout": result.stdout.strip(), "stderr": result.stderr.strip()}
 
 
+def legacy_archive_command(archive_path: Path, legacy_commit: str) -> list[str]:
+    """Build a runner-independent archive command for the frozen Git tree."""
+    return [
+        "git",
+        "-c",
+        "core.autocrlf=false",
+        "-c",
+        "core.eol=lf",
+        "-C",
+        str(PACKAGE_ROOT),
+        "archive",
+        "--format=zip",
+        f"--output={archive_path}",
+        legacy_commit,
+    ]
+
+
 def resolve_legacy_tree(record: dict[str, Any], destination: Path) -> Path:
     legacy_commit = record["phaseLineage"]["legacyFrozenCommit"]
     archive_path = destination / "legacy.zip"
     legacy_root = destination / "legacy"
     result = subprocess.run(
-        ["git", "-C", str(PACKAGE_ROOT), "archive", "--format=zip", f"--output={archive_path}", legacy_commit],
+        legacy_archive_command(archive_path, legacy_commit),
         check=False,
         capture_output=True,
         text=True,
