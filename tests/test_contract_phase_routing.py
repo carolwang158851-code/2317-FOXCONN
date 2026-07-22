@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import re
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -106,8 +107,40 @@ class PhaseRoutingConformanceTests(unittest.TestCase):
         result = self.runner.validate_immutable_v1(ROOT, self.record)
         self.assertEqual(result["rootHash"], "3370C4DBD6B564E2200D051AC07C8507442C130ADE64D770621107FA09D2924D")
         for relative, expected in self.record["immutableV1"]["artifacts"].items():
-            actual = hashlib.sha256((ROOT / relative).read_bytes()).hexdigest().upper()
+            actual = hashlib.sha256(self.runner.git_blob_bytes(ROOT, relative)).hexdigest().upper()
             self.assertEqual(actual, expected)
+
+    def test_frozen_v1_checkout_allows_only_line_ending_materialization(self) -> None:
+        relative = "contracts/p1008_research_plugin/conformance/v1.0/frozen.txt"
+        manifest_relative = "contracts/p1008_research_plugin/v1.0/contract.manifest.json"
+        with tempfile.TemporaryDirectory(prefix="p1008-frozen-checkout-test-") as root_value:
+            root = Path(root_value)
+            artifact = root / relative
+            manifest = root / manifest_relative
+            artifact.parent.mkdir(parents=True)
+            manifest.parent.mkdir(parents=True)
+            artifact.write_bytes(b"frozen\ncontent\n")
+            manifest.write_text(json.dumps({"rootHash": "ROOT"}), encoding="utf-8")
+            subprocess_args = ["git", "-C", str(root)]
+            subprocess.run([*subprocess_args, "init", "-q"], check=True)
+            subprocess.run([*subprocess_args, "add", relative, manifest_relative], check=True)
+            subprocess.run(
+                [*subprocess_args, "-c", "user.name=P1008 Test", "-c", "user.email=p1008@example.invalid", "commit", "-qm", "frozen"],
+                check=True,
+            )
+            record = {
+                "immutableV1": {
+                    "contractRootHash": "ROOT",
+                    "artifacts": {relative: hashlib.sha256(b"frozen\ncontent\n").hexdigest().upper()},
+                }
+            }
+
+            artifact.write_bytes(b"frozen\r\ncontent\r\n")
+            self.runner.validate_immutable_v1(root, record)
+
+            artifact.write_bytes(b"changed\r\ncontent\r\n")
+            with self.assertRaisesRegex(AssertionError, "beyond checkout line endings"):
+                self.runner.validate_immutable_v1(root, record)
 
     def test_push_and_pull_request_share_current_router(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "p1008-research-contract.yml").read_text(encoding="utf-8")

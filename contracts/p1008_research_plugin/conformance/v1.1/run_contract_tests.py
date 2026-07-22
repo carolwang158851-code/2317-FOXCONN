@@ -64,6 +64,25 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest().upper()
 
 
+def sha256_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest().upper()
+
+
+def git_blob_bytes(root: Path, relative_path: str, revision: str = "HEAD") -> bytes:
+    result = subprocess.run(
+        ["git", "-C", str(root), "show", f"{revision}:{relative_path}"],
+        check=False,
+        capture_output=True,
+    )
+    require(result.returncode == 0, f"Frozen v1 Git blob is unavailable: {relative_path}")
+    return result.stdout
+
+
+def normalize_checkout_eol(value: bytes) -> bytes:
+    """Compare text artifacts without treating checkout EOL policy as contract drift."""
+    return value.replace(b"\r\n", b"\n")
+
+
 def git_output(root: Path, *args: str) -> str:
     result = subprocess.run(
         ["git", "-C", str(root), *args],
@@ -210,7 +229,12 @@ def validate_immutable_v1(root: Path, record: dict[str, Any]) -> dict[str, Any]:
     for relative_path, expected_hash in artifacts.items():
         path = root / relative_path
         require(path.is_file(), f"Frozen v1 artifact is missing: {relative_path}")
-        require(sha256_file(path) == expected_hash, f"Frozen v1 bytes changed: {relative_path}")
+        committed = git_blob_bytes(root, relative_path)
+        require(sha256_bytes(committed) == expected_hash, f"Frozen v1 Git blob changed: {relative_path}")
+        require(
+            normalize_checkout_eol(path.read_bytes()) == normalize_checkout_eol(committed),
+            f"Frozen v1 worktree content changed beyond checkout line endings: {relative_path}",
+        )
     manifest = read_json(root / "contracts" / "p1008_research_plugin" / "v1.0" / "contract.manifest.json")
     require(manifest["rootHash"] == immutable.get("contractRootHash"), "Frozen v1 root hash changed")
     return {"artifactCount": len(artifacts), "rootHash": manifest["rootHash"]}
