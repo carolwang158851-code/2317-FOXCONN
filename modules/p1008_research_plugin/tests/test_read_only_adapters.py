@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import copy
+import hashlib
+import json
+import shutil
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -52,7 +57,19 @@ class ReadOnlyAdapterTests(unittest.TestCase):
 
     def test_rule_digest_and_keep_disabled_boundary(self) -> None:
         verified = self.authority.verify_all()
-        self.assertEqual(verified["verified_count"], 5)
+        self.assertEqual(verified["verified_count"], 7)
+        self.assertEqual(
+            self.authority.manifest_summary()["authority_baseline_version"],
+            AuthorityAdapter.INTEGRATED_BASELINE_VERSION,
+        )
+        self.assertEqual(
+            set(self.authority.listed_paths),
+            AuthorityAdapter.INTEGRATED_AUTHORITY_PATHS,
+        )
+        self.assertIn(
+            "data/2317_cash_flow_authority.csv",
+            {item["relative_path"] for item in verified["verified"]},
+        )
         summary = self.authority.read_rule_manifest()
         self.assertEqual(summary["keep_disabled_count"], 9)
         self.assertFalse(summary["actionable"])
@@ -69,6 +86,104 @@ class ReadOnlyAdapterTests(unittest.TestCase):
         runtime_methods = {name.lower() for name in dir(self.runtime)}
         self.assertFalse(authority_methods & forbidden)
         self.assertFalse(runtime_methods & forbidden)
+
+    def _manifest(self) -> dict[str, object]:
+        return json.loads(
+            (PACKAGE_ROOT / "data" / "CSV_AUTHORITY_MANIFEST.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+    def _copy_manifest_files(
+        self,
+        root: Path,
+        manifest: dict[str, object],
+        *,
+        omit: set[str] | None = None,
+        additionally_copy: set[str] | None = None,
+    ) -> None:
+        omitted = omit or set()
+        entries = manifest["authoritativeFiles"] + manifest["nonAuthoritativeFiles"]
+        for entry in entries:
+            relative = entry["path"]
+            if relative in omitted:
+                continue
+            destination = root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(PACKAGE_ROOT / relative, destination)
+        for relative in additionally_copy or set():
+            destination = root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(PACKAGE_ROOT / relative, destination)
+        manifest_path = root / "data" / "CSV_AUTHORITY_MANIFEST.json"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+    def test_integrated_baseline_missing_cash_flow_fails_closed(self) -> None:
+        manifest = self._manifest()
+        with tempfile.TemporaryDirectory(prefix="p1008-authority-missing-") as temp:
+            root = Path(temp)
+            self._copy_manifest_files(
+                root, manifest, omit={"data/2317_cash_flow_authority.csv"}
+            )
+            adapter = AuthorityAdapter(root, self.loader)
+            with self.assertRaises(AuthorityAdapterError):
+                adapter.verify_all()
+
+    def test_cash_flow_hash_mismatch_fails_closed(self) -> None:
+        manifest = self._manifest()
+        with tempfile.TemporaryDirectory(prefix="p1008-authority-hash-") as temp:
+            root = Path(temp)
+            self._copy_manifest_files(root, manifest)
+            cash = root / "data" / "2317_cash_flow_authority.csv"
+            cash.write_bytes(cash.read_bytes() + b"\n")
+            adapter = AuthorityAdapter(root, self.loader)
+            with self.assertRaises(AuthorityAdapterError):
+                adapter.verify_all()
+
+    def test_unauthorized_eighth_manifest_path_fails_closed(self) -> None:
+        manifest = self._manifest()
+        manifest["nonAuthoritativeFiles"].append(
+            {
+                "path": "data/unauthorized_eighth.csv",
+                "sha256": hashlib.sha256(b"x\n").hexdigest().upper(),
+            }
+        )
+        with tempfile.TemporaryDirectory(prefix="p1008-authority-extra-") as temp:
+            root = Path(temp)
+            self._copy_manifest_files(
+                root, manifest, omit={"data/unauthorized_eighth.csv"}
+            )
+            extra = root / "data" / "unauthorized_eighth.csv"
+            extra.write_bytes(b"x\n")
+            with self.assertRaises(AuthorityAdapterError):
+                AuthorityAdapter(root, self.loader)
+
+    def test_legacy_manifest_cannot_hide_existing_cash_flow_file(self) -> None:
+        manifest = copy.deepcopy(self._manifest())
+        manifest["manifestVersion"] = "1.2.2"
+        manifest.pop("authorityBaselineIntegration", None)
+        manifest["authoritativeFiles"] = [
+            entry
+            for entry in manifest["authoritativeFiles"]
+            if entry["path"]
+            not in {
+                "data/2317_cash_flow_authority.csv",
+                "data/2317_daily_market_activity.csv",
+            }
+        ]
+        with tempfile.TemporaryDirectory(prefix="p1008-authority-hidden-") as temp:
+            root = Path(temp)
+            self._copy_manifest_files(
+                root,
+                manifest,
+                additionally_copy={"data/2317_cash_flow_authority.csv"},
+            )
+            with self.assertRaises(AuthorityAdapterError):
+                AuthorityAdapter(root, self.loader)
 
 
 if __name__ == "__main__":

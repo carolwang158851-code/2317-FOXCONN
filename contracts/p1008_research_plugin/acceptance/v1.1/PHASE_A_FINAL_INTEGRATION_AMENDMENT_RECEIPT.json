@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "1.0",
+  "receiptId": "P1008_PHASE_A_FINAL_INTEGRATION_AMENDMENT_RECEIPT_20260729",
+  "scopeId": "P1008-FINAL-INTEGRATION-RECONCILIATION-20260729",
+  "acceptedBy": "Owner",
+  "acceptedAt": "2026-07-29T09:00:00Z",
+  "acceptanceStatus": "PHASE_A_FINAL_INTEGRATION_RECONCILED",
+  "baselineId": "INTEGRATED_SEVEN",
+  "priorFinalClosureReceipt": {
+    "path": "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_AUTHORITY_DATA_CLOSURE_RECEIPT.json",
+    "sha256": "C9291E01C7370FFB1D70FDF7F6363C672E77912BFA74DD6C5862F4146DD52213"
+  },
+  "committedRowIdentityEvidence": {
+    "path": "contracts/p1008_research_plugin/acceptance/v1.1/evidence/PHASE_A_MACRO_ROW_IDENTITY_RECEIPT.json",
+    "sha256": "E72989762053D20665DD87DA263F8B4DB1E77D277A6A27FD6C8AABBFE4921B9D",
+    "byteIdenticalToApprovedRuntimeEvidence": true
+  },
+  "authorityManifest": {
+    "path": "data/CSV_AUTHORITY_MANIFEST.json",
+    "sha256": "7DC97FFBC0E3F5E73E8085ACC25DD61E0F3588FCE04C360B4F19FA0D86AFA01B"
+  },
+  "authorityFiles": {
+    "data/2317_master_v9.csv": "0BB2FEC6FA3035AC642738BC12EA6959C81C8A79D5221E694BF780427051CF79",
+    "data/2317_daily_price.csv": "2581AF868AA0D8C4BFCEA913B156DBB515AF3929FAAE7D0FDC947EA4A8256304",
+    "data/2317_daily_market_activity.csv": "FE7B33B649012E7D8143838793FE5ED6244BB2183B966C0DAD2C9775FB0E4807",
+    "data/2317_cash_flow_authority.csv": "082ECA44A96A06F7DAE10DD33CBAF77C75DABA9B1B4DEA27B5B930F8CE8CD95C",
+    "data/macro_snapshot.csv": "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F",
+    "data/macro_event_observations.csv": "76B93F8932BA606390D44D68BD0D57D0BE7CB5D1D1364183F192A062D8B94BF2",
+    "data/fx_trend_observations.csv": "BFEC53845C68D689D20CC29972550279E3A4AE8D473816EFDB0855FF0DD091CD"
+  },
+  "authoritySummary": {
+    "verifiedFileCount": 7,
+    "dailyPriceRows": 116,
+    "dailyPriceCutoff": "2026-07-27",
+    "marketActivityRows": 66,
+    "marketActivityCutoff": "2026-07-27",
+    "cashFlowRows": 2,
+    "cashFlowCutoff": "2026Q1",
+    "macroRows": 39,
+    "macroCutoff": "2026-07-10"
+  },
+  "cashFlowGovernance": {
+    "sourcePr": 4,
+    "sourceHead": "41e2fae01fdaecdcdce2d3002f290941ca9dc332",
+    "selectivePortOnly": true,
+    "oldDailyPriceImported": false,
+    "oldManifestImported": false,
+    "formulaChecksRequired": true,
+    "officialSourceRequired": true,
+    "actionable": false
+  },
+  "pr5Reconciliation": {
+    "sourcePr": 5,
+    "sourceHead": "b63dd2cea525761715a2a8cefb1ebfb38272b182",
+    "comparedFileCount": 6,
+    "uniqueGovernanceDifferenceCount": 0,
+    "cherryPickOrMergePerformed": false
+  },
+  "macroAuthorityDecision": {
+    "unapprovedRowsAccepted": false,
+    "requiredSha256": "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F"
+  },
+  "candidateFirstLauncher": true,
+  "automaticFormalCsvPublish": false,
+  "automaticReportGeneration": false,
+  "ownerGateRequired": true,
+  "phaseBStarted": false,
+  "formalPublishExecutedByThisReceipt": false,
+  "ruleHoldMidrModified": false,
+  "runtimeSqliteModified": false,
+  "openAiCalls": 0,
+  "webSearchCalls": 0,
+  "canvaCalls": 0,
+  "actionable": false
+}

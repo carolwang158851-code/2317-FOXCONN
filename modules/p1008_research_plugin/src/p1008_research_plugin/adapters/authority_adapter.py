@@ -31,6 +31,24 @@ class CsvSnapshot:
 class AuthorityAdapter:
     MANIFEST_PATH = "data/CSV_AUTHORITY_MANIFEST.json"
     RULE_MANIFEST_PATH = "rules/RULE_STATUS_MANIFEST.json"
+    LEGACY_BASELINE_VERSION = "PHASE_2A_FROZEN"
+    CASH_FLOW_SIX_BASELINE_VERSION = "P1008_AUTHORITY_2026-07-20_V1"
+    INTEGRATED_BASELINE_VERSION = "P1008_AUTHORITY_INTEGRATED_SEVEN_20260729"
+    LEGACY_AUTHORITY_PATHS = frozenset(
+        {
+            "data/2317_master_v9.csv",
+            "data/2317_daily_price.csv",
+            "data/macro_snapshot.csv",
+            "data/macro_event_observations.csv",
+            "data/fx_trend_observations.csv",
+        }
+    )
+    CASH_FLOW_SIX_AUTHORITY_PATHS = LEGACY_AUTHORITY_PATHS | {
+        "data/2317_cash_flow_authority.csv"
+    }
+    INTEGRATED_AUTHORITY_PATHS = CASH_FLOW_SIX_AUTHORITY_PATHS | {
+        "data/2317_daily_market_activity.csv"
+    }
 
     def __init__(self, package_root: Path | str, loader: ContractLoader) -> None:
         self.package_root = Path(package_root).resolve()
@@ -42,6 +60,48 @@ class AuthorityAdapter:
         self._entries = {entry["path"]: entry for entry in all_entries}
         if len(self._entries) != len(all_entries):
             raise AuthorityAdapterError("Duplicate authority manifest path")
+        self._baseline_version = self._resolve_baseline_version()
+        expected_paths = self._expected_paths(self._baseline_version)
+        actual_paths = frozenset(self._entries)
+        if actual_paths != expected_paths:
+            missing = sorted(expected_paths - actual_paths)
+            extra = sorted(actual_paths - expected_paths)
+            raise AuthorityAdapterError(
+                f"Authority baseline path mismatch: missing={missing}, extra={extra}"
+            )
+        cash_flow = self._safe_package_path("data/2317_cash_flow_authority.csv")
+        if (
+            self._baseline_version == self.LEGACY_BASELINE_VERSION
+            and cash_flow.exists()
+        ):
+            raise AuthorityAdapterError(
+                "Legacy authority baseline cannot coexist with ungoverned cash-flow authority"
+            )
+
+    def _resolve_baseline_version(self) -> str:
+        integration = self._manifest.get("authorityBaselineIntegration")
+        if isinstance(integration, dict) and isinstance(
+            integration.get("version"), str
+        ):
+            return str(integration["version"])
+        promotion = self._manifest.get("authorityBaselinePromotion")
+        if isinstance(promotion, dict):
+            current = promotion.get("currentAuthorityBaseline")
+            if isinstance(current, dict) and isinstance(current.get("version"), str):
+                return str(current["version"])
+        if self._manifest.get("manifestVersion") == "1.2.2":
+            return self.LEGACY_BASELINE_VERSION
+        raise AuthorityAdapterError("Authority baseline version is missing or unsupported")
+
+    @classmethod
+    def _expected_paths(cls, version: str) -> frozenset[str]:
+        if version == cls.LEGACY_BASELINE_VERSION:
+            return cls.LEGACY_AUTHORITY_PATHS
+        if version == cls.CASH_FLOW_SIX_BASELINE_VERSION:
+            return cls.CASH_FLOW_SIX_AUTHORITY_PATHS
+        if version == cls.INTEGRATED_BASELINE_VERSION:
+            return cls.INTEGRATED_AUTHORITY_PATHS
+        raise AuthorityAdapterError(f"Unsupported authority baseline version: {version}")
 
     def _safe_package_path(self, relative_path: str) -> Path:
         raw = Path(relative_path)
@@ -74,6 +134,7 @@ class AuthorityAdapter:
         return MappingProxyType(
             {
                 "manifest_version": self._manifest.get("manifestVersion"),
+                "authority_baseline_version": self._baseline_version,
                 "approved_at": self._manifest.get("approvedAt"),
                 "entry_count": len(self._entries),
                 "actionable": False,
@@ -83,7 +144,8 @@ class AuthorityAdapter:
     def verify_all(self) -> Mapping[str, Any]:
         verified = []
         for relative_path in self.listed_paths:
-            data, _entry = self._verified_bytes(relative_path)
+            data, entry = self._verified_bytes(relative_path)
+            self._validate_declared_csv_schema(relative_path, data, entry)
             verified.append(
                 {
                     "relative_path": relative_path,
@@ -97,6 +159,40 @@ class AuthorityAdapter:
                 "actionable": False,
             }
         )
+
+    @staticmethod
+    def _validate_declared_csv_schema(
+        relative_path: str, data: bytes, entry: dict[str, Any]
+    ) -> None:
+        if not relative_path.lower().endswith((".csv", ".tsv")):
+            return
+        declared = entry.get("requiredColumns") or entry.get("columns")
+        if not declared:
+            return
+        if not isinstance(declared, list) or not all(
+            isinstance(column, str) for column in declared
+        ):
+            raise AuthorityAdapterError(
+                f"Authority schema declaration is invalid: {relative_path}"
+            )
+        try:
+            text = data.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise AuthorityAdapterError(f"CSV is not UTF-8: {relative_path}") from exc
+        data_lines = [
+            line
+            for line in text.splitlines()
+            if line.strip() and not line.strip().startswith("##")
+        ]
+        if not data_lines:
+            raise AuthorityAdapterError(f"CSV header is missing: {relative_path}")
+        delimiter = "\t" if relative_path.lower().endswith(".tsv") else ","
+        headers = next(csv.reader([data_lines[0]], delimiter=delimiter), [])
+        missing = [column for column in declared if column not in headers]
+        if missing:
+            raise AuthorityAdapterError(
+                f"Authority schema mismatch: {relative_path}, missing={missing}"
+            )
 
     def _verified_bytes(self, relative_path: str) -> tuple[bytes, dict[str, Any]]:
         entry = self._entries.get(relative_path)

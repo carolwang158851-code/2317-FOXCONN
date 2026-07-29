@@ -13,6 +13,7 @@ import argparse
 import csv
 import html
 import json
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,7 @@ TOOL_VERSION = "P1008_PERIODIC_REPORT_GENERATOR_v1"
 REPORT_MANIFEST = "reports/P1008_REPORT_MANIFEST.json"
 RUNTIME_REPORT_MANIFEST = "runtime/warroom_report_manifest.json"
 EVENT_REVIEW_STATE = "runtime/warroom_event_review_state.json"
+PLUGIN_SHADOW_CANDIDATE = "runtime/research_plugin/latest_report_candidate.json"
 
 DAILY_COLUMNS = ["Date", "Close", "QuarterKey", "BVPS_ref", "PB_daily", "DataSupportLevel", "Status"]
 MACRO_COLUMNS = [
@@ -88,6 +90,124 @@ def read_json(path: Path, default: Any = None) -> Any:
         return default
     with path.open("r", encoding="utf-8-sig") as handle:
         return json.load(handle)
+
+
+class ShadowCandidateError(RuntimeError):
+    """Raised when an existing plugin candidate cannot pass the report boundary."""
+
+
+def read_shadow_candidate(
+    package_root: Path, report_date: str | None = None
+) -> dict[str, Any] | None:
+    """Read, but never repair, the latest non-actionable manual Shadow candidate."""
+
+    path = package_root.resolve() / PLUGIN_SHADOW_CANDIDATE
+    if not path.is_file():
+        return None
+    try:
+        candidate = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ShadowCandidateError("Plugin Shadow candidate is unreadable") from exc
+    if not isinstance(candidate, dict):
+        raise ShadowCandidateError("Plugin Shadow candidate must be an object")
+    if candidate.get("actionable") is not False or candidate.get("manual_shadow") is not True:
+        raise ShadowCandidateError("Plugin Shadow candidate crossed its observation boundary")
+    if candidate.get("status") not in {
+        "NO_MATERIAL_CHANGE",
+        "MATERIAL_CHANGE_CANDIDATE",
+    }:
+        raise ShadowCandidateError("Plugin Shadow candidate status is invalid")
+    if report_date and candidate.get("as_of_date") != report_date:
+        return None
+    if not re.fullmatch(r"[A-F0-9]{64}", str(candidate.get("baseline_hash", ""))):
+        raise ShadowCandidateError("Plugin Shadow baseline hash is invalid")
+    required_lists = ("plugin_trace", "new_evidence", "evidence_ids", "source_locators")
+    if any(not isinstance(candidate.get(field), list) for field in required_lists):
+        raise ShadowCandidateError("Plugin Shadow candidate list schema is invalid")
+    changed_fields = candidate.get("changed_fields")
+    change_evidence = candidate.get("change_evidence")
+    if not isinstance(changed_fields, list) or not isinstance(change_evidence, dict):
+        raise ShadowCandidateError("Plugin Shadow evidence binding is invalid")
+    if set(changed_fields) != set(change_evidence):
+        raise ShadowCandidateError("Plugin Shadow changed fields are not evidence-bound")
+    narrative = " ".join(
+        str(candidate.get(field, "")) for field in ("investment_impact", "catalysts", "risks")
+    )
+    if re.search(r"\b(?:BUY|SELL|ADD|TRIM)\b", narrative, re.IGNORECASE):
+        raise ShadowCandidateError("Plugin Shadow candidate contains a trading instruction")
+    return candidate
+
+
+def append_shadow_candidate(
+    markdown: str, candidate: dict[str, Any] | None
+) -> str:
+    """Append the candidate as three clearly separated, observation-only sections."""
+
+    if candidate is None:
+        return markdown
+    baseline = json.dumps(
+        candidate.get("war_room_baseline", {}), ensure_ascii=False, sort_keys=True, indent=2
+    )
+    evidence_rows = []
+    for item in candidate.get("new_evidence", []):
+        locators = ", ".join(
+            str(source.get("locator", "")) for source in item.get("source_locators", [])
+        )
+        evidence_rows.append(
+            [
+                item.get("evidence_id", ""),
+                item.get("summary", ""),
+                ", ".join(item.get("changed_fields", [])),
+                locators,
+            ]
+        )
+    if not evidence_rows:
+        evidence_rows = [["-", "NO_MATERIAL_CHANGE", "-", "-"]]
+    impact_rows = []
+    for field, label in (
+        ("revenue", "Revenue"),
+        ("EPS", "EPS"),
+        ("margins", "Margins"),
+        ("valuation", "Valuation"),
+        ("fx_impact", "FX impact"),
+    ):
+        metric = candidate.get(field, {}) or {}
+        impact_rows.append(
+            [label, metric.get("investment_impact", ""), ", ".join(metric.get("evidence_ids", []))]
+        )
+    section = "\n".join(
+        [
+            "",
+            "## Plugin Module Shadow（Owner gate 前）",
+            "",
+            f"- Status: `{candidate.get('status', '')}`",
+            (
+                f"- Run: `{candidate.get('run_id', '')}` / "
+                f"`{candidate.get('run_type', '')}` / "
+                f"`{candidate.get('execution_mode', 'LEGACY')}`"
+            ),
+            "- Actionable: `false`",
+            "",
+            "### 戰情室基線",
+            "",
+            "```json",
+            baseline,
+            "```",
+            "",
+            "### 本次新增證據",
+            "",
+            markdown_table(["evidence_id", "summary", "changed_fields", "source"], evidence_rows),
+            "",
+            "### 對投資判讀的影響",
+            "",
+            f"- Direction: `{candidate.get('sentiment', '')}`; confidence: `{candidate.get('confidence', '')}`",
+            f"- Summary: {candidate.get('investment_impact', '')}",
+            "",
+            markdown_table(["field", "impact", "evidence_ids"], impact_rows),
+            "",
+        ]
+    )
+    return markdown.rstrip() + "\n" + section
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -1390,6 +1510,8 @@ def build_report(args: argparse.Namespace) -> int:
     charts = write_report_charts(package_root, report_id, data)
     markdown = build_report_markdown(period, report_date, generated_at, data)
     markdown = append_chart_markdown(markdown, charts)
+    shadow_candidate = read_shadow_candidate(package_root, report_date)
+    markdown = append_shadow_candidate(markdown, shadow_candidate)
     md_path.parent.mkdir(parents=True, exist_ok=True)
     md_path.write_text(markdown, encoding="utf-8", newline="\n")
     write_report_html(html_path, report_id, title, markdown)
@@ -1410,6 +1532,9 @@ def build_report(args: argparse.Namespace) -> int:
         "status": "GENERATED_WITH_WARNINGS" if issues else "GENERATED",
         "issues": issues,
         "eventReviewState": EVENT_REVIEW_STATE,
+        "pluginShadowCandidate": (
+            PLUGIN_SHADOW_CANDIDATE if shadow_candidate is not None else ""
+        ),
     }
     report["tags"] = [period_zh, "戰報", "新聞去噪", "圖表", "actionable:false"]
     report["charts"] = [f"generated/charts/{chart['path']}" for chart in charts]
@@ -2592,6 +2717,8 @@ def build_report(args: argparse.Namespace) -> int:
     charts = write_report_charts(package_root, report_id, data)
     markdown = build_report_markdown(period, report_date, generated_at, data)
     markdown = append_chart_markdown(markdown, charts)
+    shadow_candidate = read_shadow_candidate(package_root, report_date)
+    markdown = append_shadow_candidate(markdown, shadow_candidate)
     md_path.parent.mkdir(parents=True, exist_ok=True)
     md_path.write_text(markdown, encoding="utf-8", newline="\n")
     write_report_html(html_path, report_id, title, markdown)
@@ -2613,6 +2740,9 @@ def build_report(args: argparse.Namespace) -> int:
         "status": "GENERATED_WITH_WARNINGS" if issues else "GENERATED",
         "issues": issues,
         "eventReviewState": EVENT_REVIEW_STATE,
+        "pluginShadowCandidate": (
+            PLUGIN_SHADOW_CANDIDATE if shadow_candidate is not None else ""
+        ),
     }
     manifest = update_report_manifest(package_root, report, generated_at)
 
