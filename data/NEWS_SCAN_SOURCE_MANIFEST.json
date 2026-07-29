@@ -159,6 +159,7 @@
         "https://www.ctee.com.tw/?s={query}"
       ],
       "connectorStatus": "APPROVED",
+      "http403Policy": "STOP_AND_COOLDOWN_24H_DOMAIN_WEB_SEARCH_CANDIDATE",
       "requestTimeoutSeconds": 5,
       "rateLimitSeconds": 1,
       "maxSearchQueries": 3,
@@ -283,6 +284,10 @@
         "HTML"
       ],
       "url": "https://azure.microsoft.com/en-us/blog/",
+      "urls": [
+        "https://azure.microsoft.com/en-us/updates/"
+      ],
+      "scanCadence": "WEEKLY",
       "connectorStatus": "APPROVED",
       "requestTimeoutSeconds": 5,
       "rateLimitSeconds": 1,

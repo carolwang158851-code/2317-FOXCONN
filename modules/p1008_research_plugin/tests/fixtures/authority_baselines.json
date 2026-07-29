@@ -1,0 +1,60 @@
+{
+  "legacy": {
+    "version": "PHASE_2A_FROZEN",
+    "manifestSha256": "8BA304C36C224F1F8ADF78CB871A8200FDA0656BD5824801330EAF6EAF855847",
+    "verifiedFileCount": 5,
+    "paths": [
+      "data/2317_daily_price.csv",
+      "data/2317_master_v9.csv",
+      "data/fx_trend_observations.csv",
+      "data/macro_event_observations.csv",
+      "data/macro_snapshot.csv"
+    ]
+  },
+  "cashFlowSix": {
+    "version": "P1008_AUTHORITY_2026-07-20_V1",
+    "verifiedFileCount": 6,
+    "addedPath": "data/2317_cash_flow_authority.csv",
+    "cashFlowCutoff": "2026Q1",
+    "paths": [
+      "data/2317_cash_flow_authority.csv",
+      "data/2317_daily_price.csv",
+      "data/2317_master_v9.csv",
+      "data/fx_trend_observations.csv",
+      "data/macro_event_observations.csv",
+      "data/macro_snapshot.csv"
+    ]
+  },
+  "phaseAClosureSix": {
+    "version": "PHASE_A_CLOSURE_SIX",
+    "manifestSha256": "966352C4DD34938240901095DE5937C69C9BE8638413C2F900977C5EDBAA9C67",
+    "verifiedFileCount": 6,
+    "paths": [
+      "data/2317_daily_market_activity.csv",
+      "data/2317_daily_price.csv",
+      "data/2317_master_v9.csv",
+      "data/fx_trend_observations.csv",
+      "data/macro_event_observations.csv",
+      "data/macro_snapshot.csv"
+    ]
+  },
+  "integratedSeven": {
+    "version": "P1008_AUTHORITY_INTEGRATED_SEVEN_20260729",
+    "manifestSha256": "7DC97FFBC0E3F5E73E8085ACC25DD61E0F3588FCE04C360B4F19FA0D86AFA01B",
+    "verifiedFileCount": 7,
+    "addedPath": "data/2317_cash_flow_authority.csv",
+    "dailyPriceCutoff": "2026-07-27",
+    "marketActivityCutoff": "2026-07-27",
+    "cashFlowCutoff": "2026Q1",
+    "macroCutoff": "2026-07-10",
+    "paths": [
+      "data/2317_cash_flow_authority.csv",
+      "data/2317_daily_market_activity.csv",
+      "data/2317_daily_price.csv",
+      "data/2317_master_v9.csv",
+      "data/fx_trend_observations.csv",
+      "data/macro_event_observations.csv",
+      "data/macro_snapshot.csv"
+    ]
+  }
+}

@@ -25,12 +25,30 @@ POST /api/p1008/run/default
 固定順序：
 
 1. `preflight`：檢查必要工具、manifest、正式 CSV，建立 hash baseline。
-2. `update-data`：呼叫 `tools/warroom_data_fetcher_v2.py`，產生 staging candidate 與 runtime snapshot。
-3. `news-scan`：呼叫 `tools/warroom_news_scanner_v2.py`，抓取 manifest 中 `enabled=true` 且 `connectorStatus=APPROVED` 的公開來源，並把逐來源 `networkSummary` / `sourceHealth` 回寫 runtime。
-4. `report`：呼叫 `tools/warroom_periodic_report_v1.py --period daily`，產生日報與 manifest。
-5. `refresh`：寫入 `runtime/p1008_app_state.json`，比對正式 CSV hash。
+2. `update-data`：呼叫既有 Daily Price BAT，只產生日價、Macro 與 FX staging candidate／runtime snapshot。
+3. `market-activity`：呼叫 `P1008_1B_UPDATE_MARKET_ACTIVITY.bat`，以 Bundled Python 3.12 產生 TWSE Market Activity candidate、raw receipt 與 Owner review；不發布正式 CSV。
+4. `news-scan`：呼叫 `tools/warroom_news_scanner_v2.py`，只產生新聞／事件 candidate 與逐來源 `networkSummary` / `sourceHealth`。
+5. `validation/readiness`：重新整理 review package 並確認所有正式 CSV 與 manifest hash 未變，停在 Owner review。
 
-一鍵資料流程永遠不 append 正式 CSV。
+一鍵資料流程永遠不 append 正式 CSV，也不自動產生日報。`POST /api/p1008/run/report`
+是分離的手動入口，不屬於 default job。
+
+## Phase A Authority Data Closure
+
+- `warroom_market_activity_updater.py` 永遠是 candidate-only。即使存在新交易日，也只寫入
+  `runtime/market_activity_incremental/<RUN_ID>/`；正式
+  `data/2317_daily_market_activity.csv` 只能由 `owner_publish_csv_v2.py`
+  配合日期範圍專屬 Owner phrase 發布。
+- 日價 publisher 在最終寫入前會再次拒絕週六／週日、非
+  `OFFICIAL_TWSE_*` 或 `OWNER_APPROVED` 來源、無效／零值 Close、PB 不一致及衝突
+  Date。相同 Date 且完整列一致時視為 idempotent，不重複追加。
+- `2026-07-19` 非法日價列只能先建立 remediation preview；正式移除必須輸入
+  `OWNER_APPROVE_REMOVE_INVALID_DAILY_PRICE_2026-07-19`，並使用 backup、journal、
+  atomic replace 與 rollback。本次 Phase A closure 不執行正式移除。
+- `Hon_Hai_Rev_YoY` 的文字值不得當作數字或 0。無可追溯數值來源時，remediation
+  candidate 留空並列為資料缺口，等待 Owner gate。
+- Market Activity、Macro 與 Daily Price candidate 建立前後，正式 CSV 與
+  `CSV_AUTHORITY_MANIFEST.json` hash 必須完全不變。
 
 若候選日期是週末或交易所休市日，Launcher / 新 UI 會沿用最近正式交易日的 2317 Close/PB 供畫面連續，並標示 `MARKET_CLOSED_CARRY_FORWARD`。此列不 append 到正式 `2317_daily_price.csv`，正式 publish 只會處理已生成且通過 readiness 的候選 CSV。
 

@@ -24,7 +24,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 from pathlib import Path
@@ -46,6 +46,8 @@ USER_AGENT = "P1008WarroomNewsScanner/2.0 (+local-owner-approved-observation)"
 DEFAULT_TIMEOUT_SECONDS = 10
 DEFAULT_MAX_ITEMS_PER_SOURCE = 12
 DEFAULT_MAX_SEARCH_QUERIES = 6
+CRAWLER_GOVERNANCE_STATE = Path("runtime/news_crawler_governance_state.json")
+CTEE_SOURCE_ID = "commercial_times_search"
 DEFAULT_DEPRECATED_URL_PATTERNS = [
     "news.cnyes.com/search/all?keyword=",
     "www.cnyes.com/search/all?keyword=",
@@ -491,7 +493,7 @@ def classify_fetch_error(error: str) -> str:
     if "10061" in lower or "connection refused" in lower or "actively refused" in lower:
         return "CONNECTION_REFUSED"
     if "timed out" in lower or "timeout" in lower:
-        return "TIMEOUT"
+        return "TIMEOUT_TRANSIENT"
     if "getaddrinfo" in lower or "name resolution" in lower or "nodename" in lower:
         return "DNS_ERROR"
     if "proxy" in lower:
@@ -499,10 +501,46 @@ def classify_fetch_error(error: str) -> str:
     if "certificate" in lower or "ssl" in lower or "tls" in lower:
         return "TLS_ERROR"
     if "http error 403" in lower:
-        return "HTTP_403"
+        return "HTTP_403_POLICY_BLOCKED"
     if "http error 404" in lower:
         return "HTTP_404"
     return "FETCH_ERROR"
+
+
+def _crawler_now(args: argparse.Namespace) -> datetime:
+    supplied = getattr(args, "_crawler_now_utc", None)
+    if isinstance(supplied, datetime):
+        return supplied if supplied.tzinfo else supplied.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc)
+
+
+def _parse_utc(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _crawler_source_state(args: argparse.Namespace, source_id: str) -> dict[str, Any]:
+    state = getattr(args, "_crawler_state", None)
+    if not isinstance(state, dict):
+        state = {"sources": {}}
+        setattr(args, "_crawler_state", state)
+    sources = state.setdefault("sources", {})
+    return sources.setdefault(source_id, {})
+
+
+def _ctee_web_search_candidate() -> dict[str, Any]:
+    return {
+        "status": "CANDIDATE_ONLY_NOT_EXECUTED",
+        "domain": "ctee.com.tw",
+        "query": "site:ctee.com.tw 鴻海 OR Foxconn OR 2317",
+        "reason": "Direct source is under HTTP 403 policy cooldown; anti-bot controls must not be bypassed.",
+    }
 
 
 def safe_int(value: Any, default: int) -> int:
@@ -1114,6 +1152,8 @@ def scan_source(
         "lastError": "",
         "lastErrorType": "",
         "fetchModes": [],
+        "severity": "NORMAL",
+        "policyBlocked": 0,
     }
     if not source.get("enabled"):
         health["status"] = "DISABLED"
@@ -1132,6 +1172,32 @@ def scan_source(
         health["statusZh"] = "本地輸入來源，非爬蟲來源。"
         return [], health
 
+    now_utc = _crawler_now(args)
+    governance = _crawler_source_state(args, source_id)
+    cadence = str(source.get("scanCadence") or "DAILY").upper()
+    health["scanCadence"] = cadence
+    if cadence == "WEEKLY":
+        last_success = _parse_utc(governance.get("lastSuccessfulAtUtc"))
+        if last_success and now_utc - last_success < timedelta(days=7):
+            health["status"] = "SKIPPED_CADENCE"
+            health["statusZh"] = "每週來源尚未到下一次掃描時間。"
+            health["nextEligibleAtUtc"] = (last_success + timedelta(days=7)).isoformat().replace("+00:00", "Z")
+            return [], health
+    if source_id == CTEE_SOURCE_ID:
+        cooldown_until = _parse_utc(governance.get("cooldownUntilUtc"))
+        if cooldown_until and now_utc < cooldown_until:
+            health.update(
+                {
+                    "status": "HTTP_403_POLICY_BLOCKED",
+                    "statusZh": "工商時報直接抓取處於 24 小時政策冷卻；本次不重試。",
+                    "severity": "WARNING",
+                    "policyBlocked": 1,
+                    "cooldownUntilUtc": cooldown_until.isoformat().replace("+00:00", "Z"),
+                    "webSearchCandidate": _ctee_web_search_candidate(),
+                }
+            )
+            return [], health
+
     timeout = safe_int(source.get("requestTimeoutSeconds"), args.timeout_seconds)
     urls = urls_for_source(source, manifest)
     health["urlCount"] = len(urls)
@@ -1148,13 +1214,17 @@ def scan_source(
             time.sleep(rate_limit)
         url = url_item["url"]
         fetch = fetch_url(url, timeout)
-        if not fetch.ok and fetch.status in {"CONNECTION_REFUSED", "PROXY_ERROR", "TLS_ERROR", "TIMEOUT", "FETCH_ERROR"}:
+        if not fetch.ok and fetch.status in {"CONNECTION_REFUSED", "PROXY_ERROR", "TLS_ERROR", "TIMEOUT_TRANSIENT", "FETCH_ERROR"}:
             powershell_fetch = powershell_fetch_url(url, timeout)
             if powershell_fetch.ok:
                 fetch = powershell_fetch
             elif not health.get("lastError"):
                 health["powershellFallbackError"] = powershell_fetch.error
-        if not fetch.ok and args.browser_fallback:
+        if (
+            not fetch.ok
+            and fetch.status != "HTTP_403_POLICY_BLOCKED"
+            and args.browser_fallback
+        ):
             browser_fetch = browser_fetch_url(url, timeout)
             if browser_fetch.ok:
                 fetch = browser_fetch
@@ -1162,6 +1232,25 @@ def scan_source(
                 health["browserFallbackError"] = browser_fetch.error
         health["fetchModes"] = sorted(set((health.get("fetchModes") or []) + [fetch.fetch_mode]))
         if not fetch.ok:
+            if source_id == CTEE_SOURCE_ID and fetch.status == "HTTP_403_POLICY_BLOCKED":
+                cooldown_until = now_utc + timedelta(hours=24)
+                governance.update(
+                    {
+                        "lastAttemptAtUtc": now_utc.isoformat().replace("+00:00", "Z"),
+                        "lastStatus": "HTTP_403_POLICY_BLOCKED",
+                        "cooldownUntilUtc": cooldown_until.isoformat().replace("+00:00", "Z"),
+                    }
+                )
+                health.update(
+                    {
+                        "policyBlocked": 1,
+                        "lastError": fetch.error,
+                        "lastErrorType": fetch.status,
+                        "cooldownUntilUtc": governance["cooldownUntilUtc"],
+                        "webSearchCandidate": _ctee_web_search_candidate(),
+                    }
+                )
+                break
             health["fetchFailed"] += 1
             health["lastError"] = fetch.error
             health["lastErrorType"] = fetch.status
@@ -1181,12 +1270,34 @@ def scan_source(
             break
 
     health["itemsDiscovered"] = len(rows)
+    governance["lastAttemptAtUtc"] = now_utc.isoformat().replace("+00:00", "Z")
     if health["fetchOk"]:
         health["status"] = "OK" if rows else "OK_NO_RELEVANT_ITEMS"
         health["statusZh"] = "來源可連線，已完成公開內容掃描。"
     elif health["fetchFailed"]:
         health["status"] = health.get("lastErrorType") or "FETCH_FAILED"
         health["statusZh"] = "來源連線失敗，請檢查網路、防火牆、proxy 或 URL。"
+    if health["fetchOk"]:
+        health["status"] = "SUCCESS"
+        health["statusZh"] = "來源連線與解析成功。"
+        health["severity"] = "NORMAL"
+        governance["lastSuccessfulAtUtc"] = governance["lastAttemptAtUtc"]
+        governance["lastStatus"] = "SUCCESS"
+    elif health.get("policyBlocked"):
+        health["status"] = "HTTP_403_POLICY_BLOCKED"
+        health["statusZh"] = "來源拒絕直接抓取；已停止並建立 domain-restricted Web Search 候選。"
+        health["severity"] = "WARNING"
+        governance["lastStatus"] = health["status"]
+    elif health["fetchFailed"]:
+        if health.get("lastErrorType") == "TIMEOUT_TRANSIENT":
+            health["status"] = "TIMEOUT_TRANSIENT"
+            health["statusZh"] = "來源暫時逾時；不阻塞其他來源或日報路由。"
+            health["severity"] = "WARNING"
+        else:
+            health["status"] = "SOURCE_FAILED"
+            health["statusZh"] = "來源連線或解析失敗。"
+            health["severity"] = "FAILURE"
+        governance["lastStatus"] = health["status"]
     return rows, health
 
 
@@ -1402,18 +1513,56 @@ def formal_event_keys(package_root: Path) -> set[str]:
 
 def build_network_summary(source_health: list[dict[str, Any]]) -> dict[str, Any]:
     checked = [item for item in source_health if item.get("requiresNetwork") and item.get("enabled")]
-    ok = [item for item in checked if str(item.get("status")) in {"OK", "OK_NO_RELEVANT_ITEMS"}]
-    failed = [item for item in checked if item.get("fetchFailed")]
+    attempted = [
+        item
+        for item in checked
+        if int(item.get("fetchOk") or 0) + int(item.get("fetchFailed") or 0) > 0
+        or item.get("status") == "HTTP_403_POLICY_BLOCKED"
+    ]
+    ok = [
+        item
+        for item in attempted
+        if str(item.get("status")) in {"SUCCESS", "SUCCESS_NO_RELEVANT_EVENT"}
+    ]
+    failed = [item for item in attempted if str(item.get("status")) == "SOURCE_FAILED"]
+    warnings = [
+        item
+        for item in attempted
+        if str(item.get("status")) in {"HTTP_403_POLICY_BLOCKED", "TIMEOUT_TRANSIENT"}
+    ]
+    transient_failures = [
+        item for item in attempted if str(item.get("status")) == "TIMEOUT_TRANSIENT"
+    ]
     skipped = [item for item in checked if str(item.get("status", "")).startswith("SKIPPED")]
     refused = [item for item in failed if item.get("lastErrorType") == "CONNECTION_REFUSED"]
+    failure_count = len(failed) + len(transient_failures)
+    rated_count = len(ok) + failure_count
     return {
-        "checked": len(checked),
+        "checked": len(attempted),
+        "configured": len(checked),
         "succeeded": len(ok),
-        "failed": len(failed),
+        "failed": failure_count,
+        "sourceFailed": len(failed),
+        "warnings": len(warnings),
+        "successNoRelevantEvent": len(
+            [item for item in ok if item.get("status") == "SUCCESS_NO_RELEVANT_EVENT"]
+        ),
         "skipped": len(skipped),
         "connectionRefused": len(refused),
         "networkLikelyBlocked": bool(failed) and len(refused) == len(failed),
-        "status": "ONLINE_VERIFIED" if ok else ("NETWORK_BLOCKED" if failed else ("NO_NETWORK_RUN" if skipped else "NO_NETWORK_SOURCES")),
+        # Policy warnings (notably CTEE HTTP 403 cooldown) are observable but
+        # are not crawler connection/parser failures and must not depress the
+        # health rate.  Transient timeouts remain rated connection failures.
+        "successRate": round((len(ok) / rated_count) * 100, 1) if rated_count else 0.0,
+        "status": (
+            "ONLINE_VERIFIED"
+            if ok
+            else (
+                "SOURCE_FAILURES"
+                if failure_count
+                else ("WARNINGS_ONLY" if warnings else ("NO_NETWORK_RUN" if skipped else "NO_NETWORK_SOURCES"))
+            )
+        ),
     }
 
 
@@ -1489,12 +1638,17 @@ def scan_manifest_sources(
     manifest: dict[str, Any],
     args: argparse.Namespace,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    state_path = package_root / CRAWLER_GOVERNANCE_STATE
+    args._crawler_state = read_json(state_path) if state_path.is_file() else {"sources": {}}
+    args._crawler_now_utc = datetime.now(timezone.utc)
     rows: list[dict[str, Any]] = []
     source_health: list[dict[str, Any]] = []
     for source in manifest.get("sources", []) or []:
         source_rows, health = scan_source(source, manifest, args)
         rows.extend(source_rows)
         source_health.append(health)
+    args._crawler_state["updatedAtUtc"] = args._crawler_now_utc.isoformat().replace("+00:00", "Z")
+    write_json(state_path, args._crawler_state)
     return rows, source_health
 
 
@@ -1594,6 +1748,9 @@ def main() -> int:
             1 for event in accepted_events
             if str(health.get("sourceName") or "") in str(event.get("corroboratingSources") or event.get("candidateRow", {}).get("SourceName") or "")
         )
+        if health.get("status") == "SUCCESS" and health["itemsAccepted"] == 0:
+            health["status"] = "SUCCESS_NO_RELEVANT_EVENT"
+            health["statusZh"] = "來源連線與解析成功，但本次沒有相關重大事件。"
 
     network_summary = build_network_summary(source_health)
     warnings = list(manifest_warnings)

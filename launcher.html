@@ -73,6 +73,9 @@
     .label { font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; }
     .value { margin-top: 8px; font-size: 18px; font-weight: 900; color: white; word-break: break-word; }
     .small { margin-top: 6px; font-size: 12px; color: var(--muted); line-height: 1.5; word-break: break-word; }
+    .approval-copy-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+    .approval-copy-row .small { flex: 1; margin-top: 0; user-select: all; }
+    .approval-copy-row button { padding: 7px 10px; white-space: nowrap; }
     .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .between { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; justify-content: space-between; }
     .buttons { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -230,6 +233,12 @@
           </table>
         </div>
       </div>
+      <div class="grid four" style="margin-top:12px">
+        <div class="stat"><div class="label">Daily Price</div><div id="daily-price-status" class="value">NO_CHANGE</div><div class="small">既有 Daily Price BAT</div></div>
+        <div class="stat"><div class="label">Market Activity</div><div id="market-activity-status" class="value">N/A</div><div id="market-activity-date" class="small">最後成功日期：N/A</div></div>
+        <div class="stat"><div class="label">News</div><div id="news-component-status" class="value">NO_CHANGE</div><div class="small">既有新聞更新流程</div></div>
+        <div class="stat"><div class="label">整體狀態</div><div id="overall-component-status" class="value">IDLE</div><div id="market-activity-log" class="small">Receipt／log：N/A</div></div>
+      </div>
       <div id="server-context-warning" class="notice amber" style="display:none"></div>
     </section>
 
@@ -280,7 +289,11 @@
         <div>
           <label class="label" for="approval-phrase">Owner 確認字串</label>
           <input id="approval-phrase" autocomplete="off" spellcheck="false" placeholder="等待候選日期...">
-          <div id="approval-help" class="small">請先產生候選資料並通過 readiness。</div>
+          <div class="approval-copy-row">
+            <div id="approval-help" class="small">請先產生候選資料並通過 readiness。</div>
+            <button id="copy-approval-phrase" type="button" disabled>複製並填入</button>
+          </div>
+          <div id="approval-copy-status" class="small" role="status" aria-live="polite"></div>
         </div>
         <div class="buttons" style="align-items:end">
           <button id="owner-publish" class="danger" disabled>正式發布 CSV</button>
@@ -506,8 +519,9 @@
     }
 
     function badgeClass(code) {
-      if (/READY|SUCCEEDED|PASS/.test(code || '')) return 'badge green';
-      if (/FAILED|BLOCKED|VIOLATED|ERROR/.test(code || '')) return 'badge red';
+      if (/READY|SUCCEEDED|PASS|UPDATED|NO_CHANGE|NO_NEW|NO_MATERIAL_CHANGE|SUCCESS_NO_RELEVANT_EVENT/.test(code || '')) return 'badge green';
+      if (/HTTP_403_POLICY_BLOCKED|TIMEOUT_TRANSIENT/.test(code || '')) return 'badge amber';
+      if (/FAILED|FAILURE|STALE|BLOCKED|VIOLATED|ERROR/.test(code || '')) return 'badge red';
       if (/REVIEW|RUNNING|PENDING/.test(code || '')) return 'badge amber';
       return 'badge blue';
     }
@@ -535,9 +549,12 @@
     };
 
     function setBusy(disabled) {
-      ['run-default', 'run-update', 'run-news', 'run-report', 'owner-publish'].forEach((id) => {
+      ['run-default', 'run-update', 'run-news', 'run-report', 'owner-publish', 'copy-approval-phrase'].forEach((id) => {
         const el = $(id);
-        if (el) el.disabled = disabled || (id === 'owner-publish' && !canPublish());
+        if (!el) return;
+        if (id === 'owner-publish') el.disabled = disabled || !canPublish();
+        else if (id === 'copy-approval-phrase') el.disabled = disabled || !(state.review || {}).ownerApprovalPhrase;
+        else el.disabled = disabled;
       });
     }
 
@@ -559,6 +576,10 @@
       const latest = app.latestReport || review.latestReport || {};
       const latestDaily = latest.latestDaily || {};
       const steps = Array.isArray(app.steps) ? app.steps : [];
+      const components = app.componentStatus || {};
+      const dailyComponent = components.dailyPrice || {};
+      const marketComponent = components.marketActivity || app.marketActivity || {};
+      const newsComponent = components.news || {};
       const busy = app.status === 'RUNNING';
 
       $('gate-badge').className = badgeClass(gate.code || 'CHECKING');
@@ -575,6 +596,13 @@
 
       $('job-badge').className = badgeClass(app.status || 'IDLE');
       $('job-badge').textContent = app.status || 'IDLE';
+      $('daily-price-status').textContent = dailyComponent.status || 'NO_CHANGE';
+      $('market-activity-status').textContent = marketComponent.status || marketComponent.launcher_status || 'N/A';
+      $('market-activity-date').textContent = `最後成功日期：${marketComponent.lastSuccessDate || marketComponent.last_success_date || 'N/A'}`;
+      $('news-component-status').textContent = newsComponent.status || 'NO_CHANGE';
+      $('overall-component-status').textContent = app.overallStatus || app.status || 'IDLE';
+      const receiptPaths = marketComponent.receiptPaths || marketComponent.receipt_paths || [];
+      $('market-activity-log').textContent = `Receipt／log：${receiptPaths[0] || marketComponent.logPath || marketComponent.run_dir || 'N/A'}`;
       $('job-type').textContent = JOB_TYPE_ZH[app.jobType] || app.jobType || '無執行中任務';
       $('job-id').textContent = app.jobId || '等待啟動';
       $('formal-boundary').textContent = app.formalCsvModified
@@ -653,6 +681,7 @@
         : noPublishPending
           ? '候選資料已發布或目前沒有可發布候選資料。'
           : '目前沒有可發布候選資料。';
+      $('copy-approval-phrase').disabled = busy || !review.ownerApprovalPhrase;
       $('owner-publish').disabled = busy || !canPublish();
 
       $('steps').innerHTML = steps.length
@@ -731,12 +760,47 @@
       await refreshAll();
     }
 
+    async function copyApprovalPhrase() {
+      const expected = (state.review || {}).ownerApprovalPhrase || '';
+      const input = $('approval-phrase');
+      const status = $('approval-copy-status');
+      if (!expected) {
+        status.textContent = '目前沒有可複製的 Owner 確認字串。';
+        return;
+      }
+
+      input.value = expected;
+      input.focus();
+      input.setSelectionRange(0, expected.length);
+      let copied = false;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(expected);
+          copied = true;
+        }
+      } catch {
+        copied = false;
+      }
+      if (!copied) {
+        try {
+          copied = document.execCommand('copy');
+        } catch {
+          copied = false;
+        }
+      }
+      renderStatus();
+      status.textContent = copied
+        ? '確認字串已複製並填入；請確認後再按「正式發布 CSV」。'
+        : '確認字串已自動填入；瀏覽器未允許剪貼簿，但不需要手動重打。';
+    }
+
     $('run-default').addEventListener('click', () => runJob('/api/p1008/run/default'));
     $('run-update').addEventListener('click', () => runJob('/api/p1008/run/update-data'));
     $('run-news').addEventListener('click', () => runJob('/api/p1008/run/news-scan'));
     $('run-report').addEventListener('click', () => runJob('/api/p1008/run/report'));
     $('refresh').addEventListener('click', refreshAll);
     $('owner-publish').addEventListener('click', ownerPublish);
+    $('copy-approval-phrase').addEventListener('click', copyApprovalPhrase);
     $('approval-phrase').addEventListener('input', renderStatus);
 
     refreshAll();
@@ -758,6 +822,12 @@
         macro_event_observations: '事件 / 黑天鵝旁路',
       };
       const statusZh = {
+        SUCCESS: '來源成功',
+        SUCCESS_NO_RELEVANT_EVENT: '成功，無相關重大事件',
+        HTTP_403_POLICY_BLOCKED: '403 政策阻擋',
+        TIMEOUT_TRANSIENT: '暫時逾時',
+        SOURCE_FAILED: '來源失敗',
+        SKIPPED_CADENCE: '尚未到掃描週期',
         IDLE: '待命',
         RUNNING: '執行中',
         SUCCEEDED: '已完成',
@@ -796,6 +866,11 @@
       }
       function sourceNote(item) {
         const status = item.status || item.lastErrorType || '';
+        if (status === 'SUCCESS_NO_RELEVANT_EVENT') return '來源已成功執行，本次沒有相關重大事件；不扣 crawler health。';
+        if (status === 'HTTP_403_POLICY_BLOCKED') return '遵守反爬蟲政策，停止直接抓取 24 小時；僅建立 domain-restricted Web Search 候選。';
+        if (status === 'TIMEOUT_TRANSIENT') return '暫時逾時警告，不阻塞其他來源或日報路由。';
+        if (status === 'SOURCE_FAILED') return '真正的連線或解析失敗，計入失敗率。';
+        if (status === 'SKIPPED_CADENCE') return '此來源依核准頻率尚未到下一次掃描時間。';
         if (status === 'CONNECTION_REFUSED') return 'Python connector 連線被拒。若瀏覽器可上網，通常代表目前 App server session 被 proxy/firewall 或 Codex 沙盒限制。';
         if (status === 'TIMEOUT') return '來源逾時，可稍後補跑或調整來源權重。';
         if (status === 'HTTP_404') return '來源 URL 可能改版，需要更新 manifest。';

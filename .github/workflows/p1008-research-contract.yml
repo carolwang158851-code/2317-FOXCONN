@@ -7,6 +7,8 @@ on:
       - "data/CSV_AUTHORITY_MANIFEST.json"
       - "data/2317_master_v9.csv"
       - "data/2317_daily_price.csv"
+      - "data/2317_daily_market_activity.csv"
+      - "data/2317_cash_flow_authority.csv"
       - "data/macro_snapshot.csv"
       - "data/macro_event_observations.csv"
       - "data/fx_trend_observations.csv"
@@ -19,6 +21,8 @@ on:
       - "data/CSV_AUTHORITY_MANIFEST.json"
       - "data/2317_master_v9.csv"
       - "data/2317_daily_price.csv"
+      - "data/2317_daily_market_activity.csv"
+      - "data/2317_cash_flow_authority.csv"
       - "data/macro_snapshot.csv"
       - "data/macro_event_observations.csv"
       - "data/fx_trend_observations.csv"
@@ -37,12 +41,14 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Run frozen-contract conformance suite
+      - name: Run phase-aware contract conformance
         run: >-
-          python contracts/p1008_research_plugin/conformance/v1.0/run_contract_tests.py
+          python contracts/p1008_research_plugin/conformance/run_phase_conformance.py
           --all
           --no-write-report

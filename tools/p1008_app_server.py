@@ -10,6 +10,7 @@ publish gate and is never part of the Launcher default data pipeline.
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import http.server
 import json
@@ -19,7 +20,7 @@ import sys
 import threading
 import time
 import urllib.parse
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -43,14 +44,17 @@ UTF8_MIME_TYPES = {
 FORMAL_CSV_FILES = [
     "data/2317_master_v9.csv",
     "data/2317_daily_price.csv",
+    "data/2317_daily_market_activity.csv",
     "data/macro_snapshot.csv",
     "data/macro_event_observations.csv",
     "data/fx_trend_observations.csv",
+    "data/CSV_AUTHORITY_MANIFEST.json",
 ]
 
 STATE_REL = "runtime/p1008_app_state.json"
+MARKET_ACTIVITY_STATUS_REL = "runtime/market_activity_incremental/latest_status.json"
 SOURCE_MANIFEST_REL = "data/NEWS_SCAN_SOURCE_MANIFEST.json"
-SERVER_VERSION = "P1008_APP_SERVER_20260710_FULLSCREEN_REPORT_V1"
+SERVER_VERSION = "P1008_APP_SERVER_20260719_MARKET_ACTIVITY_V1"
 
 WEEKDAY_ZH = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"]
 FIELD_LABEL_ZH = {
@@ -322,6 +326,7 @@ class P1008JobManager:
             "errors": [],
             "warnings": [],
             "logPath": "",
+            "componentStatus": {},
         }
 
     def snapshot(self) -> dict[str, Any]:
@@ -331,6 +336,9 @@ class P1008JobManager:
         state["serverContext"] = server_context()
         state["pendingOwnerReview"] = self.pending_owner_review()
         state["sourceManifest"] = self.source_manifest_status()
+        state["marketActivity"] = read_json(
+            self.package_root / MARKET_ACTIVITY_STATUS_REL, default={}
+        ) or {}
         state["latestReport"] = self.latest_report_status()
         state["reviewPackage"] = self.review_package()
         state["launcherGate"] = self.launcher_gate_status(state["reviewPackage"], state)
@@ -527,6 +535,7 @@ class P1008JobManager:
                 "errors": [],
                 "warnings": [],
                 "logPath": log_rel,
+                "componentStatus": {},
             }
             self._persist_locked()
             thread = threading.Thread(target=self._run_job, args=(job_type, job_id), daemon=True)
@@ -601,7 +610,10 @@ class P1008JobManager:
         try:
             self._run_job_inner(job_type)
             with self.lock:
-                self.state["status"] = "FAILED" if self.state.get("errors") else "SUCCEEDED"
+                requested_status = self.state.get("overallStatus")
+                self.state["status"] = requested_status or (
+                    "FAILED" if self.state.get("errors") else "SUCCEEDED"
+                )
                 self.state["finishedAt"] = now_iso()
                 self._persist_locked()
             self._append_log(f"JOB {job_id} finished with status={self.state['status']}")
@@ -713,26 +725,120 @@ class P1008JobManager:
 
     def _run_job_inner(self, job_type: str) -> None:
         before = self._preflight()
-        if job_type in {"default", "update-data"}:
-            self._run_python_step(
-                "update-data",
-                "Update staging/runtime data",
-                [str(self.package_root / "tools" / "warroom_data_fetcher_v2.py"), "--package-root", str(self.package_root)],
-                timeout_seconds=420,
-            )
-            self._assert_hashes_unchanged(before)
         if self.state.get("errors"):
             self._refresh(before)
             return
+
+        component_failures: list[str] = []
+        if job_type in {"default", "update-data"}:
+            daily_before = formal_csv_hashes(self.package_root)
+            daily_exit = self._run_bat_step(
+                "update-data",
+                "Daily Price staging/runtime update",
+                self.package_root / "P1008_1_UPDATE_DATA.bat",
+                [],
+                timeout_seconds=420,
+            )
+            daily_after = formal_csv_hashes(self.package_root)
+            if daily_exit != 0 or daily_after != daily_before:
+                daily_status = "FAILED"
+                reason = (
+                    f"Daily Price BAT exit={daily_exit}"
+                    if daily_exit != 0
+                    else "Daily Price BAT changed formal authority unexpectedly"
+                )
+                component_failures.append(reason)
+            else:
+                review = self.review_package()
+                generated = review.get("generatedFiles", []) or []
+                daily_status = (
+                    "UPDATED"
+                    if any("2317_daily_price" in str(item) for item in generated)
+                    else "NO_CHANGE"
+                )
+            self._set_component_status(
+                "dailyPrice",
+                daily_status,
+                exitCode=daily_exit,
+                lastSuccessDate=(self.review_package().get("candidateDate") or ""),
+            )
+
+            if daily_status == "FAILED":
+                market_status = "BLOCKED"
+                market_result = self._write_launcher_market_status(
+                    "MARKET_ACTIVITY_BLOCKED_BY_DAILY_PRICE",
+                    market_status,
+                    "Daily Price failed; no market-activity publish was attempted",
+                )
+                self._set_step(
+                    "market-activity",
+                    "TWSE market activity incremental update",
+                    "BLOCKED",
+                    message="BLOCKED_BY_DAILY_PRICE",
+                )
+                component_failures.append("Market Activity blocked by failed Daily Price step")
+            else:
+                market_before = formal_csv_hashes(self.package_root)
+                market_exit = self._run_bat_step(
+                    "market-activity",
+                    "TWSE market activity incremental update",
+                    self.package_root / "P1008_1B_UPDATE_MARKET_ACTIVITY.bat",
+                    [],
+                    timeout_seconds=180,
+                )
+                market_after = formal_csv_hashes(self.package_root)
+                market_result = read_json(
+                    self.package_root / MARKET_ACTIVITY_STATUS_REL, default={}
+                ) or {}
+                market_status = str(market_result.get("launcher_status") or "STALE")
+                boundary_error = self._market_activity_boundary_error(
+                    market_before, market_after, market_status
+                )
+                if market_exit != 0 or boundary_error:
+                    market_status = (
+                        "BLOCKED"
+                        if market_result.get("status") == "MARKET_ACTIVITY_BLOCKED_BY_DAILY_PRICE"
+                        else "STALE"
+                    )
+                    failure = boundary_error or f"Market Activity BAT exit={market_exit}"
+                    component_failures.append(failure)
+                    market_result = self._write_launcher_market_status(
+                        (
+                            "MARKET_ACTIVITY_BLOCKED_BY_DAILY_PRICE"
+                            if market_status == "BLOCKED"
+                            else "MARKET_ACTIVITY_STALE"
+                        ),
+                        market_status,
+                        failure,
+                    )
+            self._set_component_status(
+                "marketActivity",
+                market_status,
+                exitCode=(None if daily_status == "FAILED" else market_exit),
+                statusCode=market_result.get("status", ""),
+                lastSuccessDate=(market_result.get("last_success_date") or self._market_activity_last_date()),
+                receiptPaths=market_result.get("receipt_paths", []) or [],
+                logPath=(market_result.get("run_dir") or "logs/last_market_activity_update.log"),
+            )
 
         if job_type in {"default", "news-scan"}:
             self._run_news_scan_step()
-            self._assert_hashes_unchanged(before)
-        if self.state.get("errors"):
-            self._refresh(before)
-            return
+            news_step = next(
+                (step for step in self.state.get("steps", []) if step.get("id") == "news-scan"),
+                {},
+            )
+            news_status = (
+                "FAILED"
+                if news_step.get("status") != "SUCCEEDED"
+                else (
+                    "UPDATED"
+                    if (read_json(self.package_root / "runtime/warroom_news_scan_snapshot.json", default={}) or {}).get("candidateRowCount", 0)
+                    else "NO_CHANGE"
+                )
+            )
+            self._set_component_status("news", news_status, exitCode=news_step.get("exitCode"))
 
-        if job_type in {"default", "report"}:
+        if job_type == "report":
             self._run_python_step(
                 "report",
                 "Generate daily report",
@@ -747,8 +853,63 @@ class P1008JobManager:
                 ],
                 timeout_seconds=180,
             )
-            self._assert_hashes_unchanged(before)
+        if job_type in {"default", "update-data"}:
+            if component_failures:
+                for failure in component_failures:
+                    self._add_error(failure)
+            components = self.state.get("componentStatus", {}) or {}
+            partial = any(
+                str((components.get(name) or {}).get("status", ""))
+                in {"FAILED", "STALE", "BLOCKED"}
+                for name in ("dailyPrice", "marketActivity", "news")
+            )
+            with self.lock:
+                self.state["overallStatus"] = "PARTIAL_FAILURE" if partial else "SUCCEEDED"
+                self._persist_locked()
         self._refresh(before)
+
+    def _set_component_status(self, component: str, status: str, **extra: Any) -> None:
+        with self.lock:
+            components = dict(self.state.get("componentStatus", {}) or {})
+            components[component] = {"status": status, **extra}
+            self.state["componentStatus"] = components
+            self._persist_locked()
+
+    def _market_activity_last_date(self) -> str:
+        path = self.package_root / "data/2317_daily_market_activity.csv"
+        try:
+            with path.open("r", encoding="utf-8-sig") as handle:
+                rows = list(csv.DictReader(handle))
+            return rows[-1].get("date", "") if rows else ""
+        except OSError:
+            return ""
+
+    def _write_launcher_market_status(
+        self, status: str, launcher_status: str, error: str
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "status": status,
+            "launcher_status": launcher_status,
+            "market_liquidity_analysis_status": "MARKET_LIQUIDITY_ANALYSIS_LIMITED",
+            "last_success_date": self._market_activity_last_date(),
+            "receipt_paths": [],
+            "run_dir": "logs/last_market_activity_update.log",
+            "recorded_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "source": "P1008 Launcher",
+            "error": error,
+            "actionable": False,
+        }
+        write_json(self.package_root / MARKET_ACTIVITY_STATUS_REL, payload)
+        return payload
+
+    @staticmethod
+    def _market_activity_boundary_error(
+        before: dict[str, str], after: dict[str, str], launcher_status: str
+    ) -> str:
+        changed = {key for key in before if before.get(key) != after.get(key)}
+        if changed:
+            return "Market Activity candidate step changed formal files: " + ", ".join(sorted(changed))
+        return ""
 
     def _preflight(self) -> dict[str, str]:
         self._set_step("preflight", "Preflight checks", "RUNNING")
@@ -756,6 +917,9 @@ class P1008JobManager:
             "output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html",
             "index_p1008_v7.html",
             "tools/warroom_data_fetcher_v2.py",
+            "tools/warroom_market_activity_updater.py",
+            "P1008_1_UPDATE_DATA.bat",
+            "P1008_1B_UPDATE_MARKET_ACTIVITY.bat",
             "tools/warroom_news_scanner_v2.py",
             "tools/warroom_periodic_report_v1.py",
             SOURCE_MANIFEST_REL,
@@ -799,8 +963,70 @@ class P1008JobManager:
             self._add_warning("No approved network news connector; news scan ran no-network.")
         self._run_python_step("news-scan", "Observation-only news scan v2", args, timeout_seconds=240)
 
-    def _run_python_step(self, step_id: str, label: str, args: list[str], timeout_seconds: int) -> None:
-        if self.state.get("errors"):
+    def _run_bat_step(
+        self,
+        step_id: str,
+        label: str,
+        bat_path: Path,
+        args: list[str],
+        timeout_seconds: int,
+    ) -> int | None:
+        command = [os.environ.get("COMSPEC", r"C:\Windows\System32\cmd.exe"), "/d", "/c", str(bat_path), *args]
+        self._set_step(step_id, label, "RUNNING", command=command)
+        started = time.monotonic()
+        env = os.environ.copy()
+        env["PYTHONUTF8"] = "1"
+        env["P1008_APP_SERVER"] = "1"
+        env["P1008_NO_PAUSE"] = "1"
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=str(self.package_root),
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                timeout=timeout_seconds,
+                env=env,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as error:
+            output = (error.stdout or "") + (error.stderr or "")
+            if output.strip():
+                self._append_log(output.rstrip())
+            self._set_step(
+                step_id,
+                label,
+                "FAILED",
+                exitCode="TIMEOUT",
+                durationSeconds=round(time.monotonic() - started, 2),
+                message=f"timed out after {timeout_seconds}s",
+            )
+            return None
+        output = (completed.stdout or "") + (completed.stderr or "")
+        if output.strip():
+            self._append_log(output.rstrip())
+        status = "SUCCEEDED" if completed.returncode == 0 else "FAILED"
+        self._set_step(
+            step_id,
+            label,
+            status,
+            exitCode=completed.returncode,
+            durationSeconds=round(time.monotonic() - started, 2),
+            message=f"exit={completed.returncode}",
+        )
+        return completed.returncode
+
+    def _run_python_step(
+        self,
+        step_id: str,
+        label: str,
+        args: list[str],
+        timeout_seconds: int,
+        *,
+        allow_after_errors: bool = False,
+    ) -> None:
+        if self.state.get("errors") and not allow_after_errors:
             return
         self._set_step(step_id, label, "RUNNING", command=[sys.executable, *args])
         started = time.monotonic()

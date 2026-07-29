@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "1.0",
+  "receiptId": "P1008_PHASE_A_AUTHORITY_BASELINE_RECEIPT_20260729",
+  "scopeId": "P1008-PHASE-A-AUTHORITY-DATA-CLOSURE",
+  "acceptedBy": "Owner",
+  "acceptedAt": "2026-07-29",
+  "acceptanceStatus": "EXISTING_OWNER_PUBLISHED_AUTHORITIES_PINNED_FOR_CI",
+  "baselineId": "PHASE_A_CLOSURE_SIX",
+  "authorityFiles": {
+    "data/2317_master_v9.csv": "0BB2FEC6FA3035AC642738BC12EA6959C81C8A79D5221E694BF780427051CF79",
+    "data/2317_daily_price.csv": "25567CE773F7270ED3B22AFBD9D2664E467A2F3D525425AFAE7F20631E56D1B4",
+    "data/2317_daily_market_activity.csv": "83AB695E478517DC11004D17CC1EAE98F6B320BE266A586E29DAD0FF28D663BD",
+    "data/macro_snapshot.csv": "353025C29D678488F7022939C86C36CB15D3B348DC5876909D6779E56CFE213B",
+    "data/macro_event_observations.csv": "76B93F8932BA606390D44D68BD0D57D0BE7CB5D1D1364183F192A062D8B94BF2",
+    "data/fx_trend_observations.csv": "BFEC53845C68D689D20CC29972550279E3A4AE8D473816EFDB0855FF0DD091CD"
+  },
+  "authorityManifest": "data/CSV_AUTHORITY_MANIFEST.json",
+  "macroAuthorityDecision": {
+    "unapprovedRowsAccepted": false,
+    "requiredSha256": "353025C29D678488F7022939C86C36CB15D3B348DC5876909D6779E56CFE213B",
+    "requiredRows": 39,
+    "requiredCutoff": "2026-07-10",
+    "upgradeRule": "A later macro authority hash requires an explicit Owner formal publish receipt and a new phase-aware acceptance version."
+  },
+  "formalPublishExecutedByThisReceipt": false,
+  "openAiCalls": 0,
+  "webSearchCalls": 0,
+  "canvaCalls": 0,
+  "actionable": false
+}

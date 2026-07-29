@@ -67,6 +67,8 @@ contracts/p1008_research_plugin/v2.0/validation/CONFORMANCE_EVIDENCE.json text e
 contracts/p1008_research_plugin/v2.0/validation/CONFORMANCE_EVIDENCE.md text eol=lf
 contracts/p1008_research_plugin/v2.0/validation/governance_validation_rules.json text eol=lf
 data/2317_daily_price.csv text eol=lf
+data/2317_cash_flow_authority.csv text eol=lf
+data/2317_daily_market_activity.csv text eol=lf
 data/2317_master_v9.csv text eol=lf
 data/CSV_AUTHORITY_MANIFEST.json text eol=lf
 data/fx_trend_observations.csv text eol=lf
@@ -78,6 +80,9 @@ modules/p1008_research_plugin/src/p1008_research_plugin/runtime/capability_regis
 modules/p1008_research_plugin/src/p1008_research_plugin/runtime/runtime_manager.py text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/runtime/runtime_validator.py text eol=lf
 modules/p1008_research_plugin/tests/governance/test_phase2a_boundaries.py text eol=lf
+modules/p1008_research_plugin/tests/fixtures/authority_baselines.json text eol=lf
 modules/p1008_research_plugin/tests/test_governance_boundaries.py text eol=lf
+contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_FINAL_INTEGRATION_AMENDMENT_RECEIPT.json text eol=lf
+contracts/p1008_research_plugin/acceptance/v1.1/evidence/PHASE_A_MACRO_ROW_IDENTITY_RECEIPT.json text eol=lf
 rules/RULE_STATUS_MANIFEST.json text eol=lf
 tools/p1008_app_server.py text eol=lf
