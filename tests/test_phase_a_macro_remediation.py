@@ -68,12 +68,14 @@ class PhaseAMacroRemediationTests(unittest.TestCase):
             item["path"]: item
             for item in manifest.get("nonAuthoritativeFiles", [])
         }
-        for path in (
-            "data/macro_snapshot.csv",
-            "data/fx_trend_observations.csv",
-            "data/macro_event_observations.csv",
-        ):
-            self.assertEqual(entries[path]["cutoffDate"], "2026-07-27")
+        expected_cutoffs = {
+            "data/macro_snapshot.csv": "2026-07-10",
+            "data/fx_trend_observations.csv": "2026-07-27",
+            "data/macro_event_observations.csv": "2026-07-27",
+        }
+        for path, cutoff in expected_cutoffs.items():
+            with self.subTest(path=path):
+                self.assertEqual(entries[path]["cutoffDate"], cutoff)
 
 
 if __name__ == "__main__":

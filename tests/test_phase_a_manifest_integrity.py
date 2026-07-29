@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import io
 import json
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -18,17 +20,22 @@ PHASE_A_FILES = (
 )
 
 
-def sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest().upper()
+def git_blob_bytes(relative: str) -> bytes:
+    return subprocess.run(
+        ["git", "show", f"HEAD:{relative}"],
+        cwd=PACKAGE_ROOT,
+        check=True,
+        capture_output=True,
+    ).stdout
 
 
-def csv_row_count(path: Path) -> int:
+def csv_row_count_bytes(payload: bytes) -> int:
     lines = [
         line
-        for line in path.read_text(encoding="utf-8-sig").splitlines()
+        for line in payload.decode("utf-8-sig").splitlines()
         if line.strip() and not line.startswith("#")
     ]
-    return max(0, len(list(csv.reader(lines))) - 1)
+    return max(0, len(list(csv.reader(io.StringIO("\n".join(lines))))) - 1)
 
 
 class PhaseAManifestIntegrityTests(unittest.TestCase):
@@ -45,8 +52,18 @@ class PhaseAManifestIntegrityTests(unittest.TestCase):
             with self.subTest(relative=relative):
                 path = PACKAGE_ROOT / relative
                 entry = entries[relative]
-                self.assertEqual(entry["sha256"], sha256(path))
-                self.assertEqual(entry["rowCount"], csv_row_count(path))
+                committed = git_blob_bytes(relative)
+                worktree = path.read_bytes().replace(b"\r\n", b"\n")
+                self.assertEqual(
+                    worktree,
+                    committed.replace(b"\r\n", b"\n"),
+                    "worktree differs from the accepted Git blob beyond line endings",
+                )
+                self.assertEqual(
+                    entry["sha256"],
+                    hashlib.sha256(committed).hexdigest().upper(),
+                )
+                self.assertEqual(entry["rowCount"], csv_row_count_bytes(committed))
 
     def test_phase_a_tools_do_not_import_ai_or_canva_clients(self) -> None:
         for relative in (
