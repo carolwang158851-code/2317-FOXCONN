@@ -22,6 +22,7 @@ import json
 import os
 import shutil
 import sqlite3
+import subprocess
 import sys
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
@@ -151,6 +152,36 @@ MARKET_ACTIVITY_RECEIPTS = {
         "raw_sha256": "907165CBFA6AA4E67701E95F1301A46252389789BBDFB6D67679813712E0CB28",
     },
 }
+MACRO_STAGE2B_APPROVAL_PHRASE = (
+    "OWNER_APPROVE_MACRO_HON_HAI_REV_YOY_REMEDIATION"
+)
+MACRO_STAGE2B_REQUIRED_HEAD = (
+    "76a62bbeccc3c89aea3605d6239910afe82aba5b"
+)
+MACRO_STAGE2B_CANONICAL_BEFORE_SHA256 = (
+    "353025C29D678488F7022939C86C36CB15D3B348DC5876909D6779E56CFE213B"
+)
+MACRO_STAGE2B_CANDIDATE_SHA256 = (
+    "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F"
+)
+MACRO_STAGE2B_ROW_IDENTITY_RECEIPT_SHA256 = (
+    "E72989762053D20665DD87DA263F8B4DB1E77D277A6A27FD6C8AABBFE4921B9D"
+)
+MACRO_STAGE2B_MANIFEST_BEFORE_SHA256 = (
+    "7E191C8204436CAE914F7F4E930D04A542798A16F97950C03DF32C93ABAFA8B9"
+)
+MACRO_STAGE2B_MANIFEST_AFTER_SHA256 = (
+    "966352C4DD34938240901095DE5937C69C9BE8638413C2F900977C5EDBAA9C67"
+)
+MACRO_STAGE2B_EXPECTED_ROWS = 39
+MACRO_STAGE2B_EXPECTED_CUTOFF = "2026-07-10"
+MACRO_STAGE2B_EXPECTED_IDENTITIES = (
+    (1, 23, "2021-03-31", "None"),
+    (26, 48, "2026-06-03", None),
+    (27, 49, "2026-06-04", None),
+    (28, 50, "2026-06-05", None),
+    (29, 51, "2026-06-12", None),
+)
 
 
 def sha256_file(path: Path) -> str:
@@ -2474,6 +2505,421 @@ def publish_market_activity_append(
         raise RuntimeError("Market-activity append failed; CSV and manifest restored") from publish_error
 
 
+def _macro_document_rows(payload: bytes) -> tuple[list[str], list[list[str]], int]:
+    lines = payload.decode("utf-8-sig").splitlines()
+    try:
+        header_offset = next(
+            index for index, line in enumerate(lines) if line.startswith("Date,")
+        )
+    except StopIteration as error:
+        raise ValueError("Macro authority has no Date CSV header") from error
+    parsed = list(csv.reader(line for line in lines[header_offset:] if line.strip()))
+    if not parsed:
+        raise ValueError("Macro authority has no CSV records")
+    header, rows = parsed[0], parsed[1:]
+    if any(len(row) != len(header) for row in rows):
+        raise ValueError("Macro authority contains a row-width mismatch")
+    return header, rows, header_offset + 1
+
+
+def _macro_stage2b_canonical_blob(package_root: Path) -> bytes:
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=package_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if head != MACRO_STAGE2B_REQUIRED_HEAD:
+        raise ValueError(
+            "Macro Stage 2B publish requires HEAD "
+            f"{MACRO_STAGE2B_REQUIRED_HEAD}; found {head}"
+        )
+    return subprocess.run(
+        ["git", "cat-file", "blob", f"HEAD:{MACRO_TARGET}"],
+        cwd=package_root,
+        check=True,
+        capture_output=True,
+    ).stdout
+
+
+def _validate_macro_stage2b_inputs(
+    package_root: Path,
+    candidate_path: Path,
+    row_identity_receipt_path: Path,
+    *,
+    canonical_blob_bytes: bytes | None = None,
+) -> dict[str, Any]:
+    formal_path = package_root / MACRO_TARGET
+    manifest_path = package_root / MANIFEST_PATH
+    if not formal_path.is_file() or not manifest_path.is_file():
+        raise FileNotFoundError("Macro formal CSV or authority manifest is missing")
+    if not candidate_path.is_file() or not row_identity_receipt_path.is_file():
+        raise FileNotFoundError("Macro Stage 2B candidate or row-identity receipt is missing")
+
+    candidate_sha = sha256_file(candidate_path)
+    receipt_sha = sha256_file(row_identity_receipt_path)
+    if candidate_sha != MACRO_STAGE2B_CANDIDATE_SHA256:
+        raise ValueError("Macro Stage 2B candidate SHA-256 mismatch")
+    if (
+        canonical_blob_bytes is None
+        and receipt_sha != MACRO_STAGE2B_ROW_IDENTITY_RECEIPT_SHA256
+    ):
+        raise ValueError("Macro Stage 2B row-identity receipt SHA-256 mismatch")
+    if sha256_file(manifest_path) != MACRO_STAGE2B_MANIFEST_BEFORE_SHA256:
+        raise ValueError("Macro Stage 2B pre-publish manifest SHA-256 mismatch")
+
+    canonical = (
+        canonical_blob_bytes
+        if canonical_blob_bytes is not None
+        else _macro_stage2b_canonical_blob(package_root)
+    )
+    canonical_sha = hashlib.sha256(canonical).hexdigest().upper()
+    if canonical_sha != MACRO_STAGE2B_CANONICAL_BEFORE_SHA256:
+        raise ValueError("Macro canonical Git blob SHA-256 mismatch")
+    formal_bytes = formal_path.read_bytes()
+    if formal_bytes.replace(b"\r\n", b"\n") != canonical.replace(b"\r\n", b"\n"):
+        raise ValueError(
+            "Macro formal worktree differs from canonical Git blob beyond line endings"
+        )
+
+    canonical_header, canonical_rows, canonical_header_line = _macro_document_rows(
+        canonical
+    )
+    candidate_bytes = candidate_path.read_bytes()
+    candidate_header, candidate_rows, candidate_header_line = _macro_document_rows(
+        candidate_bytes
+    )
+    if canonical_header_line != 22 or candidate_header_line != 22:
+        raise ValueError("Macro Stage 2B physical header identity mismatch")
+    if canonical_header != candidate_header:
+        raise ValueError("Macro Stage 2B candidate schema mismatch")
+    if len(canonical_rows) != MACRO_STAGE2B_EXPECTED_ROWS or len(candidate_rows) != len(
+        canonical_rows
+    ):
+        raise ValueError("Macro Stage 2B candidate must preserve exactly 39 records")
+    date_index = canonical_header.index("Date")
+    value_index = canonical_header.index("Hon_Hai_Rev_YoY")
+    canonical_dates = [row[date_index] for row in canonical_rows]
+    candidate_dates = [row[date_index] for row in candidate_rows]
+    if canonical_dates != candidate_dates:
+        raise ValueError("Macro Stage 2B candidate added, removed, or reordered records")
+    if (
+        len(set(candidate_dates)) != len(candidate_dates)
+        or candidate_dates[-1] != MACRO_STAGE2B_EXPECTED_CUTOFF
+        or any(value > MACRO_STAGE2B_EXPECTED_CUTOFF for value in candidate_dates)
+    ):
+        raise ValueError("Macro Stage 2B candidate date identity or cutoff mismatch")
+
+    differences: list[dict[str, Any]] = []
+    for ordinal, (before, after) in enumerate(
+        zip(canonical_rows, candidate_rows), start=1
+    ):
+        for column_index, (old_value, new_value) in enumerate(zip(before, after)):
+            if old_value != new_value:
+                differences.append(
+                    {
+                        "ordinal": ordinal,
+                        "date": before[date_index],
+                        "column": canonical_header[column_index],
+                        "before": old_value,
+                        "after": new_value,
+                    }
+                )
+    expected_ordinals = [item[0] for item in MACRO_STAGE2B_EXPECTED_IDENTITIES]
+    if (
+        len(differences) != 5
+        or [item["ordinal"] for item in differences] != expected_ordinals
+        or any(item["column"] != "Hon_Hai_Rev_YoY" for item in differences)
+        or any(item["after"] != "" for item in differences)
+    ):
+        raise ValueError(
+            "Macro Stage 2B candidate must blank exactly the five approved cells"
+        )
+    for difference, expected in zip(
+        differences, MACRO_STAGE2B_EXPECTED_IDENTITIES
+    ):
+        ordinal, physical_line, expected_date, expected_first_value = expected
+        if (
+            difference["ordinal"] != ordinal
+            or difference["date"] != expected_date
+            or physical_line != canonical_header_line + ordinal
+            or (
+                expected_first_value is not None
+                and difference["before"] != expected_first_value
+            )
+        ):
+            raise ValueError("Macro Stage 2B canonical row identity mismatch")
+
+    receipt = read_json(row_identity_receipt_path)
+    receipt_identities = receipt.get("row_identities", [])
+    receipt_pairs = [
+        (
+            item.get("canonical_data_record_ordinal"),
+            item.get("physical_file_line_number"),
+            item.get("date"),
+        )
+        for item in receipt_identities
+    ]
+    expected_pairs = [
+        (ordinal, physical_line, expected_date)
+        for ordinal, physical_line, expected_date, _ in MACRO_STAGE2B_EXPECTED_IDENTITIES
+    ]
+    if (
+        receipt.get("input", {}).get("source") != "CANONICAL_GIT_BLOB_ONLY"
+        or receipt.get("input", {}).get("sha256")
+        != MACRO_STAGE2B_CANONICAL_BEFORE_SHA256
+        or receipt.get("candidate", {}).get("sha256")
+        != MACRO_STAGE2B_CANDIDATE_SHA256
+        or receipt.get("canonical_statistics", {}).get("data_record_count")
+        != MACRO_STAGE2B_EXPECTED_ROWS
+        or receipt_pairs != expected_pairs
+        or any(
+            item.get("from_rejected_extra_seven_rows") is not False
+            for item in receipt_identities
+        )
+    ):
+        raise ValueError("Macro Stage 2B row-identity receipt content mismatch")
+
+    manifest = read_json(manifest_path)
+    entries = manifest.get("authoritativeFiles", []) + manifest.get(
+        "nonAuthoritativeFiles", []
+    )
+    macro_entry = next(
+        (item for item in entries if item.get("path") == MACRO_TARGET), None
+    )
+    if (
+        macro_entry is None
+        or macro_entry.get("sha256") != MACRO_STAGE2B_CANONICAL_BEFORE_SHA256
+        or macro_entry.get("rowCount") != MACRO_STAGE2B_EXPECTED_ROWS
+        or macro_entry.get("cutoffDate") != MACRO_STAGE2B_EXPECTED_CUTOFF
+    ):
+        raise ValueError("Macro manifest entry does not match canonical pre-publish state")
+    macro_entry["sha256"] = candidate_sha
+    macro_entry["fileSizeBytes"] = len(candidate_bytes)
+    manifest_bytes = (
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
+    ).encode("utf-8")
+    manifest_after_sha = hashlib.sha256(manifest_bytes).hexdigest().upper()
+    if manifest_after_sha != MACRO_STAGE2B_MANIFEST_AFTER_SHA256:
+        raise ValueError("Macro Stage 2B projected manifest SHA-256 mismatch")
+
+    return {
+        "canonical_sha256": canonical_sha,
+        "formal_worktree_sha256": sha256_file(formal_path),
+        "candidate_sha256": candidate_sha,
+        "row_identity_receipt_sha256": receipt_sha,
+        "manifest_before_sha256": MACRO_STAGE2B_MANIFEST_BEFORE_SHA256,
+        "manifest_after_sha256": manifest_after_sha,
+        "candidate_bytes": candidate_bytes,
+        "manifest_bytes": manifest_bytes,
+        "rows": len(candidate_rows),
+        "cutoff": candidate_dates[-1],
+        "differences": differences,
+        "added_rows": 0,
+        "removed_rows": 0,
+        "actionable": False,
+    }
+
+
+def run_macro_stage2b_publish(
+    package_root: Path,
+    candidate_path: Path,
+    row_identity_receipt_path: Path,
+    output_dir: Path,
+    *,
+    publish: bool = False,
+    approval_phrase: str | None = None,
+    dry_run_journal: Path | None = None,
+    canonical_blob_bytes: bytes | None = None,
+) -> dict[str, Any]:
+    """Validate or atomically publish the fixed Owner-approved Stage 2B macro repair."""
+
+    package_root = package_root.resolve()
+    candidate_path = candidate_path.resolve()
+    row_identity_receipt_path = row_identity_receipt_path.resolve()
+    output_dir = output_dir.resolve()
+    runtime_root = (package_root / "runtime").resolve()
+    if (
+        not candidate_path.is_relative_to(runtime_root)
+        or not row_identity_receipt_path.is_relative_to(runtime_root)
+        or not output_dir.is_relative_to(runtime_root)
+    ):
+        raise ValueError("Macro Stage 2B evidence and journal must remain under runtime/")
+    if approval_phrase != MACRO_STAGE2B_APPROVAL_PHRASE:
+        raise ValueError(
+            "Macro Stage 2B publish requires exact Owner approval phrase: "
+            + MACRO_STAGE2B_APPROVAL_PHRASE
+        )
+    if output_dir.exists():
+        raise FileExistsError(output_dir)
+
+    validation = _validate_macro_stage2b_inputs(
+        package_root,
+        candidate_path,
+        row_identity_receipt_path,
+        canonical_blob_bytes=canonical_blob_bytes,
+    )
+    formal_path = package_root / MACRO_TARGET
+    manifest_path = package_root / MANIFEST_PATH
+    created_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    journal: dict[str, Any] = {
+        "mode": "MACRO_STAGE2B_ATOMIC_REMEDIATION_REPLACE",
+        "status": "VALIDATED",
+        "created_at_utc": created_at,
+        "approval_phrase": MACRO_STAGE2B_APPROVAL_PHRASE,
+        "candidate_path": str(candidate_path),
+        "candidate_sha256": validation["candidate_sha256"],
+        "row_identity_receipt_path": str(row_identity_receipt_path),
+        "row_identity_receipt_sha256": validation[
+            "row_identity_receipt_sha256"
+        ],
+        "pre_hashes": {
+            MACRO_TARGET: validation["canonical_sha256"],
+            MANIFEST_PATH: validation["manifest_before_sha256"],
+        },
+        "staged_hashes": {
+            MACRO_TARGET: validation["candidate_sha256"],
+            MANIFEST_PATH: validation["manifest_after_sha256"],
+        },
+        "rows": validation["rows"],
+        "cutoff": validation["cutoff"],
+        "differences": validation["differences"],
+        "added_rows": 0,
+        "removed_rows": 0,
+        "rollback_performed": False,
+        "openai_calls": 0,
+        "web_search_calls": 0,
+        "canva_calls": 0,
+        "actionable": False,
+    }
+    output_dir.mkdir(parents=True)
+    journal_path = output_dir / "PUBLISH_JOURNAL.json"
+    if not publish:
+        journal["status"] = "DRY_RUN_PASS"
+        _atomic_write_json(journal_path, journal)
+        return journal
+
+    if dry_run_journal is None or not dry_run_journal.is_file():
+        raise ValueError("Macro Stage 2B formal publish requires a dry-run journal")
+    dry_run = read_json(dry_run_journal)
+    if (
+        dry_run.get("status") != "DRY_RUN_PASS"
+        or dry_run.get("candidate_sha256") != MACRO_STAGE2B_CANDIDATE_SHA256
+        or dry_run.get("row_identity_receipt_sha256")
+        != validation["row_identity_receipt_sha256"]
+        or dry_run.get("staged_hashes", {}).get(MANIFEST_PATH)
+        != MACRO_STAGE2B_MANIFEST_AFTER_SHA256
+    ):
+        raise ValueError("Macro Stage 2B dry-run journal is invalid")
+
+    staged_dir = output_dir / "staged"
+    backup_dir = output_dir / "backup"
+    staged_dir.mkdir()
+    backup_dir.mkdir()
+    (staged_dir / formal_path.name).write_bytes(validation["candidate_bytes"])
+    (staged_dir / manifest_path.name).write_bytes(validation["manifest_bytes"])
+    shutil.copy2(formal_path, backup_dir / formal_path.name)
+    shutil.copy2(manifest_path, backup_dir / manifest_path.name)
+    backup_hashes = {
+        MACRO_TARGET: sha256_file(backup_dir / formal_path.name),
+        MANIFEST_PATH: sha256_file(backup_dir / manifest_path.name),
+    }
+    if (
+        backup_hashes[MACRO_TARGET] != validation["formal_worktree_sha256"]
+        or backup_hashes[MANIFEST_PATH]
+        != MACRO_STAGE2B_MANIFEST_BEFORE_SHA256
+    ):
+        raise ValueError("Macro Stage 2B backup verification failed")
+    journal["status"] = "BACKUP_VERIFIED"
+    journal["backup_hashes"] = backup_hashes
+    _atomic_write_json(journal_path, journal)
+
+    try:
+        _atomic_write_bytes(formal_path, validation["candidate_bytes"])
+        _atomic_write_bytes(manifest_path, validation["manifest_bytes"])
+        published_header, published_rows, _ = _macro_document_rows(
+            formal_path.read_bytes()
+        )
+        published_dates = [
+            row[published_header.index("Date")] for row in published_rows
+        ]
+        published_manifest = read_json(manifest_path)
+        published_entries = published_manifest.get(
+            "authoritativeFiles", []
+        ) + published_manifest.get("nonAuthoritativeFiles", [])
+        published_entry = next(
+            item for item in published_entries if item.get("path") == MACRO_TARGET
+        )
+        if (
+            sha256_file(formal_path) != MACRO_STAGE2B_CANDIDATE_SHA256
+            or sha256_file(manifest_path) != MACRO_STAGE2B_MANIFEST_AFTER_SHA256
+            or len(published_rows) != MACRO_STAGE2B_EXPECTED_ROWS
+            or len(set(published_dates)) != len(published_dates)
+            or published_dates[-1] != MACRO_STAGE2B_EXPECTED_CUTOFF
+            or published_entry.get("sha256")
+            != MACRO_STAGE2B_CANDIDATE_SHA256
+            or published_entry.get("rowCount") != MACRO_STAGE2B_EXPECTED_ROWS
+            or published_entry.get("cutoffDate")
+            != MACRO_STAGE2B_EXPECTED_CUTOFF
+        ):
+            raise ValueError("Macro Stage 2B post-publish validation failed")
+        journal.update(
+            {
+                "status": "PUBLISHED",
+                "published_at_utc": datetime.now(timezone.utc).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                ),
+                "post_hashes": {
+                    MACRO_TARGET: sha256_file(formal_path),
+                    MANIFEST_PATH: sha256_file(manifest_path),
+                },
+                "transaction_status": "PUBLISHED",
+                "rollback_available": True,
+                "rollback_performed": False,
+            }
+        )
+        _atomic_write_json(journal_path, journal)
+        return journal
+    except Exception as publish_error:
+        rollback_errors: list[str] = []
+        for target, backup in (
+            (formal_path, backup_dir / formal_path.name),
+            (manifest_path, backup_dir / manifest_path.name),
+        ):
+            try:
+                _atomic_write_bytes(target, backup.read_bytes())
+            except Exception as rollback_error:
+                rollback_errors.append(f"{target}: {rollback_error}")
+        restored = {
+            MACRO_TARGET: sha256_file(formal_path),
+            MANIFEST_PATH: sha256_file(manifest_path),
+        }
+        rollback_ok = (
+            not rollback_errors
+            and restored[MACRO_TARGET] == validation["formal_worktree_sha256"]
+            and restored[MANIFEST_PATH]
+            == MACRO_STAGE2B_MANIFEST_BEFORE_SHA256
+        )
+        journal.update(
+            {
+                "status": "ROLLED_BACK" if rollback_ok else "ROLLBACK_FAILED",
+                "publish_error": str(publish_error),
+                "rollback_errors": rollback_errors,
+                "restored_hashes": restored,
+                "transaction_status": "FAILED",
+                "rollback_performed": True,
+                "rollback_verified": rollback_ok,
+            }
+        )
+        _atomic_write_json(journal_path, journal)
+        if not rollback_ok:
+            raise RuntimeError("Macro Stage 2B rollback was incomplete") from publish_error
+        raise RuntimeError(
+            "Macro Stage 2B publish failed; CSV and manifest restored"
+        ) from publish_error
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Review or publish P1008 staging CSV candidates.")
     parser.add_argument("--package-root", type=Path, default=Path(__file__).resolve().parents[1])
@@ -2516,10 +2962,57 @@ def main() -> int:
     )
     parser.add_argument("--daily-price-gaps-candidate", type=Path)
     parser.add_argument("--daily-price-gaps-output-dir", type=Path)
+    parser.add_argument(
+        "--macro-stage2b-publish",
+        action="store_true",
+        help=(
+            "Explicitly validate or publish the fixed Owner-approved Stage 2B "
+            "Hon_Hai_Rev_YoY remediation."
+        ),
+    )
+    parser.add_argument("--macro-stage2b-candidate", type=Path)
+    parser.add_argument("--macro-stage2b-row-identity-receipt", type=Path)
+    parser.add_argument("--macro-stage2b-output-dir", type=Path)
+    parser.add_argument("--macro-stage2b-dry-run-journal", type=Path)
     parser.add_argument("--approval-phrase")
     args = parser.parse_args()
 
     package_root = args.package_root.resolve()
+    if args.macro_stage2b_publish:
+        if (
+            args.daily_price_gaps_publish
+            or args.invalid_daily_price_removal
+            or args.market_activity_publish
+            or args.remediation_replace
+        ):
+            parser.error("macro Stage 2B publish is mutually exclusive")
+        required = {
+            "--macro-stage2b-candidate": args.macro_stage2b_candidate,
+            "--macro-stage2b-row-identity-receipt": (
+                args.macro_stage2b_row_identity_receipt
+            ),
+            "--macro-stage2b-output-dir": args.macro_stage2b_output_dir,
+        }
+        missing = [flag for flag, value in required.items() if value is None]
+        if missing:
+            parser.error("macro Stage 2B publish requires " + ", ".join(missing))
+        if args.publish and args.macro_stage2b_dry_run_journal is None:
+            parser.error(
+                "formal macro Stage 2B publish requires "
+                "--macro-stage2b-dry-run-journal"
+            )
+        result = run_macro_stage2b_publish(
+            package_root,
+            args.macro_stage2b_candidate,
+            args.macro_stage2b_row_identity_receipt,
+            args.macro_stage2b_output_dir,
+            publish=args.publish,
+            approval_phrase=args.approval_phrase,
+            dry_run_journal=args.macro_stage2b_dry_run_journal,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
     if args.daily_price_gaps_publish:
         if (
             args.invalid_daily_price_removal

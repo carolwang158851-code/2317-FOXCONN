@@ -163,7 +163,7 @@ class PhaseAFinalOwnerReviewTests(unittest.TestCase):
             if output_dir.exists():
                 shutil.rmtree(output_dir)
 
-    def test_macro_remediation_is_blank_not_zero(self) -> None:
+    def test_published_macro_remediation_has_no_remaining_invalid_values(self) -> None:
         _, header, formal_rows = self.module.read_macro(
             ROOT / "data/macro_snapshot.csv"
         )
@@ -185,13 +185,11 @@ class PhaseAFinalOwnerReviewTests(unittest.TestCase):
             },
         )
         rows = review["row_preview"]
-        self.assertEqual(len(rows), 5)
-        self.assertTrue(all(row["candidate_value"] == "" for row in rows))
-        self.assertTrue(
-            all(
-                row["original_source"] == "NOT_PRESENT_IN_MACRO_SNAPSHOT_SCHEMA"
-                for row in rows
-            )
+        self.assertEqual(invalid_values, [])
+        self.assertEqual(rows, [])
+        self.assertEqual(
+            self.module.sha256_file(ROOT / "data/macro_snapshot.csv"),
+            "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F",
         )
 
 

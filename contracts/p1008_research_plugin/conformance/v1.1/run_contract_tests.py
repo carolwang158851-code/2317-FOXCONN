@@ -271,6 +271,7 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                 "EXISTING_OWNER_PUBLISHED_AUTHORITIES_PINNED_FOR_CI",
                 "OWNER_APPROVED_FORMAL_AUTHORITY_PUBLISH",
                 "OWNER_APPROVED_MARKET_ACTIVITY_STAGE2A_PUBLISH",
+                "PHASE_A_AUTHORITY_DATA_CLOSURE_COMPLETE",
             },
             "Phase A authority receipt is not accepted",
         )
@@ -348,7 +349,7 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                 == actual_hashes.get("data/2317_daily_market_activity.csv"),
                 "Stage 1 improperly accepted Market Activity",
             )
-        else:
+        elif acceptance_status == "OWNER_APPROVED_MARKET_ACTIVITY_STAGE2A_PUBLISH":
             require(
                 receipt.get("formalPublishExecutedByThisReceipt") is True,
                 "Stage 2A receipt must record the formal publish",
@@ -421,6 +422,134 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                     git_blob_bytes(root, "data/CSV_AUTHORITY_MANIFEST.json")
                 ),
                 "Stage 2A authority manifest receipt mismatch",
+            )
+        else:
+            require(
+                receipt.get("formalPublishExecutedByThisReceipt") is False,
+                "Final closure receipt must not claim a separate formal publish",
+            )
+            require(
+                receipt.get("phaseAStatus") == "AUTHORITY_DATA_CLOSURE_COMPLETE"
+                and receipt.get("candidateFirstLauncher") is True
+                and receipt.get("automaticFormalCsvPublish") is False
+                and receipt.get("automaticReportGeneration") is False
+                and receipt.get("ownerGateRequired") is True
+                and receipt.get("phaseBStarted") is False,
+                "Final Phase A closure boundary drifted",
+            )
+            require(
+                receipt.get("openAiCalls") == 0
+                and receipt.get("webSearchCalls") == 0
+                and receipt.get("canvaCalls") == 0,
+                "Final Phase A closure recorded an unauthorized external call",
+            )
+            final_authorities = receipt.get("finalAuthorities", {})
+            expected_final = {
+                "dailyPrice": {
+                    "path": "data/2317_daily_price.csv",
+                    "sha256": "2581AF868AA0D8C4BFCEA913B156DBB515AF3929FAAE7D0FDC947EA4A8256304",
+                    "rows": 116,
+                    "cutoff": "2026-07-27",
+                },
+                "marketActivity": {
+                    "path": "data/2317_daily_market_activity.csv",
+                    "sha256": "FE7B33B649012E7D8143838793FE5ED6244BB2183B966C0DAD2C9775FB0E4807",
+                    "rows": 66,
+                    "cutoff": "2026-07-27",
+                },
+                "macro": {
+                    "path": "data/macro_snapshot.csv",
+                    "sha256": "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F",
+                    "rows": 39,
+                    "cutoff": "2026-07-10",
+                },
+            }
+            require(
+                final_authorities == expected_final,
+                "Final Phase A authority summary drifted",
+            )
+            chain = receipt.get("receiptChain", {})
+            expected_chain_paths = {
+                "baseline": "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_AUTHORITY_BASELINE_RECEIPT.json",
+                "stage1DailyPrice": "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_DAILY_PRICE_STAGE1_PUBLISH_RECEIPT.json",
+                "stage2aMarketActivity": "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_MARKET_ACTIVITY_STAGE2A_PUBLISH_RECEIPT.json",
+                "stage2bMacro": "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_MACRO_STAGE2B_PUBLISH_RECEIPT.json",
+            }
+            for key, expected_path in expected_chain_paths.items():
+                reference = chain.get(key, {})
+                require(
+                    reference.get("path") == expected_path
+                    and reference.get("sha256")
+                    == sha256_bytes(git_blob_bytes(root, expected_path)),
+                    f"Final Phase A receipt chain mismatch: {key}",
+                )
+            row_identity = chain.get("rowIdentity", {})
+            require(
+                row_identity.get("path")
+                == "runtime/phase_a_stage2b_review/P1008-PHASE-A-STAGE2B-ROW-IDENTITY-20260729/MACRO_STAGE2B_ROW_IDENTITY_RECEIPT.json"
+                and row_identity.get("sha256")
+                == "E72989762053D20665DD87DA263F8B4DB1E77D277A6A27FD6C8AABBFE4921B9D"
+                and row_identity.get("runtimeEvidence") is True,
+                "Final Phase A row-identity evidence mismatch",
+            )
+            manifest_reference = chain.get("authorityManifest", {})
+            require(
+                manifest_reference.get("path") == "data/CSV_AUTHORITY_MANIFEST.json"
+                and manifest_reference.get("sha256")
+                == sha256_bytes(
+                    git_blob_bytes(root, "data/CSV_AUTHORITY_MANIFEST.json")
+                ),
+                "Final Phase A authority manifest chain mismatch",
+            )
+            stage2b_reference = chain["stage2bMacro"]
+            stage2b = json.loads(
+                git_blob_bytes(root, stage2b_reference["path"]).decode("utf-8-sig")
+            )
+            require(
+                stage2b.get("acceptanceStatus")
+                == "OWNER_APPROVED_MACRO_STAGE2B_PUBLISH"
+                and stage2b.get("formalPublishExecutedByThisReceipt") is True
+                and stage2b.get("approvalPhrase")
+                == "OWNER_APPROVE_MACRO_HON_HAI_REV_YOY_REMEDIATION",
+                "Stage 2B Macro Owner approval evidence is invalid",
+            )
+            require(
+                stage2b.get("canonicalBeforeSha256")
+                == "353025C29D678488F7022939C86C36CB15D3B348DC5876909D6779E56CFE213B"
+                and stage2b.get("candidateSha256")
+                == "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F"
+                and stage2b.get("rowIdentityReceiptSha256")
+                == "E72989762053D20665DD87DA263F8B4DB1E77D277A6A27FD6C8AABBFE4921B9D"
+                and stage2b.get("formalAfterSha256")
+                == actual_hashes.get("data/macro_snapshot.csv")
+                and stage2b.get("manifestAfterSha256")
+                == sha256_bytes(
+                    git_blob_bytes(root, "data/CSV_AUTHORITY_MANIFEST.json")
+                ),
+                "Stage 2B Macro hash evidence is invalid",
+            )
+            require(
+                stage2b.get("beforeRows") == 39
+                and stage2b.get("afterRows") == 39
+                and stage2b.get("cutoff") == "2026-07-10"
+                and stage2b.get("changedColumn") == "Hon_Hai_Rev_YoY"
+                and stage2b.get("changedRecordCount") == 5
+                and stage2b.get("canonicalOrdinals") == [1, 26, 27, 28, 29]
+                and stage2b.get("physicalLines") == [23, 48, 49, 50, 51]
+                and stage2b.get("addedRows") == 0
+                and stage2b.get("removedRows") == 0
+                and stage2b.get("unapprovedSevenRowsAccepted") is False,
+                "Stage 2B Macro publish scope drifted",
+            )
+            require(
+                stage2b.get("transactionStatus") == "PUBLISHED"
+                and stage2b.get("rollbackTriggered") is False
+                and stage2b.get("authorityFiles") == actual_hashes
+                and stage2b.get("openAiCalls") == 0
+                and stage2b.get("webSearchCalls") == 0
+                and stage2b.get("canvaCalls") == 0
+                and stage2b.get("actionable") is False,
+                "Stage 2B Macro transaction evidence is invalid",
             )
         macro_decision = receipt.get("macroAuthorityDecision", {})
         require(

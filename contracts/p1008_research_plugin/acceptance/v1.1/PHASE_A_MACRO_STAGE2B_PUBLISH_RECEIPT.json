@@ -1,0 +1,108 @@
+{
+  "schemaVersion": "1.0",
+  "receiptId": "P1008_PHASE_A_MACRO_STAGE2B_PUBLISH_RECEIPT_20260729",
+  "scopeId": "P1008-PHASE-A-FORMAL-AUTHORITY-PUBLISH-STAGE-2B",
+  "acceptedBy": "Owner",
+  "acceptedAt": "2026-07-29T08:26:59Z",
+  "acceptanceStatus": "OWNER_APPROVED_MACRO_STAGE2B_PUBLISH",
+  "baselineId": "PHASE_A_CLOSURE_SIX",
+  "approvalPhrase": "OWNER_APPROVE_MACRO_HON_HAI_REV_YOY_REMEDIATION",
+  "canonicalBeforeSha256": "353025C29D678488F7022939C86C36CB15D3B348DC5876909D6779E56CFE213B",
+  "candidateSha256": "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F",
+  "rowIdentityReceipt": {
+    "path": "runtime/phase_a_stage2b_review/P1008-PHASE-A-STAGE2B-ROW-IDENTITY-20260729/MACRO_STAGE2B_ROW_IDENTITY_RECEIPT.json",
+    "sha256": "E72989762053D20665DD87DA263F8B4DB1E77D277A6A27FD6C8AABBFE4921B9D",
+    "source": "CANONICAL_GIT_BLOB_ONLY"
+  },
+  "rowIdentityReceiptSha256": "E72989762053D20665DD87DA263F8B4DB1E77D277A6A27FD6C8AABBFE4921B9D",
+  "formalAfterSha256": "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F",
+  "manifestAfterSha256": "966352C4DD34938240901095DE5937C69C9BE8638413C2F900977C5EDBAA9C67",
+  "beforeRows": 39,
+  "afterRows": 39,
+  "cutoff": "2026-07-10",
+  "changedColumn": "Hon_Hai_Rev_YoY",
+  "changedRecordCount": 5,
+  "canonicalOrdinals": [
+    1,
+    26,
+    27,
+    28,
+    29
+  ],
+  "physicalLines": [
+    23,
+    48,
+    49,
+    50,
+    51
+  ],
+  "changedRecords": [
+    {
+      "canonicalOrdinal": 1,
+      "physicalLine": 23,
+      "date": "2021-03-31",
+      "before": "None",
+      "after": ""
+    },
+    {
+      "canonicalOrdinal": 26,
+      "physicalLine": 48,
+      "date": "2026-06-03",
+      "before": "強勁成長",
+      "after": ""
+    },
+    {
+      "canonicalOrdinal": 27,
+      "physicalLine": 49,
+      "date": "2026-06-04",
+      "before": "強勁成長",
+      "after": ""
+    },
+    {
+      "canonicalOrdinal": 28,
+      "physicalLine": 50,
+      "date": "2026-06-05",
+      "before": "強勁成長",
+      "after": ""
+    },
+    {
+      "canonicalOrdinal": 29,
+      "physicalLine": 51,
+      "date": "2026-06-12",
+      "before": "鴻海6月營收強勁",
+      "after": ""
+    }
+  ],
+  "addedRows": 0,
+  "removedRows": 0,
+  "unapprovedSevenRowsAccepted": false,
+  "transactionStatus": "PUBLISHED",
+  "rollbackTriggered": false,
+  "rollbackAvailable": true,
+  "journal": {
+    "path": "runtime/phase_a_stage2b_publish/P1008-PHASE-A-STAGE2B-20260729/publish/PUBLISH_JOURNAL.json",
+    "sha256": "74D2F73D497804877F45AD16EC79A1D2769269EDDE2EFCAF015932A84839421D",
+    "status": "PUBLISHED"
+  },
+  "priorStage2AReceipt": {
+    "path": "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_MARKET_ACTIVITY_STAGE2A_PUBLISH_RECEIPT.json",
+    "sha256": "3131670525F1213B30A582D4C617681768EA17BFD18C8B1DAD7B0A891D5790B9"
+  },
+  "authorityFiles": {
+    "data/2317_master_v9.csv": "0BB2FEC6FA3035AC642738BC12EA6959C81C8A79D5221E694BF780427051CF79",
+    "data/2317_daily_price.csv": "2581AF868AA0D8C4BFCEA913B156DBB515AF3929FAAE7D0FDC947EA4A8256304",
+    "data/2317_daily_market_activity.csv": "FE7B33B649012E7D8143838793FE5ED6244BB2183B966C0DAD2C9775FB0E4807",
+    "data/macro_snapshot.csv": "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F",
+    "data/macro_event_observations.csv": "76B93F8932BA606390D44D68BD0D57D0BE7CB5D1D1364183F192A062D8B94BF2",
+    "data/fx_trend_observations.csv": "BFEC53845C68D689D20CC29972550279E3A4AE8D473816EFDB0855FF0DD091CD"
+  },
+  "authorityManifest": {
+    "path": "data/CSV_AUTHORITY_MANIFEST.json",
+    "sha256": "966352C4DD34938240901095DE5937C69C9BE8638413C2F900977C5EDBAA9C67"
+  },
+  "formalPublishExecutedByThisReceipt": true,
+  "openAiCalls": 0,
+  "webSearchCalls": 0,
+  "canvaCalls": 0,
+  "actionable": false
+}

@@ -197,14 +197,14 @@ class PhaseRoutingConformanceTests(unittest.TestCase):
         self.assertEqual(result["baseline"], "PHASE_A_CLOSURE_SIX")
         self.assertTrue(result["authorityReceiptVerified"])
 
-    def test_phase_a_receipt_rejects_unapproved_macro_hash(self) -> None:
+    def test_phase_a_closure_receipt_pins_owner_approved_macro_hash(self) -> None:
         receipt_ref = self.record["authorityBaselineReceipts"]["PHASE_A_CLOSURE_SIX"]
         receipt_path = ROOT / receipt_ref["path"]
         receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
         self.assertFalse(receipt["macroAuthorityDecision"]["unapprovedRowsAccepted"])
         self.assertEqual(
             receipt["macroAuthorityDecision"]["requiredSha256"],
-            "353025C29D678488F7022939C86C36CB15D3B348DC5876909D6779E56CFE213B",
+            "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F",
         )
         self.assertEqual(
             receipt["authorityFiles"]["data/macro_snapshot.csv"],
@@ -239,7 +239,9 @@ class PhaseRoutingConformanceTests(unittest.TestCase):
         self.assertFalse(receipt["macroAuthorityDecision"]["publishedInStage1"])
 
     def test_phase_a_stage2a_receipt_accepts_only_owner_approved_market_activity(self) -> None:
-        receipt_ref = self.record["authorityBaselineReceipts"]["PHASE_A_CLOSURE_SIX"]
+        receipt_ref = {
+            "path": "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_MARKET_ACTIVITY_STAGE2A_PUBLISH_RECEIPT.json"
+        }
         receipt = json.loads(
             (ROOT / receipt_ref["path"]).read_text(encoding="utf-8")
         )
@@ -264,6 +266,58 @@ class PhaseRoutingConformanceTests(unittest.TestCase):
         self.assertFalse(publish["journal"]["rollbackPerformed"])
         self.assertFalse(receipt["dailyPriceDependency"]["modifiedInStage2A"])
         self.assertFalse(receipt["macroAuthorityDecision"]["publishedInStage2A"])
+        self.assertFalse(receipt["actionable"])
+
+    def test_phase_a_stage2b_receipt_accepts_only_canonical_five_cell_repair(self) -> None:
+        receipt = json.loads(
+            (
+                ROOT
+                / "contracts"
+                / "p1008_research_plugin"
+                / "acceptance"
+                / "v1.1"
+                / "PHASE_A_MACRO_STAGE2B_PUBLISH_RECEIPT.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            receipt["acceptanceStatus"],
+            "OWNER_APPROVED_MACRO_STAGE2B_PUBLISH",
+        )
+        self.assertEqual(
+            receipt["approvalPhrase"],
+            "OWNER_APPROVE_MACRO_HON_HAI_REV_YOY_REMEDIATION",
+        )
+        self.assertEqual(receipt["canonicalOrdinals"], [1, 26, 27, 28, 29])
+        self.assertEqual(receipt["physicalLines"], [23, 48, 49, 50, 51])
+        self.assertEqual(receipt["changedColumn"], "Hon_Hai_Rev_YoY")
+        self.assertEqual(receipt["changedRecordCount"], 5)
+        self.assertEqual(receipt["addedRows"], 0)
+        self.assertEqual(receipt["removedRows"], 0)
+        self.assertFalse(receipt["unapprovedSevenRowsAccepted"])
+        self.assertEqual(receipt["transactionStatus"], "PUBLISHED")
+        self.assertFalse(receipt["rollbackTriggered"])
+        self.assertFalse(receipt["actionable"])
+
+    def test_phase_a_final_closure_preserves_owner_gates_and_phase_boundary(self) -> None:
+        receipt_ref = self.record["authorityBaselineReceipts"]["PHASE_A_CLOSURE_SIX"]
+        receipt = json.loads(
+            (ROOT / receipt_ref["path"]).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            receipt["acceptanceStatus"],
+            "PHASE_A_AUTHORITY_DATA_CLOSURE_COMPLETE",
+        )
+        self.assertEqual(
+            receipt["phaseAStatus"], "AUTHORITY_DATA_CLOSURE_COMPLETE"
+        )
+        self.assertTrue(receipt["candidateFirstLauncher"])
+        self.assertFalse(receipt["automaticFormalCsvPublish"])
+        self.assertFalse(receipt["automaticReportGeneration"])
+        self.assertTrue(receipt["ownerGateRequired"])
+        self.assertFalse(receipt["phaseBStarted"])
+        self.assertEqual(receipt["openAiCalls"], 0)
+        self.assertEqual(receipt["webSearchCalls"], 0)
+        self.assertEqual(receipt["canvaCalls"], 0)
         self.assertFalse(receipt["actionable"])
 
     def test_prior_phase_a_stage1_receipt_remains_immutable(self) -> None:

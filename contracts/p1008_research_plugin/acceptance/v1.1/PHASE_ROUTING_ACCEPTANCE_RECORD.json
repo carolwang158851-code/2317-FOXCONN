@@ -72,8 +72,8 @@
   },
   "authorityBaselineReceipts": {
     "PHASE_A_CLOSURE_SIX": {
-      "path": "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_MARKET_ACTIVITY_STAGE2A_PUBLISH_RECEIPT.json",
-      "sha256": "3131670525F1213B30A582D4C617681768EA17BFD18C8B1DAD7B0A891D5790B9"
+      "path": "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_AUTHORITY_DATA_CLOSURE_RECEIPT.json",
+      "sha256": "C9291E01C7370FFB1D70FDF7F6363C672E77912BFA74DD6C5862F4146DD52213"
     }
   },
   "protectedWriteRoots": [

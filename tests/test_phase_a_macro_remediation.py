@@ -4,6 +4,7 @@ import csv
 import hashlib
 import json
 import shutil
+import subprocess
 import sys
 import unittest
 import uuid
@@ -34,10 +35,26 @@ class PhaseAMacroRemediationTests(unittest.TestCase):
             lambda: shutil.rmtree(self.output) if self.output.exists() else None
         )
 
-    def test_five_text_values_become_explicit_blanks_in_candidate_only(self) -> None:
-        formal = PACKAGE_ROOT / remediation.FORMAL_REL
-        before = sha256(formal)
-        result = remediation.build_candidate(PACKAGE_ROOT, self.output)
+    def test_canonical_pre_publish_input_builds_exact_approved_candidate(self) -> None:
+        sandbox = self.output / "package"
+        formal = sandbox / remediation.FORMAL_REL
+        formal.parent.mkdir(parents=True)
+        formal.write_bytes(
+            subprocess.run(
+                [
+                    "git",
+                    "cat-file",
+                    "blob",
+                    "76a62bbeccc3c89aea3605d6239910afe82aba5b:data/macro_snapshot.csv",
+                ],
+                cwd=PACKAGE_ROOT,
+                check=True,
+                capture_output=True,
+            ).stdout
+        )
+        result = remediation.build_candidate(
+            sandbox, sandbox / "runtime" / "candidate"
+        )
         self.assertEqual(
             {item["date"] for item in result["invalid_values"]},
             remediation.EXPECTED_INVALID_DATES,
@@ -54,9 +71,32 @@ class PhaseAMacroRemediationTests(unittest.TestCase):
         by_date = {row[date_index]: row for row in rows}
         for invalid_date in remediation.EXPECTED_INVALID_DATES:
             self.assertEqual(by_date[invalid_date][value_index], "")
-        self.assertEqual(sha256(formal), before)
+        self.assertEqual(
+            result["candidate_sha256"],
+            "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F",
+        )
         self.assertFalse(result["formal_csv_modified"])
         self.assertFalse(result["promotion_eligible"])
+
+    def test_formal_macro_contains_only_numeric_or_blank_yoy_values(self) -> None:
+        formal = PACKAGE_ROOT / remediation.FORMAL_REL
+        self.assertEqual(
+            sha256(formal),
+            "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F",
+        )
+        _, header, rows = remediation.read_macro(formal)
+        date_index = header.index("Date")
+        value_index = header.index("Hon_Hai_Rev_YoY")
+        by_date = {row[date_index]: row for row in rows}
+        self.assertEqual(len(rows), 39)
+        for invalid_date in remediation.EXPECTED_INVALID_DATES:
+            self.assertEqual(by_date[invalid_date][value_index], "")
+        self.assertTrue(
+            all(
+                remediation.is_numeric_or_blank(row[value_index])
+                for row in rows
+            )
+        )
 
     def test_manifest_has_cutoff_for_macro_fx_and_event(self) -> None:
         manifest = json.loads(
