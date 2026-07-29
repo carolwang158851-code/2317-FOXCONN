@@ -68,12 +68,25 @@
       "data/macro_snapshot.csv",
       "data/macro_event_observations.csv",
       "data/fx_trend_observations.csv"
+    ],
+    "integratedSeven": [
+      "data/2317_master_v9.csv",
+      "data/2317_daily_price.csv",
+      "data/2317_daily_market_activity.csv",
+      "data/2317_cash_flow_authority.csv",
+      "data/macro_snapshot.csv",
+      "data/macro_event_observations.csv",
+      "data/fx_trend_observations.csv"
     ]
   },
   "authorityBaselineReceipts": {
     "PHASE_A_CLOSURE_SIX": {
       "path": "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_AUTHORITY_DATA_CLOSURE_RECEIPT.json",
       "sha256": "C9291E01C7370FFB1D70FDF7F6363C672E77912BFA74DD6C5862F4146DD52213"
+    },
+    "INTEGRATED_SEVEN": {
+      "path": "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_FINAL_INTEGRATION_AMENDMENT_RECEIPT.json",
+      "sha256": "112373EA26100384F93B85A87415C5625DA34A1634B1C83E557C45BCC7829AAE"
     }
   },
   "protectedWriteRoots": [

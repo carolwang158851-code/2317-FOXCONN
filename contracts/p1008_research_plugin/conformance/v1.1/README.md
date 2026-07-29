@@ -19,6 +19,13 @@ Both GitHub `push` and `pull_request` events use the same command:
 python contracts/p1008_research_plugin/conformance/run_phase_conformance.py --all --no-write-report
 ```
 
+The active Phase A reconciliation baseline is `INTEGRATED_SEVEN`: the six
+completed Phase A closure files plus the officially verified Cash Flow
+authority. Its amendment receipt and committed Macro Row Identity evidence
+pin all seven paths and hashes. A missing listed file, a hash mismatch, or an
+unknown eighth authority path fails closed. Historical five- and six-file
+baselines remain versioned evidence and are not rewritten.
+
 The runner is standard-library only and makes no OpenAI, Web Search, Canva, or
 market-data network call. Unknown, missing, or contradictory phase metadata is
 fail-closed.

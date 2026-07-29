@@ -1,8 +1,8 @@
 {
-  "manifestVersion": "1.3.0",
+  "manifestVersion": "1.4.0",
   "approvedAt": "2026-07-29",
   "approvedBy": "Owner",
-  "approvalSource": "Owner conversation approvals P1008 items 16-18, 25-29, 75, 77, 80 and approved P2-03B-07 Release Manifest; Owner approval 2026-06-29 for 2317_daily_price.csv PB correction and formal daily CSV authority; Owner approval 2026-06-29 for MARKET INTELLIGENCE observation boundary; Owner approval 2026-06-29 via owner_publish_csv_v2.py; appended 2 row(s); Owner approval 2026-06-29 for macro_snapshot.csv historical format correction and manifest hash update; Owner approval 2026-06-30 via owner_publish_csv_v2.py; appended 2 row(s); 2026-06-30 TWSE official close correction, no new row appended; Owner approval 2026-07-03 for macro_event_observations.csv and fx_trend_observations.csv observation-only sidecar contracts; Owner approval 2026-07-05 via owner_publish_csv_v2.py; appended 48 row(s); Owner approval 2026-07-06 via owner_publish_csv_v2.py; appended 49 row(s); Owner approval 2026-07-07 via owner_publish_csv_v2.py; appended 43 row(s); Owner approval 2026-07-08 via owner_publish_csv_v2.py; appended 50 row(s); Owner approval 2026-07-10 via owner_publish_csv_v2.py; appended 44 row(s); Owner approval 2026-07-16 via owner_publish_csv_v2.py; appended 48 row(s); Owner approval 2026-07-17 via owner_publish_csv_v2.py; appended 45 row(s); Owner-approved 2026-07-18 price authority remediation via owner_publish_csv_v2.py replace mode; Owner-approved 2026-07-18 initial TWSE market-activity authority publish via owner_publish_csv_v2.py; Owner approval 2026-07-19 via owner_publish_csv_v2.py; appended 35 row(s); Owner approval 2026-07-19 for official FCF authority and paper-style cross-references; Owner approval 2026-07-20 via owner_publish_csv_v2.py; appended 38 row(s); Owner approval 2026-07-21 via owner_publish_csv_v2.py; appended 41 row(s); Owner approval 2026-07-23 via owner_publish_csv_v2.py; appended 42 row(s); Owner approval 2026-07-27 via owner_publish_csv_v2.py; appended 46 row(s); Owner-approved removal of invalid daily-price row 2026-07-19 via owner_publish_csv_v2.py; Owner-approved official TWSE daily-price gaps 2026-07-22 and 2026-07-24 via owner_publish_csv_v2.py",
+  "approvalSource": "Owner conversation approvals P1008 items 16-18, 25-29, 75, 77, 80 and approved P2-03B-07 Release Manifest; Owner approval 2026-06-29 for 2317_daily_price.csv PB correction and formal daily CSV authority; Owner approval 2026-06-29 for MARKET INTELLIGENCE observation boundary; Owner approval 2026-06-29 via owner_publish_csv_v2.py; appended 2 row(s); Owner approval 2026-06-29 for macro_snapshot.csv historical format correction and manifest hash update; Owner approval 2026-06-30 via owner_publish_csv_v2.py; appended 2 row(s); 2026-06-30 TWSE official close correction, no new row appended; Owner approval 2026-07-03 for macro_event_observations.csv and fx_trend_observations.csv observation-only sidecar contracts; Owner approval 2026-07-05 via owner_publish_csv_v2.py; appended 48 row(s); Owner approval 2026-07-06 via owner_publish_csv_v2.py; appended 49 row(s); Owner approval 2026-07-07 via owner_publish_csv_v2.py; appended 43 row(s); Owner approval 2026-07-08 via owner_publish_csv_v2.py; appended 50 row(s); Owner approval 2026-07-10 via owner_publish_csv_v2.py; appended 44 row(s); Owner approval 2026-07-16 via owner_publish_csv_v2.py; appended 48 row(s); Owner approval 2026-07-17 via owner_publish_csv_v2.py; appended 45 row(s); Owner-approved 2026-07-18 price authority remediation via owner_publish_csv_v2.py replace mode; Owner-approved 2026-07-18 initial TWSE market-activity authority publish via owner_publish_csv_v2.py; Owner approval 2026-07-19 via owner_publish_csv_v2.py; appended 35 row(s); Owner approval 2026-07-19 for official FCF authority and paper-style cross-references; Owner approval 2026-07-20 via owner_publish_csv_v2.py; appended 38 row(s); Owner approval 2026-07-21 via owner_publish_csv_v2.py; appended 41 row(s); Owner approval 2026-07-23 via owner_publish_csv_v2.py; appended 42 row(s); Owner approval 2026-07-27 via owner_publish_csv_v2.py; appended 46 row(s); Owner-approved removal of invalid daily-price row 2026-07-19 via owner_publish_csv_v2.py; Owner-approved official TWSE daily-price gaps 2026-07-22 and 2026-07-24 via owner_publish_csv_v2.py; Owner-approved P1008 Final Integration Reconciliation adds the previously verified Cash Flow authority without changing Daily Price, Market Activity, Macro, RULE, HOLD, MIDR, or Runtime SQLite",
   "authorityPolicy": {
     "hashAlgorithm": "SHA-256",
     "hashMismatchStatus": "APPROVAL_EXPIRED",
@@ -378,6 +378,92 @@
         "mode": "MARKET_ACTIVITY_ATOMIC_APPEND",
         "actionable": false
       }
+    },
+    {
+      "path": "data/2317_cash_flow_authority.csv",
+      "fileName": "2317_cash_flow_authority.csv",
+      "fileVersion": "fcf-authority-v1.0",
+      "schemaVersion": "cash-flow-authority-v1-22-columns",
+      "sha256": "082ECA44A96A06F7DAE10DD33CBAF77C75DABA9B1B4DEA27B5B930F8CE8CD95C",
+      "fileSizeBytes": 1528,
+      "rowCount": 2,
+      "columnCount": 22,
+      "periodRange": {
+        "start": "2025Q1",
+        "end": "2026Q1"
+      },
+      "validationStatus": "PASS",
+      "validationStatusZh": "鴻海官方合併財務報告現金流量表已核對；FCF為透明公式衍生值，不是IFRS直接揭露科目",
+      "fileAuthority": "CSV_AUTHORITY",
+      "fileAuthorityZh": "官方現金流量表輸入、來源頁碼、公式及文件SHA-256已鎖定",
+      "dataProvenance": "OFFICIAL_HONHAI_FINANCIAL_REPORT_DERIVED",
+      "dataSupportLevel": "A1_L1_DERIVED",
+      "officialSource": "https://image.honhai.com/upload/202605/financy_by_quarterly/2026Q1_consolidared_report(c)_20260515_2694.pdf",
+      "officialSourcePages": "10|11",
+      "officialDocumentSha256": "7D7F1DF0D08257F49A1E112AB644665B586AB748609918335A57B4B664925D3D",
+      "formulaCore": "OPERATING_CASH_FLOW_MINUS_PPE_CAPEX",
+      "formulaAfterIntangibles": "OPERATING_CASH_FLOW_MINUS_PPE_CAPEX_MINUS_INTANGIBLE_CAPEX",
+      "unit": "THOUSAND_TWD_WITH_100M_TWD_DERIVED_COLUMNS",
+      "requiredColumns": [
+        "period",
+        "period_start",
+        "period_end",
+        "ticker",
+        "statement_scope",
+        "currency",
+        "source_unit",
+        "operating_cash_flow_thousand_ntd",
+        "ppe_capex_thousand_ntd",
+        "intangible_capex_thousand_ntd",
+        "free_cash_flow_core_thousand_ntd",
+        "free_cash_flow_after_intangibles_thousand_ntd",
+        "free_cash_flow_core_100m_ntd",
+        "free_cash_flow_after_intangibles_100m_ntd",
+        "formula_core",
+        "formula_after_intangibles",
+        "source_report_url",
+        "source_landing_url",
+        "source_pages",
+        "source_document_sha256",
+        "verification_status",
+        "actionable"
+      ],
+      "columns": [
+        "period",
+        "period_start",
+        "period_end",
+        "ticker",
+        "statement_scope",
+        "currency",
+        "source_unit",
+        "operating_cash_flow_thousand_ntd",
+        "ppe_capex_thousand_ntd",
+        "intangible_capex_thousand_ntd",
+        "free_cash_flow_core_thousand_ntd",
+        "free_cash_flow_after_intangibles_thousand_ntd",
+        "free_cash_flow_core_100m_ntd",
+        "free_cash_flow_after_intangibles_100m_ntd",
+        "formula_core",
+        "formula_after_intangibles",
+        "source_report_url",
+        "source_landing_url",
+        "source_pages",
+        "source_document_sha256",
+        "verification_status",
+        "actionable"
+      ],
+      "publishRuleZh": "只接受鴻海或MOPS正式財務報告；保留原始科目、頁碼、公式與文件SHA-256；不得將衍生FCF標示為公司直接揭露",
+      "actionable": false,
+      "financialCutoffPeriod": "2026Q1",
+      "sourceTier": "OFFICIAL_HONHAI_PDF_A1_L1_DERIVED",
+      "lastPublishedAt": "2026-07-22T03:37:22Z",
+      "publishMetadata": {
+        "scopeId": "P1008-AUTHORITY-BASELINE-20260722",
+        "sourceWorkspaceSha256": "082ECA44A96A06F7DAE10DD33CBAF77C75DABA9B1B4DEA27B5B930F8CE8CD95C",
+        "publishedAt": "2026-07-22T03:37:22Z",
+        "integratedAt": "2026-07-29",
+        "actionable": false
+      }
     }
   ],
   "nonAuthoritativeFiles": [
@@ -461,5 +547,37 @@
       "lastPublishedAt": "2026-07-27T15:27:49Z"
     }
   ],
-  "lastIntegritySyncAt": "2026-07-03T09:49:16Z"
+  "authorityBaselineIntegration": {
+    "scopeId": "P1008-FINAL-INTEGRATION-RECONCILIATION-20260729",
+    "version": "P1008_AUTHORITY_INTEGRATED_SEVEN_20260729",
+    "verifiedFileCount": 7,
+    "paths": [
+      "data/2317_master_v9.csv",
+      "data/2317_daily_price.csv",
+      "data/2317_daily_market_activity.csv",
+      "data/2317_cash_flow_authority.csv",
+      "data/macro_snapshot.csv",
+      "data/macro_event_observations.csv",
+      "data/fx_trend_observations.csv"
+    ],
+    "addedPath": "data/2317_cash_flow_authority.csv",
+    "dailyPriceCutoff": "2026-07-27",
+    "marketActivityCutoff": "2026-07-27",
+    "cashFlowCutoff": "2026Q1",
+    "macroCutoff": "2026-07-10",
+    "priorClosureReceipt": {
+      "path": "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_AUTHORITY_DATA_CLOSURE_RECEIPT.json",
+      "sha256": "C9291E01C7370FFB1D70FDF7F6363C672E77912BFA74DD6C5862F4146DD52213"
+    },
+    "rowIdentityEvidence": {
+      "path": "contracts/p1008_research_plugin/acceptance/v1.1/evidence/PHASE_A_MACRO_ROW_IDENTITY_RECEIPT.json",
+      "sha256": "E72989762053D20665DD87DA263F8B4DB1E77D277A6A27FD6C8AABBFE4921B9D"
+    },
+    "ownerGateRequired": true,
+    "automaticFormalCsvPublish": false,
+    "automaticReportGeneration": false,
+    "phaseBStarted": false,
+    "actionable": false
+  },
+  "lastIntegritySyncAt": "2026-07-29T09:00:00Z"
 }

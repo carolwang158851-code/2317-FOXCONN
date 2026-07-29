@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import sys
 import tempfile
@@ -19,12 +20,24 @@ from p1008_research_plugin.ledgers.store import LedgerStore
 
 
 BASELINE_HASHES = {
-    "launcher.html": "8BE1CAAAF3A516E02EA373D749FD3870CB756072D48A9038657B3BBCD7B540A5",
-    "tools/p1008_app_server.py": "45C906977F42E416B532D3EF4C8909AE7AE07A618C7B62F5D515973B99A882A5",
-    "data/CSV_AUTHORITY_MANIFEST.json": "8BA304C36C224F1F8ADF78CB871A8200FDA0656BD5824801330EAF6EAF855847",
+    "launcher.html": "B638D39A9F6D6316389D16C67B68394F114F0B65EDBDFF6DCB69476C60A41448",
+    "tools/p1008_app_server.py": "1381156A978274DF62DD693AEB71BC787607D3BF1D38BA786707D11D714E24D7",
+    "data/CSV_AUTHORITY_MANIFEST.json": "7DC97FFBC0E3F5E73E8085ACC25DD61E0F3588FCE04C360B4F19FA0D86AFA01B",
     "rules/RULE_STATUS_MANIFEST.json": "054DA1FDAF0C75BB27B56DF45B96F1CC1720558D44C700F1AB70AB0280A2FE5C",
     "contracts/p1008_research_plugin/v1.0/contract.manifest.json": "5D213CB4360329FCC969164F559952A0F1545BFE8E53D5CFDFF014B9D5619773",
 }
+LEGACY_AUTHORITY_MANIFEST_SHA256 = (
+    "8BA304C36C224F1F8ADF78CB871A8200FDA0656BD5824801330EAF6EAF855847"
+)
+PHASE_A_CLOSURE_MANIFEST_SHA256 = (
+    "966352C4DD34938240901095DE5937C69C9BE8638413C2F900977C5EDBAA9C67"
+)
+INTEGRATED_AUTHORITY_MANIFEST_SHA256 = BASELINE_HASHES[
+    "data/CSV_AUTHORITY_MANIFEST.json"
+]
+AUTHORITY_BASELINE_FIXTURE = (
+    MODULE_ROOT / "tests" / "fixtures" / "authority_baselines.json"
+)
 
 
 def sha256(path: Path) -> str:
@@ -74,6 +87,31 @@ class GovernanceBoundaryTests(unittest.TestCase):
         self.assertEqual(
             result["root_hash"],
             "3370C4DBD6B564E2200D051AC07C8507442C130ADE64D770621107FA09D2924D",
+        )
+
+    def test_authority_manifest_baseline_migration_is_versioned(self) -> None:
+        fixture = json.loads(AUTHORITY_BASELINE_FIXTURE.read_text(encoding="utf-8"))
+        self.assertEqual(
+            fixture["legacy"]["manifestSha256"], LEGACY_AUTHORITY_MANIFEST_SHA256
+        )
+        self.assertEqual(fixture["legacy"]["verifiedFileCount"], 5)
+        self.assertEqual(
+            fixture["phaseAClosureSix"]["manifestSha256"],
+            PHASE_A_CLOSURE_MANIFEST_SHA256,
+        )
+        self.assertEqual(fixture["phaseAClosureSix"]["verifiedFileCount"], 6)
+        self.assertEqual(
+            fixture["integratedSeven"]["manifestSha256"],
+            INTEGRATED_AUTHORITY_MANIFEST_SHA256,
+        )
+        self.assertEqual(fixture["integratedSeven"]["verifiedFileCount"], 7)
+        self.assertEqual(
+            fixture["integratedSeven"]["addedPath"],
+            "data/2317_cash_flow_authority.csv",
+        )
+        self.assertNotEqual(
+            PHASE_A_CLOSURE_MANIFEST_SHA256,
+            INTEGRATED_AUTHORITY_MANIFEST_SHA256,
         )
 
 

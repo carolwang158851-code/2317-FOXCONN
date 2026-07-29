@@ -1,0 +1,242 @@
+{
+  "receipt_id": "P1008-MACRO-STAGE2B-ROW-IDENTITY-20260729",
+  "scope": "STAGE2B_MACRO_ROW_IDENTITY_REVIEW_ONLY",
+  "generated_at_utc": "2026-07-29T08:11:30+00:00",
+  "branch": "p1008-phasea-authority-data-closure",
+  "head": "76a62bbeccc3c89aea3605d6239910afe82aba5b",
+  "input": {
+    "source": "CANONICAL_GIT_BLOB_ONLY",
+    "git_command": [
+      "git",
+      "cat-file",
+      "blob",
+      "HEAD:data/macro_snapshot.csv"
+    ],
+    "spec": "HEAD:data/macro_snapshot.csv",
+    "sha256": "353025C29D678488F7022939C86C36CB15D3B348DC5876909D6779E56CFE213B"
+  },
+  "canonical_statistics": {
+    "physical_total_lines": 62,
+    "line_terminator_count": 62,
+    "ends_with_newline": true,
+    "blank_line_numbers": [
+      53
+    ],
+    "blank_line_count": 1,
+    "metadata_line_count": 21,
+    "header_line_count": 1,
+    "header_physical_line": 22,
+    "data_record_count": 39,
+    "earliest_date": "2021-03-31",
+    "latest_date": "2026-07-10",
+    "duplicate_date_count": 0,
+    "after_cutoff_count": 0,
+    "after_cutoff_dates": [],
+    "quoted_multiline_record_count": 0
+  },
+  "hon_hai_rev_yoy_non_numeric_count": 5,
+  "row_identities": [
+    {
+      "canonical_data_record_ordinal": 1,
+      "physical_file_line_number": 23,
+      "physical_file_end_line_number": 23,
+      "date": "2021-03-31",
+      "hon_hai_rev_yoy_before": "None",
+      "hon_hai_rev_yoy_after": "",
+      "canonical_raw_full_row_sha256": "660D8031E394EA8FD6EE46D99562CFEAD3C8DB7453244868D232580831A4185F",
+      "blank_physical_lines_before_record": 0,
+      "exists_in_canonical_git_blob": true,
+      "from_rejected_extra_seven_rows": false,
+      "exists_in_formal_worktree": true
+    },
+    {
+      "canonical_data_record_ordinal": 26,
+      "physical_file_line_number": 48,
+      "physical_file_end_line_number": 48,
+      "date": "2026-06-03",
+      "hon_hai_rev_yoy_before": "強勁成長",
+      "hon_hai_rev_yoy_after": "",
+      "canonical_raw_full_row_sha256": "DAD731C66A5BF6DB7BB3A886095BB1679F0932AD25F1D054C2E1589129E0E0F2",
+      "blank_physical_lines_before_record": 0,
+      "exists_in_canonical_git_blob": true,
+      "from_rejected_extra_seven_rows": false,
+      "exists_in_formal_worktree": true
+    },
+    {
+      "canonical_data_record_ordinal": 27,
+      "physical_file_line_number": 49,
+      "physical_file_end_line_number": 49,
+      "date": "2026-06-04",
+      "hon_hai_rev_yoy_before": "強勁成長",
+      "hon_hai_rev_yoy_after": "",
+      "canonical_raw_full_row_sha256": "E0D404163E91ACEB5713AA487476538920125132B5E02D52F640DFC099925833",
+      "blank_physical_lines_before_record": 0,
+      "exists_in_canonical_git_blob": true,
+      "from_rejected_extra_seven_rows": false,
+      "exists_in_formal_worktree": true
+    },
+    {
+      "canonical_data_record_ordinal": 28,
+      "physical_file_line_number": 50,
+      "physical_file_end_line_number": 50,
+      "date": "2026-06-05",
+      "hon_hai_rev_yoy_before": "強勁成長",
+      "hon_hai_rev_yoy_after": "",
+      "canonical_raw_full_row_sha256": "57ECDEFDB7DEF7E91919E2F5B2C6D24CFBF0171C7CFA949388C324766C94255B",
+      "blank_physical_lines_before_record": 0,
+      "exists_in_canonical_git_blob": true,
+      "from_rejected_extra_seven_rows": false,
+      "exists_in_formal_worktree": true
+    },
+    {
+      "canonical_data_record_ordinal": 29,
+      "physical_file_line_number": 51,
+      "physical_file_end_line_number": 51,
+      "date": "2026-06-12",
+      "hon_hai_rev_yoy_before": "鴻海6月營收強勁",
+      "hon_hai_rev_yoy_after": "",
+      "canonical_raw_full_row_sha256": "4B8D0A0D13F88237DB2173767B726C4697AB0F469E4F33FE02BC7B0ABAEDB08C",
+      "blank_physical_lines_before_record": 0,
+      "exists_in_canonical_git_blob": true,
+      "from_rejected_extra_seven_rows": false,
+      "exists_in_formal_worktree": true
+    }
+  ],
+  "candidate": {
+    "path": "C:\\Users\\a2231\\OneDrive\\foxconn_dashboard\\foxconn-system\\CODEX_P1008_PHASE_A\\runtime\\phase_a_stage2b_review\\P1008-PHASE-A-STAGE2B-ROW-IDENTITY-20260729\\macro_snapshot_hon_hai_rev_yoy.stage2b.canonical.candidate.csv",
+    "sha256": "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F",
+    "rows": 39,
+    "cutoff": "2026-07-10",
+    "changed_cell_count": 5,
+    "diffs": [
+      {
+        "ordinal": 1,
+        "date": "2021-03-31",
+        "column": "Hon_Hai_Rev_YoY",
+        "before": "None",
+        "after": ""
+      },
+      {
+        "ordinal": 26,
+        "date": "2026-06-03",
+        "column": "Hon_Hai_Rev_YoY",
+        "before": "強勁成長",
+        "after": ""
+      },
+      {
+        "ordinal": 27,
+        "date": "2026-06-04",
+        "column": "Hon_Hai_Rev_YoY",
+        "before": "強勁成長",
+        "after": ""
+      },
+      {
+        "ordinal": 28,
+        "date": "2026-06-05",
+        "column": "Hon_Hai_Rev_YoY",
+        "before": "強勁成長",
+        "after": ""
+      },
+      {
+        "ordinal": 29,
+        "date": "2026-06-12",
+        "column": "Hon_Hai_Rev_YoY",
+        "before": "鴻海6月營收強勁",
+        "after": ""
+      }
+    ],
+    "previous_candidate_sha256": "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F",
+    "byte_identical_to_previous_candidate": true,
+    "expected_after_formal_sha256": "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F",
+    "promotion_eligible": false,
+    "actionable": false
+  },
+  "expected_after_manifest": {
+    "sha256": "966352C4DD34938240901095DE5937C69C9BE8638413C2F900977C5EDBAA9C67",
+    "bytes": 20291,
+    "rule": "Review-only projection updates only macro sha256 and fileSizeBytes; rows/cutoff and all other fields remain unchanged."
+  },
+  "row_number_explanation": {
+    "metadata_lines_before_header": 21,
+    "header_physical_line": 22,
+    "formula": "physical_file_line_number = metadata lines (21) + header line (1) + canonical_data_record_ordinal + blank physical lines before the record",
+    "blank_line_numbers": [
+      53
+    ],
+    "affected_records_blank_line_offset": 0,
+    "quoted_multiline_offset": 0,
+    "wrong_source_detected": false
+  },
+  "formal_publish_executed": false,
+  "owner_approval_phrase_used": false,
+  "network_calls": 0,
+  "openai_calls": 0,
+  "web_search_calls": 0,
+  "canva_calls": 0,
+  "protected_state_before": {
+    "daily_price": {
+      "path": "C:\\Users\\a2231\\OneDrive\\foxconn_dashboard\\foxconn-system\\CODEX_P1008_PHASE_A\\data\\2317_daily_price.csv",
+      "exists": true,
+      "sha256": "2581AF868AA0D8C4BFCEA913B156DBB515AF3929FAAE7D0FDC947EA4A8256304"
+    },
+    "market_activity": {
+      "path": "C:\\Users\\a2231\\OneDrive\\foxconn_dashboard\\foxconn-system\\CODEX_P1008_PHASE_A\\data\\2317_daily_market_activity.csv",
+      "exists": true,
+      "sha256": "FE7B33B649012E7D8143838793FE5ED6244BB2183B966C0DAD2C9775FB0E4807"
+    },
+    "authority_manifest": {
+      "path": "C:\\Users\\a2231\\OneDrive\\foxconn_dashboard\\foxconn-system\\CODEX_P1008_PHASE_A\\data\\CSV_AUTHORITY_MANIFEST.json",
+      "exists": true,
+      "sha256": "7E191C8204436CAE914F7F4E930D04A542798A16F97950C03DF32C93ABAFA8B9"
+    },
+    "macro_worktree": {
+      "path": "C:\\Users\\a2231\\OneDrive\\foxconn_dashboard\\foxconn-system\\CODEX_P1008_PHASE_A\\data\\macro_snapshot.csv",
+      "exists": true,
+      "sha256": "5F81C052FD1DD16923FAEB11DC9069B26408CCCA967DA34B0F796091A2F8F6C7"
+    },
+    "rule_status_manifest": {
+      "path": "C:\\Users\\a2231\\OneDrive\\foxconn_dashboard\\foxconn-system\\CODEX_P1008_PHASE_A\\rules\\RULE_STATUS_MANIFEST.json",
+      "exists": true,
+      "sha256": "054DA1FDAF0C75BB27B56DF45B96F1CC1720558D44C700F1AB70AB0280A2FE5C"
+    },
+    "runtime_sqlite": {
+      "path": "C:\\Users\\a2231\\AppData\\Local\\P1008\\data\\warroom.sqlite3",
+      "exists": true,
+      "sha256": "B365CB5540BDEDD2E0E0EF924DC9DFA2B4FD6F7954904BCBA5194DA0966BB832"
+    }
+  },
+  "protected_state_after": {
+    "daily_price": {
+      "path": "C:\\Users\\a2231\\OneDrive\\foxconn_dashboard\\foxconn-system\\CODEX_P1008_PHASE_A\\data\\2317_daily_price.csv",
+      "exists": true,
+      "sha256": "2581AF868AA0D8C4BFCEA913B156DBB515AF3929FAAE7D0FDC947EA4A8256304"
+    },
+    "market_activity": {
+      "path": "C:\\Users\\a2231\\OneDrive\\foxconn_dashboard\\foxconn-system\\CODEX_P1008_PHASE_A\\data\\2317_daily_market_activity.csv",
+      "exists": true,
+      "sha256": "FE7B33B649012E7D8143838793FE5ED6244BB2183B966C0DAD2C9775FB0E4807"
+    },
+    "authority_manifest": {
+      "path": "C:\\Users\\a2231\\OneDrive\\foxconn_dashboard\\foxconn-system\\CODEX_P1008_PHASE_A\\data\\CSV_AUTHORITY_MANIFEST.json",
+      "exists": true,
+      "sha256": "7E191C8204436CAE914F7F4E930D04A542798A16F97950C03DF32C93ABAFA8B9"
+    },
+    "macro_worktree": {
+      "path": "C:\\Users\\a2231\\OneDrive\\foxconn_dashboard\\foxconn-system\\CODEX_P1008_PHASE_A\\data\\macro_snapshot.csv",
+      "exists": true,
+      "sha256": "5F81C052FD1DD16923FAEB11DC9069B26408CCCA967DA34B0F796091A2F8F6C7"
+    },
+    "rule_status_manifest": {
+      "path": "C:\\Users\\a2231\\OneDrive\\foxconn_dashboard\\foxconn-system\\CODEX_P1008_PHASE_A\\rules\\RULE_STATUS_MANIFEST.json",
+      "exists": true,
+      "sha256": "054DA1FDAF0C75BB27B56DF45B96F1CC1720558D44C700F1AB70AB0280A2FE5C"
+    },
+    "runtime_sqlite": {
+      "path": "C:\\Users\\a2231\\AppData\\Local\\P1008\\data\\warroom.sqlite3",
+      "exists": true,
+      "sha256": "B365CB5540BDEDD2E0E0EF924DC9DFA2B4FD6F7954904BCBA5194DA0966BB832"
+    }
+  },
+  "protected_state_unchanged": true,
+  "review_path": "C:\\Users\\a2231\\OneDrive\\foxconn_dashboard\\foxconn-system\\CODEX_P1008_PHASE_A\\runtime\\phase_a_stage2b_review\\P1008-PHASE-A-STAGE2B-ROW-IDENTITY-20260729\\MACRO_STAGE2B_ROW_IDENTITY_REVIEW.md"
+}

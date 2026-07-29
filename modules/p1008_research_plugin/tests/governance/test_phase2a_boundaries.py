@@ -4,6 +4,7 @@ import copy
 import hashlib
 import json
 import re
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -43,10 +44,14 @@ MANIFEST_CRLF_SHA256 = (
 MANIFEST_MIXED_SHA256 = (
     "2686D044714E435CB4C1E63CB26B3BB555190F9A5BD21FE2C9439473DA998BE6"
 )
-MACRO_SHA256 = (
+FROZEN_MACRO_SHA256 = (
     "353025C29D678488F7022939C86C36CB15D3B348DC5876909D6779E56CFE213B"
 )
-MACRO_SIZE = 9075
+FROZEN_MACRO_SIZE = 9075
+CURRENT_MACRO_SHA256 = (
+    "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F"
+)
+CURRENT_MACRO_SIZE = 9012
 ERRATA_RELATIVE = (
     "contracts/p1008_research_plugin/acceptance/errata/v2.0/"
     "OWNER_ACCEPTANCE_HASH_ERRATA.json"
@@ -71,7 +76,7 @@ PHASE3A_RAW_HASHES = {
     "contracts/p1008_research_plugin/v2.0/validation/CONFORMANCE_EVIDENCE.json": (
         "13E514244F93BD02E523C1C3A14412056898A89654613DA5E5172339AA472A97"
     ),
-    "data/macro_snapshot.csv": MACRO_SHA256,
+    "data/macro_snapshot.csv": FROZEN_MACRO_SHA256,
 }
 PHASE3A_R_TARGETFILES = {
     ".gitattributes",
@@ -104,11 +109,30 @@ TEST_CONSTANT_PATHS = {
         "runtime/capability_registry.py"
     ),
     "modules/p1008_research_plugin/docs/phase2a/Phase2A_Closure_Report.md",
+    "modules/p1008_research_plugin/tests/fixtures/authority_baselines.json",
+    (
+        "contracts/p1008_research_plugin/acceptance/v1.1/"
+        "PHASE_A_FINAL_INTEGRATION_AMENDMENT_RECEIPT.json"
+    ),
+    (
+        "contracts/p1008_research_plugin/acceptance/v1.1/evidence/"
+        "PHASE_A_MACRO_ROW_IDENTITY_RECEIPT.json"
+    ),
 }
 
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
+
+
+def git_blob_sha256(revision: str, relative: str) -> str:
+    blob = subprocess.run(
+        ["git", "cat-file", "blob", f"{revision}:{relative}"],
+        cwd=PACKAGE_ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+    ).stdout
+    return hashlib.sha256(blob).hexdigest().upper()
 
 
 def load_json(path: Path) -> dict[str, object]:
@@ -189,7 +213,7 @@ class Phase2ABoundaryTests(unittest.TestCase):
             entries.append(path)
         self.assertEqual(len(entries), len(set(entries)))
         self.assertEqual(set(entries), expected_hash_governed_paths())
-        self.assertEqual(len(entries), 82)
+        self.assertEqual(len(entries), 87)
 
     def test_crlf_and_mixed_manifest_bytes_are_rejected(self) -> None:
         for rejected in (MANIFEST_CRLF_SHA256, MANIFEST_MIXED_SHA256):
@@ -204,14 +228,29 @@ class Phase2ABoundaryTests(unittest.TestCase):
             item for item in entries if item["path"] == "data/macro_snapshot.csv"
         )
         macro = PACKAGE_ROOT / "data/macro_snapshot.csv"
-        self.assertEqual(entry["sha256"], MACRO_SHA256)
-        self.assertEqual(entry["fileSizeBytes"], MACRO_SIZE)
-        self.assertEqual(sha256(macro), MACRO_SHA256)
-        self.assertEqual(macro.stat().st_size, MACRO_SIZE)
+        self.assertEqual(entry["sha256"], CURRENT_MACRO_SHA256)
+        self.assertEqual(entry["fileSizeBytes"], CURRENT_MACRO_SIZE)
+        self.assertEqual(sha256(macro), CURRENT_MACRO_SHA256)
+        self.assertEqual(macro.stat().st_size, CURRENT_MACRO_SIZE)
 
     def test_phase3a_frozen_bytes_are_unchanged(self) -> None:
         for relative, expected in PHASE3A_RAW_HASHES.items():
-            self.assertEqual(sha256(PACKAGE_ROOT / relative), expected)
+            self.assertEqual(git_blob_sha256(PHASE3A_PARENT_SHA, relative), expected)
+        self.assertEqual(
+            subprocess.run(
+                [
+                    "git",
+                    "cat-file",
+                    "-s",
+                    f"{PHASE3A_PARENT_SHA}:data/macro_snapshot.csv",
+                ],
+                cwd=PACKAGE_ROOT,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip(),
+            str(FROZEN_MACRO_SIZE),
+        )
 
     def test_errata_is_bound_to_phase3a_parent(self) -> None:
         self.assertEqual(load_errata()["phase3aParentSha"], PHASE3A_PARENT_SHA)

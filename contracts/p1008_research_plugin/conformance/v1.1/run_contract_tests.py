@@ -209,13 +209,16 @@ def classify_authority_paths(paths: Iterable[str], record: dict[str, Any]) -> st
     legacy = set(baselines.get("legacyFive", []))
     current = set(baselines.get("currentSix", []))
     phase_a_closure = set(baselines.get("phaseAClosureSix", []))
+    integrated = set(baselines.get("integratedSeven", []))
     if actual == legacy:
         return "LEGACY_FIVE"
     if actual == current:
         return "CURRENT_SIX"
     if actual == phase_a_closure:
         return "PHASE_A_CLOSURE_SIX"
-    allowed = legacy | current | phase_a_closure
+    if actual == integrated:
+        return "INTEGRATED_SEVEN"
+    allowed = legacy | current | phase_a_closure | integrated
     extras = sorted(actual - allowed)
     missing = sorted(legacy - actual)
     raise AssertionError(f"Unknown authority baseline; extras={extras}; missing={missing}")
@@ -246,7 +249,7 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
         actual_hashes[entry["path"]] = committed_hash
 
     receipt_verified = False
-    if classification == "PHASE_A_CLOSURE_SIX":
+    if classification in {"PHASE_A_CLOSURE_SIX", "INTEGRATED_SEVEN"}:
         receipt_ref = record.get("authorityBaselineReceipts", {}).get(classification, {})
         receipt_path = receipt_ref.get("path", "")
         receipt_hash = receipt_ref.get("sha256", "")
@@ -272,6 +275,7 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                 "OWNER_APPROVED_FORMAL_AUTHORITY_PUBLISH",
                 "OWNER_APPROVED_MARKET_ACTIVITY_STAGE2A_PUBLISH",
                 "PHASE_A_AUTHORITY_DATA_CLOSURE_COMPLETE",
+                "PHASE_A_FINAL_INTEGRATION_RECONCILED",
             },
             "Phase A authority receipt is not accepted",
         )
@@ -423,7 +427,7 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                 ),
                 "Stage 2A authority manifest receipt mismatch",
             )
-        else:
+        elif acceptance_status == "PHASE_A_AUTHORITY_DATA_CLOSURE_COMPLETE":
             require(
                 receipt.get("formalPublishExecutedByThisReceipt") is False,
                 "Final closure receipt must not claim a separate formal publish",
@@ -550,6 +554,119 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                 and stage2b.get("canvaCalls") == 0
                 and stage2b.get("actionable") is False,
                 "Stage 2B Macro transaction evidence is invalid",
+            )
+        else:
+            require(
+                classification == "INTEGRATED_SEVEN"
+                and receipt.get("baselineId") == "INTEGRATED_SEVEN",
+                "Final integration receipt is bound to the wrong baseline",
+            )
+            require(
+                receipt.get("formalPublishExecutedByThisReceipt") is False
+                and receipt.get("candidateFirstLauncher") is True
+                and receipt.get("automaticFormalCsvPublish") is False
+                and receipt.get("automaticReportGeneration") is False
+                and receipt.get("ownerGateRequired") is True
+                and receipt.get("phaseBStarted") is False,
+                "Final integration boundary drifted",
+            )
+            prior = receipt.get("priorFinalClosureReceipt", {})
+            require(
+                prior.get("path")
+                == "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_AUTHORITY_DATA_CLOSURE_RECEIPT.json"
+                and prior.get("sha256")
+                == sha256_bytes(git_blob_bytes(root, prior.get("path", ""))),
+                "Final integration prior closure receipt mismatch",
+            )
+            evidence = receipt.get("committedRowIdentityEvidence", {})
+            evidence_path = evidence.get("path", "")
+            require(
+                evidence_path
+                == "contracts/p1008_research_plugin/acceptance/v1.1/evidence/PHASE_A_MACRO_ROW_IDENTITY_RECEIPT.json"
+                and evidence.get("sha256")
+                == "E72989762053D20665DD87DA263F8B4DB1E77D277A6A27FD6C8AABBFE4921B9D"
+                and evidence.get("byteIdenticalToApprovedRuntimeEvidence") is True,
+                "Committed Macro row identity evidence metadata mismatch",
+            )
+            evidence_committed = git_blob_bytes(root, evidence_path)
+            require(
+                sha256_bytes(evidence_committed) == evidence.get("sha256"),
+                "Committed Macro row identity evidence hash mismatch",
+            )
+            require(
+                normalize_checkout_eol((root / evidence_path).read_bytes())
+                == normalize_checkout_eol(evidence_committed),
+                "Committed Macro row identity worktree evidence drifted",
+            )
+            evidence_document = json.loads(evidence_committed.decode("utf-8-sig"))
+            require(
+                evidence_document.get("input", {}).get("source")
+                == "CANONICAL_GIT_BLOB_ONLY"
+                and evidence_document.get("canonical_statistics", {}).get(
+                    "data_record_count"
+                )
+                == 39
+                and evidence_document.get("hon_hai_rev_yoy_non_numeric_count") == 5
+                and [
+                    item.get("canonical_data_record_ordinal")
+                    for item in evidence_document.get("row_identities", [])
+                ]
+                == [1, 26, 27, 28, 29],
+                "Committed Macro row identity evidence content mismatch",
+            )
+            manifest_reference = receipt.get("authorityManifest", {})
+            require(
+                manifest_reference.get("path") == "data/CSV_AUTHORITY_MANIFEST.json"
+                and manifest_reference.get("sha256")
+                == sha256_bytes(
+                    git_blob_bytes(root, "data/CSV_AUTHORITY_MANIFEST.json")
+                ),
+                "Final integration authority manifest mismatch",
+            )
+            summary = receipt.get("authoritySummary", {})
+            require(
+                summary
+                == {
+                    "verifiedFileCount": 7,
+                    "dailyPriceRows": 116,
+                    "dailyPriceCutoff": "2026-07-27",
+                    "marketActivityRows": 66,
+                    "marketActivityCutoff": "2026-07-27",
+                    "cashFlowRows": 2,
+                    "cashFlowCutoff": "2026Q1",
+                    "macroRows": 39,
+                    "macroCutoff": "2026-07-10",
+                },
+                "Final integration authority summary drifted",
+            )
+            cash_flow = receipt.get("cashFlowGovernance", {})
+            require(
+                cash_flow.get("sourcePr") == 4
+                and cash_flow.get("sourceHead")
+                == "41e2fae01fdaecdcdce2d3002f290941ca9dc332"
+                and cash_flow.get("selectivePortOnly") is True
+                and cash_flow.get("oldDailyPriceImported") is False
+                and cash_flow.get("oldManifestImported") is False
+                and cash_flow.get("formulaChecksRequired") is True
+                and cash_flow.get("officialSourceRequired") is True
+                and cash_flow.get("actionable") is False,
+                "Cash Flow selective integration boundary drifted",
+            )
+            pr5 = receipt.get("pr5Reconciliation", {})
+            require(
+                pr5.get("sourcePr") == 5
+                and pr5.get("comparedFileCount") == 6
+                and pr5.get("uniqueGovernanceDifferenceCount") == 0
+                and pr5.get("cherryPickOrMergePerformed") is False,
+                "PR #5 reconciliation evidence drifted",
+            )
+            require(
+                receipt.get("ruleHoldMidrModified") is False
+                and receipt.get("runtimeSqliteModified") is False
+                and receipt.get("openAiCalls") == 0
+                and receipt.get("webSearchCalls") == 0
+                and receipt.get("canvaCalls") == 0,
+                "Final integration recorded an unauthorized state change or call",
             )
         macro_decision = receipt.get("macroAuthorityDecision", {})
         require(
