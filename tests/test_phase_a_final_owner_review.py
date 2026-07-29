@@ -67,9 +67,18 @@ class PhaseAFinalOwnerReviewTests(unittest.TestCase):
         expected_price = {"price_by_date": price_by_date}
         writes: dict[str, bytes] = {}
         original_atomic_write = self.module.atomic_write
+        original_read_formal_activity = self.module.read_formal_activity
+        stage1_rows = [
+            row
+            for row in original_read_formal_activity(
+                ROOT / "data/2317_daily_market_activity.csv"
+            )
+            if row["date"] not in self.module.FULL_MARKET_DATES
+        ]
         self.module.atomic_write = (
             lambda path, value: writes.__setitem__(Path(path).name, value)
         )
+        self.module.read_formal_activity = lambda _path: stage1_rows
         try:
             result = self.module.build_market_candidate(
                 ROOT,
@@ -79,6 +88,7 @@ class PhaseAFinalOwnerReviewTests(unittest.TestCase):
             )
         finally:
             self.module.atomic_write = original_atomic_write
+            self.module.read_formal_activity = original_read_formal_activity
         self.assertEqual(len(result["candidate_rows"]), 6)
         self.assertEqual(result["expected_manifest_entry"]["rowCount"], 66)
         self.assertEqual(
@@ -114,6 +124,15 @@ class PhaseAFinalOwnerReviewTests(unittest.TestCase):
             ROOT / self.module.MANIFEST,
         ]
         before = {path: self.module.sha256_file(path) for path in formal_paths}
+        original_read_formal_activity = self.module.read_formal_activity
+        stage1_rows = [
+            row
+            for row in original_read_formal_activity(
+                ROOT / "data/2317_daily_market_activity.csv"
+            )
+            if row["date"] not in self.module.FULL_MARKET_DATES
+        ]
+        self.module.read_formal_activity = lambda _path: stage1_rows
         try:
             result = self.module.build_stage1_market_activity_candidate(
                 ROOT, receipt_dir, output_dir
@@ -140,6 +159,7 @@ class PhaseAFinalOwnerReviewTests(unittest.TestCase):
                 {path: self.module.sha256_file(path) for path in formal_paths},
             )
         finally:
+            self.module.read_formal_activity = original_read_formal_activity
             if output_dir.exists():
                 shutil.rmtree(output_dir)
 

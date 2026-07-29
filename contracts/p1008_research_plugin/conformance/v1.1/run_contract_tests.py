@@ -270,6 +270,7 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
             in {
                 "EXISTING_OWNER_PUBLISHED_AUTHORITIES_PINNED_FOR_CI",
                 "OWNER_APPROVED_FORMAL_AUTHORITY_PUBLISH",
+                "OWNER_APPROVED_MARKET_ACTIVITY_STAGE2A_PUBLISH",
             },
             "Phase A authority receipt is not accepted",
         )
@@ -282,7 +283,7 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                 receipt.get("formalPublishExecutedByThisReceipt") is False,
                 "Baseline CI receipt must not claim a formal publish",
             )
-        else:
+        elif acceptance_status == "OWNER_APPROVED_FORMAL_AUTHORITY_PUBLISH":
             require(
                 receipt.get("formalPublishExecutedByThisReceipt") is True,
                 "Formal authority publish receipt must record the publish",
@@ -346,6 +347,80 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                 and market_decision.get("formalSha256")
                 == actual_hashes.get("data/2317_daily_market_activity.csv"),
                 "Stage 1 improperly accepted Market Activity",
+            )
+        else:
+            require(
+                receipt.get("formalPublishExecutedByThisReceipt") is True,
+                "Stage 2A receipt must record the formal publish",
+            )
+            require(
+                receipt.get("ownerApprovalPhrase")
+                == "OWNER_APPROVE_MARKET_ACTIVITY_20260720_20260727",
+                "Stage 2A Market Activity Owner approval phrase does not match",
+            )
+            prior = receipt.get("priorStage1Receipt", {})
+            require(
+                prior.get("path")
+                == "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_DAILY_PRICE_STAGE1_PUBLISH_RECEIPT.json"
+                and prior.get("sha256")
+                == sha256_bytes(git_blob_bytes(root, prior.get("path", ""))),
+                "Stage 2A prior Stage 1 receipt is not preserved",
+            )
+            market_publish = receipt.get("marketActivityPublish", {})
+            require(
+                market_publish.get("transactionStatus") == "PUBLISHED"
+                and market_publish.get("candidateSha256")
+                == "D48730840F5449BE8DF815F58D262173FACF4884593DE11D0B9AF89392792941"
+                and market_publish.get("candidateReceiptSha256")
+                == "DA3F4852BDF9652ADA3403ADC6E5D720E6F154E748C44077403A219D485BD606",
+                "Stage 2A Market Activity candidate evidence is invalid",
+            )
+            require(
+                market_publish.get("beforeFormalSha256")
+                == "83AB695E478517DC11004D17CC1EAE98F6B320BE266A586E29DAD0FF28D663BD"
+                and market_publish.get("afterFormalSha256")
+                == actual_hashes.get("data/2317_daily_market_activity.csv"),
+                "Stage 2A Market Activity authority hash mismatch",
+            )
+            require(
+                market_publish.get("beforeRows") == 60
+                and market_publish.get("afterRows") == 66
+                and market_publish.get("cutoff") == "2026-07-27"
+                and market_publish.get("publishedDates")
+                == [
+                    "2026-07-20",
+                    "2026-07-21",
+                    "2026-07-22",
+                    "2026-07-23",
+                    "2026-07-24",
+                    "2026-07-27",
+                ],
+                "Stage 2A Market Activity publish scope drifted",
+            )
+            journal = market_publish.get("journal", {})
+            require(
+                journal.get("status") == "PUBLISHED"
+                and journal.get("rollbackPerformed") is False
+                and re.fullmatch(r"[0-9A-F]{64}", journal.get("sha256", ""))
+                and market_publish.get("rollbackStatus") == "NOT_REQUIRED",
+                "Stage 2A Market Activity journal evidence is invalid",
+            )
+            price_dependency = receipt.get("dailyPriceDependency", {})
+            require(
+                price_dependency.get("path") == "data/2317_daily_price.csv"
+                and price_dependency.get("sha256")
+                == actual_hashes.get("data/2317_daily_price.csv")
+                and price_dependency.get("modifiedInStage2A") is False,
+                "Stage 2A Daily Price dependency changed",
+            )
+            manifest_ref = receipt.get("authorityManifest", {})
+            require(
+                manifest_ref.get("path") == "data/CSV_AUTHORITY_MANIFEST.json"
+                and manifest_ref.get("sha256")
+                == sha256_bytes(
+                    git_blob_bytes(root, "data/CSV_AUTHORITY_MANIFEST.json")
+                ),
+                "Stage 2A authority manifest receipt mismatch",
             )
         macro_decision = receipt.get("macroAuthorityDecision", {})
         require(

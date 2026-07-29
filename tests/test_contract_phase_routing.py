@@ -212,7 +212,9 @@ class PhaseRoutingConformanceTests(unittest.TestCase):
         )
 
     def test_phase_a_stage1_receipt_accepts_only_owner_approved_daily_price(self) -> None:
-        receipt_ref = self.record["authorityBaselineReceipts"]["PHASE_A_CLOSURE_SIX"]
+        receipt_ref = {
+            "path": "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_DAILY_PRICE_STAGE1_PUBLISH_RECEIPT.json"
+        }
         receipt = json.loads(
             (ROOT / receipt_ref["path"]).read_text(encoding="utf-8")
         )
@@ -235,6 +237,52 @@ class PhaseRoutingConformanceTests(unittest.TestCase):
         self.assertFalse(receipt["marketActivityDecision"]["publishedInStage1"])
         self.assertFalse(receipt["marketActivityDecision"]["promotionEligible"])
         self.assertFalse(receipt["macroAuthorityDecision"]["publishedInStage1"])
+
+    def test_phase_a_stage2a_receipt_accepts_only_owner_approved_market_activity(self) -> None:
+        receipt_ref = self.record["authorityBaselineReceipts"]["PHASE_A_CLOSURE_SIX"]
+        receipt = json.loads(
+            (ROOT / receipt_ref["path"]).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            receipt["acceptanceStatus"],
+            "OWNER_APPROVED_MARKET_ACTIVITY_STAGE2A_PUBLISH",
+        )
+        self.assertTrue(receipt["formalPublishExecutedByThisReceipt"])
+        self.assertEqual(
+            receipt["ownerApprovalPhrase"],
+            "OWNER_APPROVE_MARKET_ACTIVITY_20260720_20260727",
+        )
+        publish = receipt["marketActivityPublish"]
+        self.assertEqual(publish["transactionStatus"], "PUBLISHED")
+        self.assertEqual(publish["beforeRows"], 60)
+        self.assertEqual(publish["afterRows"], 66)
+        self.assertEqual(publish["cutoff"], "2026-07-27")
+        self.assertEqual(
+            publish["afterFormalSha256"],
+            "FE7B33B649012E7D8143838793FE5ED6244BB2183B966C0DAD2C9775FB0E4807",
+        )
+        self.assertFalse(publish["journal"]["rollbackPerformed"])
+        self.assertFalse(receipt["dailyPriceDependency"]["modifiedInStage2A"])
+        self.assertFalse(receipt["macroAuthorityDecision"]["publishedInStage2A"])
+        self.assertFalse(receipt["actionable"])
+
+    def test_prior_phase_a_stage1_receipt_remains_immutable(self) -> None:
+        receipt_path = (
+            ROOT
+            / "contracts"
+            / "p1008_research_plugin"
+            / "acceptance"
+            / "v1.1"
+            / "PHASE_A_DAILY_PRICE_STAGE1_PUBLISH_RECEIPT.json"
+        )
+        self.assertEqual(
+            hashlib.sha256(
+                self.runner.git_blob_bytes(
+                    ROOT, receipt_path.relative_to(ROOT).as_posix()
+                )
+            ).hexdigest().upper(),
+            "C9C73AAE1185F21E5194526D006A966169C81CCC1E924DBCE6625212CD242984",
+        )
 
     def test_prior_phase_a_baseline_receipt_remains_immutable(self) -> None:
         receipt_path = (

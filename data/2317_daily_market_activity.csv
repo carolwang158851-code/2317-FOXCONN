@@ -59,3 +59,9 @@ date,stock_id,trade_volume,trade_value,transaction_count,source_url,source_month
 2026-07-15,2317,36108846,8631497928,29220,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260701&stockNo=2317&response=csv,2026-07
 2026-07-16,2317,39074704,9439036151,30798,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260701&stockNo=2317&response=csv,2026-07
 2026-07-17,2317,69006897,16280738874,59544,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260701&stockNo=2317&response=csv,2026-07
+2026-07-20,2317,48579978,11422510146,37763,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260701&stockNo=2317&response=csv,2026-07
+2026-07-21,2317,51471036,12544250590,47986,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260701&stockNo=2317&response=csv,2026-07
+2026-07-22,2317,67787081,17204588878,57938,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260701&stockNo=2317&response=csv,2026-07
+2026-07-23,2317,63787974,16358184879,53611,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260701&stockNo=2317&response=csv,2026-07
+2026-07-24,2317,33694573,8518599943,32769,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260701&stockNo=2317&response=csv,2026-07
+2026-07-27,2317,35908207,8967672916,32663,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260701&stockNo=2317&response=csv,2026-07

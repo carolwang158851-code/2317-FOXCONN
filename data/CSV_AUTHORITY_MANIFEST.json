@@ -329,13 +329,13 @@
       "fileName": "2317_daily_market_activity.csv",
       "fileVersion": "market-activity-v1.0",
       "schemaVersion": "daily-market-activity-v1-7-columns",
-      "sha256": "83AB695E478517DC11004D17CC1EAE98F6B320BE266A586E29DAD0FF28D663BD",
-      "fileSizeBytes": 8807,
-      "rowCount": 60,
+      "sha256": "FE7B33B649012E7D8143838793FE5ED6244BB2183B966C0DAD2C9775FB0E4807",
+      "fileSizeBytes": 9675,
+      "rowCount": 66,
       "columnCount": 7,
       "dateRange": {
         "start": "2026-04-22",
-        "end": "2026-07-17"
+        "end": "2026-07-27"
       },
       "validationStatus": "PASS",
       "fileAuthority": "CSV_AUTHORITY",
@@ -364,10 +364,20 @@
         "stock_id"
       ],
       "analysisStatus": "MARKET_LIQUIDITY_ANALYSIS_READY",
-      "lastPublishedAt": "2026-07-18T12:39:41Z",
+      "lastPublishedAt": "2026-07-29T05:45:54Z",
       "publisher": "owner_publish_csv_v2.py",
       "publishMode": "MARKET_ACTIVITY_INITIAL_ATOMIC_PUBLISH",
-      "actionable": false
+      "actionable": false,
+      "lastAppend": {
+        "rowsAdded": 6,
+        "start": "2026-07-20",
+        "end": "2026-07-27",
+        "candidateSha256": "D48730840F5449BE8DF815F58D262173FACF4884593DE11D0B9AF89392792941",
+        "publishedAt": "2026-07-29T05:45:54Z",
+        "publisher": "owner_publish_csv_v2.py",
+        "mode": "MARKET_ACTIVITY_ATOMIC_APPEND",
+        "actionable": false
+      }
     }
   ],
   "nonAuthoritativeFiles": [
