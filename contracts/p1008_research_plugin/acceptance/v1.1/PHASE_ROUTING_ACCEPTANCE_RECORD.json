@@ -60,7 +60,21 @@
       "data/macro_snapshot.csv",
       "data/macro_event_observations.csv",
       "data/fx_trend_observations.csv"
+    ],
+    "phaseAClosureSix": [
+      "data/2317_master_v9.csv",
+      "data/2317_daily_price.csv",
+      "data/2317_daily_market_activity.csv",
+      "data/macro_snapshot.csv",
+      "data/macro_event_observations.csv",
+      "data/fx_trend_observations.csv"
     ]
+  },
+  "authorityBaselineReceipts": {
+    "PHASE_A_CLOSURE_SIX": {
+      "path": "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_AUTHORITY_BASELINE_RECEIPT.json",
+      "sha256": "550CD7C0EA961E4643F708AE066740AEC4F69B662E9A45A79C3248814737478B"
+    }
   },
   "protectedWriteRoots": [
     "data/",

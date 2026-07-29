@@ -208,11 +208,14 @@ def classify_authority_paths(paths: Iterable[str], record: dict[str, Any]) -> st
     baselines = record.get("authorityBaselines", {})
     legacy = set(baselines.get("legacyFive", []))
     current = set(baselines.get("currentSix", []))
+    phase_a_closure = set(baselines.get("phaseAClosureSix", []))
     if actual == legacy:
         return "LEGACY_FIVE"
     if actual == current:
         return "CURRENT_SIX"
-    allowed = legacy | current
+    if actual == phase_a_closure:
+        return "PHASE_A_CLOSURE_SIX"
+    allowed = legacy | current | phase_a_closure
     extras = sorted(actual - allowed)
     missing = sorted(legacy - actual)
     raise AssertionError(f"Unknown authority baseline; extras={extras}; missing={missing}")
@@ -226,11 +229,65 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
     manifest = read_json(root / "data" / "CSV_AUTHORITY_MANIFEST.json")
     entries = _manifest_entries(manifest)
     classification = classify_authority_paths((item["path"] for item in entries), record)
+    actual_hashes: dict[str, str] = {}
     for entry in entries:
         path = root / entry["path"]
         require(path.is_file(), f"Authority file is missing: {entry['path']}")
-        require(sha256_file(path) == entry["sha256"].upper(), f"Authority hash mismatch: {entry['path']}")
-    return {"baseline": classification, "filesVerified": len(entries)}
+        committed = git_blob_bytes(root, entry["path"])
+        committed_hash = sha256_bytes(committed)
+        require(
+            committed_hash == entry["sha256"].upper(),
+            f"Authority hash mismatch: {entry['path']}",
+        )
+        require(
+            normalize_checkout_eol(path.read_bytes()) == normalize_checkout_eol(committed),
+            f"Authority worktree content changed beyond checkout line endings: {entry['path']}",
+        )
+        actual_hashes[entry["path"]] = committed_hash
+
+    receipt_verified = False
+    if classification == "PHASE_A_CLOSURE_SIX":
+        receipt_ref = record.get("authorityBaselineReceipts", {}).get(classification, {})
+        receipt_path = receipt_ref.get("path", "")
+        receipt_hash = receipt_ref.get("sha256", "")
+        require(receipt_path and receipt_hash, "Phase A authority receipt metadata is missing")
+        receipt_file = root / receipt_path
+        require(receipt_file.is_file(), "Phase A authority receipt is missing")
+        require(
+            sha256_file(receipt_file) == receipt_hash,
+            "Phase A authority receipt hash mismatch",
+        )
+        receipt = read_json(receipt_file)
+        require(
+            receipt.get("acceptanceStatus")
+            == "EXISTING_OWNER_PUBLISHED_AUTHORITIES_PINNED_FOR_CI",
+            "Phase A authority receipt is not accepted",
+        )
+        require(
+            receipt.get("formalPublishExecutedByThisReceipt") is False,
+            "CI receipt must not claim a formal publish",
+        )
+        require(
+            receipt.get("authorityFiles") == actual_hashes,
+            "Phase A authority receipt does not match committed authority bytes",
+        )
+        macro_decision = receipt.get("macroAuthorityDecision", {})
+        require(
+            macro_decision.get("unapprovedRowsAccepted") is False,
+            "Unapproved macro authority rows were accepted",
+        )
+        require(
+            macro_decision.get("requiredSha256")
+            == actual_hashes.get("data/macro_snapshot.csv"),
+            "Macro authority receipt hash mismatch",
+        )
+        require(receipt.get("actionable") is False, "Authority receipt became actionable")
+        receipt_verified = True
+    return {
+        "baseline": classification,
+        "filesVerified": len(entries),
+        "authorityReceiptVerified": receipt_verified,
+    }
 
 
 def validate_immutable_v1(root: Path, record: dict[str, Any]) -> dict[str, Any]:

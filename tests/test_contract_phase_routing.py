@@ -159,6 +159,7 @@ class PhaseRoutingConformanceTests(unittest.TestCase):
         self.assertNotIn("conformance/v1.0/run_contract_tests.py", workflow)
         self.assertIn("fetch-depth: 0", workflow)
         self.assertEqual(workflow.count('"data/2317_cash_flow_authority.csv"'), 2)
+        self.assertEqual(workflow.count('"data/2317_daily_market_activity.csv"'), 2)
 
     def test_legacy_archive_is_independent_of_runner_line_endings(self) -> None:
         command = self.router.legacy_archive_command(Path("legacy.zip"), "legacy-commit")
@@ -185,8 +186,33 @@ class PhaseRoutingConformanceTests(unittest.TestCase):
         self.assertEqual(len(current), 6)
         self.assertEqual(self.runner.classify_authority_paths(current, self.record), "CURRENT_SIX")
 
+    def test_phase_a_closure_baseline_is_receipt_pinned(self) -> None:
+        current = self.record["authorityBaselines"]["phaseAClosureSix"]
+        self.assertEqual(len(current), 6)
+        self.assertEqual(
+            self.runner.classify_authority_paths(current, self.record),
+            "PHASE_A_CLOSURE_SIX",
+        )
+        result = self.runner.validate_authority_manifest(ROOT, self.record)
+        self.assertEqual(result["baseline"], "PHASE_A_CLOSURE_SIX")
+        self.assertTrue(result["authorityReceiptVerified"])
+
+    def test_phase_a_receipt_rejects_unapproved_macro_hash(self) -> None:
+        receipt_ref = self.record["authorityBaselineReceipts"]["PHASE_A_CLOSURE_SIX"]
+        receipt_path = ROOT / receipt_ref["path"]
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        self.assertFalse(receipt["macroAuthorityDecision"]["unapprovedRowsAccepted"])
+        self.assertEqual(
+            receipt["macroAuthorityDecision"]["requiredSha256"],
+            "353025C29D678488F7022939C86C36CB15D3B348DC5876909D6779E56CFE213B",
+        )
+        self.assertEqual(
+            receipt["authorityFiles"]["data/macro_snapshot.csv"],
+            receipt["macroAuthorityDecision"]["requiredSha256"],
+        )
+
     def test_unapproved_seventh_authority_file_fails_closed(self) -> None:
-        current = list(self.record["authorityBaselines"]["currentSix"])
+        current = list(self.record["authorityBaselines"]["phaseAClosureSix"])
         current.append("data/unapproved.csv")
         with self.assertRaisesRegex(AssertionError, "Unknown authority baseline"):
             self.runner.classify_authority_paths(current, self.record)
