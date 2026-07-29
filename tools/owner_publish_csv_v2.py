@@ -16,9 +16,15 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import importlib.util
+import io
 import json
+import os
 import shutil
-from datetime import datetime, timezone
+import sqlite3
+import sys
+from datetime import date, datetime, timezone
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +51,78 @@ ALLOWED_SOURCE_TIERS = {
     "UNVERIFIED",
     "CONNECTOR_PENDING",
     "CARRY_FORWARD",
+}
+
+REMEDIATION_CANDIDATE_SHA256 = (
+    "E81AE954B7C621616E844B0034F7259F91FE3F6FCCFF2A5FBC84714BCE174A16"
+)
+REMEDIATION_FORMAL_OLD_SHA256 = (
+    "CD0C42DB047CA80C25D6D8D6A652D4D258A05C9A3AE1FC1BAE96CBBCA3D12369"
+)
+REMEDIATION_CANDIDATE_NAME = "2317_daily_price_remediated_20260718.candidate.csv"
+REMEDIATION_EXPECTED_ROWS = 110
+REMEDIATION_EXPECTED_REPAIRS = {
+    "2026-06-22": Decimal("268.50"),
+    "2026-06-23": Decimal("259.50"),
+    "2026-06-24": Decimal("256.00"),
+    "2026-06-25": Decimal("257.50"),
+    "2026-06-26": Decimal("248.50"),
+    "2026-06-29": Decimal("246.50"),
+    "2026-07-01": Decimal("248.00"),
+    "2026-07-02": Decimal("239.00"),
+    "2026-07-03": Decimal("240.50"),
+    "2026-07-09": Decimal("237.50"),
+    "2026-07-13": Decimal("236.50"),
+    "2026-07-14": Decimal("235.50"),
+    "2026-07-15": Decimal("239.00"),
+}
+REMEDIATION_REMOVED_DATES = {
+    "2026-06-19",
+    "2026-06-20",
+    "2026-07-05",
+    "2026-07-10",
+}
+
+MARKET_ACTIVITY_TARGET = "data/2317_daily_market_activity.csv"
+MARKET_ACTIVITY_PRICE_SHA256 = REMEDIATION_CANDIDATE_SHA256
+MARKET_ACTIVITY_FIELDS = (
+    "date",
+    "stock_id",
+    "trade_volume",
+    "trade_value",
+    "transaction_count",
+    "source_url",
+    "source_month",
+)
+MARKET_ACTIVITY_EXPECTED_ROWS = 60
+MARKET_ACTIVITY_EXPECTED_START = "2026-04-22"
+MARKET_ACTIVITY_EXPECTED_END = "2026-07-17"
+INVALID_DAILY_PRICE_DATE = "2026-07-19"
+INVALID_DAILY_PRICE_APPROVAL_PHRASE = (
+    "OWNER_APPROVE_REMOVE_INVALID_DAILY_PRICE_2026-07-19"
+)
+APPROVED_DAILY_PRICE_SOURCE_LEVELS = {
+    "OFFICIAL_TWSE_A1",
+    "OFFICIAL_TWSE_STOCK_DAY",
+    "OWNER_APPROVED",
+}
+MARKET_ACTIVITY_RECEIPTS = {
+    "2026-04": {
+        "receipt_sha256": "2B2D456382DDE3BCC6E39EA91BDF3248C802A14BB7F5FE6B98718B90E0BCBB74",
+        "raw_sha256": "E883E7C4B76003D01BF2CDCC46A340981EC29661492D3C41E8582D01C0121507",
+    },
+    "2026-05": {
+        "receipt_sha256": "E89FED940579DCEBCA12539C9FB9CEA5C05A9217E3346C62620B2AA9BAF01B21",
+        "raw_sha256": "5134D4DE50D136AF5337D59D36A50D420336FFB0F08470DE04B61CF53CBFEC8A",
+    },
+    "2026-06": {
+        "receipt_sha256": "1661984B856C8B6167A2F4B9E69620089F0DDC472460C7CBDA92EE175B6ED462",
+        "raw_sha256": "A93C38DA69AA8AEF92602BF874A445D74CBB6D1EA358DE7C36178C19EFCD5D39",
+    },
+    "2026-07": {
+        "receipt_sha256": "25BABF6599E49629715755C0A2F05021B9C6D696453BFDFEDD087472AFE21027",
+        "raw_sha256": "907165CBFA6AA4E67701E95F1301A46252389789BBDFB6D67679813712E0CB28",
+    },
 }
 
 
@@ -110,6 +188,66 @@ def normalize_candidate_rows_for_publish(target_rel: str, header: list[str], row
     return normalized_rows
 
 
+def validate_daily_price_publish_rows(
+    header: list[str], rows: list[list[str]]
+) -> None:
+    required = {
+        "Date",
+        "Close",
+        "BVPS_ref",
+        "PB_daily",
+        "DataSupportLevel",
+        "Status",
+    }
+    missing = required - set(header)
+    if missing:
+        raise ValueError(
+            "Daily-price publish is missing required fields: "
+            + ", ".join(sorted(missing))
+        )
+    positions = {name: header.index(name) for name in required}
+    seen: set[str] = set()
+    for row_number, row in enumerate(rows, start=2):
+        row_date = row[positions["Date"]] if positions["Date"] < len(row) else ""
+        try:
+            parsed_date = date.fromisoformat(row_date)
+        except ValueError as exc:
+            raise ValueError(
+                f"Daily-price publish has invalid Date at row {row_number}: {row_date!r}"
+            ) from exc
+        if parsed_date.weekday() >= 5:
+            raise ValueError(
+                f"Daily-price publish refused: {row_date} is Saturday/Sunday"
+            )
+        if row_date in seen:
+            raise ValueError(f"Daily-price candidate repeats Date {row_date}")
+        seen.add(row_date)
+        close = _decimal(row[positions["Close"]], field="Close", row_date=row_date)
+        bvps = _decimal(row[positions["BVPS_ref"]], field="BVPS_ref", row_date=row_date)
+        pb = _decimal(row[positions["PB_daily"]], field="PB_daily", row_date=row_date)
+        if close <= 0 or bvps <= 0:
+            raise ValueError(
+                f"Daily-price publish refused: {row_date} has zero/negative price evidence"
+            )
+        expected_pb = Decimal(str(round(float(close) / float(bvps), 3)))
+        if pb != expected_pb:
+            raise ValueError(
+                f"Daily-price PB mismatch for {row_date}: {pb} != {expected_pb}"
+            )
+        source_level = row[positions["DataSupportLevel"]].strip().upper()
+        if source_level not in APPROVED_DAILY_PRICE_SOURCE_LEVELS:
+            raise ValueError(
+                "Daily-price publish refused: "
+                f"{row_date} lacks approved TWSE/Owner trading-day evidence "
+                f"({source_level or 'MISSING'})"
+            )
+        status = row[positions["Status"]].strip().upper()
+        if status != FORMAL_DAILY_STATUS:
+            raise ValueError(
+                f"Daily-price publish refused: {row_date} status is not {FORMAL_DAILY_STATUS}"
+            )
+
+
 def row_key(target_rel: str, header: list[str], row: list[str]) -> str:
     def cell(name: str, fallback_index: int = 0) -> str:
         if name in header:
@@ -158,6 +296,8 @@ def append_candidate(candidate: Path, target: Path, target_rel: str) -> int:
     if not candidate_rows:
         raise ValueError(f"{candidate} contains no candidate rows.")
     candidate_rows = normalize_candidate_rows_for_publish(target_rel, candidate_header, candidate_rows)
+    if target_rel == DAILY_TARGET:
+        validate_daily_price_publish_rows(candidate_header, candidate_rows)
     if target_rel in OBSERVATION_ONLY_TARGETS:
         actionable_errors = actionability_violations(candidate_header, candidate_rows)
         if actionable_errors:
@@ -166,18 +306,34 @@ def append_candidate(candidate: Path, target: Path, target_rel: str) -> int:
         if source_tier_errors:
             raise ValueError(f"Append refused: observation-only rows must have an approved SourceTier ({source_tier_errors}).")
 
-    existing_keys = {row_key(target_rel, target_header, row) for row in target_rows if row}
-    duplicate_keys = [row_key(target_rel, candidate_header, row) for row in candidate_rows if row and row_key(target_rel, candidate_header, row) in existing_keys]
-    if duplicate_keys:
-        raise ValueError(f"Append refused: target already contains Date/Key {duplicate_keys}.")
+    existing_by_key = {
+        row_key(target_rel, target_header, row): row for row in target_rows if row
+    }
+    rows_to_append: list[list[str]] = []
+    conflicting_keys: list[str] = []
+    for row in candidate_rows:
+        if not row:
+            continue
+        key = row_key(target_rel, candidate_header, row)
+        existing = existing_by_key.get(key)
+        if existing is None:
+            rows_to_append.append(row)
+        elif existing != row:
+            conflicting_keys.append(key)
+    if conflicting_keys:
+        raise ValueError(
+            f"Append refused: target already contains conflicting Date/Key {conflicting_keys}."
+        )
+    if not rows_to_append:
+        return 0
 
     needs_newline = target.stat().st_size > 0 and target.read_bytes()[-1:] not in {b"\n", b"\r"}
     with target.open("a", encoding="utf-8", newline="") as handle:
         if needs_newline:
             handle.write("\n")
         writer = csv.writer(handle, lineterminator="\n")
-        writer.writerows(candidate_rows)
-    return len(candidate_rows)
+        writer.writerows(rows_to_append)
+    return len(rows_to_append)
 
 
 def resolve_generated_file(package_root: Path, generated: str) -> tuple[Path, str, str]:
@@ -583,14 +739,1529 @@ def sync_dry_run_after_publish(dry_run_path: Path, touched_targets: list[str], p
     return True
 
 
+def _decimal(value: str, *, field: str, row_date: str) -> Decimal:
+    try:
+        parsed = Decimal(str(value).strip())
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError(f"Invalid {field} for {row_date}: {value!r}") from exc
+    if not parsed.is_finite():
+        raise ValueError(f"Non-finite {field} for {row_date}: {value!r}")
+    return parsed
+
+
+def _load_module(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load existing module: {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _read_twse_month_closes(raw_path: Path) -> dict[str, Decimal]:
+    rows = list(csv.reader(raw_path.read_text(encoding="cp950").splitlines()))
+    if not rows or "2317" not in "".join(rows[0]):
+        raise ValueError(f"TWSE receipt is not for ticker 2317: {raw_path}")
+    closes: dict[str, Decimal] = {}
+    for row in rows[2:]:
+        if not row or len(row) < 7 or len(row[0]) != 9 or row[0][3] != "/":
+            continue
+        try:
+            roc_year, month, day = (int(part) for part in row[0].split("/"))
+        except ValueError:
+            continue
+        iso_date = f"{roc_year + 1911:04d}-{month:02d}-{day:02d}"
+        if iso_date in closes:
+            raise ValueError(f"Duplicate TWSE date: {iso_date}")
+        closes[iso_date] = _decimal(
+            row[6].replace(",", ""), field="TWSE Close", row_date=iso_date
+        )
+    return closes
+
+
+def validate_remediation_candidate(
+    package_root: Path,
+    candidate_path: Path,
+    *,
+    require_old_formal_sha: bool = True,
+) -> dict[str, Any]:
+    package_root = package_root.resolve()
+    candidate_path = candidate_path.resolve()
+    formal_path = package_root / DAILY_TARGET
+    expected_candidate = (
+        package_root
+        / "runtime"
+        / "research_plugin"
+        / "candidates"
+        / REMEDIATION_CANDIDATE_NAME
+    ).resolve()
+    if candidate_path != expected_candidate:
+        raise ValueError(f"Remediation candidate path is not approved: {candidate_path}")
+    if candidate_path.name != REMEDIATION_CANDIDATE_NAME:
+        raise ValueError("Remediation candidate filename is not approved")
+    candidate_sha = sha256_file(candidate_path)
+    if candidate_sha != REMEDIATION_CANDIDATE_SHA256:
+        raise ValueError(f"Remediation candidate SHA mismatch: {candidate_sha}")
+    formal_sha = sha256_file(formal_path)
+    if require_old_formal_sha and formal_sha != REMEDIATION_FORMAL_OLD_SHA256:
+        raise ValueError(f"Formal daily price SHA mismatch: {formal_sha}")
+
+    candidate_header, candidate_rows, _ = read_csv_header_and_rows(candidate_path)
+    formal_header, _, _ = read_csv_header_and_rows(formal_path)
+    if candidate_header != formal_header:
+        raise ValueError("Remediation candidate schema does not match formal target")
+    if candidate_header != [
+        "Date",
+        "Close",
+        "QuarterKey",
+        "BVPS_ref",
+        "PB_daily",
+        "DataSupportLevel",
+        "Status",
+    ]:
+        raise ValueError(f"Unexpected daily-price schema: {candidate_header}")
+    if len(candidate_rows) != REMEDIATION_EXPECTED_ROWS:
+        raise ValueError(
+            f"Remediation candidate must have {REMEDIATION_EXPECTED_ROWS} rows; "
+            f"got {len(candidate_rows)}"
+        )
+
+    dates = [row[0] for row in candidate_rows]
+    if dates != sorted(dates) or len(dates) != len(set(dates)):
+        raise ValueError("Remediation candidate dates must be unique and strictly increasing")
+    if REMEDIATION_REMOVED_DATES & set(dates):
+        raise ValueError("Remediation candidate still contains removed dates")
+
+    rows_by_date = {row[0]: dict(zip(candidate_header, row)) for row in candidate_rows}
+    for repair_date, expected_close in REMEDIATION_EXPECTED_REPAIRS.items():
+        row = rows_by_date.get(repair_date)
+        if row is None:
+            raise ValueError(f"Missing remediation date: {repair_date}")
+        close = _decimal(row["Close"], field="Close", row_date=repair_date)
+        bvps = _decimal(row["BVPS_ref"], field="BVPS_ref", row_date=repair_date)
+        pb = _decimal(row["PB_daily"], field="PB_daily", row_date=repair_date)
+        if close != expected_close:
+            raise ValueError(
+                f"Candidate Close mismatch for {repair_date}: {close} != {expected_close}"
+            )
+        expected_pb = Decimal(str(round(float(close) / float(bvps), 3)))
+        if pb != expected_pb:
+            raise ValueError(
+                f"Candidate PB_daily mismatch for {repair_date}: {pb} != {expected_pb}"
+            )
+        if row["DataSupportLevel"] != "OFFICIAL_TWSE_A1" or row["Status"] != "OK":
+            raise ValueError(f"Invalid remediation provenance/status for {repair_date}")
+
+    backfill_root = (
+        package_root
+        / "runtime"
+        / "research_plugin"
+        / "market_activity_backfill"
+        / "P1008-TWSE-2317-20260414-20260717-20260718"
+        / "receipts"
+    )
+    twse_closes: dict[str, Decimal] = {}
+    twse_sources: list[dict[str, str]] = []
+    for month in ("2026-06", "2026-07"):
+        raw_path = backfill_root / f"{month}.twse.raw.csv"
+        receipt_path = backfill_root / f"{month}.receipt.json"
+        receipt = read_json(receipt_path)
+        raw_sha = sha256_file(raw_path)
+        if receipt.get("status") != "SUCCESS" or receipt.get("raw_artifact_sha256") != raw_sha:
+            raise ValueError(f"TWSE raw receipt validation failed for {month}")
+        for source_date, close in _read_twse_month_closes(raw_path).items():
+            if source_date in twse_closes:
+                raise ValueError(f"TWSE cross-month duplicate date: {source_date}")
+            twse_closes[source_date] = close
+        twse_sources.append(
+            {
+                "month": month,
+                "raw_path": str(raw_path.resolve()),
+                "raw_sha256": raw_sha,
+                "receipt_path": str(receipt_path.resolve()),
+                "receipt_sha256": sha256_file(receipt_path),
+            }
+        )
+    for repair_date, expected_close in REMEDIATION_EXPECTED_REPAIRS.items():
+        if twse_closes.get(repair_date) != expected_close:
+            raise ValueError(f"Saved TWSE Close mismatch for {repair_date}")
+
+    return {
+        "candidate_path": str(candidate_path),
+        "candidate_sha256": candidate_sha,
+        "formal_path": str(formal_path.resolve()),
+        "formal_sha256": formal_sha,
+        "rows": len(candidate_rows),
+        "date_range": {"start": dates[0], "end": dates[-1]},
+        "repairs_verified": len(REMEDIATION_EXPECTED_REPAIRS),
+        "removed_dates_verified": sorted(REMEDIATION_REMOVED_DATES),
+        "twse_sources": twse_sources,
+        "pb_formula": 'round(Close / BVPS_ref, 3)',
+        "actionable": False,
+    }
+
+
+def _atomic_write_bytes(path: Path, content: bytes) -> None:
+    digest = hashlib.sha256(content).hexdigest()[:12]
+    temporary = path.with_name(f".{path.name}.remediation-{digest}.tmp")
+    if temporary.exists():
+        raise FileExistsError(temporary)
+    try:
+        with temporary.open("xb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
+    _atomic_write_bytes(
+        path,
+        (json.dumps(data, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
+    )
+
+
+def _build_remediation_manifest_bytes(
+    package_root: Path,
+    candidate_path: Path,
+    published_at: str,
+) -> bytes:
+    manifest_path = package_root / MANIFEST_PATH
+    manifest = read_json(manifest_path)
+    entries = manifest.get("authoritativeFiles", [])
+    entry = next((item for item in entries if item.get("path") == DAILY_TARGET), None)
+    if entry is None:
+        raise ValueError(f"Manifest has no authoritative entry for {DAILY_TARGET}")
+    candidate_header, candidate_rows, _ = read_csv_header_and_rows(candidate_path)
+    if candidate_header != entry.get("columns"):
+        raise ValueError("Manifest daily-price schema does not match remediation candidate")
+    manifest["approvedAt"] = published_at[:10]
+    note = (
+        "Owner-approved 2026-07-18 price authority remediation via "
+        "owner_publish_csv_v2.py replace mode"
+    )
+    manifest["approvalSource"] = f"{manifest.get('approvalSource', '')}; {note}".strip("; ")
+    entry["sha256"] = sha256_file(candidate_path)
+    entry["fileSizeBytes"] = candidate_path.stat().st_size
+    entry["rowCount"] = len(candidate_rows)
+    entry["lastPublishedAt"] = published_at
+    entry["publishApprovalZh"] = (
+        "Owner核准價格authority remediation完整替換；TWSE日期、Close與PB_daily已驗證。"
+    )
+    entry.setdefault("dateRange", {})["start"] = candidate_rows[0][0]
+    entry.setdefault("dateRange", {})["end"] = candidate_rows[-1][0]
+    entry["lastRemediation"] = {
+        "candidateSha256": REMEDIATION_CANDIDATE_SHA256,
+        "previousFormalSha256": REMEDIATION_FORMAL_OLD_SHA256,
+        "publishedAt": published_at,
+        "publisher": "owner_publish_csv_v2.py",
+        "mode": "REMEDIATION_REPLACE",
+        "actionable": False,
+    }
+    return (json.dumps(manifest, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+
+
+def _runtime_content_counts(runtime_db: Path) -> dict[str, int]:
+    connection = sqlite3.connect(f"file:{runtime_db.as_posix()}?mode=ro", uri=True)
+    try:
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        protected_content_tables = (
+            "subjects",
+            "metric_definitions",
+            "sources",
+            "raw_artifacts",
+            "observations",
+            "derived_metrics",
+            "derived_metric_inputs",
+            "validation_results",
+            "data_conflicts",
+            "data_conflict_candidates",
+            "audit_logs",
+            "pipeline_runs",
+        )
+        return {
+            table: int(connection.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0])
+            for table in protected_content_tables
+            if table in tables
+        }
+    finally:
+        connection.close()
+
+
+def _copy_runtime_history(source_db: Path, staged_db: Path) -> dict[str, int]:
+    copied: dict[str, int] = {}
+    source = sqlite3.connect(f"file:{source_db.as_posix()}?mode=ro", uri=True)
+    target = sqlite3.connect(staged_db)
+    try:
+        source_tables = {
+            row[0]
+            for row in source.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        target_tables = {
+            row[0]
+            for row in target.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        for table in ("backup_records", "migration_runs", "audit_logs", "pipeline_runs"):
+            if table not in source_tables or table not in target_tables:
+                continue
+            columns = [row[1] for row in source.execute(f'PRAGMA table_info("{table}")')]
+            target_columns = [row[1] for row in target.execute(f'PRAGMA table_info("{table}")')]
+            if columns != target_columns:
+                raise ValueError(f"Runtime history schema mismatch for {table}")
+            rows = source.execute(f'SELECT * FROM "{table}"').fetchall()
+            if rows:
+                placeholders = ",".join("?" for _ in columns)
+                target.executemany(
+                    f'INSERT OR IGNORE INTO "{table}" VALUES ({placeholders})', rows
+                )
+            copied[table] = len(rows)
+        target.commit()
+    finally:
+        source.close()
+        target.close()
+    return copied
+
+
+def _build_runtime_candidate(
+    package_root: Path,
+    candidate_path: Path,
+    runtime_db: Path,
+    output_dir: Path,
+) -> dict[str, Any]:
+    counts = _runtime_content_counts(runtime_db)
+    nonempty = {name: count for name, count in counts.items() if count}
+    if nonempty:
+        raise ValueError(
+            "Runtime SQLite contains formal analytical content that the approved rebuild "
+            f"would replace: {nonempty}"
+        )
+
+    authority_input = output_dir / "authority_input"
+    authority_input.mkdir(parents=True, exist_ok=False)
+    shutil.copy2(package_root / "data" / "2317_master_v9.csv", authority_input / "2317_master_v9.csv")
+    shutil.copy2(package_root / "data" / "macro_snapshot.csv", authority_input / "macro_snapshot.csv")
+    shutil.copy2(candidate_path, authority_input / "2317_daily_price.csv")
+
+    migrator_path = package_root / "db" / "tools" / "p2_02_legacy_migrator.py"
+    migrator = _load_module("p1008_price_remediation_legacy_migrator", migrator_path)
+    migrator.DATA_DIR = authority_input
+    runtime_build_dir = output_dir / "runtime_rebuild"
+    summary = migrator.run_migration(runtime_build_dir, runtime_db)
+    staged_db = runtime_build_dir / "warroom_p2_02_dryrun.sqlite3"
+    daily_summary = next(
+        (item for item in summary.get("datasets", []) if item.get("dataset") == "DAILY_PRICE"),
+        None,
+    )
+    if daily_summary is None:
+        daily_summary = next(
+            (item for item in summary.get("datasets", []) if item.get("dataset_code") == "DAILY_PRICE"),
+            None,
+        )
+    if daily_summary is None or int(daily_summary.get("valid_rows", -1)) != REMEDIATION_EXPECTED_ROWS:
+        raise ValueError(f"Runtime rebuild did not validate 110 daily rows: {daily_summary}")
+
+    copied_history = _copy_runtime_history(runtime_db, staged_db)
+    connection = sqlite3.connect(staged_db)
+    try:
+        integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
+        foreign_keys = connection.execute("PRAGMA foreign_key_check").fetchall()
+        daily_rows = connection.execute(
+            "SELECT COUNT(*) FROM legacy_source_rows "
+            "WHERE dataset_code='DAILY_PRICE' AND row_status='VALID'"
+        ).fetchone()[0]
+        if integrity != "ok" or foreign_keys or daily_rows != REMEDIATION_EXPECTED_ROWS:
+            raise ValueError(
+                f"Runtime candidate validation failed: integrity={integrity}, "
+                f"foreign_keys={len(foreign_keys)}, daily_rows={daily_rows}"
+            )
+    finally:
+        connection.close()
+    return {
+        "path": str(staged_db.resolve()),
+        "sha256": sha256_file(staged_db),
+        "daily_source_rows": REMEDIATION_EXPECTED_ROWS,
+        "integrity_check": "PASS",
+        "foreign_key_check": "PASS",
+        "copied_history_rows": copied_history,
+        "migration_summary": summary,
+    }
+
+
+def _validate_published_runtime(runtime_db: Path) -> dict[str, Any]:
+    connection = sqlite3.connect(f"file:{runtime_db.as_posix()}?mode=ro", uri=True)
+    try:
+        integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
+        foreign_keys = connection.execute("PRAGMA foreign_key_check").fetchall()
+        daily_rows = connection.execute(
+            "SELECT COUNT(*) FROM legacy_source_rows "
+            "WHERE dataset_code='DAILY_PRICE' AND row_status='VALID'"
+        ).fetchone()[0]
+    finally:
+        connection.close()
+    if integrity != "ok" or foreign_keys or daily_rows != REMEDIATION_EXPECTED_ROWS:
+        raise ValueError("Published Runtime SQLite validation failed")
+    return {
+        "sha256": sha256_file(runtime_db),
+        "integrity_check": "PASS",
+        "foreign_key_check": "PASS",
+        "daily_source_rows": daily_rows,
+    }
+
+
+def run_price_remediation(
+    package_root: Path,
+    candidate_path: Path,
+    runtime_db: Path,
+    output_dir: Path,
+    *,
+    publish: bool,
+    dry_run_journal: Path | None = None,
+) -> dict[str, Any]:
+    package_root = package_root.resolve()
+    candidate_path = candidate_path.resolve()
+    runtime_db = runtime_db.resolve()
+    output_dir = output_dir.resolve()
+    if output_dir.exists():
+        raise FileExistsError(f"Remediation output already exists: {output_dir}")
+    output_dir.mkdir(parents=True)
+    journal_path = output_dir / "PUBLISH_JOURNAL.json"
+    published_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    validation = validate_remediation_candidate(package_root, candidate_path)
+    pre_hashes = {
+        DAILY_TARGET: sha256_file(package_root / DAILY_TARGET),
+        MANIFEST_PATH: sha256_file(package_root / MANIFEST_PATH),
+        "runtime_sqlite": sha256_file(runtime_db),
+    }
+    if dry_run_journal is not None:
+        approved_dry_run = read_json(dry_run_journal)
+        if approved_dry_run.get("status") != "DRY_RUN_PASS":
+            raise ValueError("Approved remediation dry-run journal is not PASS")
+        if approved_dry_run.get("candidate_sha256") != REMEDIATION_CANDIDATE_SHA256:
+            raise ValueError("Dry-run candidate SHA mismatch")
+        if approved_dry_run.get("pre_hashes") != pre_hashes:
+            raise ValueError("Formal inputs changed after remediation dry-run")
+
+    staged_root = output_dir / "staged"
+    staged_data = staged_root / "data"
+    staged_data.mkdir(parents=True)
+    staged_price = staged_data / "2317_daily_price.csv"
+    shutil.copy2(candidate_path, staged_price)
+    staged_manifest = staged_data / "CSV_AUTHORITY_MANIFEST.json"
+    staged_manifest.write_bytes(
+        _build_remediation_manifest_bytes(package_root, candidate_path, published_at)
+    )
+    runtime_result = _build_runtime_candidate(
+        package_root, candidate_path, runtime_db, staged_root
+    )
+    staged_runtime = Path(runtime_result["path"])
+    staged_hashes = {
+        DAILY_TARGET: sha256_file(staged_price),
+        MANIFEST_PATH: sha256_file(staged_manifest),
+        "runtime_sqlite": sha256_file(staged_runtime),
+    }
+    journal: dict[str, Any] = {
+        "mode": "REMEDIATION_REPLACE",
+        "publish_requested": publish,
+        "status": "STAGED",
+        "created_at_utc": published_at,
+        "candidate_sha256": REMEDIATION_CANDIDATE_SHA256,
+        "pre_hashes": pre_hashes,
+        "staged_hashes": staged_hashes,
+        "validation": validation,
+        "runtime_validation": runtime_result,
+        "steps": ["VALIDATED", "STAGED"],
+        "owner_accepted_environment_exception": "TemporaryDirectory PermissionError",
+        "http_calls": 0,
+        "openai_calls": 0,
+        "actionable": False,
+    }
+    if not publish:
+        journal["status"] = "DRY_RUN_PASS"
+        journal["steps"].append("DRY_RUN_VERIFIED")
+        _atomic_write_json(journal_path, journal)
+        return journal
+
+    backup_dir = output_dir / "backup"
+    (backup_dir / "data").mkdir(parents=True)
+    shutil.copy2(package_root / DAILY_TARGET, backup_dir / DAILY_TARGET)
+    shutil.copy2(package_root / MANIFEST_PATH, backup_dir / MANIFEST_PATH)
+    shutil.copy2(runtime_db, backup_dir / "warroom.sqlite3")
+    backup_hashes = {
+        DAILY_TARGET: sha256_file(backup_dir / DAILY_TARGET),
+        MANIFEST_PATH: sha256_file(backup_dir / MANIFEST_PATH),
+        "runtime_sqlite": sha256_file(backup_dir / "warroom.sqlite3"),
+    }
+    if backup_hashes != pre_hashes:
+        raise ValueError("Remediation backup hashes do not match pre-publish hashes")
+    journal["backup_dir"] = str(backup_dir)
+    journal["backup_hashes"] = backup_hashes
+    journal["status"] = "BACKUP_VERIFIED"
+    journal["steps"].append("BACKUP_VERIFIED")
+    _atomic_write_json(journal_path, journal)
+
+    targets = {
+        DAILY_TARGET: package_root / DAILY_TARGET,
+        MANIFEST_PATH: package_root / MANIFEST_PATH,
+        "runtime_sqlite": runtime_db,
+    }
+    staged = {
+        DAILY_TARGET: staged_price,
+        MANIFEST_PATH: staged_manifest,
+        "runtime_sqlite": staged_runtime,
+    }
+    try:
+        for key in (DAILY_TARGET, MANIFEST_PATH, "runtime_sqlite"):
+            _atomic_write_bytes(targets[key], staged[key].read_bytes())
+            journal["steps"].append(f"REPLACED:{key}")
+            _atomic_write_json(journal_path, journal)
+
+        published_validation = validate_remediation_candidate(
+            package_root, candidate_path, require_old_formal_sha=False
+        )
+        if sha256_file(package_root / DAILY_TARGET) != REMEDIATION_CANDIDATE_SHA256:
+            raise ValueError("Published daily-price SHA mismatch")
+        manifest = read_json(package_root / MANIFEST_PATH)
+        entry = next(
+            item
+            for item in manifest.get("authoritativeFiles", [])
+            if item.get("path") == DAILY_TARGET
+        )
+        if (
+            entry.get("sha256") != REMEDIATION_CANDIDATE_SHA256
+            or entry.get("rowCount") != REMEDIATION_EXPECTED_ROWS
+        ):
+            raise ValueError("Published authority manifest validation failed")
+        runtime_validation = _validate_published_runtime(runtime_db)
+        post_hashes = {
+            DAILY_TARGET: sha256_file(package_root / DAILY_TARGET),
+            MANIFEST_PATH: sha256_file(package_root / MANIFEST_PATH),
+            "runtime_sqlite": sha256_file(runtime_db),
+        }
+        journal.update(
+            {
+                "status": "PUBLISHED",
+                "published_at_utc": datetime.now(timezone.utc).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                ),
+                "post_hashes": post_hashes,
+                "published_validation": published_validation,
+                "published_runtime_validation": runtime_validation,
+                "rollback_available": True,
+                "rollback_performed": False,
+            }
+        )
+        journal["steps"].append("POST_PUBLISH_VERIFIED")
+        _atomic_write_json(journal_path, journal)
+        return journal
+    except Exception as publish_error:
+        rollback_errors: list[str] = []
+        for key, backup_path in (
+            (DAILY_TARGET, backup_dir / DAILY_TARGET),
+            (MANIFEST_PATH, backup_dir / MANIFEST_PATH),
+            ("runtime_sqlite", backup_dir / "warroom.sqlite3"),
+        ):
+            try:
+                _atomic_write_bytes(targets[key], backup_path.read_bytes())
+            except Exception as rollback_error:
+                rollback_errors.append(f"{key}: {rollback_error}")
+        restored_hashes = {
+            key: sha256_file(path) for key, path in targets.items()
+        }
+        rollback_ok = not rollback_errors and restored_hashes == pre_hashes
+        journal.update(
+            {
+                "status": "ROLLED_BACK" if rollback_ok else "ROLLBACK_FAILED",
+                "publish_error": str(publish_error),
+                "rollback_errors": rollback_errors,
+                "restored_hashes": restored_hashes,
+                "rollback_performed": True,
+                "rollback_verified": rollback_ok,
+            }
+        )
+        _atomic_write_json(journal_path, journal)
+        if not rollback_ok:
+            raise RuntimeError(
+                f"Remediation publish failed and rollback was incomplete: {journal}"
+            ) from publish_error
+        raise RuntimeError("Remediation publish failed; all targets restored") from publish_error
+
+
+def _parse_twse_market_activity(package_root: Path) -> tuple[bytes, dict[str, Any]]:
+    price_path = package_root / DAILY_TARGET
+    if sha256_file(price_path) != MARKET_ACTIVITY_PRICE_SHA256:
+        raise ValueError("Market-activity publish requires the approved remediated price authority")
+    price_header, price_rows, _ = read_csv_header_and_rows(price_path)
+    if "Date" not in price_header or "Close" not in price_header:
+        raise ValueError("Price authority has no Date/Close columns")
+    date_index = price_header.index("Date")
+    close_index = price_header.index("Close")
+    price_by_date: dict[str, Decimal] = {}
+    for row in price_rows:
+        row_date = row[date_index]
+        if row_date in price_by_date:
+            raise ValueError(f"Duplicate price authority date: {row_date}")
+        price_by_date[row_date] = _decimal(
+            row[close_index], field="Price Close", row_date=row_date
+        )
+
+    receipt_root = (
+        package_root
+        / "runtime"
+        / "research_plugin"
+        / "market_activity_backfill"
+        / "P1008-TWSE-2317-20260414-20260717-20260718"
+        / "receipts"
+    )
+    twse_by_date: dict[str, dict[str, Any]] = {}
+    source_receipts: list[dict[str, Any]] = []
+    for month, approved in MARKET_ACTIVITY_RECEIPTS.items():
+        receipt_path = receipt_root / f"{month}.receipt.json"
+        raw_path = receipt_root / f"{month}.twse.raw.csv"
+        receipt_sha = sha256_file(receipt_path)
+        raw_sha = sha256_file(raw_path)
+        if receipt_sha != approved["receipt_sha256"] or raw_sha != approved["raw_sha256"]:
+            raise ValueError(f"Approved TWSE artifact SHA mismatch for {month}")
+        receipt = read_json(receipt_path)
+        source_url = str(receipt.get("request_url", ""))
+        expected_url = (
+            "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?"
+            f"date={month.replace('-', '')}01&stockNo=2317&response=csv"
+        )
+        if receipt.get("status") != "SUCCESS" or source_url != expected_url:
+            raise ValueError(f"TWSE receipt status/source validation failed for {month}")
+        raw_rows = list(csv.reader(raw_path.read_text(encoding="cp950").splitlines()))
+        parsed_count = 0
+        for raw in raw_rows[2:]:
+            if not raw or len(raw) < 9 or "/" not in raw[0]:
+                continue
+            try:
+                roc_year, raw_month, raw_day = (int(part) for part in raw[0].split("/"))
+                trade_date = f"{roc_year + 1911:04d}-{raw_month:02d}-{raw_day:02d}"
+            except ValueError as exc:
+                raise ValueError(f"Invalid TWSE date in {month}: {raw[0]!r}") from exc
+            if not trade_date.startswith(month + "-"):
+                raise ValueError(f"TWSE row month mismatch: {trade_date} vs {month}")
+            if trade_date in twse_by_date:
+                raise ValueError(f"Duplicate TWSE trade date: {trade_date}")
+            integer_values: list[int] = []
+            for field_name, source_value in (
+                ("trade_volume", raw[1]),
+                ("trade_value", raw[2]),
+                ("transaction_count", raw[8]),
+            ):
+                normalized = source_value.replace(",", "").strip()
+                if not normalized.isdigit() or int(normalized) < 0:
+                    raise ValueError(f"Invalid {field_name} for {trade_date}")
+                integer_values.append(int(normalized))
+            close = _decimal(
+                raw[6].replace(",", ""), field="TWSE Close", row_date=trade_date
+            )
+            twse_by_date[trade_date] = {
+                "date": trade_date,
+                "stock_id": "2317",
+                "trade_volume": integer_values[0],
+                "trade_value": integer_values[1],
+                "transaction_count": integer_values[2],
+                "source_url": source_url,
+                "source_month": month,
+                "close": close,
+            }
+            parsed_count += 1
+        if parsed_count != int(receipt.get("parsed_row_count", -1)):
+            raise ValueError(f"TWSE parsed row count mismatch for {month}")
+        source_receipts.append(
+            {
+                "month": month,
+                "receipt_path": str(receipt_path.resolve()),
+                "receipt_sha256": receipt_sha,
+                "raw_path": str(raw_path.resolve()),
+                "raw_sha256": raw_sha,
+                "parsed_rows": parsed_count,
+                "source_url": source_url,
+            }
+        )
+
+    common_dates = sorted(set(price_by_date) & set(twse_by_date))
+    close_mismatches = [
+        {
+            "date": row_date,
+            "price_close": str(price_by_date[row_date]),
+            "twse_close": str(twse_by_date[row_date]["close"]),
+        }
+        for row_date in common_dates
+        if price_by_date[row_date] != twse_by_date[row_date]["close"]
+    ]
+    if close_mismatches:
+        raise ValueError(f"Price/TWSE Close mismatch: {close_mismatches}")
+    if len(common_dates) < MARKET_ACTIVITY_EXPECTED_ROWS:
+        raise ValueError("Fewer than 60 price/TWSE common trade dates")
+    selected_dates = common_dates[-MARKET_ACTIVITY_EXPECTED_ROWS:]
+    if (
+        selected_dates[0] != MARKET_ACTIVITY_EXPECTED_START
+        or selected_dates[-1] != MARKET_ACTIVITY_EXPECTED_END
+    ):
+        raise ValueError(f"Unexpected 60-day range: {selected_dates[0]}..{selected_dates[-1]}")
+    price_window = {
+        value
+        for value in price_by_date
+        if MARKET_ACTIVITY_EXPECTED_START <= value <= MARKET_ACTIVITY_EXPECTED_END
+    }
+    twse_window = {
+        value
+        for value in twse_by_date
+        if MARKET_ACTIVITY_EXPECTED_START <= value <= MARKET_ACTIVITY_EXPECTED_END
+    }
+    missing_dates = sorted(price_window - twse_window)
+    orphan_dates = sorted(twse_window - price_window)
+    if missing_dates or orphan_dates or set(selected_dates) != price_window or set(selected_dates) != twse_window:
+        raise ValueError(
+            f"60-day window join mismatch: missing={missing_dates}, orphan={orphan_dates}"
+        )
+
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=MARKET_ACTIVITY_FIELDS, lineterminator="\n")
+    writer.writeheader()
+    for row_date in selected_dates:
+        source = twse_by_date[row_date]
+        writer.writerow({field: source[field] for field in MARKET_ACTIVITY_FIELDS})
+    csv_bytes = output.getvalue().encode("utf-8")
+    return csv_bytes, {
+        "price_sha256": sha256_file(price_path),
+        "twse_total_rows": len(twse_by_date),
+        "common_dates": len(common_dates),
+        "common_close_mismatches": close_mismatches,
+        "rows": len(selected_dates),
+        "date_range": {"start": selected_dates[0], "end": selected_dates[-1]},
+        "unique_and_strictly_increasing": selected_dates == sorted(set(selected_dates)),
+        "missing_dates": missing_dates,
+        "orphan_dates": orphan_dates,
+        "source_receipts": source_receipts,
+        "csv_sha256": hashlib.sha256(csv_bytes).hexdigest().upper(),
+        "actionable": False,
+    }
+
+
+def _build_market_activity_manifest_bytes(
+    package_root: Path, csv_bytes: bytes, published_at: str
+) -> bytes:
+    manifest = read_json(package_root / MANIFEST_PATH)
+    entries = manifest.get("authoritativeFiles", [])
+    if any(item.get("path") == MARKET_ACTIVITY_TARGET for item in entries):
+        raise ValueError("Market-activity authority manifest entry already exists")
+    csv_rows = list(csv.DictReader(io.StringIO(csv_bytes.decode("utf-8"))))
+    csv_sha = hashlib.sha256(csv_bytes).hexdigest().upper()
+    entries.append(
+        {
+            "path": MARKET_ACTIVITY_TARGET,
+            "fileName": "2317_daily_market_activity.csv",
+            "fileVersion": "market-activity-v1.0",
+            "schemaVersion": "daily-market-activity-v1-7-columns",
+            "sha256": csv_sha,
+            "fileSizeBytes": len(csv_bytes),
+            "rowCount": len(csv_rows),
+            "columnCount": len(MARKET_ACTIVITY_FIELDS),
+            "dateRange": {
+                "start": csv_rows[0]["date"],
+                "end": csv_rows[-1]["date"],
+            },
+            "validationStatus": "PASS",
+            "fileAuthority": "CSV_AUTHORITY",
+            "dataProvenance": "OFFICIAL_TWSE_STOCK_DAY_MONTHLY_CSV",
+            "dataSupportLevel": "OFFICIAL_TWSE_A1",
+            "requiredColumns": list(MARKET_ACTIVITY_FIELDS),
+            "columns": list(MARKET_ACTIVITY_FIELDS),
+            "primaryKey": ["date", "stock_id"],
+            "analysisStatus": "MARKET_LIQUIDITY_ANALYSIS_READY",
+            "lastPublishedAt": published_at,
+            "publisher": "owner_publish_csv_v2.py",
+            "publishMode": "MARKET_ACTIVITY_INITIAL_ATOMIC_PUBLISH",
+            "actionable": False,
+        }
+    )
+    manifest["approvedAt"] = published_at[:10]
+    note = (
+        "Owner-approved 2026-07-18 initial TWSE market-activity authority publish "
+        "via owner_publish_csv_v2.py"
+    )
+    manifest["approvalSource"] = f"{manifest.get('approvalSource', '')}; {note}".strip("; ")
+    return (json.dumps(manifest, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+
+
+def _market_activity_sqlite_schema(runtime_db: Path) -> dict[str, Any]:
+    connection = sqlite3.connect(f"file:{runtime_db.as_posix()}?mode=ro", uri=True)
+    required = set(MARKET_ACTIVITY_FIELDS)
+    try:
+        tables = [
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+            )
+        ]
+        matches = []
+        for table in tables:
+            columns = {
+                row[1]
+                for row in connection.execute(f'PRAGMA table_info("{table}")')
+            }
+            if required.issubset(columns):
+                matches.append(table)
+    finally:
+        connection.close()
+    return {
+        "supported": bool(matches),
+        "matching_tables": matches,
+        "status": "SUPPORTED" if matches else "NOT_UPDATED_SCHEMA_UNSUPPORTED",
+    }
+
+
+def _verify_market_activity_report_read(
+    package_root: Path, formal_path: Path
+) -> dict[str, Any]:
+    module = _load_module(
+        "p1008_market_activity_publish_reader",
+        package_root / "tools" / "warroom_market_activity.py",
+    )
+    result = module.analyze_optional_files(
+        package_root / DAILY_TARGET,
+        formal_path,
+        as_of_date=date.fromisoformat(MARKET_ACTIVITY_EXPECTED_END),
+    )
+    if result.get("status") != "MARKET_LIQUIDITY_ANALYSIS_READY":
+        raise ValueError(f"Market-activity report reader is not READY: {result}")
+    if result.get("as_of_date") != MARKET_ACTIVITY_EXPECTED_END:
+        raise ValueError("Market-activity report reader as-of date mismatch")
+    for field in ("volume_shares", "turnover_ntd", "transaction_count"):
+        if not isinstance(result.get(field), int) or result[field] < 0:
+            raise ValueError(f"Report reader did not load valid {field}")
+    if result.get("actionable") is not False:
+        raise ValueError("Market-activity report output must remain actionable=false")
+    return result
+
+
+def run_market_activity_publish(
+    package_root: Path,
+    runtime_db: Path,
+    output_dir: Path,
+) -> dict[str, Any]:
+    package_root = package_root.resolve()
+    runtime_db = runtime_db.resolve()
+    output_dir = output_dir.resolve()
+    formal_path = package_root / MARKET_ACTIVITY_TARGET
+    manifest_path = package_root / MANIFEST_PATH
+    if output_dir.exists():
+        raise FileExistsError(f"Market-activity publish output already exists: {output_dir}")
+    if formal_path.exists():
+        raise FileExistsError("Formal market-activity CSV already exists; overwrite is not approved")
+    output_dir.mkdir(parents=True)
+    journal_path = output_dir / "PUBLISH_JOURNAL.json"
+    published_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    csv_bytes, validation = _parse_twse_market_activity(package_root)
+    manifest_bytes = _build_market_activity_manifest_bytes(
+        package_root, csv_bytes, published_at
+    )
+    sqlite_schema = _market_activity_sqlite_schema(runtime_db)
+    if sqlite_schema["supported"]:
+        raise ValueError(
+            "Runtime SQLite has a market-activity-shaped table, but no existing approved loader "
+            "was found; publication is fail-closed"
+        )
+    pre_hashes = {
+        MARKET_ACTIVITY_TARGET: "NOT_PRESENT",
+        MANIFEST_PATH: sha256_file(manifest_path),
+        "runtime_sqlite": sha256_file(runtime_db),
+    }
+
+    staged_data = output_dir / "staged" / "data"
+    staged_data.mkdir(parents=True)
+    staged_csv = staged_data / "2317_daily_market_activity.csv"
+    staged_manifest = staged_data / "CSV_AUTHORITY_MANIFEST.json"
+    staged_csv.write_bytes(csv_bytes)
+    staged_manifest.write_bytes(manifest_bytes)
+    backup_data = output_dir / "backup" / "data"
+    backup_data.mkdir(parents=True)
+    shutil.copy2(manifest_path, backup_data / manifest_path.name)
+    shutil.copy2(runtime_db, output_dir / "backup" / "warroom.sqlite3")
+    backup_hashes = {
+        MARKET_ACTIVITY_TARGET: "NOT_PRESENT",
+        MANIFEST_PATH: sha256_file(backup_data / manifest_path.name),
+        "runtime_sqlite": sha256_file(output_dir / "backup" / "warroom.sqlite3"),
+    }
+    if backup_hashes != pre_hashes:
+        raise ValueError("Market-activity backup hashes do not match pre-publish state")
+    journal: dict[str, Any] = {
+        "mode": "MARKET_ACTIVITY_INITIAL_ATOMIC_PUBLISH",
+        "status": "BACKUP_VERIFIED",
+        "created_at_utc": published_at,
+        "pre_hashes": pre_hashes,
+        "backup_hashes": backup_hashes,
+        "staged_hashes": {
+            MARKET_ACTIVITY_TARGET: sha256_file(staged_csv),
+            MANIFEST_PATH: sha256_file(staged_manifest),
+            "runtime_sqlite": pre_hashes["runtime_sqlite"],
+        },
+        "validation": validation,
+        "sqlite_schema": sqlite_schema,
+        "steps": ["OFFLINE_SOURCES_VERIFIED", "STAGED", "BACKUP_VERIFIED"],
+        "http_calls": 0,
+        "openai_calls": 0,
+        "actionable": False,
+    }
+    _atomic_write_json(journal_path, journal)
+    try:
+        _atomic_write_bytes(formal_path, csv_bytes)
+        journal["steps"].append(f"CREATED:{MARKET_ACTIVITY_TARGET}")
+        _atomic_write_json(journal_path, journal)
+        _atomic_write_bytes(manifest_path, manifest_bytes)
+        journal["steps"].append(f"REPLACED:{MANIFEST_PATH}")
+        _atomic_write_json(journal_path, journal)
+
+        post_csv_bytes, post_validation = _parse_twse_market_activity(package_root)
+        if formal_path.read_bytes() != post_csv_bytes:
+            raise ValueError("Published market-activity CSV does not match verified source rebuild")
+        manifest = read_json(manifest_path)
+        entry = next(
+            item
+            for item in manifest.get("authoritativeFiles", [])
+            if item.get("path") == MARKET_ACTIVITY_TARGET
+        )
+        if (
+            entry.get("sha256") != sha256_file(formal_path)
+            or entry.get("rowCount") != MARKET_ACTIVITY_EXPECTED_ROWS
+        ):
+            raise ValueError("Published market-activity manifest entry validation failed")
+        runtime_hash_after = sha256_file(runtime_db)
+        if runtime_hash_after != pre_hashes["runtime_sqlite"]:
+            raise ValueError("Runtime SQLite changed despite unsupported market-activity schema")
+        report_read = _verify_market_activity_report_read(
+            package_root, formal_path
+        )
+        journal.update(
+            {
+                "status": "PUBLISHED",
+                "published_at_utc": datetime.now(timezone.utc).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                ),
+                "post_hashes": {
+                    MARKET_ACTIVITY_TARGET: sha256_file(formal_path),
+                    MANIFEST_PATH: sha256_file(manifest_path),
+                    "runtime_sqlite": runtime_hash_after,
+                },
+                "post_validation": post_validation,
+                "report_read_validation": report_read,
+                "market_liquidity_analysis_status": "MARKET_LIQUIDITY_ANALYSIS_READY",
+                "rollback_available": True,
+                "rollback_performed": False,
+            }
+        )
+        journal["steps"].append("POST_PUBLISH_VERIFIED")
+        _atomic_write_json(journal_path, journal)
+        return journal
+    except Exception as publish_error:
+        rollback_errors: list[str] = []
+        try:
+            if formal_path.exists():
+                formal_path.unlink()
+        except Exception as rollback_error:
+            rollback_errors.append(f"{MARKET_ACTIVITY_TARGET}: {rollback_error}")
+        for target, backup in (
+            (manifest_path, backup_data / manifest_path.name),
+            (runtime_db, output_dir / "backup" / "warroom.sqlite3"),
+        ):
+            try:
+                _atomic_write_bytes(target, backup.read_bytes())
+            except Exception as rollback_error:
+                rollback_errors.append(f"{target}: {rollback_error}")
+        restored_hashes = {
+            MARKET_ACTIVITY_TARGET: (
+                sha256_file(formal_path) if formal_path.exists() else "NOT_PRESENT"
+            ),
+            MANIFEST_PATH: sha256_file(manifest_path),
+            "runtime_sqlite": sha256_file(runtime_db),
+        }
+        rollback_ok = not rollback_errors and restored_hashes == pre_hashes
+        journal.update(
+            {
+                "status": "ROLLED_BACK" if rollback_ok else "ROLLBACK_FAILED",
+                "publish_error": str(publish_error),
+                "rollback_errors": rollback_errors,
+                "restored_hashes": restored_hashes,
+                "rollback_performed": True,
+                "rollback_verified": rollback_ok,
+            }
+        )
+        _atomic_write_json(journal_path, journal)
+        if not rollback_ok:
+            raise RuntimeError(
+                "Market-activity publish failed and rollback was incomplete"
+            ) from publish_error
+        raise RuntimeError(
+            "Market-activity publish failed; all formal state was restored"
+        ) from publish_error
+
+
+def build_invalid_daily_price_removal_preview(
+    package_root: Path,
+    output_dir: Path,
+) -> dict[str, Any]:
+    package_root = package_root.resolve()
+    output_dir = output_dir.resolve()
+    runtime_root = (package_root / "runtime").resolve()
+    if not output_dir.is_relative_to(runtime_root):
+        raise ValueError("Daily-price remediation preview must remain under runtime/")
+    if output_dir.exists():
+        raise FileExistsError(output_dir)
+
+    formal_path = package_root / DAILY_TARGET
+    manifest_path = package_root / MANIFEST_PATH
+    header, rows, comments = read_csv_header_and_rows(formal_path)
+    matching = [row for row in rows if row and row[0] == INVALID_DAILY_PRICE_DATE]
+    if len(matching) != 1:
+        raise ValueError(
+            f"Expected exactly one invalid daily-price row for {INVALID_DAILY_PRICE_DATE}"
+        )
+    invalid_row = matching[0]
+    row_map = dict(zip(header, invalid_row))
+    parsed_date = date.fromisoformat(INVALID_DAILY_PRICE_DATE)
+    if parsed_date.weekday() < 5:
+        raise ValueError("Configured invalid daily-price date is not a weekend")
+    if row_map.get("DataSupportLevel") != "PUBLIC_MARKET_DATA":
+        raise ValueError("Invalid daily-price row provenance no longer matches the approved case")
+
+    manifest = read_json(manifest_path)
+    entry = next(
+        (
+            item
+            for item in manifest.get("authoritativeFiles", [])
+            if item.get("path") == DAILY_TARGET
+        ),
+        None,
+    )
+    before_sha = sha256_file(formal_path)
+    if (
+        entry is None
+        or entry.get("sha256") != before_sha
+        or entry.get("rowCount") != len(rows)
+    ):
+        raise ValueError("Daily-price manifest does not match formal pre-remediation CSV")
+
+    candidate_rows = [
+        row for row in rows if not row or row[0] != INVALID_DAILY_PRICE_DATE
+    ]
+    candidate_dates = [row[0] for row in candidate_rows if row]
+    if (
+        len(candidate_rows) != len(rows) - 1
+        or candidate_dates != sorted(set(candidate_dates))
+        or INVALID_DAILY_PRICE_DATE in candidate_dates
+    ):
+        raise ValueError("Daily-price remediation candidate date validation failed")
+
+    text = io.StringIO(newline="")
+    for comment in comments:
+        text.write(comment + "\n")
+    writer = csv.writer(text, lineterminator="\n")
+    writer.writerow(header)
+    writer.writerows(candidate_rows)
+    candidate_bytes = text.getvalue().encode("utf-8")
+
+    output_dir.mkdir(parents=True)
+    candidate_path = output_dir / "2317_daily_price_remove_20260719.candidate.csv"
+    candidate_path.write_bytes(candidate_bytes)
+    preview = {
+        "mode": "OWNER_GATED_INVALID_DAILY_PRICE_REMOVAL",
+        "status": "OWNER_REVIEW_REQUIRED",
+        "target": DAILY_TARGET,
+        "invalid_date": INVALID_DAILY_PRICE_DATE,
+        "invalid_row": row_map,
+        "removal_reason": (
+            "2026-07-19 is Sunday and PUBLIC_MARKET_DATA is not verified TWSE "
+            "trading-day evidence."
+        ),
+        "approval_phrase": INVALID_DAILY_PRICE_APPROVAL_PHRASE,
+        "before_sha256": before_sha,
+        "before_rows": len(rows),
+        "candidate_path": str(candidate_path),
+        "candidate_sha256": sha256_file(candidate_path),
+        "candidate_rows": len(candidate_rows),
+        "candidate_cutoff": candidate_dates[-1],
+        "formal_csv_modified": False,
+        "promotion_eligible": False,
+        "actionable": False,
+    }
+    _atomic_write_json(output_dir / "REMEDIATION_PREVIEW.json", preview)
+    return preview
+
+
+def run_invalid_daily_price_removal(
+    package_root: Path,
+    output_dir: Path,
+    *,
+    publish: bool = False,
+    approval_phrase: str | None = None,
+) -> dict[str, Any]:
+    preview = build_invalid_daily_price_removal_preview(package_root, output_dir)
+    if not publish:
+        return preview
+    if approval_phrase != INVALID_DAILY_PRICE_APPROVAL_PHRASE:
+        raise ValueError(
+            "Daily-price remediation requires exact Owner approval phrase: "
+            + INVALID_DAILY_PRICE_APPROVAL_PHRASE
+        )
+
+    package_root = package_root.resolve()
+    output_dir = output_dir.resolve()
+    formal_path = package_root / DAILY_TARGET
+    manifest_path = package_root / MANIFEST_PATH
+    candidate_path = Path(preview["candidate_path"])
+    candidate_header, candidate_rows, _ = read_csv_header_and_rows(candidate_path)
+    manifest = read_json(manifest_path)
+    entry = next(
+        item
+        for item in manifest.get("authoritativeFiles", [])
+        if item.get("path") == DAILY_TARGET
+    )
+    published_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    entry["sha256"] = sha256_file(candidate_path)
+    entry["fileSizeBytes"] = candidate_path.stat().st_size
+    entry["rowCount"] = len(candidate_rows)
+    entry.setdefault("dateRange", {})["start"] = candidate_rows[0][0]
+    entry.setdefault("dateRange", {})["end"] = candidate_rows[-1][0]
+    entry["lastPublishedAt"] = published_at
+    entry["lastRemediation"] = {
+        "mode": "REMOVE_INVALID_DAILY_PRICE_DATE",
+        "removedDate": INVALID_DAILY_PRICE_DATE,
+        "candidateSha256": sha256_file(candidate_path),
+        "previousFormalSha256": preview["before_sha256"],
+        "approvalPhrase": INVALID_DAILY_PRICE_APPROVAL_PHRASE,
+        "publishedAt": published_at,
+        "publisher": "owner_publish_csv_v2.py",
+        "actionable": False,
+    }
+    manifest["approvedAt"] = published_at[:10]
+    manifest["approvalSource"] = (
+        f"{manifest.get('approvalSource', '')}; Owner-approved removal of invalid "
+        f"daily-price row {INVALID_DAILY_PRICE_DATE} via owner_publish_csv_v2.py"
+    ).strip("; ")
+    manifest_bytes = (
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
+    ).encode("utf-8")
+
+    backup_dir = output_dir / "backup"
+    backup_dir.mkdir()
+    shutil.copy2(formal_path, backup_dir / formal_path.name)
+    shutil.copy2(manifest_path, backup_dir / manifest_path.name)
+    pre_hashes = {
+        DAILY_TARGET: sha256_file(formal_path),
+        MANIFEST_PATH: sha256_file(manifest_path),
+    }
+    backup_hashes = {
+        DAILY_TARGET: sha256_file(backup_dir / formal_path.name),
+        MANIFEST_PATH: sha256_file(backup_dir / manifest_path.name),
+    }
+    if backup_hashes != pre_hashes:
+        raise ValueError("Daily-price remediation backup verification failed")
+    journal_path = output_dir / "PUBLISH_JOURNAL.json"
+    journal: dict[str, Any] = {
+        "mode": "REMOVE_INVALID_DAILY_PRICE_DATE",
+        "status": "BACKUP_VERIFIED",
+        "created_at_utc": published_at,
+        "pre_hashes": pre_hashes,
+        "backup_hashes": backup_hashes,
+        "candidate_sha256": preview["candidate_sha256"],
+        "actionable": False,
+    }
+    _atomic_write_json(journal_path, journal)
+    try:
+        _atomic_write_bytes(formal_path, candidate_path.read_bytes())
+        _atomic_write_bytes(manifest_path, manifest_bytes)
+        post_header, post_rows, _ = read_csv_header_and_rows(formal_path)
+        post_manifest = read_json(manifest_path)
+        post_entry = next(
+            item
+            for item in post_manifest.get("authoritativeFiles", [])
+            if item.get("path") == DAILY_TARGET
+        )
+        post_dates = [row[0] for row in post_rows]
+        post_hashes = {
+            DAILY_TARGET: sha256_file(formal_path),
+            MANIFEST_PATH: sha256_file(manifest_path),
+        }
+        if (
+            post_header != candidate_header
+            or len(post_rows) != preview["candidate_rows"]
+            or INVALID_DAILY_PRICE_DATE in post_dates
+            or post_dates != sorted(set(post_dates))
+            or post_entry.get("sha256") != post_hashes[DAILY_TARGET]
+            or post_entry.get("rowCount") != len(post_rows)
+            or (post_entry.get("dateRange") or {}).get("end")
+            != preview["candidate_cutoff"]
+        ):
+            raise ValueError("Daily-price remediation post-publish validation failed")
+        journal.update(
+            {
+                "status": "PUBLISHED",
+                "post_hashes": post_hashes,
+                "rows": len(post_rows),
+                "cutoff": post_dates[-1],
+                "rollback_performed": False,
+            }
+        )
+        _atomic_write_json(journal_path, journal)
+        return journal
+    except Exception as publish_error:
+        rollback_errors: list[str] = []
+        for backup, target in (
+            (backup_dir / formal_path.name, formal_path),
+            (backup_dir / manifest_path.name, manifest_path),
+        ):
+            try:
+                _atomic_write_bytes(target, backup.read_bytes())
+            except Exception as rollback_error:
+                rollback_errors.append(f"{target}: {rollback_error}")
+        restored_hashes = {
+            DAILY_TARGET: sha256_file(formal_path),
+            MANIFEST_PATH: sha256_file(manifest_path),
+        }
+        rollback_ok = not rollback_errors and restored_hashes == pre_hashes
+        journal.update(
+            {
+                "status": "ROLLED_BACK" if rollback_ok else "ROLLBACK_FAILED",
+                "publish_error": str(publish_error),
+                "rollback_errors": rollback_errors,
+                "restored_hashes": restored_hashes,
+                "rollback_performed": True,
+                "rollback_verified": rollback_ok,
+            }
+        )
+        _atomic_write_json(journal_path, journal)
+        if not rollback_ok:
+            raise RuntimeError(
+                "Daily-price remediation failed and rollback was incomplete"
+            ) from publish_error
+        raise RuntimeError(
+            "Daily-price remediation failed; CSV and manifest restored"
+        ) from publish_error
+
+
+def market_activity_approval_phrase(candidate_dates: list[str]) -> str:
+    if not candidate_dates:
+        raise ValueError("Market-activity candidate has no dates")
+    return (
+        "OWNER_APPROVE_MARKET_ACTIVITY_"
+        f"{candidate_dates[0].replace('-', '')}_"
+        f"{candidate_dates[-1].replace('-', '')}"
+    )
+
+
+def publish_market_activity_append(
+    package_root: Path,
+    candidate_path: Path,
+    output_dir: Path,
+    *,
+    approval_phrase: str | None = None,
+) -> dict[str, Any]:
+    """Atomically append a validated market-activity candidate and update its manifest entry."""
+
+    package_root = package_root.resolve()
+    candidate_path = candidate_path.resolve()
+    output_dir = output_dir.resolve()
+    runtime_root = (package_root / "runtime").resolve()
+    if not candidate_path.is_relative_to(runtime_root) or not output_dir.is_relative_to(runtime_root):
+        raise ValueError("Market-activity candidate and journal must remain under runtime/")
+    formal_path = package_root / MARKET_ACTIVITY_TARGET
+    manifest_path = package_root / MANIFEST_PATH
+    if not formal_path.is_file():
+        raise FileNotFoundError(formal_path)
+    if output_dir.exists():
+        raise FileExistsError(output_dir)
+
+    formal_header, formal_rows, _ = read_csv_header_and_rows(formal_path)
+    candidate_header, candidate_rows, _ = read_csv_header_and_rows(candidate_path)
+    if tuple(formal_header) != MARKET_ACTIVITY_FIELDS or formal_header != candidate_header:
+        raise ValueError("Market-activity append schema mismatch")
+    if not candidate_rows:
+        raise ValueError("Market-activity append candidate is empty")
+    formal_dates = [row[0] for row in formal_rows]
+    candidate_dates = [row[0] for row in candidate_rows]
+    expected_approval = market_activity_approval_phrase(candidate_dates)
+    if approval_phrase != expected_approval:
+        raise ValueError(
+            "Market-activity formal publish requires exact Owner approval phrase: "
+            + expected_approval
+        )
+    if formal_dates != sorted(set(formal_dates)):
+        raise ValueError("Formal market-activity dates are not unique and increasing")
+    if candidate_dates != sorted(set(candidate_dates)):
+        raise ValueError("Candidate market-activity dates are not unique and increasing")
+    if set(formal_dates) & set(candidate_dates) or candidate_dates[0] <= formal_dates[-1]:
+        raise ValueError("Market-activity append would rewrite or duplicate history")
+    for row in candidate_rows:
+        if row[1] != "2317" or not all(row[index].isdigit() for index in (2, 3, 4)):
+            raise ValueError(f"Invalid market-activity candidate row: {row}")
+        if not row[5].startswith("https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?"):
+            raise ValueError("Market-activity candidate source is not approved TWSE STOCK_DAY")
+        if row[6] != row[0][:7]:
+            raise ValueError("Market-activity source_month does not match date")
+
+    manifest = read_json(manifest_path)
+    entry = next(
+        (
+            item
+            for item in manifest.get("authoritativeFiles", [])
+            if item.get("path") == MARKET_ACTIVITY_TARGET
+        ),
+        None,
+    )
+    formal_sha = sha256_file(formal_path)
+    if entry is None or entry.get("sha256") != formal_sha or entry.get("rowCount") != len(formal_rows):
+        raise ValueError("Market-activity manifest does not match formal pre-publish CSV")
+
+    # Preserve every historical byte exactly.  The append publisher may add
+    # rows, but it must never re-serialize or otherwise rewrite prior rows.
+    formal_bytes = formal_path.read_bytes()
+    if not formal_bytes.endswith((b"\n", b"\r")):
+        raise ValueError("Formal market-activity CSV must end with a newline")
+    append_output = io.StringIO(newline="")
+    append_writer = csv.writer(append_output, lineterminator="\n")
+    append_writer.writerows(candidate_rows)
+    combined_bytes = formal_bytes + append_output.getvalue().encode("utf-8")
+    if not combined_bytes.startswith(formal_bytes):
+        raise ValueError("Market-activity append changed historical CSV bytes")
+    combined_sha = hashlib.sha256(combined_bytes).hexdigest().upper()
+    published_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    entry["sha256"] = combined_sha
+    entry["fileSizeBytes"] = len(combined_bytes)
+    entry["rowCount"] = len(formal_rows) + len(candidate_rows)
+    entry["dateRange"]["end"] = candidate_dates[-1]
+    entry["lastPublishedAt"] = published_at
+    entry["analysisStatus"] = "MARKET_LIQUIDITY_ANALYSIS_READY"
+    entry["lastAppend"] = {
+        "rowsAdded": len(candidate_rows),
+        "start": candidate_dates[0],
+        "end": candidate_dates[-1],
+        "candidateSha256": sha256_file(candidate_path),
+        "publishedAt": published_at,
+        "publisher": "owner_publish_csv_v2.py",
+        "mode": "MARKET_ACTIVITY_ATOMIC_APPEND",
+        "actionable": False,
+    }
+    manifest["approvedAt"] = published_at[:10]
+    manifest_bytes = (json.dumps(manifest, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+
+    output_dir.mkdir(parents=True)
+    staged_dir = output_dir / "staged"
+    backup_dir = output_dir / "backup"
+    staged_dir.mkdir()
+    backup_dir.mkdir()
+    staged_csv = staged_dir / formal_path.name
+    staged_manifest = staged_dir / manifest_path.name
+    staged_csv.write_bytes(combined_bytes)
+    staged_manifest.write_bytes(manifest_bytes)
+    shutil.copy2(formal_path, backup_dir / formal_path.name)
+    shutil.copy2(manifest_path, backup_dir / manifest_path.name)
+    pre_hashes = {
+        MARKET_ACTIVITY_TARGET: formal_sha,
+        MANIFEST_PATH: sha256_file(manifest_path),
+    }
+    backup_hashes = {
+        MARKET_ACTIVITY_TARGET: sha256_file(backup_dir / formal_path.name),
+        MANIFEST_PATH: sha256_file(backup_dir / manifest_path.name),
+    }
+    if pre_hashes != backup_hashes:
+        raise ValueError("Market-activity append backup verification failed")
+    journal_path = output_dir / "PUBLISH_JOURNAL.json"
+    journal: dict[str, Any] = {
+        "mode": "MARKET_ACTIVITY_ATOMIC_APPEND",
+        "status": "BACKUP_VERIFIED",
+        "created_at_utc": published_at,
+        "candidate_path": str(candidate_path),
+        "candidate_sha256": sha256_file(candidate_path),
+        "rows_added": len(candidate_rows),
+        "date_range_added": {"start": candidate_dates[0], "end": candidate_dates[-1]},
+        "pre_hashes": pre_hashes,
+        "backup_hashes": backup_hashes,
+        "staged_hashes": {
+            MARKET_ACTIVITY_TARGET: combined_sha,
+            MANIFEST_PATH: hashlib.sha256(manifest_bytes).hexdigest().upper(),
+        },
+        "actionable": False,
+    }
+    _atomic_write_json(journal_path, journal)
+    try:
+        _atomic_write_bytes(formal_path, combined_bytes)
+        _atomic_write_bytes(manifest_path, manifest_bytes)
+        published_header, published_rows, _ = read_csv_header_and_rows(formal_path)
+        published_dates = [row[0] for row in published_rows]
+        published_manifest = read_json(manifest_path)
+        published_entry = next(
+            item
+            for item in published_manifest.get("authoritativeFiles", [])
+            if item.get("path") == MARKET_ACTIVITY_TARGET
+        )
+        if (
+            tuple(published_header) != MARKET_ACTIVITY_FIELDS
+            or published_dates != sorted(set(published_dates))
+            or published_dates[-len(candidate_dates):] != candidate_dates
+            or sha256_file(formal_path) != combined_sha
+            or published_entry.get("sha256") != combined_sha
+            or published_entry.get("rowCount") != len(published_rows)
+        ):
+            raise ValueError("Market-activity append post-publish validation failed")
+        journal.update(
+            {
+                "status": "PUBLISHED",
+                "published_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "post_hashes": {
+                    MARKET_ACTIVITY_TARGET: sha256_file(formal_path),
+                    MANIFEST_PATH: sha256_file(manifest_path),
+                },
+                "total_rows": len(published_rows),
+                "last_date": published_dates[-1],
+                "rollback_available": True,
+                "rollback_performed": False,
+            }
+        )
+        _atomic_write_json(journal_path, journal)
+        return journal
+    except Exception as publish_error:
+        rollback_errors: list[str] = []
+        for target, backup in (
+            (formal_path, backup_dir / formal_path.name),
+            (manifest_path, backup_dir / manifest_path.name),
+        ):
+            try:
+                _atomic_write_bytes(target, backup.read_bytes())
+            except Exception as rollback_error:
+                rollback_errors.append(f"{target}: {rollback_error}")
+        restored = {
+            MARKET_ACTIVITY_TARGET: sha256_file(formal_path),
+            MANIFEST_PATH: sha256_file(manifest_path),
+        }
+        rollback_ok = not rollback_errors and restored == pre_hashes
+        journal.update(
+            {
+                "status": "ROLLED_BACK" if rollback_ok else "ROLLBACK_FAILED",
+                "publish_error": str(publish_error),
+                "rollback_errors": rollback_errors,
+                "restored_hashes": restored,
+                "rollback_performed": True,
+                "rollback_verified": rollback_ok,
+            }
+        )
+        _atomic_write_json(journal_path, journal)
+        if not rollback_ok:
+            raise RuntimeError("Market-activity append rollback was incomplete") from publish_error
+        raise RuntimeError("Market-activity append failed; CSV and manifest restored") from publish_error
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Review or publish P1008 staging CSV candidates.")
     parser.add_argument("--package-root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--date", help="Staging date, for example 2026-06-29. Defaults to latest staging date.")
     parser.add_argument("--publish", action="store_true", help="Append candidate rows into formal CSV files.")
+    parser.add_argument(
+        "--remediation-replace",
+        action="store_true",
+        help=(
+            "Explicitly opt in to the fixed P1008 price-authority remediation replacement. "
+            "Without this flag the existing append workflow is unchanged."
+        ),
+    )
+    parser.add_argument("--remediation-candidate", type=Path)
+    parser.add_argument("--runtime-db", type=Path)
+    parser.add_argument("--remediation-output-dir", type=Path)
+    parser.add_argument("--remediation-dry-run-journal", type=Path)
+    parser.add_argument(
+        "--market-activity-publish",
+        action="store_true",
+        help="Explicitly run the fixed offline TWSE 60-day market-activity initial publish.",
+    )
+    parser.add_argument("--market-activity-output-dir", type=Path)
+    parser.add_argument(
+        "--invalid-daily-price-removal",
+        action="store_true",
+        help=(
+            "Build the Owner-gated 2026-07-19 invalid-row removal preview. "
+            "Formal mutation additionally requires --publish and the exact phrase."
+        ),
+    )
+    parser.add_argument("--invalid-daily-price-output-dir", type=Path)
+    parser.add_argument("--approval-phrase")
     args = parser.parse_args()
 
     package_root = args.package_root.resolve()
+    if args.invalid_daily_price_removal:
+        if args.market_activity_publish or args.remediation_replace:
+            parser.error("invalid daily-price removal is mutually exclusive")
+        if args.invalid_daily_price_output_dir is None:
+            parser.error(
+                "invalid daily-price removal requires --invalid-daily-price-output-dir"
+            )
+        result = run_invalid_daily_price_removal(
+            package_root,
+            args.invalid_daily_price_output_dir,
+            publish=args.publish,
+            approval_phrase=args.approval_phrase,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.market_activity_publish:
+        if args.remediation_replace:
+            parser.error("market-activity and price-remediation modes are mutually exclusive")
+        if not args.publish:
+            parser.error("market-activity formal publish requires --publish")
+        required = {
+            "--runtime-db": args.runtime_db,
+            "--market-activity-output-dir": args.market_activity_output_dir,
+        }
+        missing = [flag for flag, value in required.items() if value is None]
+        if missing:
+            parser.error(
+                "market-activity publish requires " + ", ".join(missing)
+            )
+        result = run_market_activity_publish(
+            package_root,
+            args.runtime_db,
+            args.market_activity_output_dir,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.remediation_replace:
+        required = {
+            "--remediation-candidate": args.remediation_candidate,
+            "--runtime-db": args.runtime_db,
+            "--remediation-output-dir": args.remediation_output_dir,
+        }
+        missing = [flag for flag, value in required.items() if value is None]
+        if missing:
+            parser.error(
+                "remediation replace mode requires " + ", ".join(missing)
+            )
+        if args.publish and args.remediation_dry_run_journal is None:
+            parser.error(
+                "formal remediation publish requires --remediation-dry-run-journal"
+            )
+        result = run_price_remediation(
+            package_root,
+            args.remediation_candidate,
+            args.runtime_db,
+            args.remediation_output_dir,
+            publish=args.publish,
+            dry_run_journal=args.remediation_dry_run_journal,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
     staging_dir = package_root / "staging" / args.date if args.date else latest_staging_dir(package_root)
     dry_run_path = staging_dir / "DRY_RUN.json"
     if not dry_run_path.exists():
@@ -653,6 +2324,11 @@ def main() -> int:
         total_rows += rows_added
         touched_targets.append(target_rel)
         print(f"[APPENDED] {rows_added} row(s): {candidate_path} -> {target_path}")
+
+    if total_rows == 0:
+        print("[NO ACTION REQUIRED] Candidate rows are byte-equivalent to formal rows.")
+        print("                     Formal CSV and manifest were not modified.")
+        return 0
 
     approval_note = f"Owner approval {candidate_date} via owner_publish_csv_v2.py; appended {total_rows} row(s)"
     update_manifest(package_root, touched_targets, approval_note)

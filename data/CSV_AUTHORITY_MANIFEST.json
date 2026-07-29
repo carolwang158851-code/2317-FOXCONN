@@ -1,8 +1,8 @@
 {
-  "manifestVersion": "1.2.2",
-  "approvedAt": "2026-07-10",
+  "manifestVersion": "1.3.0",
+  "approvedAt": "2026-07-27",
   "approvedBy": "Owner",
-  "approvalSource": "Owner conversation approvals P1008 items 16-18, 25-29, 75, 77, 80 and approved P2-03B-07 Release Manifest; Owner approval 2026-06-29 for 2317_daily_price.csv PB correction and formal daily CSV authority; Owner approval 2026-06-29 for MARKET INTELLIGENCE observation boundary; Owner approval 2026-06-29 via owner_publish_csv_v2.py; appended 2 row(s); Owner approval 2026-06-29 for macro_snapshot.csv historical format correction and manifest hash update; Owner approval 2026-06-30 via owner_publish_csv_v2.py; appended 2 row(s); 2026-06-30 TWSE official close correction, no new row appended; Owner approval 2026-07-03 for macro_event_observations.csv and fx_trend_observations.csv observation-only sidecar contracts; Owner approval 2026-07-05 via owner_publish_csv_v2.py; appended 48 row(s); Owner approval 2026-07-06 via owner_publish_csv_v2.py; appended 49 row(s); Owner approval 2026-07-07 via owner_publish_csv_v2.py; appended 43 row(s); Owner approval 2026-07-08 via owner_publish_csv_v2.py; appended 50 row(s); Owner approval 2026-07-10 via owner_publish_csv_v2.py; appended 44 row(s)",
+  "approvalSource": "Owner conversation approvals P1008 items 16-18, 25-29, 75, 77, 80 and approved P2-03B-07 Release Manifest; Owner approval 2026-06-29 for 2317_daily_price.csv PB correction and formal daily CSV authority; Owner approval 2026-06-29 for MARKET INTELLIGENCE observation boundary; Owner approval 2026-06-29 via owner_publish_csv_v2.py; appended 2 row(s); Owner approval 2026-06-29 for macro_snapshot.csv historical format correction and manifest hash update; Owner approval 2026-06-30 via owner_publish_csv_v2.py; appended 2 row(s); 2026-06-30 TWSE official close correction, no new row appended; Owner approval 2026-07-03 for macro_event_observations.csv and fx_trend_observations.csv observation-only sidecar contracts; Owner approval 2026-07-05 via owner_publish_csv_v2.py; appended 48 row(s); Owner approval 2026-07-06 via owner_publish_csv_v2.py; appended 49 row(s); Owner approval 2026-07-07 via owner_publish_csv_v2.py; appended 43 row(s); Owner approval 2026-07-08 via owner_publish_csv_v2.py; appended 50 row(s); Owner approval 2026-07-10 via owner_publish_csv_v2.py; appended 44 row(s); Owner approval 2026-07-16 via owner_publish_csv_v2.py; appended 48 row(s); Owner approval 2026-07-17 via owner_publish_csv_v2.py; appended 45 row(s); Owner-approved 2026-07-18 price authority remediation via owner_publish_csv_v2.py replace mode; Owner-approved 2026-07-18 initial TWSE market-activity authority publish via owner_publish_csv_v2.py; Owner approval 2026-07-19 via owner_publish_csv_v2.py; appended 35 row(s); Owner approval 2026-07-19 for official FCF authority and paper-style cross-references; Owner approval 2026-07-20 via owner_publish_csv_v2.py; appended 38 row(s); Owner approval 2026-07-21 via owner_publish_csv_v2.py; appended 41 row(s); Owner approval 2026-07-23 via owner_publish_csv_v2.py; appended 42 row(s); Owner approval 2026-07-27 via owner_publish_csv_v2.py; appended 46 row(s)",
   "authorityPolicy": {
     "hashAlgorithm": "SHA-256",
     "hashMismatchStatus": "APPROVAL_EXPIRED",
@@ -183,13 +183,13 @@
       "fileName": "2317_daily_price.csv",
       "fileVersion": "daily-v1.0",
       "schemaVersion": "daily-price-v1-7-columns",
-      "sha256": "3329E871C997E983D3C279996F426736BD0A288ACF2769552C964F1AE6CF8ED1",
-      "fileSizeBytes": 5833,
-      "rowCount": 104,
+      "sha256": "25567CE773F7270ED3B22AFBD9D2664E467A2F3D525425AFAE7F20631E56D1B4",
+      "fileSizeBytes": 6508,
+      "rowCount": 115,
       "columnCount": 7,
       "dateRange": {
         "start": "2026-01-28",
-        "end": "2026-07-10"
+        "end": "2026-07-27"
       },
       "validationStatus": "PASS",
       "validationStatusZh": "欄位完整、日期未重複、PB_daily已依Close/BVPS_ref三位小數重算通過",
@@ -293,12 +293,65 @@
           "zh": "此權威資格只代表檔案版本與PB計算被核准，不代表任何買賣規則啟用"
         }
       ],
-      "lastPublishedAt": "2026-07-10T09:34:09Z",
+      "lastPublishedAt": "2026-07-27T15:27:49Z",
       "publishApprovalZh": "Owner approved append; MARKET INTELLIGENCE sidecar remains observation only; actionable:false.",
       "statusNormalizationAt": "2026-06-30T06:29:29Z",
       "statusNormalizationZh": "Owner ???????? append ???? Status ? STAGING_CANDIDATE ???? OK??????? PB ???",
       "lastCorrectionAt": "2026-06-30T06:57:47Z",
-      "lastCorrectionZh": "TWSE 2026-06-30 ??????????????? 251.00?? 246.50 ?? STOCK_DAY_ALL ? 2026-06-29 ??????????? Close ? PB_daily?"
+      "lastCorrectionZh": "TWSE 2026-06-30 ??????????????? 251.00?? 246.50 ?? STOCK_DAY_ALL ? 2026-06-29 ??????????? Close ? PB_daily?",
+      "lastRemediation": {
+        "candidateSha256": "E81AE954B7C621616E844B0034F7259F91FE3F6FCCFF2A5FBC84714BCE174A16",
+        "previousFormalSha256": "CD0C42DB047CA80C25D6D8D6A652D4D258A05C9A3AE1FC1BAE96CBBCA3D12369",
+        "publishedAt": "2026-07-18T12:29:57Z",
+        "publisher": "owner_publish_csv_v2.py",
+        "mode": "REMEDIATION_REPLACE",
+        "actionable": false
+      }
+    },
+    {
+      "path": "data/2317_daily_market_activity.csv",
+      "fileName": "2317_daily_market_activity.csv",
+      "fileVersion": "market-activity-v1.0",
+      "schemaVersion": "daily-market-activity-v1-7-columns",
+      "sha256": "83AB695E478517DC11004D17CC1EAE98F6B320BE266A586E29DAD0FF28D663BD",
+      "fileSizeBytes": 8807,
+      "rowCount": 60,
+      "columnCount": 7,
+      "dateRange": {
+        "start": "2026-04-22",
+        "end": "2026-07-17"
+      },
+      "validationStatus": "PASS",
+      "fileAuthority": "CSV_AUTHORITY",
+      "dataProvenance": "OFFICIAL_TWSE_STOCK_DAY_MONTHLY_CSV",
+      "dataSupportLevel": "OFFICIAL_TWSE_A1",
+      "requiredColumns": [
+        "date",
+        "stock_id",
+        "trade_volume",
+        "trade_value",
+        "transaction_count",
+        "source_url",
+        "source_month"
+      ],
+      "columns": [
+        "date",
+        "stock_id",
+        "trade_volume",
+        "trade_value",
+        "transaction_count",
+        "source_url",
+        "source_month"
+      ],
+      "primaryKey": [
+        "date",
+        "stock_id"
+      ],
+      "analysisStatus": "MARKET_LIQUIDITY_ANALYSIS_READY",
+      "lastPublishedAt": "2026-07-18T12:39:41Z",
+      "publisher": "owner_publish_csv_v2.py",
+      "publishMode": "MARKET_ACTIVITY_INITIAL_ATOMIC_PUBLISH",
+      "actionable": false
     }
   ],
   "nonAuthoritativeFiles": [
@@ -311,10 +364,11 @@
       "publishRuleZh": "正式macro_snapshot.csv原則上僅能append新日期行；歷史格式修正須由Owner明確核准，並同步更新SHA-256與manifest",
       "actionable": false,
       "zh": "使用者整理資料，尚未完成CSV_AUTHORITY權威驗證；可供市場情報觀察，不啟用交易規則；2026-06-29已由Owner核准修正7筆歷史欄位錯位",
-      "sha256": "353025C29D678488F7022939C86C36CB15D3B348DC5876909D6779E56CFE213B",
-      "fileSizeBytes": 9075,
-      "rowCount": 39,
-      "lastPublishedAt": "2026-07-10T09:34:09Z",
+      "sha256": "6BE82C1389563772C482F1AF77EE624E524929FC3AA3D4AB1C70A5E987C30D84",
+      "fileSizeBytes": 12219,
+      "rowCount": 46,
+      "cutoffDate": "2026-07-27",
+      "lastPublishedAt": "2026-07-27T15:27:49Z",
       "publishApprovalZh": "Owner approved append; MARKET INTELLIGENCE sidecar remains observation only; actionable:false."
     },
     {
@@ -341,11 +395,12 @@
         "DecisionImpactZh",
         "Actionable"
       ],
-      "sha256": "CF539271D2E6586DC7B35973928FA1FC1FA45F810AEAD53DD2F57F1201BFAAA1",
-      "fileSizeBytes": 141221,
-      "rowCount": 219,
+      "sha256": "76B93F8932BA606390D44D68BD0D57D0BE7CB5D1D1364183F192A062D8B94BF2",
+      "fileSizeBytes": 317726,
+      "rowCount": 493,
+      "cutoffDate": "2026-07-27",
       "publishApprovalZh": "Owner approved append; MARKET INTELLIGENCE sidecar remains observation only; actionable:false.",
-      "lastPublishedAt": "2026-07-10T09:34:09Z"
+      "lastPublishedAt": "2026-07-27T15:27:49Z"
     },
     {
       "path": "data/fx_trend_observations.csv",
@@ -372,11 +427,12 @@
         "SummaryZh",
         "Actionable"
       ],
-      "sha256": "237482A432354DF89ADCAB845FC8878D4099F1CF85B7D4B3998E2FFA5774E1E6",
-      "fileSizeBytes": 2591,
-      "rowCount": 5,
+      "sha256": "BFEC53845C68D689D20CC29972550279E3A4AE8D473816EFDB0855FF0DD091CD",
+      "fileSizeBytes": 6066,
+      "rowCount": 12,
+      "cutoffDate": "2026-07-27",
       "publishApprovalZh": "Owner approved append; MARKET INTELLIGENCE sidecar remains observation only; actionable:false.",
-      "lastPublishedAt": "2026-07-10T09:34:09Z"
+      "lastPublishedAt": "2026-07-27T15:27:49Z"
     }
   ],
   "lastIntegritySyncAt": "2026-07-03T09:49:16Z"

@@ -534,6 +534,26 @@
       </div>
     </section>
 
+    <section>
+      <h2>16. Phase A 候選資料與 Owner 發布邊界</h2>
+      <div class="ok">
+        Launcher「一鍵更新資料與資訊」只執行 Daily Price candidate、Market Activity
+        candidate、Macro／FX／News candidate、validation 與 readiness；完成後停在
+        Owner review，不自動產生日報，也不直接寫入任何正式 CSV。
+      </div>
+      <ul>
+        <li><code>P1008_1B_UPDATE_MARKET_ACTIVITY.bat</code> 只解析 Bundled Python 3.12 並啟動 Python updater；驗證規則不寫在 BAT。</li>
+        <li><code>warroom_market_activity_updater.py</code> 只寫入 runtime candidate、TWSE raw receipt 與 review；正式 Market Activity 只能由 <code>owner_publish_csv_v2.py</code> 及精確 Owner phrase 發布。</li>
+        <li>Daily Price publisher 的終端 gate 會拒絕週末、未核准來源、零／無效 Close、PB 不一致及衝突日期；相同日期且整列一致時不重複追加。</li>
+        <li><code>2026-07-19</code> 的非交易日列只能先產生修復預覽；正式移除需輸入 <code>OWNER_APPROVE_REMOVE_INVALID_DAILY_PRICE_2026-07-19</code>。</li>
+        <li><code>Hon_Hai_Rev_YoY</code> 文字值不得轉成 0；無可信數值來源時，候選留空並標示資料缺口。</li>
+      </ul>
+      <div class="warn">
+        日常操作只按 Launcher 一鍵按鈕並檢查 receipt／readiness。不得人工改 CSV、關閉
+        TLS 驗證或以未核准來源補值；任何正式發布都必須另行取得 Owner 核准。
+      </div>
+    </section>
+
   </main>
 
   <script>
