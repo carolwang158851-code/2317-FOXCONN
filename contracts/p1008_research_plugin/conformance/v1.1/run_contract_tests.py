@@ -253,11 +253,17 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
         require(receipt_path and receipt_hash, "Phase A authority receipt metadata is missing")
         receipt_file = root / receipt_path
         require(receipt_file.is_file(), "Phase A authority receipt is missing")
+        receipt_committed = git_blob_bytes(root, receipt_path)
         require(
-            sha256_file(receipt_file) == receipt_hash,
+            sha256_bytes(receipt_committed) == receipt_hash,
             "Phase A authority receipt hash mismatch",
         )
-        receipt = read_json(receipt_file)
+        require(
+            normalize_checkout_eol(receipt_file.read_bytes())
+            == normalize_checkout_eol(receipt_committed),
+            "Phase A authority receipt worktree changed beyond checkout line endings",
+        )
+        receipt = json.loads(receipt_committed.decode("utf-8-sig"))
         require(
             receipt.get("acceptanceStatus")
             == "EXISTING_OWNER_PUBLISHED_AUTHORITIES_PINNED_FOR_CI",

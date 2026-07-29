@@ -211,6 +211,16 @@ class PhaseRoutingConformanceTests(unittest.TestCase):
             receipt["macroAuthorityDecision"]["requiredSha256"],
         )
 
+    def test_phase_a_receipt_hash_uses_canonical_git_blob(self) -> None:
+        receipt_ref = self.record["authorityBaselineReceipts"]["PHASE_A_CLOSURE_SIX"]
+        committed = self.runner.git_blob_bytes(ROOT, receipt_ref["path"])
+        worktree = (ROOT / receipt_ref["path"]).read_bytes()
+        self.assertEqual(self.runner.sha256_bytes(committed), receipt_ref["sha256"])
+        self.assertEqual(
+            self.runner.normalize_checkout_eol(worktree),
+            self.runner.normalize_checkout_eol(committed),
+        )
+
     def test_unapproved_seventh_authority_file_fails_closed(self) -> None:
         current = list(self.record["authorityBaselines"]["phaseAClosureSix"])
         current.append("data/unapproved.csv")
