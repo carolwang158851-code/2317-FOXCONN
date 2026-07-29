@@ -264,19 +264,89 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
             "Phase A authority receipt worktree changed beyond checkout line endings",
         )
         receipt = json.loads(receipt_committed.decode("utf-8-sig"))
+        acceptance_status = receipt.get("acceptanceStatus")
         require(
-            receipt.get("acceptanceStatus")
-            == "EXISTING_OWNER_PUBLISHED_AUTHORITIES_PINNED_FOR_CI",
+            acceptance_status
+            in {
+                "EXISTING_OWNER_PUBLISHED_AUTHORITIES_PINNED_FOR_CI",
+                "OWNER_APPROVED_FORMAL_AUTHORITY_PUBLISH",
+            },
             "Phase A authority receipt is not accepted",
-        )
-        require(
-            receipt.get("formalPublishExecutedByThisReceipt") is False,
-            "CI receipt must not claim a formal publish",
         )
         require(
             receipt.get("authorityFiles") == actual_hashes,
             "Phase A authority receipt does not match committed authority bytes",
         )
+        if acceptance_status == "EXISTING_OWNER_PUBLISHED_AUTHORITIES_PINNED_FOR_CI":
+            require(
+                receipt.get("formalPublishExecutedByThisReceipt") is False,
+                "Baseline CI receipt must not claim a formal publish",
+            )
+        else:
+            require(
+                receipt.get("formalPublishExecutedByThisReceipt") is True,
+                "Formal authority publish receipt must record the publish",
+            )
+            require(
+                receipt.get("ownerApprovalPhrases")
+                == [
+                    "OWNER_APPROVE_REMOVE_INVALID_DAILY_PRICE_2026-07-19",
+                    "OWNER_APPROVE_DAILY_PRICE_GAPS_20260722_20260724",
+                ],
+                "Stage 1 Daily Price Owner approval phrases do not match",
+            )
+            daily_publish = receipt.get("dailyPricePublish", {})
+            require(
+                daily_publish.get("afterGapPublishSha256")
+                == actual_hashes.get("data/2317_daily_price.csv"),
+                "Stage 1 Daily Price publish hash mismatch",
+            )
+            require(
+                daily_publish.get("beforeSha256")
+                == "25567CE773F7270ED3B22AFBD9D2664E467A2F3D525425AFAE7F20631E56D1B4",
+                "Stage 1 Daily Price prior authority hash mismatch",
+            )
+            require(
+                daily_publish.get("afterRows") == 116
+                and daily_publish.get("cutoff") == "2026-07-27"
+                and daily_publish.get("removedDates") == ["2026-07-19"]
+                and daily_publish.get("addedDates")
+                == ["2026-07-22", "2026-07-24"],
+                "Stage 1 Daily Price publish scope drifted",
+            )
+            for journal_name in ("removalJournal", "gapJournal"):
+                journal = daily_publish.get(journal_name, {})
+                require(
+                    journal.get("status") == "PUBLISHED"
+                    and journal.get("rollbackPerformed") is False
+                    and re.fullmatch(r"[0-9A-F]{64}", journal.get("sha256", "")),
+                    f"Stage 1 {journal_name} evidence is invalid",
+                )
+            manifest_ref = receipt.get("authorityManifest", {})
+            require(
+                manifest_ref.get("path") == "data/CSV_AUTHORITY_MANIFEST.json"
+                and manifest_ref.get("sha256")
+                == sha256_bytes(
+                    git_blob_bytes(root, "data/CSV_AUTHORITY_MANIFEST.json")
+                ),
+                "Stage 1 authority manifest receipt mismatch",
+            )
+            prior = receipt.get("priorBaselineReceipt", {})
+            require(
+                prior.get("path")
+                == "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_AUTHORITY_BASELINE_RECEIPT.json"
+                and prior.get("sha256")
+                == sha256_bytes(git_blob_bytes(root, prior.get("path", ""))),
+                "Stage 1 prior baseline receipt is not preserved",
+            )
+            market_decision = receipt.get("marketActivityDecision", {})
+            require(
+                market_decision.get("publishedInStage1") is False
+                and market_decision.get("promotionEligible") is False
+                and market_decision.get("formalSha256")
+                == actual_hashes.get("data/2317_daily_market_activity.csv"),
+                "Stage 1 improperly accepted Market Activity",
+            )
         macro_decision = receipt.get("macroAuthorityDecision", {})
         require(
             macro_decision.get("unapprovedRowsAccepted") is False,

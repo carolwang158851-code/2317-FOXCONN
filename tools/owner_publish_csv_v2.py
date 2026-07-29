@@ -101,6 +101,33 @@ INVALID_DAILY_PRICE_DATE = "2026-07-19"
 INVALID_DAILY_PRICE_APPROVAL_PHRASE = (
     "OWNER_APPROVE_REMOVE_INVALID_DAILY_PRICE_2026-07-19"
 )
+DAILY_PRICE_GAPS_APPROVAL_PHRASE = (
+    "OWNER_APPROVE_DAILY_PRICE_GAPS_20260722_20260724"
+)
+DAILY_PRICE_GAPS_CANDIDATE_SHA256 = (
+    "904D38BC382E21C3F90ADCDEB981423F0F8FB2E6D5ED7824D1961AD6CBD3DB2D"
+)
+DAILY_PRICE_GAPS_REQUIRED_FORMAL_SHA256 = (
+    "0D9D55B3C1C28F0BF45EFC7B623D77D672B07EC9B2099EAD6EDB3A5D7318DEC2"
+)
+DAILY_PRICE_GAPS_EXPECTED_FORMAL_SHA256 = (
+    "2581AF868AA0D8C4BFCEA913B156DBB515AF3929FAAE7D0FDC947EA4A8256304"
+)
+DAILY_PRICE_GAPS_EXPECTED_ROWS = 116
+DAILY_PRICE_GAPS_EXPECTED_VALUES = {
+    "2026-07-22": {
+        "Close": "251.50",
+        "QuarterKey": "2026Q1",
+        "BVPS_ref": "127.12",
+        "PB_daily": "1.978",
+    },
+    "2026-07-24": {
+        "Close": "252.50",
+        "QuarterKey": "2026Q1",
+        "BVPS_ref": "127.12",
+        "PB_daily": "1.986",
+    },
+}
 APPROVED_DAILY_PRICE_SOURCE_LEVELS = {
     "OFFICIAL_TWSE_A1",
     "OFFICIAL_TWSE_STOCK_DAY",
@@ -1951,6 +1978,291 @@ def run_invalid_daily_price_removal(
         ) from publish_error
 
 
+def _daily_price_bytes(
+    comments: list[str],
+    header: list[str],
+    rows: list[list[str]],
+) -> bytes:
+    text = io.StringIO(newline="")
+    for comment in comments:
+        text.write(comment + "\n")
+    writer = csv.writer(text, lineterminator="\n")
+    writer.writerow(header)
+    writer.writerows(rows)
+    return text.getvalue().encode("utf-8")
+
+
+def build_daily_price_gaps_preview(
+    package_root: Path,
+    candidate_path: Path,
+    output_dir: Path,
+) -> dict[str, Any]:
+    package_root = package_root.resolve()
+    candidate_path = candidate_path.resolve()
+    output_dir = output_dir.resolve()
+    runtime_root = (package_root / "runtime").resolve()
+    if (
+        not candidate_path.is_relative_to(runtime_root)
+        or not output_dir.is_relative_to(runtime_root)
+    ):
+        raise ValueError("Daily-price gaps candidate and journal must remain under runtime/")
+    if output_dir.exists():
+        raise FileExistsError(output_dir)
+    if sha256_file(candidate_path) != DAILY_PRICE_GAPS_CANDIDATE_SHA256:
+        raise ValueError("Daily-price gaps candidate SHA-256 is not Owner-approved")
+
+    formal_path = package_root / DAILY_TARGET
+    manifest_path = package_root / MANIFEST_PATH
+    before_sha = sha256_file(formal_path)
+    if before_sha != DAILY_PRICE_GAPS_REQUIRED_FORMAL_SHA256:
+        raise ValueError("Daily-price formal SHA-256 is not the approved post-removal baseline")
+
+    formal_header, formal_rows, formal_comments = read_csv_header_and_rows(formal_path)
+    candidate_header, candidate_rows, _ = read_csv_header_and_rows(candidate_path)
+    if candidate_header != formal_header:
+        raise ValueError("Daily-price gaps candidate schema does not match formal CSV")
+    candidate_rows = normalize_candidate_rows_for_publish(
+        DAILY_TARGET, candidate_header, candidate_rows
+    )
+    validate_daily_price_publish_rows(candidate_header, candidate_rows)
+
+    positions = {name: candidate_header.index(name) for name in candidate_header}
+    candidate_by_date = {row[positions["Date"]]: row for row in candidate_rows}
+    if set(candidate_by_date) != set(DAILY_PRICE_GAPS_EXPECTED_VALUES):
+        raise ValueError("Daily-price gaps candidate must contain exactly 2026-07-22 and 2026-07-24")
+    if len(candidate_by_date) != len(candidate_rows):
+        raise ValueError("Daily-price gaps candidate contains duplicate dates")
+    for row_date, expected in DAILY_PRICE_GAPS_EXPECTED_VALUES.items():
+        row = candidate_by_date[row_date]
+        for field, value in expected.items():
+            if row[positions[field]] != value:
+                raise ValueError(
+                    f"Daily-price gaps candidate {row_date} {field} mismatch"
+                )
+        if row[positions["DataSupportLevel"]] != "OFFICIAL_TWSE_A1":
+            raise ValueError(f"Daily-price gaps candidate {row_date} is not official TWSE A1")
+
+    formal_dates = [row[formal_header.index("Date")] for row in formal_rows]
+    if any(row_date in formal_dates for row_date in candidate_by_date):
+        raise ValueError("Daily-price gaps candidate conflicts with an existing formal date")
+    combined_rows = sorted(
+        [*formal_rows, *candidate_rows],
+        key=lambda row: row[formal_header.index("Date")],
+    )
+    combined_dates = [row[formal_header.index("Date")] for row in combined_rows]
+    if combined_dates != sorted(set(combined_dates)):
+        raise ValueError("Daily-price gaps combined dates are not unique and ordered")
+    if any(date.fromisoformat(value).weekday() >= 5 for value in combined_dates):
+        raise ValueError("Daily-price gaps combined authority contains a weekend date")
+    if len(combined_rows) != DAILY_PRICE_GAPS_EXPECTED_ROWS:
+        raise ValueError("Daily-price gaps combined row count is not Owner-approved")
+
+    combined_bytes = _daily_price_bytes(
+        formal_comments, formal_header, combined_rows
+    )
+    combined_sha = hashlib.sha256(combined_bytes).hexdigest().upper()
+    if combined_sha != DAILY_PRICE_GAPS_EXPECTED_FORMAL_SHA256:
+        raise ValueError("Daily-price gaps combined SHA-256 does not match Owner review")
+
+    manifest = read_json(manifest_path)
+    entry = next(
+        (
+            item
+            for item in manifest.get("authoritativeFiles", [])
+            if item.get("path") == DAILY_TARGET
+        ),
+        None,
+    )
+    if (
+        entry is None
+        or entry.get("sha256") != before_sha
+        or entry.get("rowCount") != len(formal_rows)
+        or (entry.get("dateRange") or {}).get("end") != formal_dates[-1]
+    ):
+        raise ValueError("Daily-price manifest does not match the post-removal formal CSV")
+
+    output_dir.mkdir(parents=True)
+    full_candidate_path = output_dir / "2317_daily_price_stage1_final.candidate.csv"
+    full_candidate_path.write_bytes(combined_bytes)
+    preview = {
+        "mode": "OWNER_GATED_DAILY_PRICE_GAPS",
+        "status": "OWNER_REVIEW_REQUIRED",
+        "target": DAILY_TARGET,
+        "approval_phrase": DAILY_PRICE_GAPS_APPROVAL_PHRASE,
+        "source_candidate_path": str(candidate_path),
+        "source_candidate_sha256": DAILY_PRICE_GAPS_CANDIDATE_SHA256,
+        "before_sha256": before_sha,
+        "before_rows": len(formal_rows),
+        "candidate_dates": sorted(candidate_by_date),
+        "final_candidate_path": str(full_candidate_path),
+        "final_candidate_sha256": combined_sha,
+        "final_rows": len(combined_rows),
+        "final_cutoff": combined_rows[-1][positions["Date"]],
+        "formal_csv_modified": False,
+        "promotion_eligible": False,
+        "actionable": False,
+    }
+    _atomic_write_json(output_dir / "GAPS_PREVIEW.json", preview)
+    return preview
+
+
+def run_daily_price_gaps_publish(
+    package_root: Path,
+    candidate_path: Path,
+    output_dir: Path,
+    *,
+    publish: bool = False,
+    approval_phrase: str | None = None,
+) -> dict[str, Any]:
+    preview = build_daily_price_gaps_preview(
+        package_root, candidate_path, output_dir
+    )
+    if not publish:
+        return preview
+    if approval_phrase != DAILY_PRICE_GAPS_APPROVAL_PHRASE:
+        raise ValueError(
+            "Daily-price gaps publish requires exact Owner approval phrase: "
+            + DAILY_PRICE_GAPS_APPROVAL_PHRASE
+        )
+
+    package_root = package_root.resolve()
+    output_dir = output_dir.resolve()
+    formal_path = package_root / DAILY_TARGET
+    manifest_path = package_root / MANIFEST_PATH
+    final_candidate_path = Path(preview["final_candidate_path"])
+    final_header, final_rows, _ = read_csv_header_and_rows(final_candidate_path)
+    published_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    manifest = read_json(manifest_path)
+    entry = next(
+        item
+        for item in manifest.get("authoritativeFiles", [])
+        if item.get("path") == DAILY_TARGET
+    )
+    entry["sha256"] = preview["final_candidate_sha256"]
+    entry["fileSizeBytes"] = final_candidate_path.stat().st_size
+    entry["rowCount"] = len(final_rows)
+    entry.setdefault("dateRange", {})["start"] = final_rows[0][0]
+    entry.setdefault("dateRange", {})["end"] = final_rows[-1][0]
+    entry["lastPublishedAt"] = published_at
+    entry["lastDailyPriceGapPublish"] = {
+        "mode": "APPEND_VERIFIED_DAILY_PRICE_GAPS",
+        "dates": preview["candidate_dates"],
+        "candidateSha256": preview["source_candidate_sha256"],
+        "previousFormalSha256": preview["before_sha256"],
+        "approvalPhrase": DAILY_PRICE_GAPS_APPROVAL_PHRASE,
+        "publishedAt": published_at,
+        "publisher": "owner_publish_csv_v2.py",
+        "runtimeSqliteModified": False,
+        "actionable": False,
+    }
+    manifest["approvedAt"] = published_at[:10]
+    manifest["approvalSource"] = (
+        f"{manifest.get('approvalSource', '')}; Owner-approved official TWSE daily-price "
+        "gaps 2026-07-22 and 2026-07-24 via owner_publish_csv_v2.py"
+    ).strip("; ")
+    manifest_bytes = (
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
+    ).encode("utf-8")
+
+    backup_dir = output_dir / "backup"
+    backup_dir.mkdir()
+    shutil.copy2(formal_path, backup_dir / formal_path.name)
+    shutil.copy2(manifest_path, backup_dir / manifest_path.name)
+    pre_hashes = {
+        DAILY_TARGET: sha256_file(formal_path),
+        MANIFEST_PATH: sha256_file(manifest_path),
+    }
+    backup_hashes = {
+        DAILY_TARGET: sha256_file(backup_dir / formal_path.name),
+        MANIFEST_PATH: sha256_file(backup_dir / manifest_path.name),
+    }
+    if backup_hashes != pre_hashes:
+        raise ValueError("Daily-price gaps backup verification failed")
+
+    journal_path = output_dir / "PUBLISH_JOURNAL.json"
+    journal: dict[str, Any] = {
+        "mode": "APPEND_VERIFIED_DAILY_PRICE_GAPS",
+        "status": "BACKUP_VERIFIED",
+        "created_at_utc": published_at,
+        "pre_hashes": pre_hashes,
+        "backup_hashes": backup_hashes,
+        "source_candidate_sha256": preview["source_candidate_sha256"],
+        "final_candidate_sha256": preview["final_candidate_sha256"],
+        "actionable": False,
+    }
+    _atomic_write_json(journal_path, journal)
+    try:
+        _atomic_write_bytes(formal_path, final_candidate_path.read_bytes())
+        _atomic_write_bytes(manifest_path, manifest_bytes)
+        post_header, post_rows, _ = read_csv_header_and_rows(formal_path)
+        post_manifest = read_json(manifest_path)
+        post_entry = next(
+            item
+            for item in post_manifest.get("authoritativeFiles", [])
+            if item.get("path") == DAILY_TARGET
+        )
+        post_dates = [row[post_header.index("Date")] for row in post_rows]
+        post_hashes = {
+            DAILY_TARGET: sha256_file(formal_path),
+            MANIFEST_PATH: sha256_file(manifest_path),
+        }
+        if (
+            post_header != final_header
+            or post_hashes[DAILY_TARGET] != DAILY_PRICE_GAPS_EXPECTED_FORMAL_SHA256
+            or len(post_rows) != DAILY_PRICE_GAPS_EXPECTED_ROWS
+            or post_dates != sorted(set(post_dates))
+            or post_entry.get("sha256") != post_hashes[DAILY_TARGET]
+            or post_entry.get("rowCount") != len(post_rows)
+            or (post_entry.get("dateRange") or {}).get("end") != post_dates[-1]
+        ):
+            raise ValueError("Daily-price gaps post-publish validation failed")
+        journal.update(
+            {
+                "status": "PUBLISHED",
+                "post_hashes": post_hashes,
+                "rows": len(post_rows),
+                "cutoff": post_dates[-1],
+                "rollback_performed": False,
+            }
+        )
+        _atomic_write_json(journal_path, journal)
+        return journal
+    except Exception as publish_error:
+        rollback_errors: list[str] = []
+        for backup, target in (
+            (backup_dir / formal_path.name, formal_path),
+            (backup_dir / manifest_path.name, manifest_path),
+        ):
+            try:
+                _atomic_write_bytes(target, backup.read_bytes())
+            except Exception as rollback_error:
+                rollback_errors.append(f"{target}: {rollback_error}")
+        restored_hashes = {
+            DAILY_TARGET: sha256_file(formal_path),
+            MANIFEST_PATH: sha256_file(manifest_path),
+        }
+        rollback_ok = not rollback_errors and restored_hashes == pre_hashes
+        journal.update(
+            {
+                "status": "ROLLED_BACK" if rollback_ok else "ROLLBACK_FAILED",
+                "publish_error": str(publish_error),
+                "rollback_errors": rollback_errors,
+                "restored_hashes": restored_hashes,
+                "rollback_performed": True,
+                "rollback_verified": rollback_ok,
+            }
+        )
+        _atomic_write_json(journal_path, journal)
+        if not rollback_ok:
+            raise RuntimeError(
+                "Daily-price gaps publish failed and rollback was incomplete"
+            ) from publish_error
+        raise RuntimeError(
+            "Daily-price gaps publish failed; CSV and manifest restored"
+        ) from publish_error
+
+
 def market_activity_approval_phrase(candidate_dates: list[str]) -> str:
     if not candidate_dates:
         raise ValueError("Market-activity candidate has no dates")
@@ -2194,10 +2506,46 @@ def main() -> int:
         ),
     )
     parser.add_argument("--invalid-daily-price-output-dir", type=Path)
+    parser.add_argument(
+        "--daily-price-gaps-publish",
+        action="store_true",
+        help=(
+            "Build or publish the fixed Owner-approved 2026-07-22/2026-07-24 "
+            "daily-price gaps candidate."
+        ),
+    )
+    parser.add_argument("--daily-price-gaps-candidate", type=Path)
+    parser.add_argument("--daily-price-gaps-output-dir", type=Path)
     parser.add_argument("--approval-phrase")
     args = parser.parse_args()
 
     package_root = args.package_root.resolve()
+    if args.daily_price_gaps_publish:
+        if (
+            args.invalid_daily_price_removal
+            or args.market_activity_publish
+            or args.remediation_replace
+        ):
+            parser.error("daily-price gaps publish is mutually exclusive")
+        required = {
+            "--daily-price-gaps-candidate": args.daily_price_gaps_candidate,
+            "--daily-price-gaps-output-dir": args.daily_price_gaps_output_dir,
+        }
+        missing = [flag for flag, value in required.items() if value is None]
+        if missing:
+            parser.error(
+                "daily-price gaps publish requires " + ", ".join(missing)
+            )
+        result = run_daily_price_gaps_publish(
+            package_root,
+            args.daily_price_gaps_candidate,
+            args.daily_price_gaps_output_dir,
+            publish=args.publish,
+            approval_phrase=args.approval_phrase,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
     if args.invalid_daily_price_removal:
         if args.market_activity_publish or args.remediation_replace:
             parser.error("invalid daily-price removal is mutually exclusive")

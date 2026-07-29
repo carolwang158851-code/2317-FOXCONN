@@ -43,6 +43,31 @@ class OwnerPublishCsvV2RemediationTests(unittest.TestCase):
         self.formal = self.root / PUBLISHER.DAILY_TARGET
         self.manifest = self.root / PUBLISHER.MANIFEST_PATH
         shutil.copy2(PACKAGE_ROOT / PUBLISHER.DAILY_TARGET, self.formal)
+        header, rows, comments = PUBLISHER.read_csv_header_and_rows(self.formal)
+        rows = [
+            row
+            for row in rows
+            if row[0] not in {"2026-07-19", "2026-07-22", "2026-07-24"}
+        ]
+        rows.append(
+            [
+                "2026-07-19",
+                "234.0",
+                "2026Q1",
+                "127.12",
+                "1.841",
+                "PUBLIC_MARKET_DATA",
+                "OK",
+            ]
+        )
+        rows.sort(key=lambda row: row[0])
+        self.formal.write_bytes(
+            PUBLISHER._daily_price_bytes(comments, header, rows)
+        )
+        self.assertEqual(
+            sha256(self.formal),
+            "25567CE773F7270ED3B22AFBD9D2664E467A2F3D525425AFAE7F20631E56D1B4",
+        )
         manifest = {
             "approvedAt": "2026-07-27",
             "approvalSource": "test",
@@ -157,6 +182,78 @@ class OwnerPublishCsvV2RemediationTests(unittest.TestCase):
             0,
         )
         self.assertEqual(sha256(target), before)
+
+    def test_daily_price_gaps_require_exact_owner_phrase(self) -> None:
+        PUBLISHER.run_invalid_daily_price_removal(
+            self.root,
+            self.root / "runtime" / "remove-first",
+            publish=True,
+            approval_phrase=PUBLISHER.INVALID_DAILY_PRICE_APPROVAL_PHRASE,
+        )
+        approved_candidate = (
+            PACKAGE_ROOT
+            / "runtime"
+            / "phase_a_final_owner_review"
+            / "P1008-PHASE-A-FINAL-OWNER-REVIEW-20260729-R2"
+            / "2317_daily_price_20260722_20260724.candidate.csv"
+        )
+        candidate = self.root / "runtime" / approved_candidate.name
+        shutil.copy2(approved_candidate, candidate)
+        before = (sha256(self.formal), sha256(self.manifest))
+        with self.assertRaisesRegex(ValueError, "exact Owner approval phrase"):
+            PUBLISHER.run_daily_price_gaps_publish(
+                self.root,
+                candidate,
+                self.root / "runtime" / "gaps-no-approval",
+                publish=True,
+                approval_phrase="WRONG",
+            )
+        self.assertEqual(before, (sha256(self.formal), sha256(self.manifest)))
+
+    def test_approved_daily_price_gaps_publish_is_atomic_and_manifest_synced(self) -> None:
+        PUBLISHER.run_invalid_daily_price_removal(
+            self.root,
+            self.root / "runtime" / "remove-first",
+            publish=True,
+            approval_phrase=PUBLISHER.INVALID_DAILY_PRICE_APPROVAL_PHRASE,
+        )
+        approved_candidate = (
+            PACKAGE_ROOT
+            / "runtime"
+            / "phase_a_final_owner_review"
+            / "P1008-PHASE-A-FINAL-OWNER-REVIEW-20260729-R2"
+            / "2317_daily_price_20260722_20260724.candidate.csv"
+        )
+        candidate = self.root / "runtime" / approved_candidate.name
+        shutil.copy2(approved_candidate, candidate)
+        result = PUBLISHER.run_daily_price_gaps_publish(
+            self.root,
+            candidate,
+            self.root / "runtime" / "gaps-approved",
+            publish=True,
+            approval_phrase=PUBLISHER.DAILY_PRICE_GAPS_APPROVAL_PHRASE,
+        )
+        header, rows, _ = PUBLISHER.read_csv_header_and_rows(self.formal)
+        by_date = {row[0]: dict(zip(header, row)) for row in rows}
+        entry = json.loads(self.manifest.read_text(encoding="utf-8"))[
+            "authoritativeFiles"
+        ][0]
+        self.assertEqual(result["status"], "PUBLISHED")
+        self.assertEqual(
+            sha256(self.formal),
+            PUBLISHER.DAILY_PRICE_GAPS_EXPECTED_FORMAL_SHA256,
+        )
+        self.assertEqual(len(rows), PUBLISHER.DAILY_PRICE_GAPS_EXPECTED_ROWS)
+        self.assertEqual(by_date["2026-07-22"]["Close"], "251.50")
+        self.assertEqual(by_date["2026-07-22"]["PB_daily"], "1.978")
+        self.assertEqual(by_date["2026-07-24"]["Close"], "252.50")
+        self.assertEqual(by_date["2026-07-24"]["PB_daily"], "1.986")
+        self.assertEqual(entry["sha256"], sha256(self.formal))
+        self.assertEqual(entry["rowCount"], len(rows))
+        self.assertEqual(entry["dateRange"]["end"], "2026-07-27")
+        self.assertFalse(
+            entry["lastDailyPriceGapPublish"]["runtimeSqliteModified"]
+        )
 
     @staticmethod
     def _write_daily(path: Path, rows: list[list[str]]) -> None:

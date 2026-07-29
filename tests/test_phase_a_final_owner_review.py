@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import shutil
 import sys
 import unittest
+import uuid
 from pathlib import Path
 
 
@@ -47,29 +50,11 @@ class PhaseAFinalOwnerReviewTests(unittest.TestCase):
         self.assertEqual(str(self.twse["2026-07-22"]["close"]), "251.50")
         self.assertEqual(str(self.twse["2026-07-24"]["close"]), "252.50")
 
-    def test_daily_gap_candidate_is_official_and_nonzero(self) -> None:
-        writes: dict[str, bytes] = {}
-        original_atomic_write = self.module.atomic_write
-        self.module.atomic_write = (
-            lambda path, value: writes.__setitem__(Path(path).name, value)
-        )
-        try:
-            result = self.module.build_daily_gap_candidate(
+    def test_daily_gap_candidate_refuses_already_published_dates(self) -> None:
+        with self.assertRaisesRegex(ValueError, "gap is no longer missing"):
+            self.module.build_daily_gap_candidate(
                 ROOT, self.twse, ROOT / "runtime" / "test-review"
             )
-        finally:
-            self.module.atomic_write = original_atomic_write
-        self.assertFalse(result["formal_csv_modified"])
-        self.assertEqual(len(result["rows"]), 2)
-        self.assertEqual(
-            [row["date"] for row in result["rows"]],
-            ["2026-07-22", "2026-07-24"],
-        )
-        self.assertTrue(
-            all(row["twse_url"].startswith("https://www.twse.com.tw/") for row in result["rows"])
-        )
-        self.assertTrue(all(float(row["twse_close"]) > 0 for row in result["rows"]))
-        self.assertIn("2317_daily_price_20260722_20260724.candidate.csv", writes)
 
     def test_complete_market_candidate_requires_six_close_matches(self) -> None:
         _, formal_rows = self.module.read_csv(ROOT / "data/2317_daily_price.csv")
@@ -107,6 +92,56 @@ class PhaseAFinalOwnerReviewTests(unittest.TestCase):
             "2317_daily_market_activity_20260720_20260727.complete.candidate.csv",
             writes,
         )
+
+    def test_stage1_market_candidate_uses_formal_price_and_writes_receipt_only(self) -> None:
+        receipt_dir = (
+            ROOT
+            / "runtime"
+            / "market_activity_incremental"
+            / "P1008-MARKET-ACTIVITY-20260728T160944642607Z"
+            / "receipts"
+        )
+        output_dir = (
+            ROOT
+            / "runtime"
+            / "phase_a_test_temp"
+            / f"stage1-market-{uuid.uuid4().hex}"
+        )
+        formal_paths = [
+            ROOT / self.module.FORMAL_DAILY,
+            ROOT / self.module.FORMAL_MARKET,
+            ROOT / self.module.FORMAL_MACRO,
+            ROOT / self.module.MANIFEST,
+        ]
+        before = {path: self.module.sha256_file(path) for path in formal_paths}
+        try:
+            result = self.module.build_stage1_market_activity_candidate(
+                ROOT, receipt_dir, output_dir
+            )
+            receipt = json.loads(
+                Path(result["receipt_path"]).read_text(encoding="utf-8")
+            )
+            self.assertEqual(len(result["candidate_rows"]), 6)
+            self.assertFalse(result["promotion_eligible"])
+            self.assertEqual(result["network_calls"], 0)
+            self.assertTrue(result["formal_hashes_unchanged"])
+            self.assertEqual(
+                receipt["formal_daily_price"]["sha256"],
+                self.module.DAILY_PRICE_GAPS_EXPECTED_FORMAL_SHA256,
+            )
+            self.assertEqual(receipt["candidate"]["sha256"], result["candidate_sha256"])
+            self.assertFalse(receipt["formal_market_activity_modified"])
+            self.assertFalse(receipt["formal_macro_modified"])
+            self.assertTrue(
+                all(row["source_month"] == "2026-07" for row in result["candidate_rows"])
+            )
+            self.assertEqual(
+                before,
+                {path: self.module.sha256_file(path) for path in formal_paths},
+            )
+        finally:
+            if output_dir.exists():
+                shutil.rmtree(output_dir)
 
     def test_macro_remediation_is_blank_not_zero(self) -> None:
         _, header, formal_rows = self.module.read_macro(

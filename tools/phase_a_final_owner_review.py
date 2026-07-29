@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from owner_publish_csv_v2 import (
+    DAILY_PRICE_GAPS_EXPECTED_FORMAL_SHA256,
     INVALID_DAILY_PRICE_APPROVAL_PHRASE,
     build_invalid_daily_price_removal_preview,
     market_activity_approval_phrase,
@@ -267,6 +268,7 @@ def build_market_candidate(
                 "twse_url": row["source_url"],
                 "twse_close": str(twse["close"]),
                 "formal_price_close": formal_close,
+                "source_month": row["source_month"],
             }
         )
 
@@ -297,6 +299,102 @@ def build_market_candidate(
         "formal_csv_modified": False,
         "promotion_eligible": False,
         "actionable": False,
+    }
+
+
+def build_stage1_market_activity_candidate(
+    package_root: Path,
+    receipt_dir: Path,
+    output_dir: Path,
+) -> dict[str, Any]:
+    package_root = package_root.resolve()
+    receipt_dir = receipt_dir.resolve()
+    output_dir = output_dir.resolve()
+    runtime_root = (package_root / "runtime").resolve()
+    if not output_dir.is_relative_to(runtime_root):
+        raise ValueError("Stage 1 Market Activity review must remain under runtime/")
+    if output_dir.exists():
+        raise FileExistsError(output_dir)
+    if sha256_file(package_root / FORMAL_DAILY) != DAILY_PRICE_GAPS_EXPECTED_FORMAL_SHA256:
+        raise ValueError("Formal Daily Price is not the approved Stage 1 authority")
+    output_dir.mkdir(parents=True)
+
+    protected_paths = (FORMAL_DAILY, FORMAL_MARKET, FORMAL_MACRO, MANIFEST)
+    protected_before = {
+        path.as_posix(): sha256_file(package_root / path)
+        for path in protected_paths
+    }
+    raw_path = receipt_dir / "2026-07.twse.raw.csv"
+    source_receipt_path = receipt_dir / "2026-07.receipt.json"
+    raw, source_receipt = load_offline_month(receipt_dir, "2026-07")
+    if sha256_bytes(raw) != EXPECTED_RAW_SHA256:
+        raise ValueError("Approved TWSE raw receipt SHA mismatch")
+    if source_receipt["request_url"] != source_url("2026-07"):
+        raise ValueError("TWSE receipt URL is not the approved official channel")
+    twse_rows = parse_twse_month(raw, "2026-07")
+
+    _, formal_price_rows = read_csv(package_root / FORMAL_DAILY)
+    dates = [row["Date"] for row in formal_price_rows]
+    if dates != sorted(set(dates)):
+        raise ValueError("Formal Daily Price dates are not unique and increasing")
+    expected_price = {
+        "price_by_date": {row["Date"]: row["Close"] for row in formal_price_rows}
+    }
+    market = build_market_candidate(
+        package_root, twse_rows, expected_price, output_dir
+    )
+    protected_after = {
+        path.as_posix(): sha256_file(package_root / path)
+        for path in protected_paths
+    }
+    if protected_after != protected_before:
+        raise ValueError("Stage 1 Market Activity review changed formal authority bytes")
+
+    receipt_payload = {
+        "schema_version": "1.0",
+        "receipt_id": "P1008_PHASE_A_STAGE1_MARKET_ACTIVITY_CANDIDATE_20260729",
+        "status": "OWNER_REVIEW_REQUIRED",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "formal_daily_price": {
+            "path": FORMAL_DAILY.as_posix(),
+            "sha256": protected_before[FORMAL_DAILY.as_posix()],
+            "rows": len(formal_price_rows),
+            "cutoff": dates[-1],
+        },
+        "twse_source": {
+            **source_receipt,
+            "source_receipt_path": str(source_receipt_path),
+            "source_receipt_sha256": sha256_file(source_receipt_path),
+            "raw_artifact_path": str(raw_path),
+            "raw_artifact_sha256": sha256_file(raw_path),
+            "http_calls_this_build": 0,
+        },
+        "candidate": {
+            "path": market["candidate_path"],
+            "sha256": market["candidate_sha256"],
+            "rows": len(market["candidate_rows"]),
+            "dates": [row["date"] for row in market["candidate_rows"]],
+            "expected_manifest_entry": market["expected_manifest_entry"],
+        },
+        "close_checks": market["candidate_rows"],
+        "formal_hashes_before": protected_before,
+        "formal_hashes_after": protected_after,
+        "formal_hashes_unchanged": True,
+        "formal_market_activity_modified": False,
+        "formal_macro_modified": False,
+        "promotion_eligible": False,
+        "network_calls": 0,
+        "openai_api_calls": 0,
+        "actionable": False,
+    }
+    receipt_path = output_dir / "MARKET_ACTIVITY_CANDIDATE_RECEIPT.json"
+    atomic_json(receipt_path, receipt_payload)
+    return {
+        **market,
+        "receipt_path": str(receipt_path),
+        "receipt_sha256": sha256_file(receipt_path),
+        "formal_hashes_unchanged": True,
+        "network_calls": 0,
     }
 
 
@@ -501,10 +599,20 @@ def main() -> int:
     parser.add_argument("--package-root", type=Path, required=True)
     parser.add_argument("--receipt-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--stage1-market-only",
+        action="store_true",
+        help="Rebuild only the post-Daily-Price Stage 1 Market Activity review candidate.",
+    )
     args = parser.parse_args()
+    builder = (
+        build_stage1_market_activity_candidate
+        if args.stage1_market_only
+        else build_package
+    )
     print(
         json.dumps(
-            build_package(args.package_root, args.receipt_dir, args.output_dir),
+            builder(args.package_root, args.receipt_dir, args.output_dir),
             ensure_ascii=False,
             indent=2,
         )

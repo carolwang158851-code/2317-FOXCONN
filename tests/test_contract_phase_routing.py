@@ -211,6 +211,45 @@ class PhaseRoutingConformanceTests(unittest.TestCase):
             receipt["macroAuthorityDecision"]["requiredSha256"],
         )
 
+    def test_phase_a_stage1_receipt_accepts_only_owner_approved_daily_price(self) -> None:
+        receipt_ref = self.record["authorityBaselineReceipts"]["PHASE_A_CLOSURE_SIX"]
+        receipt = json.loads(
+            (ROOT / receipt_ref["path"]).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            receipt["acceptanceStatus"],
+            "OWNER_APPROVED_FORMAL_AUTHORITY_PUBLISH",
+        )
+        self.assertTrue(receipt["formalPublishExecutedByThisReceipt"])
+        self.assertEqual(
+            receipt["ownerApprovalPhrases"],
+            [
+                "OWNER_APPROVE_REMOVE_INVALID_DAILY_PRICE_2026-07-19",
+                "OWNER_APPROVE_DAILY_PRICE_GAPS_20260722_20260724",
+            ],
+        )
+        self.assertEqual(
+            receipt["dailyPricePublish"]["afterGapPublishSha256"],
+            "2581AF868AA0D8C4BFCEA913B156DBB515AF3929FAAE7D0FDC947EA4A8256304",
+        )
+        self.assertFalse(receipt["marketActivityDecision"]["publishedInStage1"])
+        self.assertFalse(receipt["marketActivityDecision"]["promotionEligible"])
+        self.assertFalse(receipt["macroAuthorityDecision"]["publishedInStage1"])
+
+    def test_prior_phase_a_baseline_receipt_remains_immutable(self) -> None:
+        receipt_path = (
+            ROOT
+            / "contracts"
+            / "p1008_research_plugin"
+            / "acceptance"
+            / "v1.1"
+            / "PHASE_A_AUTHORITY_BASELINE_RECEIPT.json"
+        )
+        self.assertEqual(
+            hashlib.sha256(self.runner.git_blob_bytes(ROOT, receipt_path.relative_to(ROOT).as_posix())).hexdigest().upper(),
+            "550CD7C0EA961E4643F708AE066740AEC4F69B662E9A45A79C3248814737478B",
+        )
+
     def test_phase_a_receipt_hash_uses_canonical_git_blob(self) -> None:
         receipt_ref = self.record["authorityBaselineReceipts"]["PHASE_A_CLOSURE_SIX"]
         committed = self.runner.git_blob_bytes(ROOT, receipt_ref["path"])
