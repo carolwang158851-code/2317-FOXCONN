@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import shutil
@@ -12,6 +13,26 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ROOT / "tools"
 SCRIPT = TOOLS / "phase_a_final_owner_review.py"
+TWSE_EVIDENCE_DIR = (
+    ROOT
+    / "contracts"
+    / "p1008_research_plugin"
+    / "acceptance"
+    / "v1.1"
+    / "evidence"
+    / "phase_a_twse_202607"
+)
+TWSE_RAW_PATH = TWSE_EVIDENCE_DIR / "2026-07.twse.raw.csv"
+TWSE_RECEIPT_PATH = TWSE_EVIDENCE_DIR / "2026-07.receipt.json"
+TWSE_RAW_SHA256 = (
+    "5F796822BD279DA8843E6BAA19CC238FAD9E9801874247A98DD5045379D299B5"
+)
+TWSE_OFFICIAL_URL = (
+    "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY"
+    "?date=20260701&stockNo=2317&response=csv"
+)
+
+
 def load_module():
     sys.path.insert(0, str(TOOLS))
     spec = importlib.util.spec_from_file_location("phase_a_final_owner_review", SCRIPT)
@@ -26,20 +47,27 @@ class PhaseAFinalOwnerReviewTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.module = load_module()
-        lines = [
-            '"115年07月 2317 鴻海 各日成交資訊"',
-            '"日期","成交股數","成交金額","開盤價","最高價","最低價","收盤價","漲跌價差","成交筆數"',
-            '"115/07/20","48,579,978","11,422,510,146","235.50","238.50","230.50","234.50","+0.50","37,763"',
-            '"115/07/21","51,471,036","12,544,250,590","238.00","247.00","236.50","246.00","+11.50","47,986"',
-            '"115/07/22","67,787,081","17,204,588,878","249.00","259.00","248.00","251.50","+5.50","57,938"',
-            '"115/07/23","63,787,974","16,358,184,879","256.50","259.50","253.50","257.50","+6.00","53,611"',
-            '"115/07/24","33,694,573","8,518,599,943","254.00","256.00","251.50","252.50","-5.00","32,769"',
-            '"115/07/27","35,908,207","8,967,672,916","253.00","254.50","246.00","253.00","+0.50","32,663"',
-        ]
-        cls.raw = ("\r\n".join(lines) + "\r\n").encode("cp950")
+        cls.raw = TWSE_RAW_PATH.read_bytes()
+        cls.source_receipt = json.loads(
+            TWSE_RECEIPT_PATH.read_text(encoding="utf-8")
+        )
         cls.twse = cls.module.parse_twse_month(cls.raw, "2026-07")
 
     def test_review_uses_preserved_receipt_without_network(self) -> None:
+        raw_sha = hashlib.sha256(self.raw).hexdigest().upper()
+        self.assertEqual(raw_sha, TWSE_RAW_SHA256)
+        self.assertEqual(self.source_receipt["raw_artifact_sha256"], raw_sha)
+        self.assertEqual(self.source_receipt["raw_sha256"], raw_sha)
+        self.assertEqual(self.source_receipt["request_url"], TWSE_OFFICIAL_URL)
+        self.assertEqual(self.source_receipt["http_status"], 200)
+        self.assertEqual(self.source_receipt["https_get_count"], 1)
+        self.assertEqual(self.source_receipt["max_retries"], 0)
+        self.assertEqual(self.source_receipt["response_encoding"], "cp950")
+        self.assertTrue(str(self.source_receipt["tls_version"]).startswith("TLS"))
+        self.assertIn(
+            "Taiwan Stock Exchange Corporation",
+            self.source_receipt["certificate_subject"],
+        )
         source = SCRIPT.read_text(encoding="utf-8")
         self.assertNotIn("fetch_twse_month(", source)
         self.assertNotIn("urllib", source)
@@ -104,13 +132,6 @@ class PhaseAFinalOwnerReviewTests(unittest.TestCase):
         )
 
     def test_stage1_market_candidate_uses_formal_price_and_writes_receipt_only(self) -> None:
-        receipt_dir = (
-            ROOT
-            / "runtime"
-            / "market_activity_incremental"
-            / "P1008-MARKET-ACTIVITY-20260728T160944642607Z"
-            / "receipts"
-        )
         output_dir = (
             ROOT
             / "runtime"
@@ -135,7 +156,7 @@ class PhaseAFinalOwnerReviewTests(unittest.TestCase):
         self.module.read_formal_activity = lambda _path: stage1_rows
         try:
             result = self.module.build_stage1_market_activity_candidate(
-                ROOT, receipt_dir, output_dir
+                ROOT, TWSE_EVIDENCE_DIR, output_dir
             )
             receipt = json.loads(
                 Path(result["receipt_path"]).read_text(encoding="utf-8")
@@ -153,6 +174,20 @@ class PhaseAFinalOwnerReviewTests(unittest.TestCase):
             self.assertFalse(receipt["formal_macro_modified"])
             self.assertTrue(
                 all(row["source_month"] == "2026-07" for row in result["candidate_rows"])
+            )
+            self.assertEqual(
+                {
+                    row["date"]: row["twse_close"]
+                    for row in result["candidate_rows"]
+                },
+                {
+                    "2026-07-20": "234.50",
+                    "2026-07-21": "246.00",
+                    "2026-07-22": "251.50",
+                    "2026-07-23": "257.50",
+                    "2026-07-24": "252.50",
+                    "2026-07-27": "253.00",
+                },
             )
             self.assertEqual(
                 before,
