@@ -84,5 +84,7 @@ modules/p1008_research_plugin/tests/fixtures/authority_baselines.json text eol=l
 modules/p1008_research_plugin/tests/test_governance_boundaries.py text eol=lf
 contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_FINAL_INTEGRATION_AMENDMENT_RECEIPT.json text eol=lf
 contracts/p1008_research_plugin/acceptance/v1.1/evidence/PHASE_A_MACRO_ROW_IDENTITY_RECEIPT.json text eol=lf
+contracts/p1008_research_plugin/acceptance/v1.1/evidence/phase_a_twse_202607/2026-07.twse.raw.csv binary
+contracts/p1008_research_plugin/acceptance/v1.1/evidence/phase_a_twse_202607/2026-07.receipt.json text eol=lf
 rules/RULE_STATUS_MANIFEST.json text eol=lf
 tools/p1008_app_server.py text eol=lf

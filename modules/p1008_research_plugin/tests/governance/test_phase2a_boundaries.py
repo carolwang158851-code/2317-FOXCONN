@@ -118,6 +118,20 @@ TEST_CONSTANT_PATHS = {
         "contracts/p1008_research_plugin/acceptance/v1.1/evidence/"
         "PHASE_A_MACRO_ROW_IDENTITY_RECEIPT.json"
     ),
+    (
+        "contracts/p1008_research_plugin/acceptance/v1.1/evidence/"
+        "phase_a_twse_202607/2026-07.twse.raw.csv"
+    ),
+    (
+        "contracts/p1008_research_plugin/acceptance/v1.1/evidence/"
+        "phase_a_twse_202607/2026-07.receipt.json"
+    ),
+}
+RAW_BINARY_EVIDENCE_PATHS = {
+    (
+        "contracts/p1008_research_plugin/acceptance/v1.1/evidence/"
+        "phase_a_twse_202607/2026-07.twse.raw.csv"
+    ),
 }
 
 
@@ -208,12 +222,15 @@ class Phase2ABoundaryTests(unittest.TestCase):
         entries = []
         for line in lines[1:]:
             path, attributes = line.split(" ", 1)
-            self.assertEqual(attributes, "text eol=lf")
+            expected_attributes = (
+                "binary" if path in RAW_BINARY_EVIDENCE_PATHS else "text eol=lf"
+            )
+            self.assertEqual(attributes, expected_attributes)
             self.assertFalse(any(character in path for character in "*?["))
             entries.append(path)
         self.assertEqual(len(entries), len(set(entries)))
         self.assertEqual(set(entries), expected_hash_governed_paths())
-        self.assertEqual(len(entries), 87)
+        self.assertEqual(len(entries), 89)
 
     def test_crlf_and_mixed_manifest_bytes_are_rejected(self) -> None:
         for rejected in (MANIFEST_CRLF_SHA256, MANIFEST_MIXED_SHA256):

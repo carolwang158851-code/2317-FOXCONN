@@ -1,0 +1,20 @@
+{
+  "month": "2026-07",
+  "request_url": "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260701&stockNo=2317&response=csv",
+  "http_status": 200,
+  "https_get_count": 1,
+  "max_retries": 0,
+  "tls_version": "TLSv1.3",
+  "certificate_issuer": "countryName=TW, organizationName=TAIWAN-CA, organizationalUnitName=SSL Sub-CA, commonName=TWCA SSL Certification Authority",
+  "certificate_subject": "countryName=TW, stateOrProvinceName=Taiwan, localityName=Taipei, organizationName=Taiwan Stock Exchange Corporation, commonName=www.twse.com.tw",
+  "certificate_not_before": "May 14 00:45:28 2026 GMT",
+  "certificate_not_after": "Nov 28 15:59:59 2026 GMT",
+  "response_encoding": "cp950",
+  "response_bytes": 2469,
+  "raw_sha256": "5F796822BD279DA8843E6BAA19CC238FAD9E9801874247A98DD5045379D299B5",
+  "status": "SUCCESS",
+  "fetched_at_utc": "2026-07-28T16:09:46.632352Z",
+  "parsed_row_count": 19,
+  "raw_artifact_path": "C:\\Users\\a2231\\OneDrive\\foxconn_dashboard\\foxconn-system\\CODEX_P1008_PHASE_A\\runtime\\market_activity_incremental\\P1008-MARKET-ACTIVITY-20260728T160944642607Z\\receipts\\2026-07.twse.raw.csv",
+  "raw_artifact_sha256": "5F796822BD279DA8843E6BAA19CC238FAD9E9801874247A98DD5045379D299B5"
+}

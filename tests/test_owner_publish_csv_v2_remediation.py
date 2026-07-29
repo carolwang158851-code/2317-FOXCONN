@@ -88,6 +88,38 @@ class OwnerPublishCsvV2RemediationTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def _write_approved_daily_gap_candidate(self, path: Path) -> None:
+        header = [
+            "Date",
+            "Close",
+            "QuarterKey",
+            "BVPS_ref",
+            "PB_daily",
+            "DataSupportLevel",
+            "Status",
+        ]
+        source_level = "OFFICIAL_TWSE_A1"
+        self.assertIn(source_level, PUBLISHER.APPROVED_DAILY_PRICE_SOURCE_LEVELS)
+        rows = [
+            [
+                row_date,
+                expected["Close"],
+                expected["QuarterKey"],
+                expected["BVPS_ref"],
+                expected["PB_daily"],
+                source_level,
+                "STAGING_CANDIDATE",
+            ]
+            for row_date, expected in sorted(
+                PUBLISHER.DAILY_PRICE_GAPS_EXPECTED_VALUES.items()
+            )
+        ]
+        path.write_bytes(PUBLISHER._daily_price_bytes([], header, rows))
+        self.assertEqual(
+            sha256(path),
+            PUBLISHER.DAILY_PRICE_GAPS_CANDIDATE_SHA256,
+        )
+
     def test_preview_removes_only_invalid_sunday_without_formal_mutation(self) -> None:
         before = (sha256(self.formal), sha256(self.manifest))
         preview = PUBLISHER.run_invalid_daily_price_removal(
@@ -190,15 +222,12 @@ class OwnerPublishCsvV2RemediationTests(unittest.TestCase):
             publish=True,
             approval_phrase=PUBLISHER.INVALID_DAILY_PRICE_APPROVAL_PHRASE,
         )
-        approved_candidate = (
-            PACKAGE_ROOT
+        candidate = (
+            self.root
             / "runtime"
-            / "phase_a_final_owner_review"
-            / "P1008-PHASE-A-FINAL-OWNER-REVIEW-20260729-R2"
             / "2317_daily_price_20260722_20260724.candidate.csv"
         )
-        candidate = self.root / "runtime" / approved_candidate.name
-        shutil.copy2(approved_candidate, candidate)
+        self._write_approved_daily_gap_candidate(candidate)
         before = (sha256(self.formal), sha256(self.manifest))
         with self.assertRaisesRegex(ValueError, "exact Owner approval phrase"):
             PUBLISHER.run_daily_price_gaps_publish(
@@ -217,15 +246,12 @@ class OwnerPublishCsvV2RemediationTests(unittest.TestCase):
             publish=True,
             approval_phrase=PUBLISHER.INVALID_DAILY_PRICE_APPROVAL_PHRASE,
         )
-        approved_candidate = (
-            PACKAGE_ROOT
+        candidate = (
+            self.root
             / "runtime"
-            / "phase_a_final_owner_review"
-            / "P1008-PHASE-A-FINAL-OWNER-REVIEW-20260729-R2"
             / "2317_daily_price_20260722_20260724.candidate.csv"
         )
-        candidate = self.root / "runtime" / approved_candidate.name
-        shutil.copy2(approved_candidate, candidate)
+        self._write_approved_daily_gap_candidate(candidate)
         result = PUBLISHER.run_daily_price_gaps_publish(
             self.root,
             candidate,
