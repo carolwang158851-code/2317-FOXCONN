@@ -4,14 +4,15 @@
   "status": "PHASE_B1_ADDITIVE",
   "supportedEventTypes": ["MONTHLY_REVENUE"],
   "hashAlgorithm": "SHA-256",
-  "rootHash": "1AD3A079BB606C314153A1602656A8EA3A66DD02D7159D4234B6142B5D6A3BAD",
+  "rootHash": "B19929D11BD1C39BBDAAC72F56EA9CAED6F6FB5B25F6A5FE3818827616D31AEE",
   "artifacts": [
-    {"path": "REPORT_PRODUCTION_CONTRACT.md", "sha256": "E69CDF5BD67F287616515880A6CA2662BE4292D4440A8EB0C34413DFE3AFA7D6", "sizeBytes": 1034},
+    {"path": "REPORT_PRODUCTION_CONTRACT.md", "sha256": "0B4F2193203F97C8267A66283B06D154309635B62C29B56A254C082EDD1EEADB", "sizeBytes": 1785},
     {"path": "schemas/chart_data.schema.json", "sha256": "41C17314FE466E7807A0D94D430C0740012150E3AA3CF812B39394AB1BBD535B", "sizeBytes": 679},
-    {"path": "schemas/editorial_validation.schema.json", "sha256": "B277B2B4AAD5AF1492DE9EE1DB92CDCE34BC0C2F9B0A9C3E4AC9F4C17BECA566", "sizeBytes": 762},
+    {"path": "schemas/editorial_validation.schema.json", "sha256": "9F11D0EAC4659E51D7F5259C20572DC2069A017B749C0910F38478590BBFD4A8", "sizeBytes": 1541},
     {"path": "schemas/evidence_reference.schema.json", "sha256": "7B5134D5C3EA13A20E84B461C44D2D7D0AE5EEEFB78757E42186BDC88CDC7823", "sizeBytes": 526},
-    {"path": "schemas/report_candidate.schema.json", "sha256": "15AE4F88C0DF5B631A8242ABDE6C14AD3A464F4C47D9A12617AB2ADCDF228CD3", "sizeBytes": 1274},
-    {"path": "schemas/report_gate_result.schema.json", "sha256": "BBCA2BFCA79D6B4C8A6EF8D8D5CB7F6DEF9B9A3FEF4B6BB53D6877EA6ECA2A8C", "sizeBytes": 513}
+    {"path": "schemas/report_candidate.schema.json", "sha256": "7D81D396518D0346C7AC0821CAAF7913C3426030B984E86B8D3FAAC009AE9043", "sizeBytes": 1811},
+    {"path": "schemas/report_gate_result.schema.json", "sha256": "BBCA2BFCA79D6B4C8A6EF8D8D5CB7F6DEF9B9A3FEF4B6BB53D6877EA6ECA2A8C", "sizeBytes": 513},
+    {"path": "schemas/shorts_duration_validation.schema.json", "sha256": "B0BE0879431A4C9EEFABEE1B4D316B2FD87F5347AD28C95CA83725B803747E7B", "sizeBytes": 1112}
   ],
   "backwardCompatibility": "Consumes Analysis v1.0 and does not modify frozen Research Plugin contracts",
   "actionable": false

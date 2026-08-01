@@ -12,7 +12,23 @@
     "thesisState": {"enum": ["IMPROVING", "MAINTAINED", "REVIEW_REQUIRED"]},
     "evidenceBoundFacts": {"type": "array", "minItems": 1},
     "evidenceReferences": {"type": "array", "minItems": 1, "items": {"$ref": "evidence_reference.schema.json"}},
-    "sections": {"type": "array", "minItems": 20, "maxItems": 20},
+    "sections": {
+      "type": "array",
+      "minItems": 20,
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "required": ["sectionId", "titleZh", "bodyZh", "epistemicClass", "evidenceIds"],
+        "properties": {
+          "sectionId": {"type": "string", "minLength": 1},
+          "titleZh": {"type": "string", "minLength": 1},
+          "bodyZh": {"type": "string", "minLength": 1},
+          "epistemicClass": {"enum": ["FACT", "INFERENCE", "MIXED", "COMPLIANCE"]},
+          "evidenceIds": {"type": "array"}
+        },
+        "additionalProperties": false
+      }
+    },
     "actionable": {"const": false}
   },
   "additionalProperties": false

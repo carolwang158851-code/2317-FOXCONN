@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://analysis/v1.0/price_and_market_activity",
+  "type": "object",
+  "required": ["priceTrend", "recentPriceContext", "eventWindowReaction", "volumeTrend", "volumePercentile", "transactionActivity", "abnormalActivityFlag", "dataLimitations"],
+  "properties": {
+    "priceTrend": {"type": "string"},
+    "recentPriceContext": {
+      "type": "object",
+      "required": ["returnWindows", "dataWindow"],
+      "properties": {"returnWindows": {"type": "object"}, "dataWindow": {"type": "string"}},
+      "additionalProperties": false
+    },
+    "eventWindowReaction": {
+      "type": "object",
+      "required": ["status", "publicationDate", "returnWindows", "benchmarkAdjustedReturn", "limitations"],
+      "properties": {
+        "status": {"enum": ["CALCULATED", "INSUFFICIENT_DATA"]},
+        "publicationDate": {"type": ["string", "null"], "format": "date"},
+        "returnWindows": {"type": "object"},
+        "benchmarkAdjustedReturn": {"type": ["string", "null"]},
+        "limitations": {"type": "array"}
+      },
+      "additionalProperties": false
+    },
+    "volumeTrend": {"type": "string"},
+    "volumePercentile": {"type": "string"},
+    "transactionActivity": {"type": "string"},
+    "abnormalActivityFlag": {"type": "boolean"},
+    "dataLimitations": {"type": "array"}
+  },
+  "additionalProperties": false
+}

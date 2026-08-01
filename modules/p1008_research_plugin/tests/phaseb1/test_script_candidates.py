@@ -29,6 +29,7 @@ class PhaseB1ScriptCandidateTests(unittest.TestCase):
         for required in ("已驗證的新證據", "從營收到投資意義", "替代解釋", "反方證據", "下一個驗證點"):
             self.assertIn(required, text)
         self.assertIn("actionable=false", text)
+        self.assertIn("畫面合規字卡（不口播）", text)
 
     def test_shorts_has_all_timed_segments(self) -> None:
         text = ScriptBuilder().shorts_75s(self.report)

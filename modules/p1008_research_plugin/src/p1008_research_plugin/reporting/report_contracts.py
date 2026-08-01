@@ -65,6 +65,7 @@ class ReportSection(StrictModel):
     section_id: NonEmpty
     title_zh: NonEmpty
     body_zh: NonEmpty
+    epistemic_class: Literal["FACT", "INFERENCE", "MIXED", "COMPLIANCE"]
     evidence_ids: list[NonEmpty]
 
 
@@ -114,12 +115,37 @@ class ChartData(StrictModel):
 
 
 class EditorialValidation(StrictModel):
-    status: Literal["PASS", "FAIL_CLOSED"]
+    status: Literal["PASS", "FAIL"]
     report_candidate_sha256: Sha256 | None
     required_sections_present: bool
-    evidence_identity_preserved: bool
-    thesis_identity_preserved: bool
+    all_evidence_ids_resolve: bool
+    facts_and_inferences_separated: bool
+    unsupported_numeric_claims_absent: bool
+    forbidden_intent_claims_absent: bool
+    placeholders_absent: bool
+    duplicate_sections_absent: bool
+    shorts_duration_passed: bool
+    next_validation_evidence_bound: bool
+    invalidation_condition_present: bool
+    analysis_identity_preserved: bool
     scripts_read_validated_report_only: bool
+    actionable_false_preserved: bool
+    errors: list[str]
+    actionable: Literal[False] = False
+
+
+class ShortsDurationValidation(StrictModel):
+    record_type: Literal["P1008_SHORTS_DURATION_VALIDATION"] = (
+        "P1008_SHORTS_DURATION_VALIDATION"
+    )
+    speech_rate_assumption: NonEmpty
+    spoken_characters_per_second: float = Field(gt=0)
+    spoken_character_count: int = Field(ge=0)
+    estimated_spoken_seconds: float = Field(ge=0)
+    segment_character_counts: dict[NonEmpty, int]
+    segment_estimated_seconds: dict[NonEmpty, float]
+    duration_gate_status: Literal["PASS", "PASS_WITH_WARNING", "FAIL"]
+    warnings: list[str]
     errors: list[str]
     actionable: Literal[False] = False
 

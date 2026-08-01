@@ -36,10 +36,10 @@ PHASEB1_ACCEPTANCE_RECORD = (
     / "p1008_report_production"
     / "acceptance"
     / "v1.0"
-    / "PHASE_B1_OWNER_ACCEPTANCE_RECORD.json"
+    / "PHASE_B1_OWNER_AUTHORIZATION_RECORD.json"
 )
 PHASEB1_ACCEPTANCE_SHA256 = (
-    "4E016AF1D0B5489647F72071070718885ADC8FF10B597514A72E038FC64A9BD8"
+    "67AE473810DFD0C01049FDAA32FE5A7685297CBE579808C6A77475BB297C110D"
 )
 LEGACY_AUTHORITY_MANIFEST_SHA256 = (
     "8BA304C36C224F1F8ADF78CB871A8200FDA0656BD5824801330EAF6EAF855847"
@@ -97,10 +97,13 @@ class GovernanceBoundaryTests(unittest.TestCase):
         after = {relative: sha256(PACKAGE_ROOT / relative) for relative in BASELINE_HASHES}
         self.assertEqual(after, before)
 
-    def test_phaseb1_boundary_changes_are_owner_accepted_and_versioned(self) -> None:
+    def test_phaseb1_boundary_changes_are_owner_authorized_and_versioned(self) -> None:
         self.assertEqual(sha256(PHASEB1_ACCEPTANCE_RECORD), PHASEB1_ACCEPTANCE_SHA256)
         receipt = json.loads(PHASEB1_ACCEPTANCE_RECORD.read_text(encoding="utf-8"))
         self.assertEqual(receipt["phase"], "PHASE_B1")
+        self.assertTrue(receipt["implementationAuthorized"])
+        self.assertFalse(receipt["finalAcceptanceGranted"])
+        self.assertNotIn("acceptedBy", receipt)
         self.assertEqual(
             receipt["authorizationPhrase"],
             "OWNER_APPROVE_P1008_PHASE_B1_ANALYSIS_REPORT_MVP_53323CC2",

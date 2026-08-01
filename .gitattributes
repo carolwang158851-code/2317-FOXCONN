@@ -94,15 +94,18 @@ contracts/p1008_research_plugin/acceptance/v1.1/evidence/phase_a_twse_202607/202
 contracts/p1008_research_plugin/acceptance/v1.1/evidence/phase_a_twse_202607/2026-07.receipt.json text eol=lf
 rules/RULE_STATUS_MANIFEST.json text eol=lf
 tools/p1008_app_server.py text eol=lf
+tools/p1008_build_phaseb1_final_review.py text eol=lf
 contracts/p1008_analysis/v1.0/ANALYSIS_CONTRACT.md text eol=lf
 contracts/p1008_analysis/v1.0/contract.manifest.json text eol=lf
 contracts/p1008_analysis/v1.0/schemas/analysis_gate_result.schema.json text eol=lf
 contracts/p1008_analysis/v1.0/schemas/analysis_packet.schema.json text eol=lf
 contracts/p1008_analysis/v1.0/schemas/financial_trend.schema.json text eol=lf
 contracts/p1008_analysis/v1.0/schemas/market_psychology.schema.json text eol=lf
+contracts/p1008_analysis/v1.0/schemas/market_regime.schema.json text eol=lf
+contracts/p1008_analysis/v1.0/schemas/price_and_market_activity.schema.json text eol=lf
 contracts/p1008_analysis/v1.0/schemas/thesis_scorecard.schema.json text eol=lf
 contracts/p1008_analysis/v1.0/schemas/valuation_analysis.schema.json text eol=lf
-contracts/p1008_report_production/acceptance/v1.0/PHASE_B1_OWNER_ACCEPTANCE_RECORD.json text eol=lf
+contracts/p1008_report_production/acceptance/v1.0/PHASE_B1_OWNER_AUTHORIZATION_RECORD.json text eol=lf
 contracts/p1008_report_production/v1.0/REPORT_PRODUCTION_CONTRACT.md text eol=lf
 contracts/p1008_report_production/v1.0/contract.manifest.json text eol=lf
 contracts/p1008_report_production/v1.0/schemas/chart_data.schema.json text eol=lf
@@ -110,6 +113,7 @@ contracts/p1008_report_production/v1.0/schemas/editorial_validation.schema.json 
 contracts/p1008_report_production/v1.0/schemas/evidence_reference.schema.json text eol=lf
 contracts/p1008_report_production/v1.0/schemas/report_candidate.schema.json text eol=lf
 contracts/p1008_report_production/v1.0/schemas/report_gate_result.schema.json text eol=lf
+contracts/p1008_report_production/v1.0/schemas/shorts_duration_validation.schema.json text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/analysis/__init__.py text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/analysis/analysis_builder.py text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/analysis/analysis_contracts.py text eol=lf
@@ -123,6 +127,8 @@ modules/p1008_research_plugin/src/p1008_research_plugin/reporting/report_contrac
 modules/p1008_research_plugin/src/p1008_research_plugin/reporting/report_renderer_markdown.py text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/reporting/report_validator.py text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/reporting/script_builder.py text eol=lf
+modules/p1008_research_plugin/tests/fixtures/phaseb1/monthly_revenue_fixture_alt_dates.json text eol=lf
+modules/p1008_research_plugin/tests/phaseb1/test_owner_review_remediation_r1.py text eol=lf
 modules/p1008_research_plugin/tests/fixtures/phaseb1/monthly_revenue_fixture.json text eol=lf
 modules/p1008_research_plugin/tests/phaseb1/__init__.py text eol=lf
 modules/p1008_research_plugin/tests/phaseb1/helpers.py text eol=lf

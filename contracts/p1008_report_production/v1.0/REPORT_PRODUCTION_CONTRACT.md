@@ -10,6 +10,19 @@ The report candidate contains twenty ordered sections and prioritizes one
 investor question. Script candidates are downstream of the validated report;
 they have no Authority, CSV, Evidence Packet, web, model, or database access.
 
+Editorial validation is calculated, never defaulted. It fails closed on
+missing or unresolved citations, unsupported numbers, blurred fact/inference
+identity, prohibited intent claims, placeholders, duplicate sections, missing
+next-validation or invalidation evidence, analysis-identity drift, script
+provenance drift, or loss of the non-actionable boundary.
+
+The 75-second candidate stores a deterministic duration receipt. Spoken
+content assumes 4.2 pronounceable Traditional-Chinese characters, letters, or
+digits per second; headings and the non-spoken compliance card are excluded.
+60–75 seconds passes, 76–78 seconds passes with warning, over 78 fails, and
+under 60 warns. `actionable=false` appears only in non-spoken compliance
+metadata.
+
 All artifacts are deterministic UTF-8/LF files under
 `runtime/report_production/<run_id>/`. They remain Owner-review candidates,
 `actionable=false`, and never enter formal authority or Runtime SQLite.

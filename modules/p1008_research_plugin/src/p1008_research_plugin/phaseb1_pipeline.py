@@ -22,7 +22,13 @@ from .phaseb1_common import (
 )
 from .plugin_module.packet_gateway import PacketGateway, PacketValidationError
 from .plugin_module.router import PluginRouter
-from .reporting import ReportBuilder, ReportCandidate, ReportValidator, ScriptBuilder
+from .reporting import (
+    ReportBuilder,
+    ReportCandidate,
+    ReportValidator,
+    ScriptBuilder,
+    ShortsDurationValidator,
+)
 from .reporting.chart_data_builder import ChartDataBuilder
 from .reporting.report_renderer_markdown import MarkdownRenderer
 
@@ -91,7 +97,8 @@ class PhaseB1Pipeline:
             ),
         }
         suffix = sha256_bytes(canonical_json_bytes(identity))[:12]
-        return f"P1008-B1-MONTHLY-REVENUE-20260728-DET-{suffix}"
+        generated = self._utc(fixture["generatedAtUtc"])
+        return f"P1008-B1-MONTHLY-REVENUE-{generated:%Y%m%d}-DET-{suffix}"
 
     def build_analysis(self, *, output_base: Path | None = None) -> dict[str, Any]:
         fixture, evidence = self.load_inputs()
@@ -215,12 +222,19 @@ class PhaseB1Pipeline:
             generated_at_utc=generated,
         )
         report = ReportValidator().validate(report, analysis)
-        editorial = ReportValidator.editorial_result(report)
         charts = ChartDataBuilder().build(analysis)
         markdown = MarkdownRenderer().render(report).replace("\r\n", "\n")
         scripts = ScriptBuilder()
         longform = scripts.longform(report).replace("\r\n", "\n")
         shorts = scripts.shorts_75s(report).replace("\r\n", "\n")
+        duration = ShortsDurationValidator.validate(shorts)
+        editorial = ReportValidator.editorial_result(
+            report, analysis, longform, shorts, duration
+        )
+        if editorial.status != "PASS":
+            raise PhaseB1PipelineError(
+                "Editorial validation failed closed: " + "; ".join(editorial.errors)
+            )
 
         report_sha = atomic_write_json(
             run_root / "report_candidate.json",
@@ -233,6 +247,10 @@ class PhaseB1Pipeline:
         )
         atomic_write(run_root / "longform_script_candidate.md", longform.encode("utf-8"))
         atomic_write(run_root / "shorts_75s_candidate.md", shorts.encode("utf-8"))
+        atomic_write_json(
+            run_root / "shorts_duration_validation.json",
+            duration.model_dump(mode="json", by_alias=True),
+        )
         atomic_write_json(
             run_root / "editorial_validation.json",
             editorial.model_dump(mode="json", by_alias=True),
@@ -262,6 +280,7 @@ class PhaseB1Pipeline:
             "chart_data.json",
             "longform_script_candidate.md",
             "shorts_75s_candidate.md",
+            "shorts_duration_validation.json",
             "editorial_validation.json",
             "owner_review.json",
             "protected_state_hashes_before.json",

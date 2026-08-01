@@ -167,11 +167,13 @@ PHASEB1_HASH_GOVERNED_PATHS = {
     "contracts/p1008_analysis/v1.0/schemas/analysis_packet.schema.json",
     "contracts/p1008_analysis/v1.0/schemas/financial_trend.schema.json",
     "contracts/p1008_analysis/v1.0/schemas/market_psychology.schema.json",
+    "contracts/p1008_analysis/v1.0/schemas/market_regime.schema.json",
+    "contracts/p1008_analysis/v1.0/schemas/price_and_market_activity.schema.json",
     "contracts/p1008_analysis/v1.0/schemas/thesis_scorecard.schema.json",
     "contracts/p1008_analysis/v1.0/schemas/valuation_analysis.schema.json",
     (
         "contracts/p1008_report_production/acceptance/v1.0/"
-        "PHASE_B1_OWNER_ACCEPTANCE_RECORD.json"
+        "PHASE_B1_OWNER_AUTHORIZATION_RECORD.json"
     ),
     "contracts/p1008_report_production/v1.0/REPORT_PRODUCTION_CONTRACT.md",
     "contracts/p1008_report_production/v1.0/contract.manifest.json",
@@ -180,6 +182,7 @@ PHASEB1_HASH_GOVERNED_PATHS = {
     "contracts/p1008_report_production/v1.0/schemas/evidence_reference.schema.json",
     "contracts/p1008_report_production/v1.0/schemas/report_candidate.schema.json",
     "contracts/p1008_report_production/v1.0/schemas/report_gate_result.schema.json",
+    "contracts/p1008_report_production/v1.0/schemas/shorts_duration_validation.schema.json",
     "docs/APP_WORKFLOW.md",
     "modules/p1008_research_plugin/docs/phaseb1/PhaseB1_Analysis_Report_MVP.md",
     "modules/p1008_research_plugin/src/p1008_research_plugin/analysis/__init__.py",
@@ -197,6 +200,8 @@ PHASEB1_HASH_GOVERNED_PATHS = {
     ),
     "modules/p1008_research_plugin/src/p1008_research_plugin/phaseb1_common.py",
     "modules/p1008_research_plugin/src/p1008_research_plugin/phaseb1_pipeline.py",
+    "modules/p1008_research_plugin/tests/fixtures/phaseb1/monthly_revenue_fixture_alt_dates.json",
+    "modules/p1008_research_plugin/tests/phaseb1/test_owner_review_remediation_r1.py",
     "modules/p1008_research_plugin/src/p1008_research_plugin/reporting/__init__.py",
     (
         "modules/p1008_research_plugin/src/p1008_research_plugin/reporting/"
@@ -231,6 +236,7 @@ PHASEB1_HASH_GOVERNED_PATHS = {
     "tests/test_phaseb1_launcher.py",
     "tools/p1008_build_analysis.py",
     "tools/p1008_build_report.py",
+    "tools/p1008_build_phaseb1_final_review.py",
 }
 
 
@@ -333,7 +339,7 @@ class Phase2ABoundaryTests(unittest.TestCase):
             entries.append(path)
         self.assertEqual(len(entries), len(set(entries)))
         self.assertEqual(set(entries), expected_hash_governed_paths())
-        self.assertEqual(len(entries), 138)
+        self.assertEqual(len(entries), 144)
 
     def test_crlf_and_mixed_manifest_bytes_are_rejected(self) -> None:
         for rejected in (MANIFEST_CRLF_SHA256, MANIFEST_MIXED_SHA256):

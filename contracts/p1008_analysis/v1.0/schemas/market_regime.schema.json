@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://analysis/v1.0/market_regime",
+  "type": "object",
+  "required": ["primaryRegime", "evidenceIds", "confidence", "evaluatedConditions", "alternativeRegime", "invalidationCondition"],
+  "properties": {
+    "primaryRegime": {"enum": ["AI_EUPHORIA", "ETF_FOMO", "EARNINGS_REASSESSMENT", "BROAD_CORRECTION", "PANIC", "DIVIDEND_FOCUS", "FUNDAMENTAL_DOWNTURN", "RANGE_BOUND", "INSUFFICIENT_DATA"]},
+    "evidenceIds": {"type": "array"},
+    "confidence": {"enum": ["HIGH", "MEDIUM", "LOW"]},
+    "evaluatedConditions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["conditionId", "description", "result", "evidenceIds"],
+        "properties": {
+          "conditionId": {"type": "string", "minLength": 1},
+          "description": {"type": "string", "minLength": 1},
+          "result": {"enum": ["PASS", "FAIL", "INSUFFICIENT_DATA"]},
+          "evidenceIds": {"type": "array"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "alternativeRegime": {"type": "string"},
+    "invalidationCondition": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": false
+}

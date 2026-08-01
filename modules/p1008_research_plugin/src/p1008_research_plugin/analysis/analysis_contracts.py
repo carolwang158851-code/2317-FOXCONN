@@ -7,7 +7,7 @@ snake_case for readability.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from typing import Annotated, Any, Literal
 
@@ -43,6 +43,7 @@ class TrendStatus(str, Enum):
 
 
 class ValuationStatus(str, Enum):
+    DESCRIPTIVE_ONLY = "DESCRIPTIVE_ONLY"
     ATTRACTIVE = "ATTRACTIVE"
     FAIR = "FAIR"
     FAIR_TO_EXPENSIVE = "FAIR_TO_EXPENSIVE"
@@ -96,6 +97,17 @@ class FactOrInference(str, Enum):
     INFERENCE = "INFERENCE"
 
 
+class ConfidenceClass(str, Enum):
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+
+
+class EventWindowStatus(str, Enum):
+    CALCULATED = "CALCULATED"
+    INSUFFICIENT_DATA = "INSUFFICIENT_DATA"
+
+
 class MetricAssessment(StrictModel):
     value: str | None
     unit: NonEmpty
@@ -134,25 +146,69 @@ class ValuationAnalysis(StrictModel):
     roe_support: TrendStatus
     earnings_support: TrendStatus
     valuation_status: ValuationStatus
+    valuation_policy_id: NonEmpty | None = None
     data_window: NonEmpty
     limitations: list[NonEmpty]
+
+    @model_validator(mode="after")
+    def unapproved_policy_is_descriptive_only(self) -> "ValuationAnalysis":
+        evaluative = {
+            ValuationStatus.ATTRACTIVE,
+            ValuationStatus.FAIR,
+            ValuationStatus.FAIR_TO_EXPENSIVE,
+            ValuationStatus.EXPENSIVE,
+            ValuationStatus.EXTREME,
+        }
+        if self.valuation_policy_id is None and self.valuation_status in evaluative:
+            raise ValueError("evaluative valuation status requires an approved valuation policy")
+        return self
+
+
+class RecentPriceContext(StrictModel):
+    return_windows: dict[NonEmpty, str]
+    data_window: NonEmpty
+
+
+class EventWindowReaction(StrictModel):
+    status: EventWindowStatus
+    publication_date: date | None
+    return_windows: dict[NonEmpty, str]
+    benchmark_adjusted_return: str | None
+    limitations: list[NonEmpty]
+
+    @model_validator(mode="after")
+    def calculated_windows_require_a_date(self) -> "EventWindowReaction":
+        if self.status is EventWindowStatus.CALCULATED:
+            if self.publication_date is None or not self.return_windows:
+                raise ValueError("calculated event windows require publication date and returns")
+        elif self.return_windows:
+            raise ValueError("insufficient event window cannot contain calculated returns")
+        return self
 
 
 class PriceAndMarketActivity(StrictModel):
     price_trend: TrendStatus
-    return_windows: dict[NonEmpty, str]
+    recent_price_context: RecentPriceContext
+    event_window_reaction: EventWindowReaction
     volume_trend: TrendStatus
     volume_percentile: str
     transaction_activity: str
     abnormal_activity_flag: bool
-    price_reaction_to_event: str
     data_limitations: list[NonEmpty]
+
+
+class RegimeCondition(StrictModel):
+    condition_id: NonEmpty
+    description: NonEmpty
+    result: Literal["PASS", "FAIL", "INSUFFICIENT_DATA"]
+    evidence_ids: list[NonEmpty]
 
 
 class MarketRegime(StrictModel):
     primary_regime: MarketRegimeName
     evidence_ids: list[NonEmpty]
-    confidence: float = Field(ge=0, le=1)
+    confidence: ConfidenceClass
+    evaluated_conditions: list[RegimeCondition] = Field(min_length=1)
     alternative_regime: MarketRegimeName
     invalidation_condition: NonEmpty
 
@@ -163,7 +219,7 @@ class MarketPsychology(StrictModel):
     evidence_basis: list[NonEmpty]
     alternative_explanation: NonEmpty
     counter_evidence: list[NonEmpty]
-    confidence: float = Field(ge=0, le=1)
+    confidence: ConfidenceClass
     invalidation_condition: NonEmpty
 
 
@@ -213,7 +269,7 @@ class MaterialConclusion(StrictModel):
     source_tier: NonEmpty
     source_date: NonEmpty
     data_cutoff: NonEmpty
-    confidence: float = Field(ge=0, le=1)
+    confidence: ConfidenceClass
     alternative_explanation: NonEmpty
     counter_evidence: list[NonEmpty]
     missing_evidence: list[NonEmpty]
@@ -258,6 +314,19 @@ class AnalysisPacket(StrictModel):
         if self.generated_at_utc.utcoffset() is None or self.generated_at_utc.utcoffset().total_seconds() != 0:
             raise ValueError("generatedAtUtc must be timezone-aware UTC")
         evidence = set(self.source_evidence_ids)
+        governed_groups = [
+            self.market_regime.evidence_ids,
+            self.market_psychology.evidence_basis,
+            self.thesis_scorecard.evidence_ids,
+            *[item.evidence_ids for item in self.event_impact_chain],
+            *[item.evidence_ids for item in self.market_regime.evaluated_conditions],
+        ]
+        governed_groups.extend(
+            getattr(self.financial_trend, name).evidence_ids
+            for name in self.financial_trend.__class__.model_fields
+        )
+        if any(not set(group).issubset(evidence) for group in governed_groups):
+            raise ValueError("analysis component cites unknown evidence")
         for conclusion in self.material_conclusions:
             if not set(conclusion.evidence_ids).issubset(evidence):
                 raise ValueError("material conclusion cites unknown evidence")

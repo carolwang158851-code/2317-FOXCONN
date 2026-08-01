@@ -15,13 +15,22 @@ search the web, publish formal data, write Runtime SQLite, or change rules.
 
 - Trend: `IMPROVING`, `STABLE`, `WATCH`, `WEAKENING`, `BROKEN`,
   `INSUFFICIENT_DATA`.
-- Valuation: `ATTRACTIVE`, `FAIR`, `FAIR_TO_EXPENSIVE`, `EXPENSIVE`,
-  `EXTREME`, `INSUFFICIENT_DATA`.
+- Valuation: `DESCRIPTIVE_ONLY` is mandatory unless an Owner-approved
+  valuation policy ID supplies explicit classification thresholds. Evaluative
+  labels remain schema vocabulary but fail closed without that policy.
 - Market regime: `AI_EUPHORIA`, `ETF_FOMO`, `EARNINGS_REASSESSMENT`,
   `BROAD_CORRECTION`, `PANIC`, `DIVIDEND_FOCUS`, `FUNDAMENTAL_DOWNTURN`,
   `RANGE_BOUND`, `INSUFFICIENT_DATA`.
 - Event links: `VERIFIED`, `INFERRED`, `UNCONFIRMED`, `NOT_APPLICABLE`.
 - Thesis: `IMPROVING`, `MAINTAINED`, `REVIEW_REQUIRED`.
+- Confidence: categorical `HIGH`, `MEDIUM`, or `LOW`; numeric confidence is
+  rejected because it implies unsupported precision.
+
+Recent trailing 1/5/20-day returns are market context, not event reaction.
+Event-window returns require a unique official publication date and complete
+T-1/T+1/T+5 governed price observations; otherwise the event result is
+`INSUFFICIENT_DATA`. Market-regime labels are derived from stored, evidence-ID
+bound conditions rather than fixed narrative assignments.
 
 Missing data maps to `INSUFFICIENT_DATA`, never zero. Volume describes market
 activity only and cannot establish investor identity or intent. AI exposure is

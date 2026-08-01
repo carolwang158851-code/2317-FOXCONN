@@ -2,12 +2,25 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "p1008://report/v1.0/editorial_validation",
   "type": "object",
-  "required": ["status", "reportCandidateSha256", "requiredSectionsPresent", "evidenceIdentityPreserved", "thesisIdentityPreserved", "scriptsReadValidatedReportOnly", "errors", "actionable"],
+  "required": ["status", "reportCandidateSha256", "requiredSectionsPresent", "allEvidenceIdsResolve", "factsAndInferencesSeparated", "unsupportedNumericClaimsAbsent", "forbiddenIntentClaimsAbsent", "placeholdersAbsent", "duplicateSectionsAbsent", "shortsDurationPassed", "nextValidationEvidenceBound", "invalidationConditionPresent", "analysisIdentityPreserved", "scriptsReadValidatedReportOnly", "actionableFalsePreserved", "errors", "actionable"],
   "properties": {
-    "status": {"enum": ["PASS", "FAIL_CLOSED"]}, "reportCandidateSha256": {"type": ["string", "null"]},
-    "requiredSectionsPresent": {"type": "boolean"}, "evidenceIdentityPreserved": {"type": "boolean"},
-    "thesisIdentityPreserved": {"type": "boolean"}, "scriptsReadValidatedReportOnly": {"type": "boolean"},
-    "errors": {"type": "array"}, "actionable": {"const": false}
+    "status": {"enum": ["PASS", "FAIL"]},
+    "reportCandidateSha256": {"type": ["string", "null"]},
+    "requiredSectionsPresent": {"type": "boolean"},
+    "allEvidenceIdsResolve": {"type": "boolean"},
+    "factsAndInferencesSeparated": {"type": "boolean"},
+    "unsupportedNumericClaimsAbsent": {"type": "boolean"},
+    "forbiddenIntentClaimsAbsent": {"type": "boolean"},
+    "placeholdersAbsent": {"type": "boolean"},
+    "duplicateSectionsAbsent": {"type": "boolean"},
+    "shortsDurationPassed": {"type": "boolean"},
+    "nextValidationEvidenceBound": {"type": "boolean"},
+    "invalidationConditionPresent": {"type": "boolean"},
+    "analysisIdentityPreserved": {"type": "boolean"},
+    "scriptsReadValidatedReportOnly": {"type": "boolean"},
+    "actionableFalsePreserved": {"type": "boolean"},
+    "errors": {"type": "array", "items": {"type": "string"}},
+    "actionable": {"const": false}
   },
   "additionalProperties": false
 }
