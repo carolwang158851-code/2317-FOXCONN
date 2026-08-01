@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://report/v1.0/editorial_validation",
+  "type": "object",
+  "required": ["status", "reportCandidateSha256", "requiredSectionsPresent", "evidenceIdentityPreserved", "thesisIdentityPreserved", "scriptsReadValidatedReportOnly", "errors", "actionable"],
+  "properties": {
+    "status": {"enum": ["PASS", "FAIL_CLOSED"]}, "reportCandidateSha256": {"type": ["string", "null"]},
+    "requiredSectionsPresent": {"type": "boolean"}, "evidenceIdentityPreserved": {"type": "boolean"},
+    "thesisIdentityPreserved": {"type": "boolean"}, "scriptsReadValidatedReportOnly": {"type": "boolean"},
+    "errors": {"type": "array"}, "actionable": {"const": false}
+  },
+  "additionalProperties": false
+}

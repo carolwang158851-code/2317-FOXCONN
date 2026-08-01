@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://analysis/v1.0/valuation_analysis",
+  "type": "object",
+  "required": ["currentPrice", "currentPb", "governedHistoricalPbPosition", "roeSupport", "earningsSupport", "valuationStatus", "dataWindow", "limitations"],
+  "properties": {
+    "currentPrice": {"type": "string"}, "currentPb": {"type": "string"},
+    "governedHistoricalPbPosition": {"type": "string"}, "roeSupport": {"type": "string"},
+    "earningsSupport": {"type": "string"},
+    "valuationStatus": {"enum": ["ATTRACTIVE", "FAIR", "FAIR_TO_EXPENSIVE", "EXPENSIVE", "EXTREME", "INSUFFICIENT_DATA"]},
+    "dataWindow": {"type": "string"}, "limitations": {"type": "array"}
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,19 @@
+{
+  "contractId": "P1008_ANALYSIS",
+  "contractVersion": "1.0",
+  "status": "PHASE_B1_ADDITIVE",
+  "supportedEventTypes": ["MONTHLY_REVENUE"],
+  "hashAlgorithm": "SHA-256",
+  "rootHash": "EC974F645137D56B244139FF76F6019F8AEA632B8C3ABA2F428877C94B245FD7",
+  "artifacts": [
+    {"path": "ANALYSIS_CONTRACT.md", "sha256": "FDEAD7761E76E2CCD2B3A95A61873B4902D695FBA9FF78109E2FB6FA82260DBB", "sizeBytes": 1656},
+    {"path": "schemas/analysis_gate_result.schema.json", "sha256": "AB95287FB9E085471C8BAF0CEFFF345DCC62AD07A73B9ACC1243D1AFE1FDA076", "sizeBytes": 566},
+    {"path": "schemas/analysis_packet.schema.json", "sha256": "3B565F9607BB16C503C7E2D810C56748931543395CE476032103915D0D3B1A96", "sizeBytes": 1905},
+    {"path": "schemas/financial_trend.schema.json", "sha256": "FC5F7E59DA18E9123756D3B0B3DF697C9EE5B84384252BBFC957F2288905A9BD", "sizeBytes": 757},
+    {"path": "schemas/market_psychology.schema.json", "sha256": "0429972C8ECC7C06BE649E09302309027AE924D3706F34D3E8680F8992A4F31D", "sizeBytes": 667},
+    {"path": "schemas/thesis_scorecard.schema.json", "sha256": "0FDD7FBF89082653C53BBF67D111ECA1B474FB8E942935F5CB7492E3B1CB2246", "sizeBytes": 635},
+    {"path": "schemas/valuation_analysis.schema.json", "sha256": "EEFF219033DFFFE5CFB6DA4DAB6F6296847B8650082DFE7CDB0C6E3C8BE343F4", "sizeBytes": 751}
+  ],
+  "backwardCompatibility": "Does not modify frozen Research Plugin contract bytes",
+  "actionable": false
+}

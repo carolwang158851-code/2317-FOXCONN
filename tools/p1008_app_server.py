@@ -853,6 +853,32 @@ class P1008JobManager:
                 ],
                 timeout_seconds=180,
             )
+        if job_type in {"analysis-candidate", "report-candidate"}:
+            is_analysis = job_type == "analysis-candidate"
+            bat_name = "P1008_BUILD_ANALYSIS.bat" if is_analysis else "P1008_BUILD_REPORT.bat"
+            label = "Build Phase B1 Analysis candidate" if is_analysis else "Build Phase B1 Report candidate"
+            exit_code = self._run_bat_step(
+                job_type,
+                label,
+                self.package_root / bat_name,
+                [],
+                timeout_seconds=180,
+            )
+            latest = self._latest_phaseb1_status()
+            status = (
+                "ANALYSIS_CANDIDATE_READY"
+                if is_analysis and exit_code == 0
+                else "REPORT_CANDIDATE_READY"
+                if not is_analysis and exit_code == 0
+                else "FAIL_CLOSED"
+            )
+            self._set_component_status(
+                "phaseB1",
+                status,
+                runId=latest.get("runId", ""),
+                outputPath=latest.get("outputPath", ""),
+                actionable=False,
+            )
         if job_type in {"default", "update-data"}:
             if component_failures:
                 for failure in component_failures:
@@ -883,6 +909,22 @@ class P1008JobManager:
             return rows[-1].get("date", "") if rows else ""
         except OSError:
             return ""
+
+    def _latest_phaseb1_status(self) -> dict[str, str]:
+        root = self.package_root / "runtime" / "report_production"
+        candidates: list[tuple[str, dict[str, Any], Path]] = []
+        if root.is_dir():
+            for path in root.glob("*/run_manifest.json"):
+                payload = read_json(path, default={}) or {}
+                if payload.get("eventType") == "MONTHLY_REVENUE":
+                    candidates.append((str(payload.get("generatedAtUtc") or ""), payload, path.parent))
+        if not candidates:
+            return {"runId": "", "outputPath": ""}
+        _timestamp, payload, output_path = sorted(candidates, key=lambda item: (item[0], str(item[2])))[-1]
+        return {
+            "runId": str(payload.get("runId") or ""),
+            "outputPath": str(output_path),
+        }
 
     def _write_launcher_market_status(
         self, status: str, launcher_status: str, error: str
@@ -1165,6 +1207,8 @@ class P1008AppHandler(http.server.SimpleHTTPRequestHandler):
             "/api/p1008/run/update-data": "update-data",
             "/api/p1008/run/news-scan": "news-scan",
             "/api/p1008/run/report": "report",
+            "/api/p1008/run/analysis-candidate": "analysis-candidate",
+            "/api/p1008/run/report-candidate": "report-candidate",
         }
         if parsed.path in {"/api/p1008/publish/formal", "/api/p1008/owner-publish/formal"}:
             try:

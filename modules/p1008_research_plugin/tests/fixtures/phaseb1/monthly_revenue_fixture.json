@@ -1,0 +1,120 @@
+{
+  "fixtureVersion": "P1008_PHASE_B1_MONTHLY_REVENUE_1.0",
+  "eventType": "MONTHLY_REVENUE",
+  "asOfDate": "2026-07-27",
+  "generatedAtUtc": "2026-07-28T00:00:00Z",
+  "approvedEvidenceSet": "P3B-MONTHLY-REVENUE-20260716-LIVE-20260716T034008557264Z-A75FB4F7",
+  "packets": [
+    {
+      "packet_id": "PKT-PHASEB1-DA-MONTHLY-202606",
+      "plugin": "DATA_ANALYTICS",
+      "supported_run_types": ["MONTHLY_REVENUE"],
+      "as_of_date": "2026-07-05",
+      "expires_on": "2026-08-31",
+      "signals": {
+        "material_delta": true,
+        "numeric_anomaly": false,
+        "data_quality_warning": false,
+        "major_transaction": false,
+        "earnings_event": false,
+        "capital_allocation_event": false,
+        "financial_numbers": true
+      },
+      "evidence": [
+        {
+          "evidence_id": "E-DA-MONTHLY-202606-OFFICIAL",
+          "summary": "鴻海官方2026年6月營收公告：單月新台幣821,763百萬元，月減4.38%、年增52.11%；上半年累計新台幣4,642,861百萬元，年增34.99%。",
+          "changed_fields": ["revenue"],
+          "field_values": {
+            "revenue": "2026年6月營收新台幣821,763百萬元；MoM -4.38%；YoY +52.11%；2026年1至6月累計新台幣4,642,861百萬元；累計YoY +34.99%；發布日2026-07-05"
+          },
+          "investment_impact": "營收年增與上半年累計年增顯示動能強，但月減代表相較5月正常化；本證據不支持調整EPS、利潤率、估值或匯率假設。",
+          "impact_direction": "偏多",
+          "confidence": "HIGH",
+          "catalysts": ["6月營收年增52.11%", "上半年累計營收年增34.99%"],
+          "risks": ["6月營收月減4.38%"],
+          "source_locators": [
+            {
+              "source_id": "SRC-HONHAI-ANNOUNCEMENT-202606",
+              "locator": "https://www.honhai.com/zh-tw/press-center/press-releases/latest-news/2076",
+              "source_tier": "OFFICIAL_COMPANY_RELEASE",
+              "observed_at": "2026-07-16T03:40:08Z"
+            },
+            {
+              "source_id": "SRC-HONHAI-MONTHLY-TABLE-202606",
+              "locator": "https://www.honhai.com/zh-tw/investor-relations/financial-information/reports?category=monthly",
+              "source_tier": "OFFICIAL_COMPANY_INVESTOR_RELATIONS",
+              "observed_at": "2026-07-16T03:40:08Z"
+            }
+          ],
+          "data_quality_notes": ["公司說明數字未經查核，並表示與公開資訊觀測站申報資料一致。"]
+        }
+      ],
+      "executor": "CODEX_PLUGIN_EXECUTOR",
+      "actionable": false
+    },
+    {
+      "packet_id": "PKT-PHASEB1-WEB-MONTHLY-202606",
+      "plugin": "WEB_SEARCH",
+      "supported_run_types": ["MONTHLY_REVENUE"],
+      "as_of_date": "2026-07-05",
+      "expires_on": "2026-08-31",
+      "signals": {
+        "material_delta": true,
+        "numeric_anomaly": false,
+        "data_quality_warning": false,
+        "major_transaction": false,
+        "earnings_event": false,
+        "capital_allocation_event": false,
+        "financial_numbers": true
+      },
+      "evidence": [
+        {
+          "evidence_id": "E-WEB-MONTHLY-202606-OFFICIAL",
+          "summary": "鴻海官方月營收頁與公告交叉核對2026年6月及上半年累計營收數字一致。",
+          "changed_fields": ["revenue"],
+          "field_values": {
+            "revenue": "2026年6月營收新台幣821,763百萬元；MoM -4.38%；YoY +52.11%；2026年1至6月累計新台幣4,642,861百萬元；累計YoY +34.99%；發布日2026-07-05"
+          },
+          "investment_impact": "官方交叉來源確認同一組營收數字；不提供獲利率、EPS、FCF或估值更新。",
+          "impact_direction": "偏多",
+          "confidence": "HIGH",
+          "catalysts": ["官方月營收頁支持公告數字"],
+          "risks": ["公告數字未經查核"],
+          "source_locators": [
+            {
+              "source_id": "SRC-HONHAI-ANNOUNCEMENT-202606",
+              "locator": "https://www.honhai.com/zh-tw/press-center/press-releases/latest-news/2076",
+              "source_tier": "OFFICIAL_COMPANY_RELEASE",
+              "observed_at": "2026-07-16T03:40:08Z"
+            },
+            {
+              "source_id": "SRC-HONHAI-MONTHLY-TABLE-202606",
+              "locator": "https://www.honhai.com/zh-tw/investor-relations/financial-information/reports?category=monthly",
+              "source_tier": "OFFICIAL_COMPANY_INVESTOR_RELATIONS",
+              "observed_at": "2026-07-16T03:40:08Z"
+            }
+          ],
+          "data_quality_notes": ["官方公司來源交叉核對一致。"]
+        }
+      ],
+      "executor": "CODEX_PLUGIN_EXECUTOR",
+      "actionable": false
+    }
+  ],
+  "expectedOutputSha256": {
+    "analysis_packet.json": "550918C75532E004A0AB3C9E4687396D746EF85D9BC5D867AC4AB6346537A302",
+    "report_candidate.json": "84962EDEB519936616290636E02EBAE92E508914ABD8E00CECA0E24506D05A8F",
+    "report_candidate.md": "24CAED33E4F38A2FDB47EC159E16081FD1E0B05114CC496C472F26E8DD60E43F",
+    "shorts_75s_candidate.md": "91FBFA929AA6546DCEC6231EDF27E941F41DAE6B53FB22CCBA935982A7385477"
+  },
+  "externalCalls": {
+    "openaiApi": 0,
+    "hostedWebSearch": 0,
+    "deepResearch": 0,
+    "canva": 0,
+    "gemini": 0,
+    "youtube": 0
+  },
+  "actionable": false
+}

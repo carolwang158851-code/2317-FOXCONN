@@ -1,0 +1,55 @@
+name: P1008 Phase B1 Analysis and Report
+
+on:
+  push:
+    branches:
+      - p1008-phaseb1-analysis-report-vertical-slice
+  pull_request:
+    paths:
+      - "contracts/p1008_analysis/**"
+      - "contracts/p1008_report_production/**"
+      - "modules/p1008_research_plugin/**"
+      - "tools/p1008_build_analysis.py"
+      - "tools/p1008_build_report.py"
+      - "tools/p1008_app_server.py"
+      - "P1008_BUILD_ANALYSIS.bat"
+      - "P1008_BUILD_REPORT.bat"
+      - "launcher.html"
+      - "tests/test_phaseb1_launcher.py"
+      - ".github/workflows/p1008-phaseb1-analysis-report.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic-phaseb1:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install declared module dependencies
+        run: python -m pip install --disable-pip-version-check -e modules/p1008_research_plugin
+      - name: Run Phase B1 focused tests
+        run: python -m unittest discover -s modules/p1008_research_plugin/tests/phaseb1 -p "test_*.py" -v
+      - name: Run Launcher Phase B1 tests
+        run: python -m unittest tests.test_phaseb1_launcher -v
+      - name: Run Plugin Shadow regression
+        run: python -m unittest discover -s modules/p1008_research_plugin/tests -p "test_*.py" -v
+      - name: Run Phase A regression
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: Run phase-aware legacy and current conformance
+        run: python contracts/p1008_research_plugin/conformance/run_phase_conformance.py --all --no-write-report
+      - name: Verify clean diff formatting
+        run: git diff --check HEAD~1 HEAD

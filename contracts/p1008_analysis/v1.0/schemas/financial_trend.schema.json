@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://analysis/v1.0/financial_trend",
+  "type": "object",
+  "required": ["revenue", "grossMargin", "operatingMargin", "eps", "epsTtm", "roe", "roic", "operatingCashFlow", "freeCashFlow", "dividendSafety", "balanceSheetSafety"],
+  "properties": {
+    "revenue": {"type": "object"}, "grossMargin": {"type": "object"},
+    "operatingMargin": {"type": "object"}, "eps": {"type": "object"},
+    "epsTtm": {"type": "object"}, "roe": {"type": "object"},
+    "roic": {"type": "object"}, "operatingCashFlow": {"type": "object"},
+    "freeCashFlow": {"type": "object"}, "dividendSafety": {"type": "object"},
+    "balanceSheetSafety": {"type": "object"}
+  },
+  "additionalProperties": false
+}

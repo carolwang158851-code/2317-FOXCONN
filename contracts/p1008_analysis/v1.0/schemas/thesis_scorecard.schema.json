@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://analysis/v1.0/thesis_scorecard",
+  "type": "object",
+  "required": ["earningsQuality", "aiMonetization", "dividendSafety", "balanceSheet", "valuation", "overallThesis", "evidenceIds"],
+  "properties": {
+    "earningsQuality": {"type": "string"}, "aiMonetization": {"type": "string"},
+    "dividendSafety": {"type": "string"}, "balanceSheet": {"type": "string"},
+    "valuation": {"type": "string"},
+    "overallThesis": {"enum": ["IMPROVING", "MAINTAINED", "REVIEW_REQUIRED"]},
+    "evidenceIds": {"type": "array"}
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "1.0",
+  "recordId": "P1008-PHASE-B1-ANALYSIS-REPORT-MVP-20260801",
+  "scopeId": "P1008-PHASE-B1-ANALYSIS-REPORT-MVP",
+  "phase": "PHASE_B1",
+  "status": "OWNER_AUTHORIZED_ADDITIVE_CHANGE",
+  "acceptedBy": "Owner",
+  "authorizationPhrase": "OWNER_APPROVE_P1008_PHASE_B1_ANALYSIS_REPORT_MVP_53323CC2",
+  "baseCommitSha": "53323cc2bec5cf6e16e8d13692e9178036c3b060",
+  "contractRoots": {
+    "analysisV1": "EC974F645137D56B244139FF76F6019F8AEA632B8C3ABA2F428877C94B245FD7",
+    "reportProductionV1": "1AD3A079BB606C314153A1602656A8EA3A66DD02D7159D4234B6142B5D6A3BAD"
+  },
+  "authorizedBoundaryChanges": {
+    "launcher.html": {
+      "baseSha256": "B638D39A9F6D6316389D16C67B68394F114F0B65EDBDFF6DCB69476C60A41448",
+      "phaseB1Sha256": "41B349691AB6CDEDE6D622F4B5A7FE0ED707F42B8D7BD6D2CD6776EAC2607F91"
+    },
+    "tools/p1008_app_server.py": {
+      "baseSha256": "1381156A978274DF62DD693AEB71BC787607D3BF1D38BA786707D11D714E24D7",
+      "phaseB1Sha256": "03FC1742F308E245B66237CD415FE0BE2184ACFB4E7D0FB2086EF609027B242B"
+    }
+  },
+  "constraints": {
+    "runtimeOnlyOutputs": true,
+    "formalAuthorityReadOnly": true,
+    "defaultLauncherDataFlowUnchanged": true,
+    "openaiApiCalls": 0,
+    "webSearchCalls": 0,
+    "canvaCalls": 0,
+    "phaseB2Started": false
+  },
+  "actionable": false
+}
