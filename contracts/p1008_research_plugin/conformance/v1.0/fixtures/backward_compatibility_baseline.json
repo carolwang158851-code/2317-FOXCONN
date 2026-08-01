@@ -1,0 +1,83 @@
+{
+  "baselineId": "P1008_RESEARCH_BACKWARD_COMPATIBILITY_V1",
+  "contractVersion": "1.0",
+  "formalDataContracts": {
+    "data/2317_master_v9.csv": [
+      "Quarter",
+      "QuarterEndDate",
+      "EstimatedEffectiveDate",
+      "EPS_Q",
+      "EPS_TTM",
+      "BVPS",
+      "ROE_TTM_Pct",
+      "DataSource",
+      "DataSupportLevel"
+    ],
+    "data/2317_daily_price.csv": [
+      "Date",
+      "Close",
+      "QuarterKey",
+      "BVPS_ref",
+      "PB_daily",
+      "DataSupportLevel",
+      "Status"
+    ],
+    "data/macro_snapshot.csv": [
+      "Date",
+      "TWD_USD",
+      "VIX",
+      "WTI_Oil",
+      "US_10Y_Yield",
+      "Fed_Rate",
+      "Fed_Hike_Prob_YE",
+      "DXY",
+      "RiskLevel",
+      "RiskNote"
+    ],
+    "data/macro_event_observations.csv": [
+      "Date",
+      "EventType",
+      "EventTitle",
+      "SourceTier",
+      "SourceUrl",
+      "EvidenceStatus",
+      "BlackSwanLevel",
+      "Actionable"
+    ],
+    "data/fx_trend_observations.csv": [
+      "Date",
+      "TWD_USD",
+      "DXY",
+      "JPY_USD",
+      "US_10Y_Yield",
+      "Fed_Rate",
+      "BOJ_Rate",
+      "FxTrend",
+      "FxPressureLevel",
+      "SourceTier",
+      "SourceUrl",
+      "Actionable"
+    ]
+  },
+  "existingAppApiPaths": [
+    "/api/p1008/status",
+    "/api/p1008/review-package",
+    "/api/p1008/log",
+    "/api/p1008/run/default",
+    "/api/p1008/run/update-data",
+    "/api/p1008/run/news-scan",
+    "/api/p1008/run/report",
+    "/api/p1008/publish/formal"
+  ],
+  "researchApiPrefix": "/api/research-plugin/",
+  "legacyApiPrefix": "/api/p1008/",
+  "forbiddenAuthoritySubstitution": "data/2317_master_v10.csv",
+  "expectedCapabilityIds": [
+    "deep_research",
+    "evidence",
+    "financial",
+    "foreign_flow",
+    "macro",
+    "valuation"
+  ]
+}

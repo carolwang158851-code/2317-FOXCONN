@@ -1,0 +1,19 @@
+{
+  "capability_id": "foreign_flow",
+  "display_name": "Foreign Flow Research Capability",
+  "version": "0.0.0",
+  "lifecycle_state": "REGISTERED_DISABLED",
+  "execution_mode": "DISABLED",
+  "provider_id": null,
+  "implementation_available": false,
+  "enabled": false,
+  "owner_approval_reference": null,
+  "allowed_operations": [],
+  "input_contract": "DEFERRED_NOT_DEFINED",
+  "output_contract": "PHASE2A_TYPED_RESEARCH_OUTPUT",
+  "required_contract_roots": {"v1": "3370C4DBD6B564E2200D051AC07C8507442C130ADE64D770621107FA09D2924D", "v2": "E056357A8A63A15BCF9FDC286BEE0BDB56E043AF26F4DDCD5624FDB3707BD782"},
+  "health_policy_id": "P1008_PHASE3A_CAPABILITY_HEALTH_POLICY",
+  "compatibility_policy_id": "P1008_PHASE3A_CAPABILITY_COMPATIBILITY_POLICY",
+  "retirement_policy_id": "P1008_PHASE3A_CAPABILITY_RETIREMENT_POLICY",
+  "actionable": false
+}

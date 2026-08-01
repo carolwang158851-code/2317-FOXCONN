@@ -1,0 +1,26 @@
+{
+  "recordId": "P1008_RESEARCH_PHASE1B_DRY_RUN_AUTHORIZATION",
+  "contractVersion": "1.0",
+  "authorizedAt": "2026-07-10T21:35:15+08:00",
+  "authorizedBy": "Owner",
+  "acceptedContractRootHash": "3370C4DBD6B564E2200D051AC07C8507442C130ADE64D770621107FA09D2924D",
+  "authorizationStatus": "DRY_RUN_AUTHORIZED",
+  "authorizedObjectives": [
+    "Validate that the frozen Contract can be implemented without extending it.",
+    "Design a read-only Adapter and Status API with no OpenAI call.",
+    "Design and verify the Event to Ledger to Projection to Replay chain.",
+    "Preserve every existing deterministic governance boundary."
+  ],
+  "implementationAuthorized": false,
+  "moduleCreationAuthorized": false,
+  "dependencyInstallationAuthorized": false,
+  "openAiCallsAuthorized": false,
+  "launcherChangesAuthorized": false,
+  "appServerChangesAuthorized": false,
+  "formalCsvWriteAuthorized": false,
+  "runtimeSqliteWriteAuthorized": false,
+  "ruleChangeAuthorized": false,
+  "decisionFlowChangeAuthorized": false,
+  "tradeOrPositionActionAuthorized": false,
+  "actionable": false
+}

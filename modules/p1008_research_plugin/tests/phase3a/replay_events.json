@@ -1,0 +1,10 @@
+[
+  {"sequence": 1, "capability_id": "echo_research", "event_type": "CAPABILITY_REGISTERED", "owner_approval_reference": null, "actionable": false},
+  {"sequence": 2, "capability_id": "echo_research", "event_type": "CAPABILITY_VALIDATED", "owner_approval_reference": null, "actionable": false},
+  {"sequence": 3, "capability_id": "echo_research", "event_type": "CAPABILITY_SHADOW_ENABLED", "owner_approval_reference": "OWNER_APPROVE_P1008_PHASE2A_GOVERNED_OPENAI_RUNTIME_TARGETFILES", "actionable": false},
+  {"sequence": 4, "capability_id": "financial", "event_type": "CAPABILITY_REGISTERED", "owner_approval_reference": null, "actionable": false},
+  {"sequence": 5, "capability_id": "macro", "event_type": "CAPABILITY_REGISTERED", "owner_approval_reference": null, "actionable": false},
+  {"sequence": 6, "capability_id": "news", "event_type": "CAPABILITY_REGISTERED", "owner_approval_reference": null, "actionable": false},
+  {"sequence": 7, "capability_id": "deep_research", "event_type": "CAPABILITY_REGISTERED", "owner_approval_reference": null, "actionable": false},
+  {"sequence": 8, "capability_id": "foreign_flow", "event_type": "CAPABILITY_REGISTERED", "owner_approval_reference": null, "actionable": false}
+]

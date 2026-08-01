@@ -1,0 +1,193 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "P1008 Research Plugin Contract API",
+    "version": "1.0",
+    "description": "Contract-only API. No implementation exists in Phase 1A. All outputs are research candidates, actionable=false."
+  },
+  "servers": [{"url": "http://127.0.0.1:{port}", "variables": {"port": {"default": "8767"}}}],
+  "x-p1008-contract-version": "1.0",
+  "x-p1008-same-origin-only": true,
+  "x-p1008-no-publish-endpoint": true,
+  "x-p1008-no-effective-decision-change": true,
+  "paths": {
+    "/api/research-plugin/status": {
+      "get": {
+        "operationId": "getResearchPluginStatus",
+        "responses": {"200": {"description": "Current contract/runtime status", "content": {"application/json": {"schema": {"$ref": "../schemas/plugin_status.schema.json"}}}}}
+      }
+    },
+    "/api/research-plugin/run/daily": {"$ref": "#/components/pathItems/RunOperation"},
+    "/api/research-plugin/run/weekly": {"$ref": "#/components/pathItems/RunOperation"},
+    "/api/research-plugin/run/monthly": {"$ref": "#/components/pathItems/RunOperation"},
+    "/api/research-plugin/run/epistemic-review": {"$ref": "#/components/pathItems/RunOperation"},
+    "/api/research-plugin/owner-review-queue": {
+      "get": {
+        "operationId": "getOwnerReviewQueue",
+        "responses": {"200": {"description": "Candidate review items", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "../schemas/owner_review_item.schema.json"}}}}}}
+      }
+    },
+    "/api/research-plugin/owner-review/{review_item_id}/disposition": {
+      "parameters": [{"name": "review_item_id", "in": "path", "required": true, "schema": {"type": "string", "minLength": 1}}],
+      "post": {
+        "operationId": "recordOwnerReviewDisposition",
+        "security": [{"LocalSession": []}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OwnerDispositionRequest"}}}},
+        "responses": {
+          "200": {"description": "Disposition appended to Plugin-owned ledger; no effective change", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DispositionRecorded"}}}},
+          "400": {"$ref": "#/components/responses/ContractError"},
+          "409": {"$ref": "#/components/responses/Conflict"}
+        }
+      }
+    },
+    "/api/research-plugin/thesis/propose-change": {
+      "post": {
+        "operationId": "proposeThesisChange",
+        "security": [{"LocalSession": []}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ThesisChangeProposalRequest"}}}},
+        "responses": {
+          "202": {"description": "Candidate recorded; no effective change", "content": {"application/json": {"schema": {"$ref": "../schemas/thesis_event.schema.json"}}}},
+          "400": {"$ref": "#/components/responses/ContractError"},
+          "409": {"$ref": "#/components/responses/Conflict"}
+        }
+      }
+    },
+    "/api/research-plugin/thesis/owner-approve": {"$ref": "#/components/pathItems/OwnerDispositionOperation"},
+    "/api/research-plugin/thesis/owner-reject": {"$ref": "#/components/pathItems/OwnerDispositionOperation"},
+    "/api/research-plugin/thesis/lineage": {
+      "get": {
+        "operationId": "getThesisLineage",
+        "responses": {"200": {"description": "Candidate lineage", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "../schemas/thesis_lineage.schema.json"}}}}}}
+      }
+    },
+    "/api/research-plugin/legacy-reuse-report": {
+      "get": {
+        "operationId": "getLegacyReuseReport",
+        "responses": {"200": {"description": "Latest legacy reuse gate result", "content": {"application/json": {"schema": {"$ref": "../schemas/gate_result.schema.json"}}}}}
+      }
+    },
+    "/api/research-plugin/agenda": {
+      "get": {
+        "operationId": "getResearchAgenda",
+        "responses": {"200": {"description": "Projected agenda state", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "../schemas/research_agenda_item.schema.json"}}}}}}
+      }
+    },
+    "/api/research-plugin/knowledge-gaps": {
+      "get": {
+        "operationId": "getKnowledgeGaps",
+        "responses": {"200": {"description": "Projected knowledge gap state", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "../schemas/knowledge_gap.schema.json"}}}}}}
+      }
+    },
+    "/api/research-plugin/research-debt": {
+      "get": {
+        "operationId": "getResearchDebt",
+        "responses": {"200": {"description": "Projected research debt state", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "../schemas/research_debt.schema.json"}}}}}}
+      }
+    },
+    "/api/research-plugin/research-health": {
+      "get": {
+        "operationId": "getResearchHealth",
+        "responses": {"200": {"description": "Latest Research Health snapshot", "content": {"application/json": {"schema": {"$ref": "../schemas/research_health_snapshot.schema.json"}}}}}
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "LocalSession": {"type": "apiKey", "in": "header", "name": "X-P1008-Session", "description": "Ephemeral per-server local session token; not an OpenAI credential."}
+    },
+    "schemas": {
+      "RunRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "as_of_date": {"type": "string", "format": "date"},
+          "capabilities": {"type": "array", "uniqueItems": true, "items": {"enum": ["financial", "deep_research", "macro", "foreign_flow", "valuation", "evidence"]}},
+          "owner_requested": {"const": true}
+        },
+        "required": ["owner_requested"]
+      },
+      "JobAccepted": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["job_id", "status", "contract_version", "actionable"],
+        "properties": {
+          "job_id": {"type": "string", "minLength": 1},
+          "status": {"const": "ACCEPTED"},
+          "contract_version": {"const": "1.0"},
+          "actionable": {"const": false}
+        }
+      },
+      "ThesisChangeProposalRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["thesis_id", "proposed_status", "evidence_ids", "reason", "effective_change_requested"],
+        "properties": {
+          "thesis_id": {"type": "string", "minLength": 1},
+          "proposed_status": {"enum": ["WATCHED", "CHALLENGED", "QUARANTINED", "DEPRECATED", "RETIRED", "RESTORED", "REPLACED"]},
+          "suggested_weight": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "evidence_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+          "reason": {"type": "string", "minLength": 1, "maxLength": 4000},
+          "effective_change_requested": {"const": false}
+        }
+      },
+      "OwnerDispositionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["owner_id", "subject_id", "disposition", "note", "effective_change_requested"],
+        "properties": {
+          "owner_id": {"type": "string", "minLength": 1},
+          "subject_id": {"type": "string", "minLength": 1},
+          "disposition": {"enum": ["APPROVED_AS_CANDIDATE", "REJECTED", "DEFERRED"]},
+          "note": {"type": "string", "minLength": 1, "maxLength": 4000},
+          "effective_change_requested": {"const": false}
+        }
+      },
+      "DispositionRecorded": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["subject_id", "disposition", "recorded", "effective_change_applied", "actionable"],
+        "properties": {
+          "subject_id": {"type": "string", "minLength": 1},
+          "disposition": {"enum": ["APPROVED_AS_CANDIDATE", "REJECTED", "DEFERRED"]},
+          "recorded": {"const": true},
+          "effective_change_applied": {"const": false},
+          "actionable": {"const": false}
+        }
+      },
+      "Error": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["error_code", "message", "actionable"],
+        "properties": {"error_code": {"type": "string"}, "message": {"type": "string"}, "actionable": {"const": false}}
+      }
+    },
+    "responses": {
+      "ContractError": {"description": "Contract validation failed", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+      "Conflict": {"description": "Another core/research job is active or state changed", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}
+    },
+    "pathItems": {
+      "RunOperation": {
+        "post": {
+          "security": [{"LocalSession": []}],
+          "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RunRequest"}}}},
+          "responses": {
+            "202": {"description": "Research job accepted", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/JobAccepted"}}}},
+            "400": {"$ref": "#/components/responses/ContractError"},
+            "409": {"$ref": "#/components/responses/Conflict"}
+          }
+        }
+      },
+      "OwnerDispositionOperation": {
+        "post": {
+          "security": [{"LocalSession": []}],
+          "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OwnerDispositionRequest"}}}},
+          "responses": {
+            "200": {"description": "Candidate disposition appended; no effective change", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DispositionRecorded"}}}},
+            "400": {"$ref": "#/components/responses/ContractError"},
+            "409": {"$ref": "#/components/responses/Conflict"}
+          }
+        }
+      }
+    }
+  }
+}

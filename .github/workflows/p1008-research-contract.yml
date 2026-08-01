@@ -1,0 +1,54 @@
+name: P1008 Research Contract Drift Monitor
+
+on:
+  push:
+    paths:
+      - "contracts/p1008_research_plugin/**"
+      - "data/CSV_AUTHORITY_MANIFEST.json"
+      - "data/2317_master_v9.csv"
+      - "data/2317_daily_price.csv"
+      - "data/2317_daily_market_activity.csv"
+      - "data/2317_cash_flow_authority.csv"
+      - "data/macro_snapshot.csv"
+      - "data/macro_event_observations.csv"
+      - "data/fx_trend_observations.csv"
+      - "rules/RULE_STATUS_MANIFEST.json"
+      - "tools/p1008_app_server.py"
+      - ".github/workflows/p1008-research-contract.yml"
+  pull_request:
+    paths:
+      - "contracts/p1008_research_plugin/**"
+      - "data/CSV_AUTHORITY_MANIFEST.json"
+      - "data/2317_master_v9.csv"
+      - "data/2317_daily_price.csv"
+      - "data/2317_daily_market_activity.csv"
+      - "data/2317_cash_flow_authority.csv"
+      - "data/macro_snapshot.csv"
+      - "data/macro_event_observations.csv"
+      - "data/fx_trend_observations.csv"
+      - "rules/RULE_STATUS_MANIFEST.json"
+      - "tools/p1008_app_server.py"
+      - ".github/workflows/p1008-research-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract-conformance:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run phase-aware contract conformance
+        run: >-
+          python contracts/p1008_research_plugin/conformance/run_phase_conformance.py
+          --all
+          --no-write-report

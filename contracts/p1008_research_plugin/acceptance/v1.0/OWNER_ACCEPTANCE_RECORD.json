@@ -1,0 +1,25 @@
+{
+  "recordId": "P1008_RESEARCH_CONTRACT_V1_OWNER_ACCEPTANCE",
+  "contractId": "P1008_RESEARCH_CONTRACT_FREEZE_MANIFEST",
+  "contractVersion": "1.0",
+  "acceptedAt": "2026-07-10T21:05:36+08:00",
+  "acceptedBy": "Owner",
+  "acceptedRootHash": "3370C4DBD6B564E2200D051AC07C8507442C130ADE64D770621107FA09D2924D",
+  "acceptanceStatus": "ACCEPTED_WITH_PHASE_1B_CONDITIONS",
+  "acceptanceScope": "Contract Freeze v1.0 only",
+  "governanceStatement": "Agent orchestration and SDK guardrails do not replace deterministic application governance.",
+  "requiredBeforePhase1B": [
+    "BACKWARD_COMPATIBILITY_TEST",
+    "LEDGER_REPLAY_TEST",
+    "DETERMINISTIC_RESEARCH_TEST",
+    "CONTRACT_DRIFT_MONITOR",
+    "OPENAI_CAPABILITY_BOUNDARY_TEST"
+  ],
+  "phase1bAuthorized": false,
+  "phase1bAuthorizationRule": "A passing conformance report makes Phase 1B Dry-Run eligible; implementation still requires a separate Owner approval.",
+  "openAiCallsAuthorized": false,
+  "launcherIntegrationAuthorized": false,
+  "formalCsvWriteAuthorized": false,
+  "runtimeSqliteWriteAuthorized": false,
+  "actionable": false
+}

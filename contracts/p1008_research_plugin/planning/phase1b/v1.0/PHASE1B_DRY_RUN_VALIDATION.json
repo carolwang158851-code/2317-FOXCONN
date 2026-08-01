@@ -1,0 +1,44 @@
+{
+  "validationId": "P1008_RESEARCH_PHASE1B_DRY_RUN_VALIDATION",
+  "validatedAt": "2026-07-10T21:38:52+08:00",
+  "contractVersion": "1.0",
+  "contractRootHash": "3370C4DBD6B564E2200D051AC07C8507442C130ADE64D770621107FA09D2924D",
+  "overallStatus": "GO_WITH_PREREQUISITES",
+  "implementationAuthorized": false,
+  "actionable": false,
+  "objectiveResults": [
+    {
+      "objective": "CONTRACT_IMPLEMENTABILITY",
+      "status": "PASS_AS_DRY_RUN_DESIGN",
+      "evidence": "43 frozen artifacts, 23 schemas, 34 allowed events, 8 forbidden events, 8 ledgers and 16 API routes remain hash-frozen and referenceable."
+    },
+    {
+      "objective": "READ_ONLY_ADAPTER_AND_STATUS_API",
+      "status": "PASS_AS_DRY_RUN_DESIGN",
+      "evidence": "Allowlisted read-only inputs and the frozen GET status schema are mapped without Launcher or App server integration."
+    },
+    {
+      "objective": "EVENT_LEDGER_PROJECTION_REPLAY",
+      "status": "PASS_AS_DRY_RUN_DESIGN",
+      "evidence": "All eight ledgers have deterministic projector ownership, replay requirements and corruption tests; live writes are disabled in Phase 1B."
+    },
+    {
+      "objective": "GOVERNANCE_BOUNDARY_PRESERVATION",
+      "status": "PASS",
+      "evidence": "Contract conformance PASS; formal data, rules, Launcher, App server and Runtime SQLite baselines are unchanged; OpenAI calls=0."
+    }
+  ],
+  "currentBlockers": [
+    "No Git baseline commit exists.",
+    "Owner has not authorized Phase 1B implementation TargetFiles.",
+    "A Draft 2020-12 validator dependency decision is not pinned."
+  ],
+  "nextGate": "OWNER_APPROVAL_AFTER_GIT_BASELINE",
+  "prohibitedNextActions": [
+    "Create modules/p1008_research_plugin before approval",
+    "Install OpenAI SDK",
+    "Modify Launcher or App server",
+    "Write formal CSV, rules, Runtime SQLite or warroom runtime",
+    "Generate investment decisions or trading actions"
+  ]
+}

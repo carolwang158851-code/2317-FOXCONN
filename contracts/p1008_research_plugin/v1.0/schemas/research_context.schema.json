@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v1.0/schemas/research_context.schema.json",
+  "title": "P1008 Frozen Research Context",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["context_id", "run_id", "run_date", "symbol", "contract_version", "authority_manifest_version", "rule_manifest_digest", "input_hashes", "source_ids", "as_of_dates", "knowledge_gap_ids", "owner_review_item_ids", "writable_paths_exposed", "shell_exposed", "database_handle_exposed", "publish_credential_exposed", "actionable"],
+  "properties": {
+    "context_id": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "run_date": {"type": "string", "format": "date"},
+    "symbol": {"const": "2317.TW"},
+    "contract_version": {"const": "1.0"},
+    "authority_manifest_version": {"type": "string", "minLength": 1},
+    "rule_manifest_digest": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+    "input_hashes": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[A-F0-9]{64}$"}},
+    "source_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "as_of_dates": {"type": "array", "items": {"type": "string", "format": "date"}},
+    "knowledge_gap_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "owner_review_item_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "writable_paths_exposed": {"const": false},
+    "shell_exposed": {"const": false},
+    "database_handle_exposed": {"const": false},
+    "publish_credential_exposed": {"const": false},
+    "actionable": {"const": false}
+  }
+}

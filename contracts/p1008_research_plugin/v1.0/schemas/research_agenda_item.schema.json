@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v1.0/schemas/research_agenda_item.schema.json",
+  "title": "P1008 Research Agenda Item",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["agenda_id", "title", "research_question", "symbol", "origin_type", "origin_id", "priority", "status", "required_evidence", "success_criteria", "next_review_trigger", "owner_review_required", "created_at", "updated_at", "actionable"],
+  "properties": {
+    "agenda_id": {"type": "string", "minLength": 1},
+    "title": {"type": "string", "minLength": 1, "maxLength": 500},
+    "research_question": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "normalized_research_question": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "symbol": {"const": "2317.TW"},
+    "origin_type": {"enum": ["KNOWLEDGE_GAP", "REJECTED_CLAIM", "COUNTER_EVIDENCE", "DECISION_MEMORY", "MATERIAL_EVENT", "OWNER_REQUEST", "RESEARCH_DEBT"]},
+    "origin_id": {"type": "string", "minLength": 1},
+    "priority": {"enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]},
+    "status": {"enum": ["PROPOSED", "ACTIVE", "BLOCKED", "ANSWERED", "RETIRED"]},
+    "required_evidence": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "success_criteria": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "next_review_trigger": {"type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": {"type": {"enum": ["DATE", "EVENT", "DATA_RELEASE", "OWNER_REQUEST"]}, "value": {"type": "string", "minLength": 1}}},
+    "linked_gap_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "resolution_evidence_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "owner_review_required": {"type": "boolean"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "actionable": {"const": false}
+  }
+}

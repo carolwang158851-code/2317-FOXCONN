@@ -1,0 +1,34 @@
+{
+  "claims": [
+    {
+      "claim_id": "CLAIM-86C76D6BDADF",
+      "claim": "Echo Capability Active",
+      "evidence_ids": ["EVIDENCE-86C76D6BDADF"],
+      "confidence": "low",
+      "actionable": false
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "EVIDENCE-86C76D6BDADF",
+      "description": "Local mock echo accepted the normalized request.",
+      "source_ids": ["SOURCE-86C76D6BDADF"],
+      "actionable": false
+    }
+  ],
+  "counter_evidence": [],
+  "knowledge_gaps": [],
+  "sources": [
+    {
+      "source_id": "SOURCE-86C76D6BDADF",
+      "source_tier": "UNVERIFIED",
+      "source_name": "Phase 2A local mock request",
+      "locator": "memory://phase2a/86C76D6BDADFE87162F3B511",
+      "evidence_level": "L1"
+    }
+  ],
+  "confidence": "low",
+  "limitations": ["Echo validates the governed pipeline only."],
+  "owner_review_required": [],
+  "actionable": false
+}

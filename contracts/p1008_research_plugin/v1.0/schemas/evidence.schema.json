@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v1.0/schemas/evidence.schema.json",
+  "title": "P1008 Research Evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["evidence_id", "source_id", "as_of_date", "summary", "direction", "quality", "actionable"],
+  "properties": {
+    "evidence_id": {"type": "string", "minLength": 1, "maxLength": 160},
+    "source_id": {"type": "string", "minLength": 1, "maxLength": 160},
+    "as_of_date": {"type": "string", "format": "date"},
+    "summary": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "direction": {"enum": ["SUPPORTS", "CONTRADICTS", "NEUTRAL", "CONTEXT_ONLY"]},
+    "quality": {"enum": ["HIGH", "MEDIUM", "LOW", "UNVERIFIED"]},
+    "metric_names": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "extracted_value": {"type": ["number", "string", "boolean", "null"]},
+    "unit": {"type": ["string", "null"], "maxLength": 80},
+    "limitations": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "actionable": {"const": false}
+  }
+}

@@ -1,0 +1,119 @@
+{
+  "policyId": "P1008_EXTERNAL_TAIL_ANCHOR_POLICY",
+  "version": "2.0-draft",
+  "status": "DRAFT_NOT_AUTHORITY",
+  "extendsContractVersion": "1.0",
+  "modifiesV1": false,
+  "actionable": false,
+  "purpose": "Detect complete valid ledger suffix deletion or rollback by comparing the local tail with an independently retained monotonic witness receipt.",
+  "minimumRollbackDetectionTrustLevel": "L3_EXTERNAL_APPEND_ONLY",
+  "trustLevels": [
+    {
+      "id": "L0_HASH_CHAIN_ONLY",
+      "detectsRecordMutation": true,
+      "detectsCompleteSuffixDeletion": false,
+      "productionRollbackClaimAllowed": false
+    },
+    {
+      "id": "L1_LOCAL_HASH_ANCHOR",
+      "detectsRecordMutation": true,
+      "detectsCompleteSuffixDeletion": false,
+      "productionRollbackClaimAllowed": false
+    },
+    {
+      "id": "L2_LOCAL_AUTHENTICATED",
+      "detectsRecordMutation": true,
+      "detectsCompleteSuffixDeletion": false,
+      "productionRollbackClaimAllowed": false,
+      "note": "Local HMAC/DPAPI authenticates content but ledger and anchor can still be rolled back together by a privileged actor."
+    },
+    {
+      "id": "L3_EXTERNAL_APPEND_ONLY",
+      "detectsRecordMutation": true,
+      "detectsCompleteSuffixDeletion": true,
+      "productionRollbackClaimAllowed": true
+    },
+    {
+      "id": "L4_HARDWARE_MONOTONIC",
+      "detectsRecordMutation": true,
+      "detectsCompleteSuffixDeletion": true,
+      "productionRollbackClaimAllowed": true
+    }
+  ],
+  "qualifyingWitnessClasses": ["EXTERNAL_APPEND_ONLY", "HARDWARE_MONOTONIC"],
+  "nonQualifyingWitnessClasses": [
+    "LOCAL_HASH_ONLY",
+    "LOCAL_AUTHENTICATED",
+    "OWNER_SIGNED_CHECKPOINT",
+    "LOCAL_TEST_ONLY"
+  ],
+  "anchorCadence": {
+    "researchGovernanceLedger": "EVERY_COMMITTED_RECORD",
+    "researchDomainLedgers": "POLICY_DEFINED_PER_LEDGER_BUT_NEVER_LESS_THAN_EVERY_COMPLETED_RUN"
+  },
+  "commitProtocol": [
+    "VALIDATE_EVENT_AND_CURRENT_RECEIPT",
+    "APPEND_LEDGER_RECORD_AND_FSYNC",
+    "CREATE_IMMUTABLE_TAIL_ANCHOR",
+    "SUBMIT_ANCHOR_TO_APPROVED_WITNESS",
+    "VERIFY_SIGNATURE_COUNTER_PREVIOUS_RECEIPT_AND_ANCHOR_HASH",
+    "PERSIST_RECEIPT_REFERENCE_AS_PLUGIN_OWNED_NON_AUTHORITY_CACHE",
+    "ALLOW_PROJECTION_ONLY_WHEN_POLICY_STATE_PERMITS"
+  ],
+  "recoveryStates": [
+    {
+      "id": "MATCHED",
+      "condition": "Local sequence/hash equals the latest verified external receipt.",
+      "projectionAllowed": true,
+      "ownerReviewRequired": false
+    },
+    {
+      "id": "UNANCHORED_TAIL",
+      "condition": "Local ledger is ahead of the latest verified receipt.",
+      "projectionAllowed": false,
+      "ownerReviewRequired": true,
+      "recovery": "Resume anchoring or quarantine unanchored records; never discard them automatically."
+    },
+    {
+      "id": "LEDGER_ROLLBACK_DETECTED",
+      "condition": "Verified receipt counter/sequence is ahead of the local ledger.",
+      "projectionAllowed": false,
+      "ownerReviewRequired": true,
+      "recovery": "Stop plugin, preserve evidence, restore only through an Owner-approved recovery event."
+    },
+    {
+      "id": "DIVERGED",
+      "condition": "Sequence matches but tail hash, prefix hash, receipt chain, or anchor payload hash differs.",
+      "projectionAllowed": false,
+      "ownerReviewRequired": true,
+      "recovery": "Stop plugin and preserve both local and witness evidence."
+    },
+    {
+      "id": "WITNESS_UNAVAILABLE",
+      "condition": "The qualifying witness cannot be queried or signature verification cannot complete.",
+      "projectionAllowed": false,
+      "ownerReviewRequired": true,
+      "recovery": "Core Warroom continues; Research OS remains unavailable until verification succeeds."
+    },
+    {
+      "id": "NOT_INITIALIZED",
+      "condition": "No genesis receipt exists.",
+      "projectionAllowed": false,
+      "ownerReviewRequired": true,
+      "recovery": "Owner authorizes governance genesis and the first external receipt."
+    }
+  ],
+  "monotonicRules": [
+    "witness_monotonic_counter strictly increases by one for each witness_id and ledger_id",
+    "anchor_epoch never decreases",
+    "ledger_sequence never decreases",
+    "witness_previous_receipt_hash equals the canonical hash of the prior verified receipt",
+    "anchor.previous_anchor_receipt_hash equals the prior verified receipt hash"
+  ],
+  "providerApprovalRequired": true,
+  "providerConfiguredInPhase1B5ContractDesign": false,
+  "networkConnectorAuthorized": false,
+  "runtimeImplementationAuthorized": false,
+  "openAiRuntimeAuthorized": false,
+  "failureMode": "STOP_RESEARCH_OS_PRESERVE_CORE_WARROOM"
+}

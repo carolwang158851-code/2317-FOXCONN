@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v2.0/schemas/tail_anchor.schema.json",
+  "title": "P1008 External Tail Anchor Candidate",
+  "description": "Immutable local checkpoint submitted to an independent witness. It is not rollback-resistant until a qualifying receipt is verified.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "anchor_id",
+    "anchor_contract_version",
+    "ledger_id",
+    "ledger_contract_version",
+    "ledger_sequence",
+    "tail_record_hash",
+    "ledger_prefix_hash",
+    "previous_anchor_receipt_hash",
+    "anchor_epoch",
+    "created_at",
+    "nonce",
+    "warroom_effective_change_applied",
+    "actionable"
+  ],
+  "properties": {
+    "anchor_id": {"type": "string", "minLength": 1, "maxLength": 160},
+    "anchor_contract_version": {"const": "2.0"},
+    "ledger_id": {"type": "string", "minLength": 1, "maxLength": 160},
+    "ledger_contract_version": {"type": "string", "minLength": 1, "maxLength": 40},
+    "ledger_sequence": {"type": "integer", "minimum": 0},
+    "tail_record_hash": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+    "ledger_prefix_hash": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+    "previous_anchor_receipt_hash": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+    "anchor_epoch": {"type": "integer", "minimum": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "nonce": {"type": "string", "minLength": 16, "maxLength": 256},
+    "metadata": {
+      "type": "object",
+      "additionalProperties": {"type": ["string", "number", "integer", "boolean", "null"]}
+    },
+    "warroom_effective_change_applied": {"const": false},
+    "actionable": {"const": false}
+  }
+}

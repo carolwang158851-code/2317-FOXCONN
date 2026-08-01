@@ -1,0 +1,44 @@
+{
+  "fixture_id": "P2-03A-OFFLINE-FIXTURE-v1",
+  "fixture_notice_zh": "本檔為離線管線測試資料，不代表任何真實公司、行情或總經數值。",
+  "snapshot_id": "SNAP-TEST-20260620-001",
+  "snapshot_created_at": "2026-06-20T08:00:00Z",
+  "as_of": "2026-06-20T08:00:00Z",
+  "sequence": 1,
+  "datasets": [
+    {
+      "dataset_code": "MASTER_TEST",
+      "target_path": "data/2317_master_v9.csv",
+      "columns": ["Quarter", "BVPS", "DataSource"],
+      "primary_source": "TEST_PRIMARY_MASTER",
+      "secondary_source": "TEST_SECONDARY_MASTER",
+      "observed_at": "2026-06-20T07:00:00Z",
+      "stale_after_days": 120,
+      "rows": [["TESTQ1", "100.00", "TEST_FIXTURE"]],
+      "secondary_rows": [["TESTQ1", "100.00", "TEST_FIXTURE"]]
+    },
+    {
+      "dataset_code": "DAILY_TEST",
+      "target_path": "data/2317_daily_price.csv",
+      "columns": ["Date", "Close", "Status"],
+      "primary_source": "TEST_PRIMARY_DAILY",
+      "secondary_source": "TEST_SECONDARY_DAILY",
+      "observed_at": "2026-06-20T06:00:00Z",
+      "stale_after_days": 2,
+      "rows": [["2026-06-20", "100.00", "TEST_FIXTURE"]],
+      "secondary_rows": [["2026-06-20", "100.00", "TEST_FIXTURE"]]
+    },
+    {
+      "dataset_code": "MACRO_TEST",
+      "target_path": "data/macro_snapshot.csv",
+      "columns": ["Date", "VIX", "RiskLevel"],
+      "primary_source": "TEST_PRIMARY_MACRO",
+      "secondary_source": "TEST_SECONDARY_MACRO",
+      "observed_at": "2026-06-20T05:00:00Z",
+      "stale_after_days": 3,
+      "rows": [["2026-06-20", "20.00", "TEST_ONLY"]],
+      "secondary_rows": [["2026-06-20", "20.00", "TEST_ONLY"]]
+    }
+  ]
+}
+

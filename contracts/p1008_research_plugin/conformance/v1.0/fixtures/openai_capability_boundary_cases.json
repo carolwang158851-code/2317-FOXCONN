@@ -1,0 +1,48 @@
+{
+  "fixtureId": "P1008_OPENAI_CAPABILITY_BOUNDARY_V1",
+  "contractVersion": "1.0",
+  "deterministicGovernanceGates": [
+    "SOURCE",
+    "FRESHNESS",
+    "EVIDENCE",
+    "ANTI_FANTASY",
+    "THESIS_USAGE",
+    "LEGACY_REUSE",
+    "WARROOM_ADAPTER",
+    "OWNER"
+  ],
+  "allowedAgentTools": [
+    "read_financial_context",
+    "read_macro_context",
+    "read_foreign_flow_context",
+    "read_valuation_context",
+    "read_evidence_context",
+    "submit_research_candidate"
+  ],
+  "forbiddenAgentTools": [
+    "arbitrary_shell",
+    "arbitrary_http",
+    "write_formal_csv",
+    "write_runtime_sqlite",
+    "publish_report",
+    "enable_rule",
+    "change_hold",
+    "change_midr",
+    "change_position",
+    "submit_trade",
+    "override_source_gate",
+    "override_evidence_gate",
+    "default_fill_missing_data"
+  ],
+  "cases": [
+    {"id": "READ_FINANCIAL", "tool": "read_financial_context", "expected": "ALLOW"},
+    {"id": "READ_MACRO", "tool": "read_macro_context", "expected": "ALLOW"},
+    {"id": "SUBMIT_CANDIDATE", "tool": "submit_research_candidate", "expected": "ALLOW"},
+    {"id": "WRITE_FORMAL", "tool": "write_formal_csv", "expected": "DENY"},
+    {"id": "CHANGE_HOLD", "tool": "change_hold", "expected": "DENY"},
+    {"id": "ARBITRARY_SHELL", "tool": "arbitrary_shell", "expected": "DENY"},
+    {"id": "MODEL_SOURCE_UPGRADE", "tool": "override_source_gate", "expected": "DENY"},
+    {"id": "MODEL_DEFAULT_FILL", "tool": "default_fill_missing_data", "expected": "DENY"},
+    {"id": "UNKNOWN_TOOL", "tool": "read_unregistered_knowledge_base", "expected": "DENY"}
+  ]
+}

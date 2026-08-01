@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v1.0/schemas/decision_memory.schema.json",
+  "title": "P1008 Decision Memory Candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["memory_id", "recorded_at", "decision_context", "original_hypothesis", "mechanism_chain", "evidence_ids", "review_due_at", "status", "owner_review_required", "actionable"],
+  "properties": {
+    "memory_id": {"type": "string", "minLength": 1},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "decision_context": {"type": "string", "minLength": 1, "maxLength": 6000},
+    "original_hypothesis": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "mechanism_chain": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "evidence_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "counter_evidence_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "review_due_at": {"type": "string", "format": "date-time"},
+    "status": {"enum": ["OPEN", "DUE", "REVIEWED", "SUPERSEDED", "RETIRED"]},
+    "owner_review_required": {"const": true},
+    "actionable": {"const": false}
+  }
+}

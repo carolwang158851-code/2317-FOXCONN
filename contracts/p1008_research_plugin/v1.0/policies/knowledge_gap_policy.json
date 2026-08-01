@@ -1,0 +1,14 @@
+{
+  "policyId": "P1008_KNOWLEDGE_GAP_POLICY",
+  "version": "1.0",
+  "frozen": true,
+  "gapTypes": ["DATA", "SOURCE", "FRESHNESS", "EVIDENCE", "CAUSALITY", "CONFLICT", "CALIBRATION"],
+  "allowedStates": ["OPEN", "INVESTIGATING", "PARTIALLY_RESOLVED", "RESOLVED", "ACCEPTED_UNKNOWN", "RETIRED"],
+  "missingDataCreatesGap": true,
+  "defaultFillAllowed": false,
+  "modelMayResolveGap": false,
+  "resolutionRequiresEvidence": true,
+  "acceptedUnknownValidatesClaim": false,
+  "openGapPrecisionBehavior": "INSUFFICIENT_DATA_OR_OWNER_REVIEW_REQUIRED",
+  "actionable": false
+}

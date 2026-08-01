@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "1.0",
+  "recordId": "P1008_CONTRACT_CONFORMANCE_PHASE_ROUTING_20260722",
+  "scopeId": "P1008-CONTRACT-CONFORMANCE-PHASE-ROUTING-20260722",
+  "acceptedBy": "Owner",
+  "acceptedAt": "2026-07-22",
+  "acceptanceStatus": "CURRENT_PHASE_CONFORMANCE_AUTHORIZED",
+  "contractVersion": "1.1",
+  "currentPhase": "PHASE_3B",
+  "moduleExpectation": "PRESENT",
+  "modulePath": "modules/p1008_research_plugin",
+  "legacySuite": "contracts/p1008_research_plugin/conformance/v1.0/run_contract_tests.py",
+  "currentSuite": "contracts/p1008_research_plugin/conformance/v1.1/run_contract_tests.py",
+  "phaseLineage": {
+    "legacyFrozenCommit": "efbf0b2ec1aaf25d1d4f9025fe4a04b0f336dce7",
+    "firstModuleAuthorizedCommit": "da8f1e286c5a3c2bb0c77fe176a277c3bbc6faa9",
+    "currentBaseCommit": "150f98ad4ae48cecf58334ac2ae995828aba601a",
+    "phase1bAcceptanceRecord": "contracts/p1008_research_plugin/acceptance/v1.0/PHASE1B_ACCEPTANCE_RECORD.json",
+    "phase1bAcceptanceSha256": "F0C5827F320B54508E3C69EB4795A2DEBFF3DEEE60B392CB047B973B8E51A655",
+    "phase2aOwnerRecord": "modules/p1008_research_plugin/docs/phase2a/Owner_Acceptance_Report.md",
+    "phase2aOwnerRecordSha256": "AE8B472624620E4F256B543530E23AE7C38C288D7F0D9FBEE27BE1A9FD0E0D34",
+    "phase3aOwnerRecord": "modules/p1008_research_plugin/docs/phase3a/Owner_Acceptance_Report.md",
+    "phase3aOwnerRecordSha256": "D2EA6D5DF82E2F5392C3C6BA4245CFDB98513B20B3C79DD6CB69052795944F00"
+  },
+  "immutableV1": {
+    "contractRootHash": "3370C4DBD6B564E2200D051AC07C8507442C130ADE64D770621107FA09D2924D",
+    "artifacts": {
+      "contracts/p1008_research_plugin/conformance/v1.0/run_contract_tests.py": "4F9F75F87DED593991C05166A94419A6205EFE3A08B4435764E077B266464995",
+      "contracts/p1008_research_plugin/conformance/v1.0/fixtures/backward_compatibility_baseline.json": "E18F307CDA82144F623F7B64958B736263E2D841E7EA7CD037197DDE9745B238",
+      "contracts/p1008_research_plugin/conformance/v1.0/fixtures/deterministic_research_fixture.json": "6E966A339775200EEEF88314FF35CD09C1181722736A007FE0A2596CDDDDEB0D",
+      "contracts/p1008_research_plugin/conformance/v1.0/fixtures/ledger_replay_fixture.json": "B5F7E8B6C0AEB54BA1F46739144BD73B0171CD854F88516A380E3E6D424DB83B",
+      "contracts/p1008_research_plugin/conformance/v1.0/fixtures/openai_capability_boundary_cases.json": "4E361EA520A08D62A5CAFC3195294EE1E3DAE8C9A22418C9C23FF8042315BA6C",
+      "contracts/p1008_research_plugin/acceptance/v1.0/OWNER_ACCEPTANCE_RECORD.json": "20006125FE4DEE001C7D32D3C7E1BA629458FC086C1090EA0AC638B646E019F0"
+    }
+  },
+  "legacyWorktreeMaterialization": {
+    "data/macro_snapshot.csv": {
+      "reason": "The accepted v1.0 authority hash records the historical mixed-line-ending Windows worktree bytes; the Git blob is LF-normalized.",
+      "crlfLineNumbers": [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+        17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+        33, 34, 35, 36, 37, 38, 39, 40, 41, 48, 49, 50, 52, 53, 54, 55
+      ],
+      "expectedSha256": "5F81C052FD1DD16923FAEB11DC9069B26408CCCA967DA34B0F796091A2F8F6C7",
+      "expectedSizeBytes": 9123
+    }
+  },
+  "authorityBaselines": {
+    "legacyFive": [
+      "data/2317_master_v9.csv",
+      "data/2317_daily_price.csv",
+      "data/macro_snapshot.csv",
+      "data/macro_event_observations.csv",
+      "data/fx_trend_observations.csv"
+    ],
+    "currentSix": [
+      "data/2317_master_v9.csv",
+      "data/2317_daily_price.csv",
+      "data/2317_cash_flow_authority.csv",
+      "data/macro_snapshot.csv",
+      "data/macro_event_observations.csv",
+      "data/fx_trend_observations.csv"
+    ],
+    "phaseAClosureSix": [
+      "data/2317_master_v9.csv",
+      "data/2317_daily_price.csv",
+      "data/2317_daily_market_activity.csv",
+      "data/macro_snapshot.csv",
+      "data/macro_event_observations.csv",
+      "data/fx_trend_observations.csv"
+    ],
+    "integratedSeven": [
+      "data/2317_master_v9.csv",
+      "data/2317_daily_price.csv",
+      "data/2317_daily_market_activity.csv",
+      "data/2317_cash_flow_authority.csv",
+      "data/macro_snapshot.csv",
+      "data/macro_event_observations.csv",
+      "data/fx_trend_observations.csv"
+    ]
+  },
+  "authorityBaselineReceipts": {
+    "PHASE_A_CLOSURE_SIX": {
+      "path": "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_AUTHORITY_DATA_CLOSURE_RECEIPT.json",
+      "sha256": "C9291E01C7370FFB1D70FDF7F6363C672E77912BFA74DD6C5862F4146DD52213"
+    },
+    "INTEGRATED_SEVEN": {
+      "path": "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_FINAL_INTEGRATION_AMENDMENT_RECEIPT.json",
+      "sha256": "112373EA26100384F93B85A87415C5625DA34A1634B1C83E557C45BCC7829AAE"
+    }
+  },
+  "protectedWriteRoots": [
+    "data/",
+    "rules/",
+    "Runtime SQLite",
+    "HOLD",
+    "MIDR",
+    "MRD"
+  ],
+  "openAiCallsAuthorized": false,
+  "webSearchCallsAuthorized": false,
+  "canvaCallsAuthorized": false,
+  "actionable": false
+}

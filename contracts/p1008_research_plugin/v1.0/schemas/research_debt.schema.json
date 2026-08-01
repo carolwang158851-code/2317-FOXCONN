@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v1.0/schemas/research_debt.schema.json",
+  "title": "P1008 Research Debt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["debt_id", "source_gap_id", "source_agenda_id", "linked_claim_ids", "linked_thesis_ids", "reason", "due_trigger", "age_days", "risk_weight", "status", "resolution_evidence_ids", "owner_review_required", "actionable"],
+  "properties": {
+    "debt_id": {"type": "string", "minLength": 1},
+    "source_gap_id": {"type": "string", "minLength": 1},
+    "source_agenda_id": {"type": "string", "minLength": 1},
+    "linked_claim_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "linked_thesis_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "reason": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "due_trigger": {"type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": {"type": {"enum": ["DATE", "EVENT", "DATA_RELEASE", "OWNER_REQUEST"]}, "value": {"type": "string", "minLength": 1}}},
+    "due_at": {"type": ["string", "null"], "format": "date-time"},
+    "age_days": {"type": "integer", "minimum": 0},
+    "risk_weight": {"type": "number", "minimum": 0, "maximum": 1},
+    "status": {"enum": ["OPEN", "WAITING_EVENT", "WAITING_DATA", "OVERDUE", "RESOLVED", "ACCEPTED_DEBT", "RETIRED"]},
+    "resolution_evidence_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "owner_review_required": {"type": "boolean"},
+    "actionable": {"const": false}
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "policyId": "P1008_RESEARCH_GOVERNANCE_LEDGER_POLICY",
+  "version": "2.0",
+  "status": "FROZEN_AUTHORITY",
+  "extendsContractVersion": "1.0",
+  "modifiesV1": false,
+  "actionable": false,
+  "purpose": "Make Contract, Policy, Schema, Architecture Review, phase authorization, implementation, validation, rollback, and deprecation lineage replayable.",
+  "authorityOrder": [
+    "OWNER_ACCEPTED_FROZEN_CONTRACT",
+    "EXTERNALLY_ANCHORED_RESEARCH_GOVERNANCE_LEDGER",
+    "GOVERNANCE_BOUND_IMPLEMENTATION_COMMIT",
+    "RUNTIME_PROJECTION"
+  ],
+  "allowedActors": ["OWNER", "SYSTEM"],
+  "forbiddenActors": ["OPENAI", "CODEX", "MODEL", "AGENT", "TOOL"],
+  "candidateMaterialRule": "Model/Codex output may be bound as a hashed architecture-review artifact only after deterministic validation and an OWNER or SYSTEM governance event. It has no authority by itself.",
+  "immutabilityRules": [
+    "Frozen contract artifacts are never edited in place.",
+    "Policy and Schema changes create a new version and preserve the prior version.",
+    "Governance events are append-only and never deleted, updated, or reordered.",
+    "Projection snapshots are disposable and rebuilt only from verified governance records.",
+    "Every governance record requires a qualifying external tail anchor receipt before it becomes replay authority."
+  ],
+  "requiredArtifactBindings": {
+    "CONTRACT_FROZEN": ["CONTRACT_ROOT"],
+    "CONTRACT_OWNER_ACCEPTED": ["CONTRACT_ROOT", "OWNER_ACCEPTANCE"],
+    "POLICY_VERSION_BOUND": ["POLICY"],
+    "SCHEMA_VERSION_BOUND": ["SCHEMA"],
+    "ARCHITECTURE_REVIEW_RECORDED": ["ARCHITECTURE_REVIEW"],
+    "PHASE_AUTHORIZED": ["OWNER_ACCEPTANCE"],
+    "IMPLEMENTATION_COMMIT_BOUND": ["GIT_COMMIT"],
+    "VALIDATION_REPORT_BOUND": ["VALIDATION_REPORT"],
+    "PHASE_ACCEPTED": ["OWNER_ACCEPTANCE", "VALIDATION_REPORT", "GIT_COMMIT"],
+    "ROLLBACK_RECORDED": ["ROLLBACK_PLAN", "GIT_COMMIT"]
+  },
+  "phase2EntryRequirements": [
+    "v2 External Tail Anchor and Governance Ledger Contract is frozen and Owner-accepted.",
+    "A qualifying L3 or L4 witness provider is separately approved.",
+    "Tail deletion, ledger rollback, receipt rollback, divergence, and witness outage tests pass.",
+    "Governance ledger replay reconstructs the accepted contract, active policy/schema set, phase authorizations, implementation commits, and validation lineage.",
+    "Phase 1B.5 implementation is bound to a Git commit and accepted by Owner.",
+    "OpenAI Runtime receives a separate Phase 2 authorization."
+  ],
+  "forbiddenEffects": [
+    "WRITE_FORMAL_CSV",
+    "WRITE_RUNTIME_SQLITE",
+    "CHANGE_RULE",
+    "CHANGE_HOLD",
+    "CHANGE_MIDR",
+    "CHANGE_IC_SCORE",
+    "PUBLISH_REPORT",
+    "SUBMIT_TRADE",
+    "CHANGE_POSITION",
+    "ENABLE_OPENAI_RUNTIME"
+  ],
+  "runtimeImplementationAuthorized": false,
+  "launcherIntegrationAuthorized": false,
+  "openAiRuntimeAuthorized": false,
+  "failureMode": "STOP_GOVERNANCE_REPLAY_PRESERVE_CORE_WARROOM"
+}

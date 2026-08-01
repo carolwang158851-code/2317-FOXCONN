@@ -1,0 +1,19 @@
+{
+  "policy_id": "P1008_PHASE3A_CAPABILITY_HEALTH_POLICY",
+  "version": "1.0.0",
+  "required_checks": [
+    "manifest",
+    "contract",
+    "boundary",
+    "typed_output",
+    "deterministic_replay",
+    "protected_files"
+  ],
+  "states": {
+    "HEALTHY": 100,
+    "DEGRADED": 80,
+    "BLOCKED": 0
+  },
+  "production_health_claim_allowed": false,
+  "actionable": false
+}

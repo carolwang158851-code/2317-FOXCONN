@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v1.0/schemas/source.schema.json",
+  "title": "P1008 Research Source",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source_id", "source_tier", "source_name", "locator", "as_of_date", "retrieved_at", "evidence_level"],
+  "properties": {
+    "source_id": {"type": "string", "minLength": 1, "maxLength": 160},
+    "source_tier": {"enum": ["CSV_AUTHORITY", "OFFICIAL", "PUBLIC_MARKET", "MEDIA", "OWNER_NOTE", "UNVERIFIED"]},
+    "source_name": {"type": "string", "minLength": 1, "maxLength": 240},
+    "locator": {"type": "string", "minLength": 1, "maxLength": 2048},
+    "as_of_date": {"type": "string", "format": "date"},
+    "retrieved_at": {"type": "string", "format": "date-time"},
+    "evidence_level": {"enum": ["L1", "L2", "L3", "L4"]},
+    "authority_manifest_path": {"type": ["string", "null"], "maxLength": 512},
+    "sha256": {"type": ["string", "null"], "pattern": "^[A-F0-9]{64}$"},
+    "freshness_state": {"enum": ["CURRENT", "STALE", "UNKNOWN"]},
+    "corroborating_source_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+  }
+}

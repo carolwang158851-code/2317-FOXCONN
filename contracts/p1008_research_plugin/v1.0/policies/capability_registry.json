@@ -1,0 +1,23 @@
+{
+  "registryId": "P1008_RESEARCH_CAPABILITY_REGISTRY",
+  "version": "1.0",
+  "frozen": true,
+  "actionable": false,
+  "defaultEnabled": false,
+  "capabilities": [
+    {"id": "financial", "enabledInPhase1A": false, "outputSchema": "../schemas/common_output.schema.json", "mayCreateGaps": true, "actionable": false},
+    {"id": "deep_research", "enabledInPhase1A": false, "outputSchema": "../schemas/common_output.schema.json", "mayCreateGaps": true, "actionable": false},
+    {"id": "macro", "enabledInPhase1A": false, "outputSchema": "../schemas/common_output.schema.json", "mayCreateGaps": true, "actionable": false},
+    {"id": "foreign_flow", "enabledInPhase1A": false, "outputSchema": "../schemas/common_output.schema.json", "mayCreateGaps": true, "actionable": false},
+    {"id": "valuation", "enabledInPhase1A": false, "outputSchema": "../schemas/common_output.schema.json", "mayCreateGaps": true, "actionable": false},
+    {"id": "evidence", "enabledInPhase1A": false, "outputSchema": "../schemas/evidence_matrix.schema.json", "mayCreateGaps": true, "actionable": false}
+  ],
+  "deferredCapabilities": [
+    "knowledge_graph",
+    "plugin_marketplace",
+    "automatic_model_weight_learning",
+    "automatic_thesis_modification",
+    "automatic_trading_backtest",
+    "full_daily_ic_debate"
+  ]
+}

@@ -1,0 +1,112 @@
+{
+  "manifestVersion": "1.0.0",
+  "approvedAt": "2026-06-20",
+  "approvedBy": "Owner",
+  "approvalSource": "Owner conversation approvals P1008 items 1 and 19",
+  "defaultStatus": "OBSERVATION_ONLY",
+  "defaultStatusZh": "未列入清單的規則預設僅供觀察，不參與正式訊號",
+  "actionable": false,
+  "actionableZh": "僅供提示，不會自動交易、改變持股或寫入正式資料",
+  "rulesDigestScope": "Canonical JSON of the rules array only",
+  "rulesDigestSha256": "409A704278DFB66B675E727C31D27B7FCD1B79B699A6FC3F4B171D67F9753CDC",
+  "rules": [
+    {
+      "id": "STRONG_ADD",
+      "status": "KEEP_DISABLED",
+      "statusZh": "維持停用",
+      "reasonZh": "Owner 於 2026-06-20 決定在獨立核准前維持停用",
+      "actionable": false
+    },
+    {
+      "id": "GROWTH_BUY_LINE_145",
+      "status": "KEEP_DISABLED",
+      "statusZh": "維持停用",
+      "reasonZh": "成長買進線尚未完成獨立治理與核准",
+      "actionable": false
+    },
+    {
+      "id": "EPS_GROWTH_QUALIFIED",
+      "status": "KEEP_DISABLED",
+      "statusZh": "維持停用",
+      "reasonZh": "規格文件狀態互相衝突，依較新的 Owner 決定維持停用",
+      "actionable": false
+    },
+    {
+      "id": "ROE_BLOCK",
+      "status": "KEEP_DISABLED",
+      "statusZh": "維持停用",
+      "reasonZh": "規格文件狀態互相衝突，依較新的 Owner 決定維持停用",
+      "actionable": false
+    },
+    {
+      "id": "ROE_ADD_QUALIFIED",
+      "status": "KEEP_DISABLED",
+      "statusZh": "維持停用",
+      "reasonZh": "規格文件狀態互相衝突，依較新的 Owner 決定維持停用",
+      "actionable": false
+    },
+    {
+      "id": "PB_UNDERVALUE",
+      "status": "KEEP_DISABLED",
+      "statusZh": "維持停用",
+      "reasonZh": "每日價格資料尚未升格為權威資料",
+      "actionable": false
+    },
+    {
+      "id": "PB_OVERHEAT",
+      "status": "KEEP_DISABLED",
+      "statusZh": "維持停用",
+      "reasonZh": "樣本與規格仍有衝突，只能顯示估值觀察",
+      "actionable": false
+    },
+    {
+      "id": "DIVIDEND_TRAP",
+      "status": "KEEP_DISABLED",
+      "statusZh": "維持停用",
+      "reasonZh": "payoutRatio 為計算值，且規格狀態互相衝突",
+      "actionable": false
+    },
+    {
+      "id": "SELL_ALL",
+      "status": "KEEP_DISABLED",
+      "statusZh": "維持停用",
+      "reasonZh": "退休存股系統不得由單一事件自動觸發清倉",
+      "actionable": false
+    },
+    {
+      "id": "OPERATING_MARGIN_FLOOR",
+      "status": "OBSERVATION_ONLY",
+      "statusZh": "僅供觀察",
+      "reasonZh": "2.8% 門檻可用於品質觀察，但本階段不改變正式訊號",
+      "actionable": false
+    },
+    {
+      "id": "MIDR",
+      "status": "OBSERVATION_ONLY",
+      "statusZh": "僅供觀察",
+      "reasonZh": "模型分數只提供方向資訊，不得輸出自動加減碼",
+      "actionable": false
+    },
+    {
+      "id": "MRD",
+      "status": "OBSERVATION_ONLY",
+      "statusZh": "僅供觀察",
+      "reasonZh": "均值回歸模型僅供研究，不得變更正式訊號",
+      "actionable": false
+    },
+    {
+      "id": "DIMAS",
+      "status": "OBSERVATION_ONLY",
+      "statusZh": "僅供觀察",
+      "reasonZh": "風險診斷只能提供提示，不得直接產生交易指令",
+      "actionable": false
+    },
+    {
+      "id": "DIVIDEND_SAFETY",
+      "status": "OBSERVATION_ONLY",
+      "statusZh": "僅供觀察",
+      "reasonZh": "股息安全性不得直接改變 newMoneySignal 或 holdingSignal",
+      "actionable": false
+    }
+  ]
+}

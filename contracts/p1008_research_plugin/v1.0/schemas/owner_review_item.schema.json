@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v1.0/schemas/owner_review_item.schema.json",
+  "title": "P1008 Research Owner Review Item",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["review_item_id", "created_at", "review_type", "subject_type", "subject_id", "question", "evidence_ids", "status", "effective_change_applied", "actionable"],
+  "properties": {
+    "review_item_id": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "review_type": {"enum": ["EVIDENCE_GAP", "THESIS_CHANGE_CANDIDATE", "LEGACY_REUSE", "RESEARCH_DEBT", "RESEARCH_HEALTH", "REPORT_ADMISSIBILITY", "SOURCE_POLICY"]},
+    "subject_type": {"enum": ["CLAIM", "THESIS", "GAP", "AGENDA", "DEBT", "HEALTH", "REPORT", "SOURCE"]},
+    "subject_id": {"type": "string", "minLength": 1},
+    "question": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "evidence_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "due_at": {"type": ["string", "null"], "format": "date-time"},
+    "status": {"enum": ["PENDING", "ACKNOWLEDGED", "APPROVED_AS_CANDIDATE", "REJECTED", "DEFERRED", "CLOSED"]},
+    "owner_id": {"type": ["string", "null"]},
+    "owner_disposition_at": {"type": ["string", "null"], "format": "date-time"},
+    "owner_note": {"type": ["string", "null"], "maxLength": 4000},
+    "effective_change_applied": {"const": false},
+    "actionable": {"const": false}
+  }
+}

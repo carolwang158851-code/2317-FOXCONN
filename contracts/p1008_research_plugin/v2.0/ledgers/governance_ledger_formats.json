@@ -1,0 +1,61 @@
+{
+  "formatId": "P1008_RESEARCH_GOVERNANCE_LEDGER_FORMAT",
+  "version": "2.0",
+  "status": "FROZEN_AUTHORITY",
+  "recordSchema": "../schemas/governance_ledger_record.schema.json",
+  "projectionSchema": "../schemas/governance_projection.schema.json",
+  "anchorSchema": "../schemas/tail_anchor.schema.json",
+  "anchorReceiptSchema": "../schemas/anchor_receipt.schema.json",
+  "encoding": "UTF-8",
+  "format": "JSONL",
+  "canonicalization": "RFC8785_JSON_CANONICALIZATION_SCHEME",
+  "hashAlgorithm": "SHA-256",
+  "appendOnly": true,
+  "inPlaceUpdateAllowed": false,
+  "deleteAllowed": false,
+  "truncateAllowed": false,
+  "genesisPreviousHash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "sequenceRule": "strictly_monotonic_starting_at_1",
+  "recordHashInput": [
+    "ledger_id",
+    "sequence",
+    "record_contract_version",
+    "recorded_at",
+    "previous_hash",
+    "event"
+  ],
+  "ledger": {
+    "ledgerId": "research_governance",
+    "relativePath": "runtime/research_plugin/governance/research_governance_ledger.jsonl",
+    "aggregateTypes": [
+      "GOVERNANCE",
+      "CONTRACT",
+      "POLICY",
+      "SCHEMA",
+      "ARCHITECTURE_REVIEW",
+      "PHASE",
+      "IMPLEMENTATION",
+      "VALIDATION",
+      "ROLLBACK"
+    ]
+  },
+  "projection": {
+    "relativePath": "runtime/research_plugin/governance/research_governance_projection.json",
+    "authoritative": false,
+    "deleteAndRebuildAllowed": true,
+    "source": "verified and externally anchored governance ledger only"
+  },
+  "genesisRequirements": [
+    "First event is GOVERNANCE_GENESIS_RECORDED by OWNER.",
+    "Genesis binds the accepted v1 Contract root hash.",
+    "Genesis binds Git baseline commit efbf0b2ec1aaf25d1d4f9025fe4a04b0f336dce7.",
+    "Genesis binds Phase 1B implementation commit da8f1e286c5a3c2bb0c77fe176a277c3bbc6faa9.",
+    "Genesis obtains a qualifying external receipt before replay authority is granted."
+  ],
+  "anchorRule": "Every committed governance record requires a verified L3/L4 witness receipt before it becomes replay authority.",
+  "replayRule": "Validate receipt chain, ledger chain, event catalog, artifact hashes, and Owner authorization before reducing state.",
+  "corruptionBehavior": "STOP_GOVERNANCE_REPLAY_PRESERVE_CORE_WARROOM",
+  "runtimeImplementationAuthorized": false,
+  "modifiesV1": false,
+  "actionable": false
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v1.0/schemas/plugin_status.schema.json",
+  "title": "P1008 Research Plugin Status",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "implementation_status", "runtime_status", "last_successful_run", "data_freshness", "rqs", "rhs", "evidence_gate_result", "legacy_reuse_violation_count", "owner_review_count", "open_gap_count", "overdue_debt_count", "openai_enabled", "actionable"],
+  "properties": {
+    "contract_version": {"const": "1.0"},
+    "implementation_status": {"enum": ["CONTRACT_ONLY", "SKELETON", "SHADOW", "PRODUCTION_ACCEPTED"]},
+    "runtime_status": {"enum": ["NOT_IMPLEMENTED", "IDLE", "RUNNING", "AVAILABLE", "DEGRADED", "UNAVAILABLE", "BLOCKED_BY_GOVERNANCE"]},
+    "last_successful_run": {"type": ["string", "null"], "format": "date-time"},
+    "data_freshness": {"enum": ["CURRENT", "STALE", "UNKNOWN", "NOT_EVALUATED"]},
+    "rqs": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+    "rhs": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+    "evidence_gate_result": {"enum": ["NOT_EVALUATED", "PASS", "WARNING", "OWNER_REVIEW_REQUIRED", "REJECT"]},
+    "legacy_reuse_violation_count": {"type": "integer", "minimum": 0},
+    "owner_review_count": {"type": "integer", "minimum": 0},
+    "open_gap_count": {"type": "integer", "minimum": 0},
+    "overdue_debt_count": {"type": "integer", "minimum": 0},
+    "openai_enabled": {"type": "boolean"},
+    "actionable": {"const": false}
+  }
+}

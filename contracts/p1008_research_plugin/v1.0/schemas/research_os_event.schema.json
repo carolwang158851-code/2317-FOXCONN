@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v1.0/schemas/research_os_event.schema.json",
+  "title": "P1008 Research OS Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "event_type", "aggregate_type", "aggregate_id", "occurred_at", "actor_type", "actor_id", "payload", "owner_review_required", "effective_change_applied", "actionable"],
+  "properties": {
+    "event_id": {"type": "string", "minLength": 1},
+    "event_type": {"type": "string", "minLength": 1, "maxLength": 120},
+    "aggregate_type": {"enum": ["RUN", "CLAIM", "GAP", "AGENDA", "DEBT", "HEALTH", "DECISION_MEMORY", "THESIS", "OWNER_REVIEW", "LEGACY_REUSE"]},
+    "aggregate_id": {"type": "string", "minLength": 1},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "actor_type": {"enum": ["SYSTEM", "CODEX", "OPENAI", "OWNER"]},
+    "actor_id": {"type": "string", "minLength": 1},
+    "causation_event_id": {"type": ["string", "null"]},
+    "correlation_id": {"type": ["string", "null"]},
+    "payload": {"type": "object"},
+    "owner_review_required": {"type": "boolean"},
+    "effective_change_applied": {"const": false},
+    "actionable": {"const": false}
+  }
+}

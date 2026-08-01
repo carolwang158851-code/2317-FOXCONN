@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/phase3a/capability.schema.json",
+  "title": "P1008 Governed Capability Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "capability_id",
+    "display_name",
+    "version",
+    "lifecycle_state",
+    "execution_mode",
+    "provider_id",
+    "implementation_available",
+    "enabled",
+    "owner_approval_reference",
+    "allowed_operations",
+    "input_contract",
+    "output_contract",
+    "required_contract_roots",
+    "health_policy_id",
+    "compatibility_policy_id",
+    "retirement_policy_id",
+    "actionable"
+  ],
+  "properties": {
+    "capability_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{1,63}$"},
+    "display_name": {"type": "string", "minLength": 1, "maxLength": 120},
+    "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "lifecycle_state": {
+      "enum": [
+        "DRAFT",
+        "REGISTERED_DISABLED",
+        "VALIDATED_DISABLED",
+        "SHADOW_ENABLED",
+        "RETIREMENT_PENDING",
+        "RETIRED"
+      ]
+    },
+    "execution_mode": {"enum": ["DISABLED", "MOCK_SHADOW"]},
+    "provider_id": {"type": ["string", "null"], "maxLength": 120},
+    "implementation_available": {"type": "boolean"},
+    "enabled": {"type": "boolean"},
+    "owner_approval_reference": {"type": ["string", "null"], "maxLength": 240},
+    "allowed_operations": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "input_contract": {"type": "string", "minLength": 1},
+    "output_contract": {"const": "PHASE2A_TYPED_RESEARCH_OUTPUT"},
+    "required_contract_roots": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["v1", "v2"],
+      "properties": {
+        "v1": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+        "v2": {"type": "string", "pattern": "^[A-F0-9]{64}$"}
+      }
+    },
+    "health_policy_id": {"const": "P1008_PHASE3A_CAPABILITY_HEALTH_POLICY"},
+    "compatibility_policy_id": {"const": "P1008_PHASE3A_CAPABILITY_COMPATIBILITY_POLICY"},
+    "retirement_policy_id": {"const": "P1008_PHASE3A_CAPABILITY_RETIREMENT_POLICY"},
+    "actionable": {"const": false}
+  }
+}

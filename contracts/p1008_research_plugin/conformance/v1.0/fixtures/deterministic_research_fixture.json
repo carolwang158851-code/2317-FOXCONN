@@ -1,0 +1,39 @@
+{
+  "fixtureId": "P1008_DETERMINISTIC_RESEARCH_V1",
+  "contractVersion": "1.0",
+  "runId": "RUN-CONFORMANCE-001",
+  "asOfDate": "2026-07-10",
+  "question": "  What is the official Q3 CSP capex guidance?  ",
+  "sources": [
+    {"source_id": "SRC-OWNER-002", "source_tier": "OWNER_NOTE", "as_of_date": "2026-07-10"},
+    {"source_id": "SRC-CSP-OFFICIAL-001", "source_tier": "OFFICIAL", "as_of_date": "2026-07-09"},
+    {"source_id": "SRC-CSP-OFFICIAL-001", "source_tier": "OFFICIAL", "as_of_date": "2026-07-09"}
+  ],
+  "claims": [
+    {"claim_id": "CLM-002", "text": "Demand remains under review.", "evidence_ids": []},
+    {"claim_id": "CLM-001", "text": "Official capex evidence is incomplete.", "evidence_ids": ["EVD-001"]}
+  ],
+  "knowledgeGaps": [
+    {"gap_id": "GAP-CSP-CAPEX-Q3", "question": "What is the official Q3 CSP capex guidance?"},
+    {"gap_id": "GAP-CSP-CAPEX-Q3", "question": "What is the official Q3 CSP capex guidance?"}
+  ],
+  "healthComponents": {
+    "evidenceLinkage": 80,
+    "knowledgeGapHygiene": 90,
+    "researchDebtHygiene": 70,
+    "agendaExecution": 85,
+    "sourceFreshness": 95,
+    "historicalCalibration": 75
+  },
+  "expected": {
+    "normalizedQuestion": "what is the official q3 csp capex guidance?",
+    "sourceCount": 2,
+    "claimCount": 2,
+    "knowledgeGapCount": 1,
+    "healthScore": 81.75,
+    "healthState": "HEALTHY",
+    "status": "owner_review_required",
+    "actionable": false,
+    "defaultFillUsed": false
+  }
+}

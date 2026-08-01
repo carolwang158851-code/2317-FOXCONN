@@ -1,0 +1,14 @@
+{
+  "policyId": "P1008_RESEARCH_AGENDA_POLICY",
+  "version": "1.0",
+  "frozen": true,
+  "allowedStates": ["PROPOSED", "ACTIVE", "BLOCKED", "ANSWERED", "RETIRED"],
+  "allowedOrigins": ["KNOWLEDGE_GAP", "REJECTED_CLAIM", "COUNTER_EVIDENCE", "DECISION_MEMORY", "MATERIAL_EVENT", "OWNER_REQUEST", "RESEARCH_DEBT"],
+  "deduplicationKey": ["normalized_research_question", "symbol", "origin_scope"],
+  "autoCloseAllowed": false,
+  "answerRequiresResolutionEvidence": true,
+  "reportConclusionCanClose": false,
+  "overdueCreatesResearchDebt": true,
+  "mayChangeWarroomDecision": false,
+  "actionable": false
+}

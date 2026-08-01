@@ -1,0 +1,26 @@
+{
+  "policyId": "P1008_RESEARCH_HEALTH_POLICY",
+  "version": "1.0",
+  "frozen": true,
+  "metricId": "RHS",
+  "separateFromRqs": true,
+  "notInvestmentIc": true,
+  "weights": {
+    "evidenceLinkage": 25,
+    "knowledgeGapHygiene": 20,
+    "researchDebtHygiene": 20,
+    "agendaExecution": 15,
+    "sourceFreshness": 10,
+    "historicalCalibration": 10
+  },
+  "states": [
+    {"id": "HEALTHY", "minimum": 80, "maximum": 100},
+    {"id": "WATCH", "minimum": 60, "maximum": 79.999},
+    {"id": "DEGRADED", "minimum": 0, "maximum": 59.999}
+  ],
+  "degradedBehavior": "SUPPRESS_PLUGIN_MAIN_CONCLUSION_AND_REQUIRE_OWNER_REVIEW",
+  "mayBlockCoreWarroom": false,
+  "mayChangeHold": false,
+  "mayChangeIcScore": false,
+  "actionable": false
+}

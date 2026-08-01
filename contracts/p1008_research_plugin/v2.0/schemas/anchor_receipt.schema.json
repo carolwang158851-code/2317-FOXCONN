@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v2.0/schemas/anchor_receipt.schema.json",
+  "title": "P1008 External Tail Anchor Witness Receipt",
+  "description": "Receipt returned by an approved independent witness for one immutable tail anchor candidate.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "receipt_id",
+    "receipt_contract_version",
+    "anchor",
+    "anchor_payload_hash",
+    "witness_id",
+    "witness_class",
+    "witness_monotonic_counter",
+    "witness_previous_receipt_hash",
+    "received_at",
+    "signature_algorithm",
+    "key_id",
+    "signature",
+    "verification_status",
+    "warroom_effective_change_applied",
+    "actionable"
+  ],
+  "properties": {
+    "receipt_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "receipt_contract_version": {"const": "2.0"},
+    "anchor": {"$ref": "tail_anchor.schema.json"},
+    "anchor_payload_hash": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+    "witness_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "witness_class": {
+      "enum": [
+        "LOCAL_HASH_ONLY",
+        "LOCAL_AUTHENTICATED",
+        "OWNER_SIGNED_CHECKPOINT",
+        "EXTERNAL_APPEND_ONLY",
+        "HARDWARE_MONOTONIC",
+        "LOCAL_TEST_ONLY"
+      ]
+    },
+    "witness_monotonic_counter": {"type": "integer", "minimum": 1},
+    "witness_previous_receipt_hash": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+    "received_at": {"type": "string", "format": "date-time"},
+    "signature_algorithm": {
+      "enum": [
+        "ED25519",
+        "ECDSA_P256_SHA256",
+        "TPM_ATTESTED",
+        "OWNER_SIGNED_CHECKPOINT",
+        "TEST_ONLY_NONE"
+      ]
+    },
+    "key_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "signature": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "verification_status": {
+      "enum": ["VERIFIED", "INVALID", "UNKNOWN_KEY", "REVOKED", "EXPIRED"]
+    },
+    "witness_locator": {"type": ["string", "null"], "maxLength": 2000},
+    "warroom_effective_change_applied": {"const": false},
+    "actionable": {"const": false}
+  }
+}

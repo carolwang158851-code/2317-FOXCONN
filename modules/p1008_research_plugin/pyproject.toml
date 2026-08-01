@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "p1008-research-plugin"
+version = "0.1.0"
+description = "P1008 Research OS governed runtime and manual plugin-module shadow"
+requires-python = ">=3.11"
+dependencies = [
+  "openai-agents>=0.2.0",
+  "pydantic>=2.7",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.p1008]
+contract-version = "1.0"
+openai-enabled = false
+actionable = false

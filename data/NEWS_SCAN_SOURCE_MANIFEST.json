@@ -1,0 +1,418 @@
+{
+  "manifestVersion": "P1008_NEWS_SCAN_SOURCE_MANIFEST_v2",
+  "status": "ACTIVE",
+  "approvedAt": "2026-07-04",
+  "approvalScope": "Observation-only public news crawler source registry. Approved sources may be fetched by warroom_news_scanner_v2.py, but formal CSV append still requires Owner gate.",
+  "actionable": false,
+  "formalCsvModifiedByScanner": false,
+  "deprecatedUrlPatterns": [
+    "https://news.cnyes.com/search/all?keyword=",
+    "https://www.cnyes.com/search/all?keyword="
+  ],
+  "defaultQueryMatrix": [
+    "鴻海",
+    "2317",
+    "Hon Hai",
+    "Foxconn",
+    "富士康",
+    "鴻海 AI server",
+    "Foxconn NVIDIA GB200",
+    "鴻海 匯率",
+    "鴻海 出口管制"
+  ],
+  "sourceTierPolicy": {
+    "allowedSourceTiers": [
+      "OFFICIAL",
+      "PUBLIC_MARKET",
+      "MEDIA",
+      "OWNER_NOTE",
+      "UNVERIFIED"
+    ],
+    "singleMediaMaxLevel": "WATCH",
+    "unverifiedMaxLevel": "OBSERVE",
+    "reviewRequiredRule": "OFFICIAL direct event, or two-plus independent media/public-market sources plus explicit Hon Hai relevance, CSP capex/AI data center demand, GB200/GB300/AI server linkage, supply-chain disruption, macro/FX/rate stress, tariff/export-control/sanction, or other direct market-impact trigger.",
+    "connectorPolicy": "Only enabled=true and connectorStatus=APPROVED sources may be fetched. All fetched rows remain observation-only and Actionable=false."
+  },
+  "scanWindowsTST": [
+    {
+      "id": "preopen",
+      "time": "08:10",
+      "lookbackHours": 16,
+      "purpose": "Pre-open protection"
+    },
+    {
+      "id": "intraday",
+      "time": "12:30",
+      "lookbackHours": 6,
+      "purpose": "Intraday event check"
+    },
+    {
+      "id": "postclose",
+      "time": "15:30",
+      "lookbackHours": 8,
+      "purpose": "Post-close event check"
+    },
+    {
+      "id": "global",
+      "time": "21:30",
+      "lookbackHours": 12,
+      "purpose": "International, Fed, FX, oil, and geopolitics check"
+    },
+    {
+      "id": "report",
+      "time": "WEEKEND_OR_MONDAY",
+      "lookbackHours": 168,
+      "purpose": "Weekly report counter-evidence audit"
+    }
+  ],
+  "sources": [
+    {
+      "sourceId": "owner_manual_event",
+      "sourceTier": "OWNER_NOTE",
+      "sourceName": "Owner manual event input",
+      "enabled": true,
+      "requiresNetwork": false,
+      "connectorType": "LOCAL_INPUT",
+      "url": "",
+      "connectorStatus": "LOCAL_INPUT_ONLY",
+      "maxLevelWithoutCorroboration": "WATCH"
+    },
+    {
+      "sourceId": "honhai_ir",
+      "sourceTier": "OFFICIAL",
+      "sourceName": "Hon Hai official press releases",
+      "enabled": true,
+      "requiresNetwork": true,
+      "connectorType": "HTTPS_HTML",
+      "discoveryMode": [
+        "HTML"
+      ],
+      "url": "https://www.honhai.com/zh-tw/press-center/press-releases/latest-news",
+      "urls": [
+        "https://www.honhai.com/zh-tw/press-center/press-releases/latest-news",
+        "https://www.honhai.com/zh-tw/press-center/press-releases/latest-news?category=3plus3",
+        "https://www.honhai.com/zh-tw/investor-relations/financial-information/reports?category=monthly"
+      ],
+      "connectorStatus": "APPROVED",
+      "requestTimeoutSeconds": 5,
+      "rateLimitSeconds": 1,
+      "maxItemsPerSource": 8,
+      "maxLevelWithoutCorroboration": "REVIEW_REQUIRED"
+    },
+    {
+      "sourceId": "mops_material_info",
+      "sourceTier": "OFFICIAL",
+      "sourceName": "TWSE/MOPS official disclosure",
+      "enabled": true,
+      "requiresNetwork": true,
+      "connectorType": "HTTPS_OFFICIAL_HTML",
+      "discoveryMode": [
+        "HTML"
+      ],
+      "url": "https://mops.twse.com.tw/mops/web/t05st02",
+      "connectorStatus": "APPROVED",
+      "requestTimeoutSeconds": 5,
+      "rateLimitSeconds": 1,
+      "maxItemsPerSource": 8,
+      "maxLevelWithoutCorroboration": "REVIEW_REQUIRED"
+    },
+    {
+      "sourceId": "economic_daily_search",
+      "sourceTier": "MEDIA",
+      "sourceName": "經濟日報",
+      "enabled": true,
+      "requiresNetwork": true,
+      "connectorType": "HTTPS_SEARCH_HTML",
+      "discoveryMode": [
+        "SEARCH",
+        "HTML"
+      ],
+      "url": "https://money.udn.com/",
+      "searchUrlTemplates": [
+        "https://money.udn.com/search/result/1001/{query}"
+      ],
+      "connectorStatus": "APPROVED",
+      "requestTimeoutSeconds": 5,
+      "rateLimitSeconds": 1,
+      "maxSearchQueries": 3,
+      "maxItemsPerSource": 10,
+      "maxLevelWithoutCorroboration": "WATCH"
+    },
+    {
+      "sourceId": "commercial_times_search",
+      "sourceTier": "MEDIA",
+      "sourceName": "工商時報",
+      "enabled": true,
+      "requiresNetwork": true,
+      "connectorType": "HTTPS_SEARCH_HTML",
+      "discoveryMode": [
+        "HTML"
+      ],
+      "url": "https://www.ctee.com.tw/",
+      "urls": [
+        "https://www.ctee.com.tw/livenews",
+        "https://www.ctee.com.tw/stock",
+        "https://www.ctee.com.tw/industry",
+        "https://www.ctee.com.tw/world"
+      ],
+      "searchUrlTemplates": [
+        "https://www.ctee.com.tw/?s={query}"
+      ],
+      "connectorStatus": "APPROVED",
+      "http403Policy": "STOP_AND_COOLDOWN_24H_DOMAIN_WEB_SEARCH_CANDIDATE",
+      "requestTimeoutSeconds": 5,
+      "rateLimitSeconds": 1,
+      "maxSearchQueries": 3,
+      "maxItemsPerSource": 10,
+      "maxLevelWithoutCorroboration": "WATCH"
+    },
+    {
+      "sourceId": "cnyes_search",
+      "sourceTier": "MEDIA",
+      "sourceName": "鉅亨網",
+      "enabled": true,
+      "requiresNetwork": true,
+      "connectorType": "HTTPS_SEARCH_HTML",
+      "discoveryMode": [
+        "SEARCH",
+        "HTML"
+      ],
+      "url": "https://news.cnyes.com/news/cat/tw_stock",
+      "urls": [
+        "https://news.cnyes.com/news/cat/tw_stock",
+        "https://news.cnyes.com/news/cat/tw_stock_news",
+        "https://news.cnyes.com/news/cat/tw_macro",
+        "https://news.cnyes.com/news/cat/us_stock",
+        "https://news.cnyes.com/news/cat/forex"
+      ],
+      "searchUrlTemplates": [
+        "https://news.cnyes.com/search?q={query}"
+      ],
+      "connectorStatus": "APPROVED",
+      "requestTimeoutSeconds": 5,
+      "rateLimitSeconds": 1,
+      "maxSearchQueries": 3,
+      "maxItemsPerSource": 10,
+      "maxLevelWithoutCorroboration": "WATCH"
+    },
+    {
+      "sourceId": "moneydj_search",
+      "sourceTier": "MEDIA",
+      "sourceName": "MoneyDJ",
+      "enabled": true,
+      "requiresNetwork": true,
+      "connectorType": "HTTPS_SEARCH_HTML",
+      "discoveryMode": [
+        "SEARCH",
+        "HTML"
+      ],
+      "url": "https://www.moneydj.com/",
+      "searchUrlTemplates": [
+        "https://www.moneydj.com/kmdj/search/list.aspx?svc=NW&a={query}"
+      ],
+      "connectorStatus": "APPROVED",
+      "requestTimeoutSeconds": 5,
+      "rateLimitSeconds": 1,
+      "maxSearchQueries": 3,
+      "maxItemsPerSource": 10,
+      "maxLevelWithoutCorroboration": "WATCH"
+    },
+    {
+      "sourceId": "cna_finance_search",
+      "sourceTier": "MEDIA",
+      "sourceName": "中央社財經",
+      "enabled": true,
+      "requiresNetwork": true,
+      "connectorType": "HTTPS_SEARCH_HTML",
+      "discoveryMode": [
+        "SEARCH",
+        "HTML"
+      ],
+      "url": "https://www.cna.com.tw/",
+      "searchUrlTemplates": [
+        "https://www.cna.com.tw/search/hysearchws.aspx?q={query}"
+      ],
+      "connectorStatus": "APPROVED",
+      "requestTimeoutSeconds": 5,
+      "rateLimitSeconds": 1,
+      "maxSearchQueries": 3,
+      "maxItemsPerSource": 10,
+      "maxLevelWithoutCorroboration": "WATCH"
+    },
+    {
+      "sourceId": "nvidia_news",
+      "sourceTier": "OFFICIAL",
+      "sourceName": "NVIDIA official newsroom",
+      "enabled": true,
+      "requiresNetwork": true,
+      "connectorType": "HTTPS_HTML",
+      "discoveryMode": [
+        "HTML"
+      ],
+      "url": "https://nvidianews.nvidia.com/news",
+      "connectorStatus": "APPROVED",
+      "requestTimeoutSeconds": 5,
+      "rateLimitSeconds": 1,
+      "maxItemsPerSource": 8,
+      "maxLevelWithoutCorroboration": "WATCH"
+    },
+    {
+      "sourceId": "apple_newsroom",
+      "sourceTier": "OFFICIAL",
+      "sourceName": "Apple Newsroom",
+      "enabled": true,
+      "requiresNetwork": true,
+      "connectorType": "HTTPS_HTML",
+      "discoveryMode": [
+        "HTML"
+      ],
+      "url": "https://www.apple.com/tw/newsroom/",
+      "connectorStatus": "APPROVED",
+      "requestTimeoutSeconds": 5,
+      "rateLimitSeconds": 1,
+      "maxItemsPerSource": 8,
+      "maxLevelWithoutCorroboration": "WATCH"
+    },
+    {
+      "sourceId": "microsoft_azure_blog",
+      "sourceTier": "OFFICIAL",
+      "sourceName": "Microsoft Azure official blog",
+      "enabled": true,
+      "requiresNetwork": true,
+      "connectorType": "HTTPS_HTML",
+      "discoveryMode": [
+        "HTML"
+      ],
+      "url": "https://azure.microsoft.com/en-us/blog/",
+      "urls": [
+        "https://azure.microsoft.com/en-us/updates/"
+      ],
+      "scanCadence": "WEEKLY",
+      "connectorStatus": "APPROVED",
+      "requestTimeoutSeconds": 5,
+      "rateLimitSeconds": 1,
+      "maxItemsPerSource": 8,
+      "maxLevelWithoutCorroboration": "WATCH"
+    },
+    {
+      "sourceId": "aws_news_blog",
+      "sourceTier": "OFFICIAL",
+      "sourceName": "AWS official news blog",
+      "enabled": true,
+      "requiresNetwork": true,
+      "connectorType": "HTTPS_HTML",
+      "discoveryMode": [
+        "HTML"
+      ],
+      "url": "https://aws.amazon.com/blogs/aws/",
+      "connectorStatus": "APPROVED",
+      "requestTimeoutSeconds": 5,
+      "rateLimitSeconds": 1,
+      "maxItemsPerSource": 8,
+      "maxLevelWithoutCorroboration": "WATCH"
+    },
+    {
+      "sourceId": "google_cloud_blog",
+      "sourceTier": "OFFICIAL",
+      "sourceName": "Google Cloud official blog",
+      "enabled": true,
+      "requiresNetwork": true,
+      "connectorType": "HTTPS_HTML",
+      "discoveryMode": [
+        "HTML"
+      ],
+      "url": "https://cloud.google.com/blog",
+      "connectorStatus": "APPROVED",
+      "requestTimeoutSeconds": 5,
+      "rateLimitSeconds": 1,
+      "maxItemsPerSource": 8,
+      "maxLevelWithoutCorroboration": "WATCH"
+    },
+    {
+      "sourceId": "meta_newsroom",
+      "sourceTier": "OFFICIAL",
+      "sourceName": "Meta official newsroom",
+      "enabled": true,
+      "requiresNetwork": true,
+      "connectorType": "HTTPS_HTML",
+      "discoveryMode": [
+        "HTML"
+      ],
+      "url": "https://about.fb.com/news/",
+      "connectorStatus": "APPROVED",
+      "requestTimeoutSeconds": 5,
+      "rateLimitSeconds": 1,
+      "maxItemsPerSource": 8,
+      "maxLevelWithoutCorroboration": "WATCH"
+    },
+    {
+      "sourceId": "oracle_news",
+      "sourceTier": "OFFICIAL",
+      "sourceName": "Oracle official news",
+      "enabled": true,
+      "requiresNetwork": true,
+      "connectorType": "HTTPS_HTML",
+      "discoveryMode": [
+        "HTML"
+      ],
+      "url": "https://www.oracle.com/news/",
+      "connectorStatus": "APPROVED",
+      "requestTimeoutSeconds": 5,
+      "rateLimitSeconds": 1,
+      "maxItemsPerSource": 8,
+      "maxLevelWithoutCorroboration": "WATCH"
+    },
+    {
+      "sourceId": "coreweave_blog",
+      "sourceTier": "OFFICIAL",
+      "sourceName": "CoreWeave official blog",
+      "enabled": true,
+      "requiresNetwork": true,
+      "connectorType": "HTTPS_HTML",
+      "discoveryMode": [
+        "HTML"
+      ],
+      "url": "https://www.coreweave.com/blog",
+      "connectorStatus": "APPROVED",
+      "requestTimeoutSeconds": 5,
+      "rateLimitSeconds": 1,
+      "maxItemsPerSource": 8,
+      "maxLevelWithoutCorroboration": "WATCH"
+    },
+    {
+      "sourceId": "openai_news",
+      "sourceTier": "OFFICIAL",
+      "sourceName": "OpenAI official news",
+      "enabled": true,
+      "requiresNetwork": true,
+      "connectorType": "HTTPS_HTML",
+      "discoveryMode": [
+        "HTML"
+      ],
+      "url": "https://openai.com/news/",
+      "connectorStatus": "APPROVED",
+      "requestTimeoutSeconds": 5,
+      "rateLimitSeconds": 1,
+      "maxItemsPerSource": 8,
+      "maxLevelWithoutCorroboration": "WATCH"
+    },
+    {
+      "sourceId": "finance_audio_public_summary",
+      "sourceTier": "MEDIA",
+      "sourceName": "財經影音/電台公開摘要 watchlist",
+      "enabled": false,
+      "requiresNetwork": true,
+      "connectorType": "HTTPS_RSS_OR_HTML",
+      "discoveryMode": [
+        "RSS",
+        "HTML"
+      ],
+      "urls": [],
+      "connectorStatus": "CONNECTOR_PENDING",
+      "requestTimeoutSeconds": 5,
+      "rateLimitSeconds": 1,
+      "maxItemsPerSource": 8,
+      "maxLevelWithoutCorroboration": "WATCH"
+    }
+  ]
+}

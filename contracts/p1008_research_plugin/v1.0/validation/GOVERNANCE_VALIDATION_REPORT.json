@@ -1,0 +1,52 @@
+{
+  "validationId": "P1008_RESEARCH_CONTRACT_VALIDATION_20260710",
+  "contractVersion": "1.0",
+  "phase": "PHASE_1A_RESEARCH_CONTRACT_LAYER",
+  "generatedAt": "2026-07-10T20:36:05+08:00",
+  "status": "PASS_PENDING_OWNER_ACCEPTANCE",
+  "actionable": false,
+  "summary": {
+    "checks": 16,
+    "passed": 16,
+    "failed": 0,
+    "jsonFilesParsed": 40,
+    "schemasChecked": 23,
+    "apiPathsChecked": 16,
+    "ledgerDefinitionsChecked": 8,
+    "pythonFilesInContract": 0,
+    "implementationModulePresent": false
+  },
+  "checks": [
+    {"id": "GV-001", "status": "PASS", "evidence": "All 40 final JSON artifacts parse as UTF-8 JSON."},
+    {"id": "GV-002", "status": "PASS", "evidence": "23 schemas declare Draft 2020-12, unique $id and top-level additionalProperties=false."},
+    {"id": "GV-003", "status": "PASS", "evidence": "All external relative $ref targets resolve inside frozen contract files."},
+    {"id": "GV-004", "status": "PASS", "evidence": "Permanent no-trade/no-write/no-rule/no-HOLD/no-MIDR/no-publish invariants are locked."},
+    {"id": "GV-005", "status": "PASS", "evidence": "All five hooks are registered disabled; scheduling is manual only."},
+    {"id": "GV-006", "status": "PASS", "evidence": "16 API paths checked; no forbidden publish/trading/position/rule/shell/command route."},
+    {"id": "GV-007", "status": "PASS", "evidence": "All four POST operation definitions require LocalSession security."},
+    {"id": "GV-008", "status": "PASS", "evidence": "Owner disposition request/response enforce effective change false."},
+    {"id": "GV-009", "status": "PASS", "evidence": "Eight ledgers are JSONL append-only with SHA-256 chain; update/delete/truncate false."},
+    {"id": "GV-010", "status": "PASS", "evidence": "Knowledge-gap resolution requires evidence and cannot be finalized by a model actor."},
+    {"id": "GV-011", "status": "PASS", "evidence": "Research debt cannot auto-delete/resolve or change HOLD."},
+    {"id": "GV-012", "status": "PASS", "evidence": "RHS weights sum to 100; RHS is separate from RQS and investment ICs."},
+    {"id": "GV-013", "status": "PASS", "evidence": "Source policy rejects DefaultFill, unregistered KB input and model tier upgrades."},
+    {"id": "GV-014", "status": "PASS", "evidence": "No Python exists in contract; modules/p1008_research_plugin is absent."},
+    {"id": "GV-015", "status": "PASS", "evidence": "Formal CSV, governance rules and Runtime SQLite are outside allowed write roots."},
+    {"id": "GV-016", "status": "PASS", "evidence": "contract.manifest.json records SHA-256 for every frozen artifact except itself."}
+  ],
+  "validationMethod": [
+    "PowerShell UTF-8 JSON parse",
+    "JSON Schema metadata and unique-id inspection",
+    "Relative reference resolution",
+    "Contract-specific governance assertions",
+    "API route and POST security inspection",
+    "Policy invariant inspection",
+    "SHA-256 freeze manifest verification"
+  ],
+  "limitations": [
+    "No third-party Draft 2020-12 metaschema engine is installed in the current workspace runtime.",
+    "Phase 1B must add executable valid/invalid fixture tests against a pinned Draft 2020-12 validator before any runtime status can exceed SKELETON."
+  ],
+  "formalSystemsModified": false,
+  "ownerAcceptanceRequired": true
+}

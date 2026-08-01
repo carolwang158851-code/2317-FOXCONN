@@ -1,0 +1,106 @@
+{
+  "fixtureId": "P1008_LEDGER_REPLAY_V1",
+  "contractVersion": "1.0",
+  "records": [
+    {
+      "ledgerId": "knowledge_gap",
+      "aggregateType": "GAP",
+      "aggregateId": "GAP-CSP-CAPEX-Q3",
+      "eventType": "KNOWLEDGE_GAP_OPENED",
+      "targetState": "OPEN",
+      "actorType": "SYSTEM",
+      "payload": {"question": "What is the official Q3 CSP capex guidance?"}
+    },
+    {
+      "ledgerId": "knowledge_gap",
+      "aggregateType": "GAP",
+      "aggregateId": "GAP-CSP-CAPEX-Q3",
+      "eventType": "KNOWLEDGE_GAP_INVESTIGATION_STARTED",
+      "targetState": "INVESTIGATING",
+      "actorType": "SYSTEM",
+      "payload": {"agenda_id": "AGENDA-CSP-CAPEX-Q3"}
+    },
+    {
+      "ledgerId": "knowledge_gap",
+      "aggregateType": "GAP",
+      "aggregateId": "GAP-CSP-CAPEX-Q3",
+      "eventType": "KNOWLEDGE_GAP_RESOLVED",
+      "targetState": "RESOLVED",
+      "actorType": "OWNER",
+      "payload": {"evidence_ids": ["EVD-CSP-OFFICIAL-Q3"]}
+    },
+    {
+      "ledgerId": "research_agenda",
+      "aggregateType": "AGENDA",
+      "aggregateId": "AGENDA-CSP-CAPEX-Q3",
+      "eventType": "RESEARCH_AGENDA_PROPOSED",
+      "targetState": "PROPOSED",
+      "actorType": "SYSTEM",
+      "payload": {"success_condition": "Official capex guidance is available."}
+    },
+    {
+      "ledgerId": "research_agenda",
+      "aggregateType": "AGENDA",
+      "aggregateId": "AGENDA-CSP-CAPEX-Q3",
+      "eventType": "RESEARCH_AGENDA_ACTIVATED",
+      "targetState": "ACTIVE",
+      "actorType": "OWNER",
+      "payload": {"priority": "HIGH"}
+    },
+    {
+      "ledgerId": "research_agenda",
+      "aggregateType": "AGENDA",
+      "aggregateId": "AGENDA-CSP-CAPEX-Q3",
+      "eventType": "RESEARCH_AGENDA_ANSWERED",
+      "targetState": "ANSWERED",
+      "actorType": "OWNER",
+      "payload": {"evidence_ids": ["EVD-CSP-OFFICIAL-Q3"]}
+    },
+    {
+      "ledgerId": "research_debt",
+      "aggregateType": "DEBT",
+      "aggregateId": "DEBT-AI-REVENUE-MIX",
+      "eventType": "RESEARCH_DEBT_OPENED",
+      "targetState": "OPEN",
+      "actorType": "SYSTEM",
+      "payload": {"reason": "Awaiting segment disclosure."}
+    },
+    {
+      "ledgerId": "research_debt",
+      "aggregateType": "DEBT",
+      "aggregateId": "DEBT-AI-REVENUE-MIX",
+      "eventType": "RESEARCH_DEBT_WAITING_DATA",
+      "targetState": "WAITING_DATA",
+      "actorType": "SYSTEM",
+      "payload": {"expected_event": "Quarterly earnings release"}
+    },
+    {
+      "ledgerId": "research_debt",
+      "aggregateType": "DEBT",
+      "aggregateId": "DEBT-AI-REVENUE-MIX",
+      "eventType": "RESEARCH_DEBT_OVERDUE",
+      "targetState": "OVERDUE",
+      "actorType": "SYSTEM",
+      "payload": {"owner_review_required": true}
+    },
+    {
+      "ledgerId": "research_debt",
+      "aggregateType": "DEBT",
+      "aggregateId": "DEBT-AI-REVENUE-MIX",
+      "eventType": "RESEARCH_DEBT_RESOLVED",
+      "targetState": "RESOLVED",
+      "actorType": "OWNER",
+      "payload": {"evidence_ids": ["EVD-EARNINGS-AI-MIX"]}
+    }
+  ],
+  "expectedProjection": {
+    "GAP-CSP-CAPEX-Q3": "RESOLVED",
+    "AGENDA-CSP-CAPEX-Q3": "ANSWERED",
+    "DEBT-AI-REVENUE-MIX": "RESOLVED"
+  },
+  "tamperTest": {
+    "recordIndex": 1,
+    "payloadField": "agenda_id",
+    "replacement": "TAMPERED"
+  }
+}

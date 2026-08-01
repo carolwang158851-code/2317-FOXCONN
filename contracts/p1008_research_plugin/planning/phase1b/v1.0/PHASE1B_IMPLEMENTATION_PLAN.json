@@ -1,0 +1,117 @@
+{
+  "planId": "P1008_RESEARCH_PHASE1B_PLUGIN_SKELETON_PLAN",
+  "planVersion": "1.0",
+  "contractVersion": "1.0",
+  "contractRootHash": "3370C4DBD6B564E2200D051AC07C8507442C130ADE64D770621107FA09D2924D",
+  "status": "DRY_RUN_ONLY_IMPLEMENTATION_NOT_AUTHORIZED",
+  "actionable": false,
+  "objectives": [
+    "CONTRACT_IMPLEMENTABILITY",
+    "READ_ONLY_ADAPTER_AND_STATUS_API",
+    "EVENT_LEDGER_PROJECTION_REPLAY",
+    "GOVERNANCE_BOUNDARY_PRESERVATION"
+  ],
+  "plannedModuleRoot": "modules/p1008_research_plugin/",
+  "plannedFiles": [
+    "modules/p1008_research_plugin/README.md",
+    "modules/p1008_research_plugin/pyproject.toml",
+    "modules/p1008_research_plugin/src/p1008_research_plugin/__init__.py",
+    "modules/p1008_research_plugin/src/p1008_research_plugin/contract_loader.py",
+    "modules/p1008_research_plugin/src/p1008_research_plugin/governance.py",
+    "modules/p1008_research_plugin/src/p1008_research_plugin/adapters/authority_adapter.py",
+    "modules/p1008_research_plugin/src/p1008_research_plugin/adapters/runtime_snapshot_adapter.py",
+    "modules/p1008_research_plugin/src/p1008_research_plugin/events/catalog.py",
+    "modules/p1008_research_plugin/src/p1008_research_plugin/ledgers/store.py",
+    "modules/p1008_research_plugin/src/p1008_research_plugin/projections/replay.py",
+    "modules/p1008_research_plugin/src/p1008_research_plugin/status/service.py",
+    "modules/p1008_research_plugin/src/p1008_research_plugin/status/server.py",
+    "modules/p1008_research_plugin/src/p1008_research_plugin/shadow_runtime.py",
+    "modules/p1008_research_plugin/tests/fixtures/",
+    "modules/p1008_research_plugin/tests/test_contract_loader.py",
+    "modules/p1008_research_plugin/tests/test_read_only_adapters.py",
+    "modules/p1008_research_plugin/tests/test_event_catalog.py",
+    "modules/p1008_research_plugin/tests/test_ledger_replay.py",
+    "modules/p1008_research_plugin/tests/test_status_api.py",
+    "modules/p1008_research_plugin/tests/test_governance_boundaries.py"
+  ],
+  "implementedApiSubset": [
+    "GET /api/research-plugin/status"
+  ],
+  "unimplementedContractRoutesBehavior": "NOT_BOUND_IN_PHASE_1B; no substitute route may be invented",
+  "statusRequirements": {
+    "implementation_status": "SKELETON",
+    "openai_enabled": false,
+    "actionable": false,
+    "schema": "contracts/p1008_research_plugin/v1.0/schemas/plugin_status.schema.json"
+  },
+  "readOnlyInputs": [
+    "data/CSV_AUTHORITY_MANIFEST.json",
+    "authority-manifest-listed CSV files",
+    "rules/RULE_STATUS_MANIFEST.json",
+    "approved runtime JSON snapshots",
+    "contracts/p1008_research_plugin/v1.0/"
+  ],
+  "testWriteRoot": "temporary test directory only",
+  "futurePluginOwnedWriteRoots": [
+    "runtime/research_plugin/",
+    "staging/research_plugin/",
+    "reports/generated/research_plugin/",
+    "logs/research_plugin/"
+  ],
+  "phase1bLiveWritePolicy": "DISABLED; ledger and projection tests use a temporary root that mirrors contract-relative paths",
+  "forbiddenTargets": [
+    "launcher.html",
+    "tools/p1008_app_server.py",
+    "data/*.csv",
+    "data/CSV_AUTHORITY_MANIFEST.json",
+    "rules/",
+    "runtime/warroom_*",
+    "%LOCALAPPDATA%/P1008/data/warroom.sqlite3",
+    "reports/generated/warroom/",
+    "Windows Task Scheduler",
+    "BAT workflow files"
+  ],
+  "forbiddenCapabilities": [
+    "OPENAI_CALL",
+    "ARBITRARY_NETWORK",
+    "ARBITRARY_SHELL",
+    "FORMAL_CSV_WRITE",
+    "RUNTIME_SQLITE_WRITE",
+    "RULE_CHANGE",
+    "HOLD_CHANGE",
+    "MIDR_CHANGE",
+    "IC_SCORE_CHANGE",
+    "REPORT_PUBLISH",
+    "TRADE_OR_POSITION_ACTION"
+  ],
+  "ledgerCoverage": [
+    "inference_chain",
+    "decision_memory",
+    "thesis_lineage",
+    "research_agenda",
+    "knowledge_gap",
+    "research_debt",
+    "owner_review",
+    "research_health"
+  ],
+  "requiredTests": [
+    "CONTRACT_ROOT_AND_REFERENCE_VALIDATION",
+    "COMMENT_AWARE_CSV_READ",
+    "AUTHORITY_ALLOWLIST_AND_PATH_TRAVERSAL_REJECTION",
+    "READ_ONLY_ADAPTER_MUTATION_REJECTION",
+    "ALL_EVENT_TYPES_ACCEPTED_OR_REJECTED_BY_CATALOG",
+    "ALL_FORBIDDEN_EVENTS_REJECTED",
+    "ALL_EIGHT_LEDGER_HASH_CHAINS_REPLAYED",
+    "ALL_DECLARED_STATE_TRANSITIONS_REBUILT",
+    "TAMPER_TRUNCATION_SEQUENCE_AND_UNKNOWN_EVENT_REJECTION",
+    "RESTART_REPLAY_PRODUCES_IDENTICAL_PROJECTION_HASH",
+    "STATUS_RESPONSE_SCHEMA_VALIDATION",
+    "OPENAI_ENABLED_ALWAYS_FALSE",
+    "FORMAL_DATA_RULE_LAUNCHER_APP_SERVER_AND_SQLITE_HASHES_UNCHANGED"
+  ],
+  "implementationPrerequisites": [
+    "Owner approves this Phase 1B implementation plan after Dry-Run review.",
+    "A Git baseline commit exists before implementation edits.",
+    "Any JSON Schema validator dependency is pinned and approved without adding OpenAI dependencies."
+  ]
+}

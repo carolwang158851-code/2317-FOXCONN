@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://p1008.local/contracts/2317_daily_market_activity.schema.json",
+  "title": "P1008 2317 Daily Market Activity CSV",
+  "description": "TWSE-authoritative daily market activity rows. The CSV grain is one trade_date plus ticker.",
+  "type": "array",
+  "x-csv-columns": [
+    "date",
+    "stock_id",
+    "trade_volume",
+    "trade_value",
+    "transaction_count",
+    "source_url",
+    "source_month"
+  ],
+  "x-primary-key": ["date", "stock_id"],
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "date",
+      "stock_id",
+      "trade_volume",
+      "trade_value",
+      "transaction_count",
+      "source_url",
+      "source_month"
+    ],
+    "properties": {
+      "date": {"type": "string", "format": "date"},
+      "stock_id": {"const": "2317"},
+      "trade_volume": {"type": "integer", "minimum": 0},
+      "trade_value": {"type": "integer", "minimum": 0},
+      "transaction_count": {"type": "integer", "minimum": 0},
+      "source_url": {
+        "type": "string",
+        "format": "uri",
+        "pattern": "^https://(openapi\\.twse\\.com\\.tw|www\\.twse\\.com\\.tw|twse\\.com\\.tw)/"
+      },
+      "source_month": {"type": "string", "pattern": "^20[0-9]{2}-(0[1-9]|1[0-2])$"}
+    }
+  }
+}

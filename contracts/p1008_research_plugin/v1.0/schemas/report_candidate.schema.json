@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v1.0/schemas/report_candidate.schema.json",
+  "title": "P1008 Research Report Candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["report_candidate_id", "period", "as_of_date", "run_ids", "executive_summary", "claim_ids", "counter_evidence_ids", "knowledge_gap_ids", "research_agenda_ids", "research_debt_ids", "rqs", "rhs", "owner_review_item_ids", "warroom_admissibility", "actionable"],
+  "properties": {
+    "report_candidate_id": {"type": "string", "minLength": 1},
+    "period": {"enum": ["DAILY", "WEEKLY", "MONTHLY"]},
+    "as_of_date": {"type": "string", "format": "date"},
+    "run_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "executive_summary": {"type": "string", "minLength": 1, "maxLength": 10000},
+    "claim_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "counter_evidence_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "knowledge_gap_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "research_agenda_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "research_debt_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "rqs": {"type": "number", "minimum": 0, "maximum": 100},
+    "rhs": {"type": "number", "minimum": 0, "maximum": 100},
+    "owner_review_item_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "warroom_admissibility": {"enum": ["CANDIDATE_ONLY", "OWNER_REVIEW_REQUIRED", "REJECTED"]},
+    "actionable": {"const": false}
+  }
+}

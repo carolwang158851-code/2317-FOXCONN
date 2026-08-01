@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v1.0/schemas/evidence_matrix.schema.json",
+  "title": "P1008 Evidence Matrix",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["matrix_id", "run_id", "as_of_date", "claims", "evidence", "links", "coverage_pct", "actionable"],
+  "properties": {
+    "matrix_id": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "as_of_date": {"type": "string", "format": "date"},
+    "claims": {"type": "array", "items": {"$ref": "claim.schema.json"}},
+    "evidence": {"type": "array", "items": {"$ref": "evidence.schema.json"}},
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["claim_id", "evidence_id", "relationship"],
+        "properties": {
+          "claim_id": {"type": "string", "minLength": 1},
+          "evidence_id": {"type": "string", "minLength": 1},
+          "relationship": {"enum": ["SUPPORTS", "CONTRADICTS", "CONTEXT_ONLY"]}
+        }
+      }
+    },
+    "coverage_pct": {"type": "number", "minimum": 0, "maximum": 100},
+    "orphan_claim_ids": {"type": "array", "maxItems": 0, "items": {"type": "string"}},
+    "orphan_evidence_ids": {"type": "array", "items": {"type": "string"}},
+    "actionable": {"const": false}
+  }
+}

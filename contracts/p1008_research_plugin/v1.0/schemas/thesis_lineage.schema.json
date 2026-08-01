@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v1.0/schemas/thesis_lineage.schema.json",
+  "title": "P1008 Thesis Lineage",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["thesis_id", "title", "current_status", "current_effective_weight", "events", "parent_thesis_ids", "replacement_thesis_ids", "requires_owner_gate", "actionable"],
+  "properties": {
+    "thesis_id": {"type": "string", "minLength": 1},
+    "title": {"type": "string", "minLength": 1, "maxLength": 500},
+    "current_status": {"enum": ["ACTIVE", "WATCHED", "CHALLENGED", "QUARANTINED", "DEPRECATED", "RETIRED", "RESTORED", "REPLACED", "RETIRED_BUT_HISTORICALLY_VALID"]},
+    "current_effective_weight": {"type": "number", "minimum": 0, "maximum": 1},
+    "suggested_weight": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "review_weight": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "events": {"type": "array", "items": {"$ref": "thesis_event.schema.json"}},
+    "parent_thesis_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "replacement_thesis_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "valid_from": {"type": ["string", "null"], "format": "date"},
+    "valid_to": {"type": ["string", "null"], "format": "date"},
+    "allowed_usage": {"type": "array", "items": {"enum": ["historical_context", "appendix", "past_report_explanation"]}},
+    "blocked_usage": {"type": "array", "items": {"enum": ["daily_main_conclusion", "THESIS_STRONG", "valuation_upgrade", "holding_safety_conclusion"]}},
+    "requires_owner_gate": {"const": true},
+    "actionable": {"const": false}
+  }
+}

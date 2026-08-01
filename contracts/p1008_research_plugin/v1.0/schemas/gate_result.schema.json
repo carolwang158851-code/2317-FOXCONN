@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://research-plugin/contracts/v1.0/schemas/gate_result.schema.json",
+  "title": "P1008 Research Gate Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["gate_id", "gate_type", "evaluated_at", "result", "reason_codes", "violations", "owner_review_required", "effective_change_applied", "actionable"],
+  "properties": {
+    "gate_id": {"type": "string", "minLength": 1},
+    "gate_type": {"enum": ["SOURCE", "FRESHNESS", "TOKEN_BUDGET", "EVIDENCE", "ANTI_FANTASY", "THESIS_USAGE", "LEGACY_REUSE", "WARROOM_ADAPTER", "OWNER"]},
+    "evaluated_at": {"type": "string", "format": "date-time"},
+    "result": {"enum": ["PASS", "WARNING", "OWNER_REVIEW_REQUIRED", "REJECT"]},
+    "reason_codes": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "violations": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "owner_review_required": {"type": "boolean"},
+    "effective_change_applied": {"const": false},
+    "actionable": {"const": false}
+  }
+}

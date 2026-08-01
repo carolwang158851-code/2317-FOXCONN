@@ -1,0 +1,82 @@
+{
+  "schemaVersion": "1.0",
+  "receiptId": "P1008_PHASE_A_DAILY_PRICE_STAGE1_PUBLISH_RECEIPT_20260729",
+  "scopeId": "P1008-PHASE-A-FORMAL-AUTHORITY-PUBLISH-STAGE-1",
+  "acceptedBy": "Owner",
+  "acceptedAt": "2026-07-29",
+  "acceptanceStatus": "OWNER_APPROVED_FORMAL_AUTHORITY_PUBLISH",
+  "baselineId": "PHASE_A_CLOSURE_SIX",
+  "priorBaselineReceipt": {
+    "path": "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_AUTHORITY_BASELINE_RECEIPT.json",
+    "sha256": "550CD7C0EA961E4643F708AE066740AEC4F69B662E9A45A79C3248814737478B"
+  },
+  "authorityFiles": {
+    "data/2317_master_v9.csv": "0BB2FEC6FA3035AC642738BC12EA6959C81C8A79D5221E694BF780427051CF79",
+    "data/2317_daily_price.csv": "2581AF868AA0D8C4BFCEA913B156DBB515AF3929FAAE7D0FDC947EA4A8256304",
+    "data/2317_daily_market_activity.csv": "83AB695E478517DC11004D17CC1EAE98F6B320BE266A586E29DAD0FF28D663BD",
+    "data/macro_snapshot.csv": "353025C29D678488F7022939C86C36CB15D3B348DC5876909D6779E56CFE213B",
+    "data/macro_event_observations.csv": "76B93F8932BA606390D44D68BD0D57D0BE7CB5D1D1364183F192A062D8B94BF2",
+    "data/fx_trend_observations.csv": "BFEC53845C68D689D20CC29972550279E3A4AE8D473816EFDB0855FF0DD091CD"
+  },
+  "authorityManifest": {
+    "path": "data/CSV_AUTHORITY_MANIFEST.json",
+    "sha256": "09B9CCE81F27C51C48C75E71F967886248E0A621FCD04EB2D3601DF014FDEA58"
+  },
+  "ownerApprovalPhrases": [
+    "OWNER_APPROVE_REMOVE_INVALID_DAILY_PRICE_2026-07-19",
+    "OWNER_APPROVE_DAILY_PRICE_GAPS_20260722_20260724"
+  ],
+  "dailyPricePublish": {
+    "publisher": "tools/owner_publish_csv_v2.py",
+    "beforeSha256": "25567CE773F7270ED3B22AFBD9D2664E467A2F3D525425AFAE7F20631E56D1B4",
+    "afterRemovalSha256": "0D9D55B3C1C28F0BF45EFC7B623D77D672B07EC9B2099EAD6EDB3A5D7318DEC2",
+    "afterGapPublishSha256": "2581AF868AA0D8C4BFCEA913B156DBB515AF3929FAAE7D0FDC947EA4A8256304",
+    "beforeRows": 115,
+    "afterRows": 116,
+    "cutoff": "2026-07-27",
+    "removedDates": [
+      "2026-07-19"
+    ],
+    "addedDates": [
+      "2026-07-22",
+      "2026-07-24"
+    ],
+    "removalCandidateSha256": "0D9D55B3C1C28F0BF45EFC7B623D77D672B07EC9B2099EAD6EDB3A5D7318DEC2",
+    "gapCandidateSha256": "904D38BC382E21C3F90ADCDEB981423F0F8FB2E6D5ED7824D1961AD6CBD3DB2D",
+    "removalJournal": {
+      "path": "runtime/phase_a_stage1_publish/P1008-PHASE-A-STAGE1-20260729/daily_price_removal/PUBLISH_JOURNAL.json",
+      "sha256": "EC6070ED995F3BE84D34C2BF5FC6E34139186B88DC40CEB3D678DF60DC0E3C52",
+      "status": "PUBLISHED",
+      "rollbackPerformed": false
+    },
+    "gapJournal": {
+      "path": "runtime/phase_a_stage1_publish/P1008-PHASE-A-STAGE1-20260729/daily_price_gaps/PUBLISH_JOURNAL.json",
+      "sha256": "218377896B40E2D23755D4E01F3187784B6915D17D1D2F5FCCAF10E9DE59B44D",
+      "status": "PUBLISHED",
+      "rollbackPerformed": false
+    }
+  },
+  "macroAuthorityDecision": {
+    "unapprovedRowsAccepted": false,
+    "requiredSha256": "353025C29D678488F7022939C86C36CB15D3B348DC5876909D6779E56CFE213B",
+    "publishedInStage1": false
+  },
+  "marketActivityDecision": {
+    "formalSha256": "83AB695E478517DC11004D17CC1EAE98F6B320BE266A586E29DAD0FF28D663BD",
+    "candidateSha256": "D48730840F5449BE8DF815F58D262173FACF4884593DE11D0B9AF89392792941",
+    "candidateReceiptSha256": "DA3F4852BDF9652ADA3403ADC6E5D720E6F154E748C44077403A219D485BD606",
+    "promotionEligible": false,
+    "publishedInStage1": false
+  },
+  "protectedState": {
+    "ruleManifestSha256": "054DA1FDAF0C75BB27B56DF45B96F1CC1720558D44C700F1AB70AB0280A2FE5C",
+    "runtimeSqliteSha256": "B365CB5540BDEDD2E0E0EF924DC9DFA2B4FD6F7954904BCBA5194DA0966BB832",
+    "ruleHoldMidrModified": false,
+    "runtimeSqliteModified": false
+  },
+  "formalPublishExecutedByThisReceipt": true,
+  "openAiCalls": 0,
+  "webSearchCalls": 0,
+  "canvaCalls": 0,
+  "actionable": false
+}
