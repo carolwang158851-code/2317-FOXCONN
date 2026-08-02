@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "p1008://report/v1.0/editorial_validation",
   "type": "object",
-  "required": ["status", "reportCandidateSha256", "requiredSectionsPresent", "allEvidenceIdsResolve", "factsAndInferencesSeparated", "unsupportedNumericClaimsAbsent", "forbiddenIntentClaimsAbsent", "placeholdersAbsent", "duplicateSectionsAbsent", "shortsDurationPassed", "nextValidationEvidenceBound", "invalidationConditionPresent", "analysisIdentityPreserved", "scriptsReadValidatedReportOnly", "actionableFalsePreserved", "errors", "actionable"],
+  "required": ["status", "reportCandidateSha256", "requiredSectionsPresent", "allEvidenceIdsResolve", "factsAndInferencesSeparated", "unsupportedNumericClaimsAbsent", "forbiddenIntentClaimsAbsent", "placeholdersAbsent", "duplicateSectionsAbsent", "shortsDurationPassed", "nextValidationEvidenceBound", "invalidationConditionPresent", "analysisIdentityPreserved", "scriptsReadValidatedReportOnly", "actionableFalsePreserved", "sentenceCompletenessPassed", "numericUnitsPreserved", "spokenTechnicalCodesAbsent", "balancedPunctuationPassed", "noMechanicalTruncation", "allSegmentsSemanticallyComplete", "errors", "actionable"],
   "properties": {
     "status": {"enum": ["PASS", "FAIL"]},
     "reportCandidateSha256": {"type": ["string", "null"]},
@@ -19,6 +19,12 @@
     "analysisIdentityPreserved": {"type": "boolean"},
     "scriptsReadValidatedReportOnly": {"type": "boolean"},
     "actionableFalsePreserved": {"type": "boolean"},
+    "sentenceCompletenessPassed": {"type": "boolean"},
+    "numericUnitsPreserved": {"type": "boolean"},
+    "spokenTechnicalCodesAbsent": {"type": "boolean"},
+    "balancedPunctuationPassed": {"type": "boolean"},
+    "noMechanicalTruncation": {"type": "boolean"},
+    "allSegmentsSemanticallyComplete": {"type": "boolean"},
     "errors": {"type": "array", "items": {"type": "string"}},
     "actionable": {"const": false}
   },

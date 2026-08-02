@@ -23,6 +23,16 @@ digits per second; headings and the non-spoken compliance card are excluded.
 under 60 warns. `actionable=false` appears only in non-spoken compliance
 metadata.
 
+Shorts narration is assembled from governed structured fields and complete
+sentence templates. Production code must not shorten retained facts by raw
+Unicode character slicing. Every timed segment must have complete sentence
+boundaries, balanced punctuation, complete numeric units, no dangling terminal
+tokens, and no raw internal event-window or evidence identifiers. Duration and
+sentence integrity are independent mandatory gates: a valid duration cannot
+override malformed prose. Technical event windows are narrated as complete
+one- and five-trading-day price reactions while preserving sign and decimal
+identity.
+
 All artifacts are deterministic UTF-8/LF files under
 `runtime/report_production/<run_id>/`. They remain Owner-review candidates,
 `actionable=false`, and never enter formal authority or Runtime SQLite.

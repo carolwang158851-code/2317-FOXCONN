@@ -32,8 +32,11 @@ formal-data writer participates in this slice.
   sections. It cannot read raw CSV/news or change conclusions, Evidence IDs,
   evidence-bound numbers, thesis state, or Authority identity.
 - Media scripts: read only a validated `ReportCandidate`; raw CSV/evidence
-  paths are rejected. Shorts store a deterministic duration validation and
-  keep `actionable=false` in a non-spoken compliance card.
+  paths are rejected. Shorts use complete semantic templates rather than
+  character slicing, preserve governed numeric signs and units, translate raw
+  event-window codes into spoken Chinese, and store deterministic duration plus
+  per-segment sentence-integrity validation. `actionable=false` stays in a
+  non-spoken compliance card.
 
 ## Evidence lineage
 
@@ -58,10 +61,10 @@ stable deterministic Run ID. Authority-derived statements use explicit
    Analysis validation is absent or stale.
 4. Review files under `runtime/report_production/<run_id>/`.
 
-For the R1 content gate, the offline command below creates one immutable
+For the R2 content gate, the offline command below creates one immutable
 runtime review package containing analysis/report candidates, editorial and
-Shorts-duration validations, evidence lineage, protected-state snapshots, and
-the Owner decision marker:
+Shorts duration/sentence-integrity validations, evidence lineage, the R1
+supersession receipt, protected-state snapshots, and the Owner decision marker:
 
 ```text
 python tools/p1008_build_phaseb1_final_review.py --package-root .
@@ -75,8 +78,9 @@ report, database row, scheduled task, or public artifact.
 Missing/extra/drifted Authority, stale or unsupported evidence, conflicting
 official values, unknown vocabularies, missing epistemic fields, Analysis
 bypass, report conclusion drift, script raw-input access, non-false
-`actionable`, protected-state drift, overwrite, and output outside the runtime
-root all stop the run.
+`actionable`, incomplete sentences, missing numeric units, raw technical codes,
+unbalanced punctuation, mechanical truncation, protected-state drift,
+overwrite, and output outside the runtime root all stop the run.
 
 ## Known limitations and Phase B2 boundary
 

@@ -130,6 +130,12 @@ class EditorialValidation(StrictModel):
     analysis_identity_preserved: bool
     scripts_read_validated_report_only: bool
     actionable_false_preserved: bool
+    sentence_completeness_passed: bool
+    numeric_units_preserved: bool
+    spoken_technical_codes_absent: bool
+    balanced_punctuation_passed: bool
+    no_mechanical_truncation: bool
+    all_segments_semantically_complete: bool
     errors: list[str]
     actionable: Literal[False] = False
 
@@ -144,6 +150,15 @@ class ShortsDurationValidation(StrictModel):
     estimated_spoken_seconds: float = Field(ge=0)
     segment_character_counts: dict[NonEmpty, int]
     segment_estimated_seconds: dict[NonEmpty, float]
+    segment_integrity: dict[NonEmpty, bool]
+    sentence_integrity_status: Literal["PASS", "FAIL"]
+    numeric_unit_status: Literal["PASS", "FAIL"]
+    sentence_completeness_passed: bool
+    numeric_units_preserved: bool
+    spoken_technical_codes_absent: bool
+    balanced_punctuation_passed: bool
+    no_mechanical_truncation: bool
+    all_segments_semantically_complete: bool
     duration_gate_status: Literal["PASS", "PASS_WITH_WARNING", "FAIL"]
     warnings: list[str]
     errors: list[str]

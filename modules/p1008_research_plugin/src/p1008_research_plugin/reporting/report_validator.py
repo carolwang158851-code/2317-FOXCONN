@@ -140,6 +140,23 @@ class ReportValidator:
         shorts_duration_passed = duration.duration_gate_status != "FAIL"
         if not shorts_duration_passed:
             errors.extend(duration.errors)
+        sentence_completeness_passed = duration.sentence_completeness_passed
+        numeric_units_preserved = duration.numeric_units_preserved
+        spoken_technical_codes_absent = duration.spoken_technical_codes_absent
+        balanced_punctuation_passed = duration.balanced_punctuation_passed
+        no_mechanical_truncation = duration.no_mechanical_truncation
+        all_segments_semantically_complete = duration.all_segments_semantically_complete
+        mandatory_shorts_checks = (
+            (sentence_completeness_passed, "Shorts sentence completeness failed"),
+            (numeric_units_preserved, "Shorts numeric-unit preservation failed"),
+            (spoken_technical_codes_absent, "Shorts contains a spoken technical code"),
+            (balanced_punctuation_passed, "Shorts punctuation is unbalanced"),
+            (no_mechanical_truncation, "Shorts contains mechanical truncation"),
+            (all_segments_semantically_complete, "Shorts segment semantic completeness failed"),
+        )
+        for passed, message in mandatory_shorts_checks:
+            if not passed and message not in errors:
+                errors.append(message)
 
         section_map = {item.section_id: item for item in report.sections}
         next_section = section_map.get("NEXT_VALIDATION_DATE_AND_EVENT")
@@ -205,6 +222,12 @@ class ReportValidator:
             analysis_identity_preserved=analysis_identity_preserved,
             scripts_read_validated_report_only=scripts_read_validated_report_only,
             actionable_false_preserved=actionable_false_preserved,
+            sentence_completeness_passed=sentence_completeness_passed,
+            numeric_units_preserved=numeric_units_preserved,
+            spoken_technical_codes_absent=spoken_technical_codes_absent,
+            balanced_punctuation_passed=balanced_punctuation_passed,
+            no_mechanical_truncation=no_mechanical_truncation,
+            all_segments_semantically_complete=all_segments_semantically_complete,
             errors=errors,
             actionable=False,
         )
