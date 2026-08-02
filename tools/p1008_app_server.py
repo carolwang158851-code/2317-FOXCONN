@@ -522,7 +522,20 @@ class P1008JobManager:
             }
 
     def launcher_gate_status(self, review_package: dict[str, Any], state: dict[str, Any] | None = None) -> dict[str, Any]:
-        state = state or self.state
+        if state is None:
+            state = dict(self.state)
+            state["latestReport"] = self.latest_report_status()
+        latest_report = state.get("latestReport") or {}
+        report_health = latest_report.get("health") or {}
+        if report_health.get("status") != "PASS":
+            return {
+                "code": "REPORT_LIBRARY_FAIL_CLOSED",
+                "zh": (
+                    "Rolling brief／研報庫身分驗證未通過；新 UI 與研報庫入口已停用。"
+                    f" 請依 Launcher health 指示修復：{report_health.get('code', 'UNKNOWN')}。"
+                ),
+                "canEnterNewUi": False,
+            }
         if state.get("status") == "RUNNING":
             return {"code": "PIPELINE_RUNNING", "zh": "更新流程執行中，請留在 Launcher。", "canEnterNewUi": False}
         if state.get("errors"):
@@ -971,6 +984,10 @@ class P1008JobManager:
             "rollingBrief",
             "UPDATED",
             authorityDate=result.get("authorityDate", ""),
+            dataCutoffs=result.get("dataCutoffs", {}),
+            dataAlignmentStatus=result.get("dataAlignmentStatus", ""),
+            marketActivityFreshness=result.get("marketActivityFreshness", {}),
+            briefContentSha256=result.get("briefContentSha256", ""),
             briefPath=result.get("briefPath", ""),
             htmlPath=result.get("htmlPath", ""),
             archiveAppended=False,

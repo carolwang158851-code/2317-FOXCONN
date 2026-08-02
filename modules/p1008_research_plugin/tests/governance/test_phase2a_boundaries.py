@@ -179,6 +179,10 @@ PHASEB1_HASH_GOVERNED_PATHS = {
         "contracts/p1008_report_production/acceptance/v1.1/"
         "PHASE_B1_OPS_OWNER_AUTHORIZATION_RECORD.json"
     ),
+    (
+        "contracts/p1008_report_production/acceptance/v1.1/"
+        "PHASE_B1_OPS_R1_OWNER_AUTHORIZATION_RECORD.json"
+    ),
     "contracts/p1008_report_production/v1.0/REPORT_PRODUCTION_CONTRACT.md",
     "contracts/p1008_report_production/v1.0/contract.manifest.json",
     "contracts/p1008_report_production/v1.0/schemas/chart_data.schema.json",
@@ -351,7 +355,7 @@ class Phase2ABoundaryTests(unittest.TestCase):
             entries.append(path)
         self.assertEqual(len(entries), len(set(entries)))
         self.assertEqual(set(entries), expected_hash_governed_paths())
-        self.assertEqual(len(entries), 153)
+        self.assertEqual(len(entries), 154)
 
     def test_crlf_and_mixed_manifest_bytes_are_rejected(self) -> None:
         for rejected in (MANIFEST_CRLF_SHA256, MANIFEST_MIXED_SHA256):

@@ -96,6 +96,7 @@ rules/RULE_STATUS_MANIFEST.json text eol=lf
 tools/p1008_app_server.py text eol=lf
 tools/p1008_build_phaseb1_final_review.py text eol=lf
 contracts/p1008_report_production/acceptance/v1.1/PHASE_B1_OPS_OWNER_AUTHORIZATION_RECORD.json text eol=lf
+contracts/p1008_report_production/acceptance/v1.1/PHASE_B1_OPS_R1_OWNER_AUTHORIZATION_RECORD.json text eol=lf
 docs/P1008_PHASE_B1_OPS_LAUNCHER_REPORT_RECOVERY.md text eol=lf
 report_viewer.html text eol=lf
 reports.html text eol=lf

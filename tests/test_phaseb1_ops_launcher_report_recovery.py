@@ -147,6 +147,24 @@ class PhaseB1OpsLauncherReportRecoveryTests(unittest.TestCase):
         report.write_bytes(body)
         return runtime.read_bytes(), report.read_bytes()
 
+    def _launcher_gate(self, health: dict) -> dict:
+        manager = app_server.P1008JobManager(self.root)
+        state = {
+            "status": "IDLE",
+            "errors": [],
+            "formalCsvModified": False,
+            "latestReport": {"health": health},
+        }
+        review = {
+            "status": "READY",
+            "candidatePending": False,
+            "pendingOwnerReview": {},
+            "newsScan": {},
+            "eventReview": {},
+            "formalPublishBlocked": False,
+        }
+        return manager.launcher_gate_status(review, state)
+
     def test_stale_server_from_another_working_tree_is_rejected(self) -> None:
         responses = [
             _Response("text/html; charset=utf-8"),
@@ -240,6 +258,16 @@ class PhaseB1OpsLauncherReportRecoveryTests(unittest.TestCase):
         self.assertEqual(health["status"], "PASS")
         self.assertTrue(health["archiveManifestAgreement"])
         self.assertEqual(health["latestRollingBriefDate"], "2026-07-27")
+        self.assertEqual(health["dataAlignmentStatus"], "ALIGNED")
+        self.assertEqual(health["marketActivityFreshness"]["status"], "CURRENT")
+        brief = json.loads(
+            (self.root / rolling_brief.CURRENT_BRIEF_REL).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            brief["briefContentSha256"],
+            rolling_brief.brief_content_sha256(brief),
+        )
+        self.assertEqual(self._launcher_gate(health)["code"], "READY_TO_ENTER_NEW_UI")
 
     def test_manifest_mismatch_fails_closed(self) -> None:
         self._write_matching_manifests()
@@ -250,12 +278,79 @@ class PhaseB1OpsLauncherReportRecoveryTests(unittest.TestCase):
         health = rolling_brief.report_library_health(self.root)
         self.assertEqual(health["status"], "FAIL_CLOSED")
         self.assertEqual(health["code"], "REPORT_LIBRARY_MANIFEST_MISMATCH")
+        gate = self._launcher_gate(health)
+        self.assertEqual(gate["code"], "REPORT_LIBRARY_FAIL_CLOSED")
+        self.assertFalse(gate["canEnterNewUi"])
 
     def test_missing_manifest_has_actionable_recovery(self) -> None:
         health = rolling_brief.report_library_health(self.root)
         self.assertEqual(health["status"], "FAIL_CLOSED")
         self.assertEqual(health["code"], "REPORT_LIBRARY_MANIFEST_MISSING")
         self.assertIn("P1008_APP.bat", health["recoveryInstruction"])
+        gate = self._launcher_gate(health)
+        self.assertEqual(gate["code"], "REPORT_LIBRARY_FAIL_CLOSED")
+        self.assertFalse(gate["canEnterNewUi"])
+
+    def test_price_and_market_activity_cutoffs_are_governed_separately(self) -> None:
+        self._write_matching_manifests()
+        activity_path = self.root / "data/2317_daily_market_activity.csv"
+        activity_path.write_text(
+            "date,stock_id,trade_volume,trade_value,transaction_count,source_url,source_month\n"
+            "2026-07-24,2317,90,22000,9,https://www.twse.com.tw/source,2026-07\n",
+            encoding="utf-8",
+        )
+        rolling_brief.refresh_current_brief(self.root)
+        brief = json.loads(
+            (self.root / rolling_brief.CURRENT_BRIEF_REL).read_text(encoding="utf-8")
+        )
+        rendered = (self.root / rolling_brief.LATEST_REPORT_REL).read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(
+            brief["dataCutoffs"],
+            {"dailyPrice": "2026-07-27", "marketActivity": "2026-07-24"},
+        )
+        self.assertEqual(brief["dataAlignmentStatus"], "PARTIAL")
+        self.assertEqual(brief["marketActivityFreshness"]["status"], "STALE")
+        self.assertEqual(brief["marketActivityFreshness"]["lagCalendarDays"], 3)
+        self.assertIn("成交股數", rendered)
+        self.assertIn("資料截止：2026-07-24", rendered)
+        self.assertIn("市場活動資料未與價格資料同日", rendered)
+
+    def test_html_kpi_mutation_with_unchanged_identity_fails_closed(self) -> None:
+        self._write_matching_manifests()
+        rolling_brief.refresh_current_brief(self.root)
+        html_path = self.root / rolling_brief.LATEST_REPORT_REL
+        rendered = html_path.read_text(encoding="utf-8")
+        self.assertIn(">100<", rendered)
+        html_path.write_text(rendered.replace(">100<", ">101<", 1), encoding="utf-8")
+        health = rolling_brief.report_library_health(self.root)
+        self.assertEqual(health["status"], "FAIL_CLOSED")
+        self.assertEqual(health["code"], "ROLLING_BRIEF_HTML_CONTENT_MISMATCH")
+        self.assertEqual(self._launcher_gate(health)["code"], "REPORT_LIBRARY_FAIL_CLOSED")
+
+    def test_json_kpi_mutation_with_unchanged_html_fails_closed(self) -> None:
+        self._write_matching_manifests()
+        rolling_brief.refresh_current_brief(self.root)
+        brief_path = self.root / rolling_brief.CURRENT_BRIEF_REL
+        brief = json.loads(brief_path.read_text(encoding="utf-8"))
+        brief["marketBaseline"]["dailyPrice"]["close"] = "999.0"
+        brief_path.write_text(
+            json.dumps(brief, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        health = rolling_brief.report_library_health(self.root)
+        self.assertEqual(health["status"], "FAIL_CLOSED")
+        self.assertEqual(health["code"], "ROLLING_BRIEF_JSON_CONTENT_HASH_MISMATCH")
+        self.assertEqual(self._launcher_gate(health)["code"], "REPORT_LIBRARY_FAIL_CLOSED")
+
+    def test_launcher_blocks_new_ui_and_library_when_report_health_fails(self) -> None:
+        launcher = (PACKAGE_ROOT / "launcher.html").read_text(encoding="utf-8")
+        self.assertIn('id="new-ui-link"', launcher)
+        self.assertIn('id="research-library-link"', launcher)
+        self.assertIn("gate.code === 'REPORT_LIBRARY_FAIL_CLOSED'", launcher)
+        self.assertIn("setReportNavigationBlocked(reportLibraryBlocked)", launcher)
+        self.assertIn("link.setAttribute('aria-disabled', blocked ? 'true' : 'false')", launcher)
 
     def test_file_mode_pages_reject_interactive_use(self) -> None:
         reports = (PACKAGE_ROOT / "reports.html").read_text(encoding="utf-8")

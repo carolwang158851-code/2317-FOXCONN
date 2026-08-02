@@ -20,11 +20,15 @@ from p1008_research_plugin.ledgers.store import LedgerStore
 
 
 BASELINE_HASHES = {
-    "launcher.html": "7A25A766D50F2A8514B5C51166FAD5274C6F05B58DB252CE97A325A0508BA998",
-    "tools/p1008_app_server.py": "282C68BA845CC5CB3EC27AF14D9606806BB27F5312E5851F8E2822F9C959FFEA",
+    "launcher.html": "A0D5CAFDE151CCCCA5342AB719D83130A775965C64429CCE26092FED50FCDDC5",
+    "tools/p1008_app_server.py": "B29A78E3F5F89026C2B116149186FBAADE6993A13F4137FDAEF6D7C498E8ADDD",
     "data/CSV_AUTHORITY_MANIFEST.json": "7DC97FFBC0E3F5E73E8085ACC25DD61E0F3588FCE04C360B4F19FA0D86AFA01B",
     "rules/RULE_STATUS_MANIFEST.json": "054DA1FDAF0C75BB27B56DF45B96F1CC1720558D44C700F1AB70AB0280A2FE5C",
     "contracts/p1008_research_plugin/v1.0/contract.manifest.json": "5D213CB4360329FCC969164F559952A0F1545BFE8E53D5CFDFF014B9D5619773",
+}
+PHASEB1_OPS_BOUNDARY_HASHES = {
+    "launcher.html": "7A25A766D50F2A8514B5C51166FAD5274C6F05B58DB252CE97A325A0508BA998",
+    "tools/p1008_app_server.py": "282C68BA845CC5CB3EC27AF14D9606806BB27F5312E5851F8E2822F9C959FFEA",
 }
 LEGACY_BOUNDARY_HASHES = {
     "launcher.html": "B638D39A9F6D6316389D16C67B68394F114F0B65EDBDFF6DCB69476C60A41448",
@@ -55,6 +59,17 @@ PHASEB1_OPS_ACCEPTANCE_RECORD = (
 )
 PHASEB1_OPS_ACCEPTANCE_SHA256 = (
     "4AD5A1622DC421865E99E62FC6636E104A30E706179971815A3B3CBAFDF53B3B"
+)
+PHASEB1_OPS_R1_ACCEPTANCE_RECORD = (
+    PACKAGE_ROOT
+    / "contracts"
+    / "p1008_report_production"
+    / "acceptance"
+    / "v1.1"
+    / "PHASE_B1_OPS_R1_OWNER_AUTHORIZATION_RECORD.json"
+)
+PHASEB1_OPS_R1_ACCEPTANCE_SHA256 = (
+    "ED5AF459990F5390F39CDAC1DEBBA0CFCFFA20E8438E67087C0F29488DB092B6"
 )
 LEGACY_AUTHORITY_MANIFEST_SHA256 = (
     "8BA304C36C224F1F8ADF78CB871A8200FDA0656BD5824801330EAF6EAF855847"
@@ -149,11 +164,51 @@ class GovernanceBoundaryTests(unittest.TestCase):
         self.assertEqual(receipt["deliveryBoundary"], "DRAFT_PR_ONLY")
         self.assertTrue(receipt["constraints"]["formalAuthorityReadOnly"])
         self.assertTrue(receipt["constraints"]["rollingBriefNonArchival"])
+        self.assertEqual(
+            receipt["authorizedBoundaryChanges"]["launcher.html"][
+                "phaseB1OpsSha256"
+            ],
+            PHASEB1_OPS_BOUNDARY_HASHES["launcher.html"],
+        )
+        self.assertEqual(
+            receipt["authorizedBoundaryChanges"]["tools/p1008_app_server.py"][
+                "phaseB1OpsSha256"
+            ],
+            PHASEB1_OPS_BOUNDARY_HASHES["tools/p1008_app_server.py"],
+        )
+        self.assertFalse(receipt["actionable"])
+
+    def test_phaseb1_ops_r1_boundary_changes_are_separately_authorized(self) -> None:
+        self.assertEqual(
+            sha256(PHASEB1_OPS_R1_ACCEPTANCE_RECORD),
+            PHASEB1_OPS_R1_ACCEPTANCE_SHA256,
+        )
+        receipt = json.loads(
+            PHASEB1_OPS_R1_ACCEPTANCE_RECORD.read_text(encoding="utf-8")
+        )
+        self.assertEqual(receipt["phase"], "PHASE_B1_OPS_R1")
+        self.assertEqual(receipt["pullRequest"], 10)
+        self.assertEqual(
+            receipt["priorHead"],
+            "3bcc36db1b2822bf53cdd4b1631380ca42196f6c",
+        )
+        self.assertEqual(
+            receipt["priorAuthorization"]["sha256"],
+            PHASEB1_OPS_ACCEPTANCE_SHA256,
+        )
+        self.assertTrue(receipt["implementationAuthorized"])
+        self.assertFalse(receipt["finalAcceptanceGranted"])
+        self.assertEqual(receipt["deliveryBoundary"], "DRAFT_PR_ONLY")
         for relative, change in receipt["authorizedBoundaryChanges"].items():
             with self.subTest(path=relative):
                 self.assertEqual(
-                    sha256(PACKAGE_ROOT / relative), change["phaseB1OpsSha256"]
+                    sha256(PACKAGE_ROOT / relative),
+                    change["phaseB1OpsR1Sha256"],
                 )
+        self.assertTrue(receipt["constraints"]["formalAuthorityReadOnly"])
+        self.assertTrue(receipt["constraints"]["rollingBriefNonArchival"])
+        self.assertTrue(receipt["constraints"]["phaseB1Point5NotStarted"])
+        self.assertTrue(receipt["constraints"]["phaseB2NotStarted"])
         self.assertFalse(receipt["actionable"])
 
     def test_contract_root_still_matches_owner_accepted_hash(self) -> None:

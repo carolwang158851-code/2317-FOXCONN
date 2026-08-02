@@ -35,11 +35,27 @@ manifest remained at an older explicit report run.
 - Server status publishes `resolvedPackageRoot`, `gitHead`,
   `authorityManifestSha256`, and a per-process `serverInstanceId`.
 - The runtime and reports archive manifests must be semantically identical.
-- The rolling JSON and HTML must carry the same brief ID and authority date.
+- The rolling JSON contains a canonical governed-content SHA-256 computed with
+  the hash field excluded from its own preimage. The HTML embeds that same hash
+  and must byte-match the deterministic rendering of the governed JSON.
+- Any report-library health status other than `PASS` returns
+  `REPORT_LIBRARY_FAIL_CLOSED`; Launcher disables both the New UI and Research
+  Library links until identity is restored.
 - Missing, invalid, or divergent identities return `FAIL_CLOSED` with the exact
   recovery instruction to launch `P1008_APP.bat`.
 - `reports.html` and `report_viewer.html` reject unsupported interactive
   `file://` use instead of presenting stale content as current.
+
+## R1 cutoff alignment
+
+- The rolling payload preserves independent Daily Price and Market Activity
+  cutoffs under `dataCutoffs`.
+- `dataAlignmentStatus=ALIGNED` is allowed only when both cutoffs match.
+- A missing or different Market Activity cutoff is `PARTIAL`; an older activity
+  cutoff is additionally marked `marketActivityFreshness.status=STALE`.
+- Every rendered price, valuation, volume, turnover, and transaction-count KPI
+  displays the cutoff of its own authority source. No missing value is
+  forward-filled or replaced with zero.
 
 ## External-call boundary
 
