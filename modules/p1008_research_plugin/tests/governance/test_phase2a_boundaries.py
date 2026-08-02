@@ -175,6 +175,10 @@ PHASEB1_HASH_GOVERNED_PATHS = {
         "contracts/p1008_report_production/acceptance/v1.0/"
         "PHASE_B1_OWNER_AUTHORIZATION_RECORD.json"
     ),
+    (
+        "contracts/p1008_report_production/acceptance/v1.1/"
+        "PHASE_B1_OPS_OWNER_AUTHORIZATION_RECORD.json"
+    ),
     "contracts/p1008_report_production/v1.0/REPORT_PRODUCTION_CONTRACT.md",
     "contracts/p1008_report_production/v1.0/contract.manifest.json",
     "contracts/p1008_report_production/v1.0/schemas/chart_data.schema.json",
@@ -184,6 +188,7 @@ PHASEB1_HASH_GOVERNED_PATHS = {
     "contracts/p1008_report_production/v1.0/schemas/report_gate_result.schema.json",
     "contracts/p1008_report_production/v1.0/schemas/shorts_duration_validation.schema.json",
     "docs/APP_WORKFLOW.md",
+    "docs/P1008_PHASE_B1_OPS_LAUNCHER_REPORT_RECOVERY.md",
     "modules/p1008_research_plugin/docs/phaseb1/PhaseB1_Analysis_Report_MVP.md",
     "modules/p1008_research_plugin/src/p1008_research_plugin/analysis/__init__.py",
     (
@@ -234,9 +239,16 @@ PHASEB1_HASH_GOVERNED_PATHS = {
     "modules/p1008_research_plugin/tests/phaseb1/test_report_production.py",
     "modules/p1008_research_plugin/tests/phaseb1/test_script_candidates.py",
     "tests/test_phaseb1_launcher.py",
+    "report_viewer.html",
+    "reports.html",
+    "tests/test_p1008_app_market_activity_pipeline.py",
+    "tests/test_phaseb1_ops_launcher_report_recovery.py",
     "tools/p1008_build_analysis.py",
     "tools/p1008_build_report.py",
     "tools/p1008_build_phaseb1_final_review.py",
+    "tools/p1008_open_warroom.py",
+    "tools/warroom_periodic_report_v1.py",
+    "tools/warroom_rolling_brief.py",
 }
 
 
@@ -339,7 +351,7 @@ class Phase2ABoundaryTests(unittest.TestCase):
             entries.append(path)
         self.assertEqual(len(entries), len(set(entries)))
         self.assertEqual(set(entries), expected_hash_governed_paths())
-        self.assertEqual(len(entries), 144)
+        self.assertEqual(len(entries), 153)
 
     def test_crlf_and_mixed_manifest_bytes_are_rejected(self) -> None:
         for rejected in (MANIFEST_CRLF_SHA256, MANIFEST_MIXED_SHA256):

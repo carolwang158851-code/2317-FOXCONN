@@ -20,8 +20,8 @@ from p1008_research_plugin.ledgers.store import LedgerStore
 
 
 BASELINE_HASHES = {
-    "launcher.html": "41B349691AB6CDEDE6D622F4B5A7FE0ED707F42B8D7BD6D2CD6776EAC2607F91",
-    "tools/p1008_app_server.py": "03FC1742F308E245B66237CD415FE0BE2184ACFB4E7D0FB2086EF609027B242B",
+    "launcher.html": "7A25A766D50F2A8514B5C51166FAD5274C6F05B58DB252CE97A325A0508BA998",
+    "tools/p1008_app_server.py": "282C68BA845CC5CB3EC27AF14D9606806BB27F5312E5851F8E2822F9C959FFEA",
     "data/CSV_AUTHORITY_MANIFEST.json": "7DC97FFBC0E3F5E73E8085ACC25DD61E0F3588FCE04C360B4F19FA0D86AFA01B",
     "rules/RULE_STATUS_MANIFEST.json": "054DA1FDAF0C75BB27B56DF45B96F1CC1720558D44C700F1AB70AB0280A2FE5C",
     "contracts/p1008_research_plugin/v1.0/contract.manifest.json": "5D213CB4360329FCC969164F559952A0F1545BFE8E53D5CFDFF014B9D5619773",
@@ -29,6 +29,10 @@ BASELINE_HASHES = {
 LEGACY_BOUNDARY_HASHES = {
     "launcher.html": "B638D39A9F6D6316389D16C67B68394F114F0B65EDBDFF6DCB69476C60A41448",
     "tools/p1008_app_server.py": "1381156A978274DF62DD693AEB71BC787607D3BF1D38BA786707D11D714E24D7",
+}
+PHASEB1_MVP_BOUNDARY_HASHES = {
+    "launcher.html": "41B349691AB6CDEDE6D622F4B5A7FE0ED707F42B8D7BD6D2CD6776EAC2607F91",
+    "tools/p1008_app_server.py": "03FC1742F308E245B66237CD415FE0BE2184ACFB4E7D0FB2086EF609027B242B",
 }
 PHASEB1_ACCEPTANCE_RECORD = (
     PACKAGE_ROOT
@@ -40,6 +44,17 @@ PHASEB1_ACCEPTANCE_RECORD = (
 )
 PHASEB1_ACCEPTANCE_SHA256 = (
     "67AE473810DFD0C01049FDAA32FE5A7685297CBE579808C6A77475BB297C110D"
+)
+PHASEB1_OPS_ACCEPTANCE_RECORD = (
+    PACKAGE_ROOT
+    / "contracts"
+    / "p1008_report_production"
+    / "acceptance"
+    / "v1.1"
+    / "PHASE_B1_OPS_OWNER_AUTHORIZATION_RECORD.json"
+)
+PHASEB1_OPS_ACCEPTANCE_SHA256 = (
+    "4AD5A1622DC421865E99E62FC6636E104A30E706179971815A3B3CBAFDF53B3B"
 )
 LEGACY_AUTHORITY_MANIFEST_SHA256 = (
     "8BA304C36C224F1F8ADF78CB871A8200FDA0656BD5824801330EAF6EAF855847"
@@ -114,10 +129,31 @@ class GovernanceBoundaryTests(unittest.TestCase):
             with self.subTest(path=relative):
                 self.assertEqual(changes[relative]["baseSha256"], legacy_hash)
                 self.assertEqual(
-                    changes[relative]["phaseB1Sha256"], BASELINE_HASHES[relative]
+                    changes[relative]["phaseB1Sha256"], PHASEB1_MVP_BOUNDARY_HASHES[relative]
                 )
-                self.assertEqual(sha256(PACKAGE_ROOT / relative), BASELINE_HASHES[relative])
         self.assertTrue(receipt["constraints"]["formalAuthorityReadOnly"])
+        self.assertFalse(receipt["actionable"])
+
+    def test_phaseb1_ops_boundary_changes_are_separately_authorized(self) -> None:
+        self.assertEqual(
+            sha256(PHASEB1_OPS_ACCEPTANCE_RECORD), PHASEB1_OPS_ACCEPTANCE_SHA256
+        )
+        receipt = json.loads(PHASEB1_OPS_ACCEPTANCE_RECORD.read_text(encoding="utf-8"))
+        self.assertEqual(receipt["phase"], "PHASE_B1_OPS")
+        self.assertEqual(
+            receipt["base"]["commit"],
+            "bfe19f353a7c26676507beeeb566a6ad60fcbedf",
+        )
+        self.assertTrue(receipt["implementationAuthorized"])
+        self.assertFalse(receipt["finalAcceptanceGranted"])
+        self.assertEqual(receipt["deliveryBoundary"], "DRAFT_PR_ONLY")
+        self.assertTrue(receipt["constraints"]["formalAuthorityReadOnly"])
+        self.assertTrue(receipt["constraints"]["rollingBriefNonArchival"])
+        for relative, change in receipt["authorizedBoundaryChanges"].items():
+            with self.subTest(path=relative):
+                self.assertEqual(
+                    sha256(PACKAGE_ROOT / relative), change["phaseB1OpsSha256"]
+                )
         self.assertFalse(receipt["actionable"])
 
     def test_contract_root_still_matches_owner_accepted_hash(self) -> None:

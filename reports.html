@@ -128,13 +128,13 @@ body.p1008-focus-mode>div{max-width:none!important;min-height:100vh}
     <div id="list" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"></div>
 
     <div id="fileModeNotice" class="hidden mt-6 glass p-5 border border-amber-500/40 bg-amber-950/20">
-      <div class="font-black text-amber-200 mb-2">資料夾雙擊模式</div>
+      <div class="font-black text-amber-200 mb-2">不支援 file:// 互動模式</div>
       <div class="text-sm text-amber-50 leading-relaxed">
-        直接從資料夾開啟 <code>reports.html</code> 時，瀏覽器可能阻擋讀取 manifest 或 markdown。
-        下方「最新本機定期戰報」會直接開啟 HTML 產物；若要使用完整研報閱讀器與首頁互動，請改用
-        <code>P1008_2_OPEN_WARROOM.bat</code> 開啟本機戰情室。
+        研報庫不會在直接雙擊的 <code>file://</code> 模式載入 manifest、報告卡片或互動閱讀器。
+        請回到套件根目錄，雙擊 <code>P1008_APP.bat</code>，再由 Launcher 進入研報庫。
       </div>
     </div>
+    <div id="libraryHealthNotice" class="hidden mt-6 glass p-5 border border-red-500/40 bg-red-950/20"></div>
 
     <div class="mt-10 glass p-6 border border-slate-700">
       <div class="font-black text-sky-300 mb-2">📌 研報庫怎麼「活起來」</div>
@@ -205,13 +205,26 @@ body.p1008-focus-mode>div{max-width:none!important;min-height:100vh}
       return ({ GENERATED: "已產生", GENERATED_WITH_WARNINGS: "已產生 / 有警示" })[status] || String(status || "已產生");
     }
 
+    function showLibraryRecovery(message) {
+      const notice = document.getElementById("libraryHealthNotice");
+      if (!notice) return;
+      notice.classList.remove("hidden");
+      notice.innerHTML = `<div class="font-black text-red-200 mb-2">研報庫索引不可用</div>
+        <div class="text-sm text-red-50 leading-relaxed">${escapeHtml(message)}<br>
+        請回到套件根目錄，雙擊 <code>P1008_APP.bat</code>；若仍缺少 manifest，請在 Launcher 明確執行「產生日報」。</div>`;
+    }
+
     async function loadReportCatalog() {
       const fileMode = location.protocol === "file:";
       const notice = document.getElementById("fileModeNotice");
       if (notice && fileMode) notice.classList.remove("hidden");
+      if (fileMode) return [];
       try {
         const res = await fetch("./reports/P1008_REPORT_MANIFEST.json", { cache: "no-store" });
-        if (!res.ok) return fileMode ? [...DIRECT_FILE_REPORT_CATALOG, ...LOCAL_REPORT_CATALOG] : LOCAL_REPORT_CATALOG;
+        if (!res.ok) {
+          showLibraryRecovery(`P1008_REPORT_MANIFEST.json 讀取失敗（HTTP ${res.status}）。`);
+          return [];
+        }
         const manifest = await res.json();
         const generated = (manifest.reports || []).map(r => ({
           id: r.id,
@@ -223,9 +236,7 @@ body.p1008-focus-mode>div{max-width:none!important;min-height:100vh}
           status: r.status || "GENERATED"
         }));
         const seen = new Set();
-        const merged = fileMode
-          ? [...DIRECT_FILE_REPORT_CATALOG, ...generated, ...LOCAL_REPORT_CATALOG]
-          : [...generated, ...LOCAL_REPORT_CATALOG];
+        const merged = [...generated, ...LOCAL_REPORT_CATALOG];
         return merged
           .filter(r => {
             if (!r || !r.id || seen.has(r.id)) return false;
@@ -233,8 +244,9 @@ body.p1008-focus-mode>div{max-width:none!important;min-height:100vh}
             return true;
           })
           .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
-      } catch (_) {
-        return fileMode ? [...DIRECT_FILE_REPORT_CATALOG, ...LOCAL_REPORT_CATALOG] : LOCAL_REPORT_CATALOG;
+      } catch (error) {
+        showLibraryRecovery(`研報 manifest 無法解析：${String(error && (error.message || error) || error)}`);
+        return [];
       }
     }
 

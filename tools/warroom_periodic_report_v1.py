@@ -1506,7 +1506,6 @@ def build_report(args: argparse.Namespace) -> int:
     html_rel = f"generated/{report_id}.html"
     md_path = report_dir / f"{report_id}.md"
     html_path = report_dir / f"{report_id}.html"
-    latest_html_path = report_dir / "latest_report.html"
     charts = write_report_charts(package_root, report_id, data)
     markdown = build_report_markdown(period, report_date, generated_at, data)
     markdown = append_chart_markdown(markdown, charts)
@@ -1515,7 +1514,6 @@ def build_report(args: argparse.Namespace) -> int:
     md_path.parent.mkdir(parents=True, exist_ok=True)
     md_path.write_text(markdown, encoding="utf-8", newline="\n")
     write_report_html(html_path, report_id, title, markdown)
-    write_report_html(latest_html_path, report_id, title, markdown)
 
     issues = daily_issues + macro_issues + master_issues + event_issues + fx_issues
     report = {
@@ -1542,7 +1540,7 @@ def build_report(args: argparse.Namespace) -> int:
 
     log(f"Report markdown: {md_path}")
     log(f"Report html: {html_path}")
-    log(f"Latest direct html: {latest_html_path}")
+    log("Rolling latest HTML is owned by the default Launcher brief refresh.")
     log(f"Report manifest: {package_root / REPORT_MANIFEST}")
     log(f"Runtime report manifest: {package_root / RUNTIME_REPORT_MANIFEST}")
     log(f"Reports in manifest: {len(manifest.get('reports', []))}")
@@ -2516,12 +2514,10 @@ def build_report(args: argparse.Namespace) -> int:
     html_rel = f"generated/{report_id}.html"
     md_path = report_dir / f"{report_id}.md"
     html_path = report_dir / f"{report_id}.html"
-    latest_html_path = report_dir / "latest_report.html"
     markdown = build_report_markdown(period, report_date, generated_at, data)
     md_path.parent.mkdir(parents=True, exist_ok=True)
     md_path.write_text(markdown, encoding="utf-8", newline="\n")
     write_report_html(html_path, report_id, title, markdown)
-    write_report_html(latest_html_path, report_id, title, markdown)
 
     issues = daily_issues + macro_issues + master_issues + event_issues + fx_issues
     report = {
@@ -2543,7 +2539,7 @@ def build_report(args: argparse.Namespace) -> int:
 
     log(f"Report markdown: {md_path}")
     log(f"Report html: {html_path}")
-    log(f"Latest direct html: {latest_html_path}")
+    log("Rolling latest HTML is owned by the default Launcher brief refresh.")
     log(f"Report manifest: {package_root / REPORT_MANIFEST}")
     log(f"Runtime report manifest: {package_root / RUNTIME_REPORT_MANIFEST}")
     log(f"Reports in manifest: {len(manifest.get('reports', []))}")
@@ -2713,7 +2709,6 @@ def build_report(args: argparse.Namespace) -> int:
     html_rel = f"generated/{report_id}.html"
     md_path = report_dir / f"{report_id}.md"
     html_path = report_dir / f"{report_id}.html"
-    latest_html_path = report_dir / "latest_report.html"
     charts = write_report_charts(package_root, report_id, data)
     markdown = build_report_markdown(period, report_date, generated_at, data)
     markdown = append_chart_markdown(markdown, charts)
@@ -2722,7 +2717,6 @@ def build_report(args: argparse.Namespace) -> int:
     md_path.parent.mkdir(parents=True, exist_ok=True)
     md_path.write_text(markdown, encoding="utf-8", newline="\n")
     write_report_html(html_path, report_id, title, markdown)
-    write_report_html(latest_html_path, report_id, title, markdown)
 
     issues = daily_issues + macro_issues + master_issues + event_issues + fx_issues
     report = {
@@ -2748,7 +2742,7 @@ def build_report(args: argparse.Namespace) -> int:
 
     log(f"Report markdown: {md_path}")
     log(f"Report html: {html_path}")
-    log(f"Latest direct html: {latest_html_path}")
+    log("Rolling latest HTML is owned by the default Launcher brief refresh.")
     log(f"Report manifest: {package_root / REPORT_MANIFEST}")
     log(f"Runtime report manifest: {package_root / RUNTIME_REPORT_MANIFEST}")
     log(f"Reports in manifest: {len(manifest.get('reports', []))}")

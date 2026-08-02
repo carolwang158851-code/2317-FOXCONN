@@ -20,11 +20,13 @@ import sys
 import threading
 import time
 import urllib.parse
+import uuid
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import owner_publish_csv_v2 as owner_publish
+import warroom_rolling_brief as rolling_brief
 
 
 UTF8_MIME_TYPES = {
@@ -54,7 +56,7 @@ FORMAL_CSV_FILES = [
 STATE_REL = "runtime/p1008_app_state.json"
 MARKET_ACTIVITY_STATUS_REL = "runtime/market_activity_incremental/latest_status.json"
 SOURCE_MANIFEST_REL = "data/NEWS_SCAN_SOURCE_MANIFEST.json"
-SERVER_VERSION = "P1008_APP_SERVER_20260719_MARKET_ACTIVITY_V1"
+SERVER_VERSION = "P1008_APP_SERVER_20260802_PHASEB1_OPS_V1"
 
 WEEKDAY_ZH = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"]
 FIELD_LABEL_ZH = {
@@ -132,6 +134,23 @@ def formal_csv_hashes(package_root: Path) -> dict[str, str]:
         path = package_root / rel
         hashes[rel] = sha256_file(path) if path.exists() else "MISSING"
     return hashes
+
+
+def git_head(package_root: Path) -> str:
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(package_root), "rev-parse", "HEAD"],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "UNKNOWN"
+    value = completed.stdout.strip()
+    return value if completed.returncode == 0 and value else "UNKNOWN"
 
 
 def parse_candidate_date(value: str) -> date | None:
@@ -299,7 +318,10 @@ def approved_network_sources(manifest: dict[str, Any]) -> list[dict[str, Any]]:
 
 class P1008JobManager:
     def __init__(self, package_root: Path) -> None:
-        self.package_root = package_root
+        self.package_root = package_root.resolve()
+        self.resolved_package_root = str(self.package_root)
+        self.git_head = git_head(self.package_root)
+        self.server_instance_id = uuid.uuid4().hex
         self.lock = threading.Lock()
         self.active_thread: threading.Thread | None = None
         self.state = self._initial_state()
@@ -333,6 +355,13 @@ class P1008JobManager:
         with self.lock:
             state = dict(self.state)
         state["serverVersion"] = SERVER_VERSION
+        state["resolvedPackageRoot"] = self.resolved_package_root
+        state["gitHead"] = self.git_head
+        authority_manifest = self.package_root / "data/CSV_AUTHORITY_MANIFEST.json"
+        state["authorityManifestSha256"] = (
+            sha256_file(authority_manifest) if authority_manifest.is_file() else "MISSING"
+        )
+        state["serverInstanceId"] = self.server_instance_id
         state["serverContext"] = server_context()
         state["pendingOwnerReview"] = self.pending_owner_review()
         state["sourceManifest"] = self.source_manifest_status()
@@ -387,12 +416,16 @@ class P1008JobManager:
     def latest_report_status(self) -> dict[str, Any]:
         manifest = read_json(self.package_root / "runtime" / "warroom_report_manifest.json", default={}) or {}
         latest = manifest.get("latest", {}) if isinstance(manifest.get("latest", {}), dict) else {}
+        health = rolling_brief.report_library_health(self.package_root)
         return {
             "manifestPath": "runtime/warroom_report_manifest.json",
             "count": len(manifest.get("reports", []) or []),
             "latestDaily": latest.get("daily"),
             "latestWeekly": latest.get("weekly"),
             "latestMonthly": latest.get("monthly"),
+            "latestRollingBriefDate": health.get("latestRollingBriefDate", ""),
+            "latestArchivedReportDate": health.get("latestArchivedReportDate", ""),
+            "health": health,
         }
 
     def _resolve_staging_dir(self, date_str: str | None = None) -> Path:
@@ -838,6 +871,11 @@ class P1008JobManager:
             )
             self._set_component_status("news", news_status, exitCode=news_step.get("exitCode"))
 
+        if job_type == "default":
+            rolling_error = self._refresh_rolling_brief_step()
+            if rolling_error:
+                component_failures.append(rolling_error)
+
         if job_type == "report":
             self._run_python_step(
                 "report",
@@ -886,8 +924,8 @@ class P1008JobManager:
             components = self.state.get("componentStatus", {}) or {}
             partial = any(
                 str((components.get(name) or {}).get("status", ""))
-                in {"FAILED", "STALE", "BLOCKED"}
-                for name in ("dailyPrice", "marketActivity", "news")
+                in {"FAILED", "STALE", "BLOCKED", "FAIL_CLOSED"}
+                for name in ("dailyPrice", "marketActivity", "news", "rollingBrief", "reportLibrary")
             )
             with self.lock:
                 self.state["overallStatus"] = "PARTIAL_FAILURE" if partial else "SUCCEEDED"
@@ -900,6 +938,60 @@ class P1008JobManager:
             components[component] = {"status": status, **extra}
             self.state["componentStatus"] = components
             self._persist_locked()
+
+    def _refresh_rolling_brief_step(self) -> str:
+        """Refresh the current view and verify archive-index consistency."""
+        self._set_step(
+            "rolling-brief",
+            "Refresh rolling current war-room brief",
+            "RUNNING",
+        )
+        try:
+            result = rolling_brief.refresh_current_brief(self.package_root)
+        except (rolling_brief.RollingBriefError, OSError) as exc:
+            message = str(exc)
+            self._set_step(
+                "rolling-brief",
+                "Refresh rolling current war-room brief",
+                "FAILED",
+                message=message,
+            )
+            self._set_component_status(
+                "rollingBrief", "FAILED", error=message, actionable=False
+            )
+            return f"Rolling brief refresh failed: {message}"
+
+        self._set_step(
+            "rolling-brief",
+            "Refresh rolling current war-room brief",
+            "SUCCEEDED",
+            message=result.get("authorityDate", ""),
+        )
+        self._set_component_status(
+            "rollingBrief",
+            "UPDATED",
+            authorityDate=result.get("authorityDate", ""),
+            briefPath=result.get("briefPath", ""),
+            htmlPath=result.get("htmlPath", ""),
+            archiveAppended=False,
+            actionable=False,
+        )
+        health = rolling_brief.report_library_health(self.package_root)
+        health_status = str(health.get("status") or "FAIL_CLOSED")
+        self._set_component_status(
+            "reportLibrary",
+            health_status,
+            code=health.get("code", ""),
+            latestArchivedReportDate=health.get("latestArchivedReportDate", ""),
+            recoveryInstruction=health.get("recoveryInstruction", ""),
+            actionable=False,
+        )
+        if health_status != "PASS":
+            return (
+                "Report library health check failed: "
+                f"{health.get('code', 'UNKNOWN')} — {health.get('message', '')}"
+            )
+        return ""
 
     def _market_activity_last_date(self) -> str:
         path = self.package_root / "data/2317_daily_market_activity.csv"

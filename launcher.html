@@ -234,6 +234,12 @@
         <div class="stat"><div class="label">新聞 connector</div><div id="connector-status" class="value">N/A</div><div class="small">未核准來源不得連網</div></div>
         <div class="stat"><div class="label">最新戰報</div><div id="latest-report" class="value">N/A</div><div class="small">日報 / 週報 / 月報 manifest</div></div>
       </div>
+      <div class="grid four" style="margin-top:12px">
+        <div class="stat"><div class="label">Served package root</div><div id="served-package-root" class="small">N/A</div></div>
+        <div class="stat"><div class="label">Served git HEAD</div><div id="served-git-head" class="small">N/A</div></div>
+        <div class="stat"><div class="label">Latest rolling brief date</div><div id="latest-rolling-brief-date" class="value">N/A</div></div>
+        <div class="stat"><div class="label">Latest archived report date</div><div id="latest-archived-report-date" class="value">N/A</div><div id="report-library-health" class="small">CHECKING</div></div>
+      </div>
       <div class="notice blue" style="margin-top:12px">
         <div class="between">
           <div>
@@ -634,6 +640,11 @@
       const checkedCount = networkSummary.checked ?? sourceHealth.length;
       $('connector-status').textContent = `${successCount}/${checkedCount || approvedCount} success`;
       $('latest-report').textContent = latestDaily?.date || latestDaily?.title || 'N/A';
+      $('served-package-root').textContent = app.resolvedPackageRoot || 'N/A';
+      $('served-git-head').textContent = app.gitHead || 'N/A';
+      $('latest-rolling-brief-date').textContent = latest.latestRollingBriefDate || 'N/A';
+      $('latest-archived-report-date').textContent = latest.latestArchivedReportDate || 'N/A';
+      $('report-library-health').textContent = `${latest.health?.status || 'UNKNOWN'} ${latest.health?.code || ''}`.trim();
       $('network-status-badge').className = badgeClass(networkSummary.status || 'NO_SCAN');
       $('network-status-badge').textContent = networkSummary.status || 'NO_SCAN';
       $('connector-health-summary').textContent = networkSummary.status
@@ -832,7 +843,7 @@
   <script>
     (function installDecisionUiPolish() {
       const jobTypeZh = {
-        default: '一鍵更新：資料 + 新聞（不自動產報）',
+        default: '一鍵更新：資料 + 新聞 + rolling brief（不追加研報庫）',
         'update-data': '只更新資料',
         'news-scan': '只掃描新聞',
         report: '產生日報',

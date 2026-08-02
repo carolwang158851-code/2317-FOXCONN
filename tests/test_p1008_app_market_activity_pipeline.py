@@ -76,6 +76,12 @@ class FakeManager(app_server.P1008JobManager):
     def _refresh(self, before):
         self.calls.append("refresh")
 
+    def _refresh_rolling_brief_step(self):
+        self.calls.append("rolling-brief")
+        self._set_component_status("rollingBrief", "UPDATED", archiveAppended=False)
+        self._set_component_status("reportLibrary", "PASS")
+        return ""
+
     def _market_activity_last_date(self) -> str:
         return "2026-07-17"
 
@@ -90,7 +96,7 @@ class LauncherMarketActivityPipelineTests(unittest.TestCase):
         manager = FakeManager(self.root)
         with mock.patch.object(app_server, "formal_csv_hashes", return_value=dict(BASE_HASHES)):
             manager._run_job_inner("default")
-        self.assertEqual(manager.calls, ["preflight", "update-data", "market-activity", "news-scan", "refresh"])
+        self.assertEqual(manager.calls, ["preflight", "update-data", "market-activity", "news-scan", "rolling-brief", "refresh"])
         self.assertEqual(manager.state["componentStatus"]["dailyPrice"]["status"], "NO_CHANGE")
         self.assertEqual(manager.state["componentStatus"]["marketActivity"]["status"], "NO_NEW_DATA")
         self.assertEqual(manager.state["overallStatus"], "SUCCEEDED")
@@ -149,6 +155,11 @@ class LauncherMarketActivityPipelineTests(unittest.TestCase):
             "overall-component-status",
             "market-activity-date",
             "market-activity-log",
+            "served-package-root",
+            "served-git-head",
+            "latest-rolling-brief-date",
+            "latest-archived-report-date",
+            "report-library-health",
         ):
             self.assertIn(f'id="{element_id}"', launcher)
         self.assertIn("HTTP_403_POLICY_BLOCKED|TIMEOUT_TRANSIENT", launcher)

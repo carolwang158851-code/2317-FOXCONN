@@ -95,6 +95,15 @@ contracts/p1008_research_plugin/acceptance/v1.1/evidence/phase_a_twse_202607/202
 rules/RULE_STATUS_MANIFEST.json text eol=lf
 tools/p1008_app_server.py text eol=lf
 tools/p1008_build_phaseb1_final_review.py text eol=lf
+contracts/p1008_report_production/acceptance/v1.1/PHASE_B1_OPS_OWNER_AUTHORIZATION_RECORD.json text eol=lf
+docs/P1008_PHASE_B1_OPS_LAUNCHER_REPORT_RECOVERY.md text eol=lf
+report_viewer.html text eol=lf
+reports.html text eol=lf
+tests/test_p1008_app_market_activity_pipeline.py text eol=lf
+tests/test_phaseb1_ops_launcher_report_recovery.py text eol=lf
+tools/p1008_open_warroom.py text eol=lf
+tools/warroom_periodic_report_v1.py text eol=lf
+tools/warroom_rolling_brief.py text eol=lf
 contracts/p1008_analysis/v1.0/ANALYSIS_CONTRACT.md text eol=lf
 contracts/p1008_analysis/v1.0/contract.manifest.json text eol=lf
 contracts/p1008_analysis/v1.0/schemas/analysis_gate_result.schema.json text eol=lf
