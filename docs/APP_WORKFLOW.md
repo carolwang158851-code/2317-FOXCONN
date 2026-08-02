@@ -33,6 +33,25 @@ POST /api/p1008/run/default
 一鍵資料流程永遠不 append 正式 CSV，也不自動產生日報。`POST /api/p1008/run/report`
 是分離的手動入口，不屬於 default job。
 
+## Phase B1 手動分析／戰報候選
+
+Launcher 另提供兩個不屬於一鍵資料流程的手動控制：
+
+1. `POST /api/p1008/run/analysis-candidate`／「產生分析候選」：以七檔
+   Authority、既有 Evidence Packet gates 與受控 MONTHLY_REVENUE fixture
+   產生並驗證 `analysis_packet.json`。
+2. `POST /api/p1008/run/report-candidate`／「產生戰報候選」：只有前一項
+   Analysis gate 為 PASS 且 SHA 一致時，才產生 report、chart data、長篇與
+   75 秒腳本候選。
+
+Windows wrapper 是 `P1008_BUILD_ANALYSIS.bat` 與
+`P1008_BUILD_REPORT.bat`；它們只鎖定 Bundled Python 3.12、設定套件路徑並
+呼叫 `tools/p1008_build_analysis.py`／`tools/p1008_build_report.py`。所有業務
+與安全規則均在 Python typed layers。產物只寫入
+`runtime/report_production/<run_id>/`，不寫正式 CSV、Runtime SQLite、研報庫或
+公開發布位置。OpenAI、Web Search、Deep Research、Canva、Gemini 與 YouTube
+calls 均為 0，且所有候選 `actionable=false`。
+
 ## Phase A Authority Data Closure
 
 - `warroom_market_activity_updater.py` 永遠是 candidate-only。即使存在新交易日，也只寫入
@@ -101,6 +120,8 @@ Launcher 的 crawler 成功率只計算 `requiresNetwork=true` 的網路來源�
 | `POST /api/p1008/run/update-data` | 只補跑資料更新 | 不 publish |
 | `POST /api/p1008/run/news-scan` | 只補跑新聞掃描 v2，更新 source health | 未核准來源不連網 |
 | `POST /api/p1008/run/report` | 只產生日報 | 不改正式 CSV |
+| `POST /api/p1008/run/analysis-candidate` | 手動產生 Phase B1 MONTHLY_REVENUE Analysis 候選 | 不連網、不呼叫模型、runtime-only |
+| `POST /api/p1008/run/report-candidate` | 從已驗證 Analysis 產生 Report 與腳本候選 | 不可繞過 Analysis gate、不發布 |
 | `POST /api/p1008/publish/formal` | Owner 強確認後 append 正式 CSV | 只能呼叫既有 publish gate |
 | `GET /api/p1008/log?jobId=...` | 讀取任務 log | 只讀 |
 

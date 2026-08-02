@@ -1,0 +1,102 @@
+{
+  "fixtureVersion": "P1008_PHASE_B1_MONTHLY_REVENUE_ALT_DATES_1.0",
+  "eventType": "MONTHLY_REVENUE",
+  "asOfDate": "2026-06-11",
+  "generatedAtUtc": "2026-06-12T02:03:04Z",
+  "approvedEvidenceSet": "OFFLINE-DETERMINISTIC-ALT-DATES",
+  "packets": [
+    {
+      "packet_id": "PKT-ALT-DA-MONTHLY-202605",
+      "plugin": "DATA_ANALYTICS",
+      "supported_run_types": ["MONTHLY_REVENUE"],
+      "as_of_date": "2026-06-10",
+      "expires_on": "2026-08-31",
+      "signals": {
+        "material_delta": true,
+        "numeric_anomaly": false,
+        "data_quality_warning": false,
+        "major_transaction": false,
+        "earnings_event": false,
+        "capital_allocation_event": false,
+        "financial_numbers": true
+      },
+      "evidence": [
+        {
+          "evidence_id": "E-ALT-DA-MONTHLY-202605-OFFICIAL",
+          "summary": "官方2026年5月營收資料，用於離線驗證日期與Evidence ID不被硬編碼。",
+          "changed_fields": ["revenue"],
+          "field_values": {
+            "revenue": "2026年5月營收新台幣700,000百萬元；MoM +1.25%；YoY +18.50%；2026年1至5月累計新台幣3,800,000百萬元；累計YoY +20.75%；發布日2026-06-10"
+          },
+          "investment_impact": "僅驗證動態身分與期間傳遞；不支持EPS、利潤率、FCF或估值調整。",
+          "impact_direction": "中性",
+          "confidence": "HIGH",
+          "catalysts": ["官方月營收期間不同"],
+          "risks": ["不提供獲利轉換證據"],
+          "source_locators": [
+            {
+              "source_id": "SRC-ALT-HONHAI-ANNOUNCEMENT-202605",
+              "locator": "https://www.honhai.com/zh-tw/press-center/press-releases/latest-news/alt-202605",
+              "source_tier": "OFFICIAL_COMPANY_RELEASE",
+              "observed_at": "2026-06-10T10:00:00Z"
+            }
+          ],
+          "data_quality_notes": ["離線替代日期案例；不執行網路。"]
+        }
+      ],
+      "executor": "CODEX_PLUGIN_EXECUTOR",
+      "actionable": false
+    },
+    {
+      "packet_id": "PKT-ALT-WEB-MONTHLY-202605",
+      "plugin": "WEB_SEARCH",
+      "supported_run_types": ["MONTHLY_REVENUE"],
+      "as_of_date": "2026-06-10",
+      "expires_on": "2026-08-31",
+      "signals": {
+        "material_delta": true,
+        "numeric_anomaly": false,
+        "data_quality_warning": false,
+        "major_transaction": false,
+        "earnings_event": false,
+        "capital_allocation_event": false,
+        "financial_numbers": true
+      },
+      "evidence": [
+        {
+          "evidence_id": "E-ALT-WEB-MONTHLY-202605-OFFICIAL",
+          "summary": "替代日期案例的第二個官方來源交叉核對。",
+          "changed_fields": ["revenue"],
+          "field_values": {
+            "revenue": "2026年5月營收新台幣700,000百萬元；MoM +1.25%；YoY +18.50%；2026年1至5月累計新台幣3,800,000百萬元；累計YoY +20.75%；發布日2026-06-10"
+          },
+          "investment_impact": "交叉核對同一組替代案例數字；不增添其他結論。",
+          "impact_direction": "中性",
+          "confidence": "HIGH",
+          "catalysts": ["官方交叉來源"],
+          "risks": ["不提供獲利轉換證據"],
+          "source_locators": [
+            {
+              "source_id": "SRC-ALT-HONHAI-MONTHLY-202605",
+              "locator": "https://www.honhai.com/zh-tw/investor-relations/financial-information/reports?category=monthly",
+              "source_tier": "OFFICIAL_COMPANY_INVESTOR_RELATIONS",
+              "observed_at": "2026-06-10T10:00:00Z"
+            }
+          ],
+          "data_quality_notes": ["離線替代日期案例；不執行網路。"]
+        }
+      ],
+      "executor": "CODEX_PLUGIN_EXECUTOR",
+      "actionable": false
+    }
+  ],
+  "externalCalls": {
+    "openaiApi": 0,
+    "hostedWebSearch": 0,
+    "deepResearch": 0,
+    "canva": 0,
+    "gemini": 0,
+    "youtube": 0
+  },
+  "actionable": false
+}
