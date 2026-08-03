@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shutil
 import sys
 import tempfile
 import unittest
@@ -20,8 +21,8 @@ from p1008_research_plugin.ledgers.store import LedgerStore
 
 
 BASELINE_HASHES = {
-    "launcher.html": "A0D5CAFDE151CCCCA5342AB719D83130A775965C64429CCE26092FED50FCDDC5",
-    "tools/p1008_app_server.py": "B29A78E3F5F89026C2B116149186FBAADE6993A13F4137FDAEF6D7C498E8ADDD",
+    "launcher.html": "1639C5A1D28B76241633F173A58627631BE1F8E577278B6FDE002AD1106D7ACA",
+    "tools/p1008_app_server.py": "44F2DD278D2FBFC7AF853B8CFC91611C76555015BEA3F547F55F545C38DCF687",
     "data/CSV_AUTHORITY_MANIFEST.json": "7DC97FFBC0E3F5E73E8085ACC25DD61E0F3588FCE04C360B4F19FA0D86AFA01B",
     "rules/RULE_STATUS_MANIFEST.json": "054DA1FDAF0C75BB27B56DF45B96F1CC1720558D44C700F1AB70AB0280A2FE5C",
     "contracts/p1008_research_plugin/v1.0/contract.manifest.json": "5D213CB4360329FCC969164F559952A0F1545BFE8E53D5CFDFF014B9D5619773",
@@ -71,6 +72,17 @@ PHASEB1_OPS_R1_ACCEPTANCE_RECORD = (
 PHASEB1_OPS_R1_ACCEPTANCE_SHA256 = (
     "ED5AF459990F5390F39CDAC1DEBBA0CFCFFA20E8438E67087C0F29488DB092B6"
 )
+PHASEB1_OPS_R2_ACCEPTANCE_RECORD = (
+    PACKAGE_ROOT
+    / "contracts"
+    / "p1008_report_production"
+    / "acceptance"
+    / "v1.1"
+    / "PHASE_B1_OPS_R2_OWNER_AUTHORIZATION_RECORD.json"
+)
+PHASEB1_OPS_R2_ACCEPTANCE_SHA256 = (
+    "76D58C43D8622A1F069D554D0B435756EE1679E48DF54EF78EC4714DE1E8C781"
+)
 LEGACY_AUTHORITY_MANIFEST_SHA256 = (
     "8BA304C36C224F1F8ADF78CB871A8200FDA0656BD5824801330EAF6EAF855847"
 )
@@ -119,11 +131,14 @@ class GovernanceBoundaryTests(unittest.TestCase):
         before = {relative: sha256(PACKAGE_ROOT / relative) for relative in BASELINE_HASHES}
         self.assertEqual(before, BASELINE_HASHES)
         catalog = EventCatalog(self.loader)
-        with tempfile.TemporaryDirectory(
-            prefix=".p1008-boundary-", dir=PACKAGE_ROOT.parent
-        ) as temp_dir:
+        temp_dir = tempfile.mkdtemp(prefix=".p1008-boundary-", dir=PACKAGE_ROOT.parent)
+        try:
             store = LedgerStore(PACKAGE_ROOT, Path(temp_dir), self.loader, catalog)
             self.assertEqual(store.read_all(), {key: [] for key in sorted(store.ledgers)})
+        finally:
+            # A local synchronization service can retain the directory handle; this
+            # cleanup must not obscure the boundary assertion that already passed.
+            shutil.rmtree(temp_dir, ignore_errors=True)
         after = {relative: sha256(PACKAGE_ROOT / relative) for relative in BASELINE_HASHES}
         self.assertEqual(after, before)
 
@@ -178,7 +193,7 @@ class GovernanceBoundaryTests(unittest.TestCase):
         )
         self.assertFalse(receipt["actionable"])
 
-    def test_phaseb1_ops_r1_boundary_changes_are_separately_authorized(self) -> None:
+    def test_phaseb1_ops_r1_receipt_remains_immutable(self) -> None:
         self.assertEqual(
             sha256(PHASEB1_OPS_R1_ACCEPTANCE_RECORD),
             PHASEB1_OPS_R1_ACCEPTANCE_SHA256,
@@ -199,11 +214,39 @@ class GovernanceBoundaryTests(unittest.TestCase):
         self.assertTrue(receipt["implementationAuthorized"])
         self.assertFalse(receipt["finalAcceptanceGranted"])
         self.assertEqual(receipt["deliveryBoundary"], "DRAFT_PR_ONLY")
+        self.assertEqual(
+            receipt["authorizedBoundaryChanges"]["launcher.html"]["phaseB1OpsR1Sha256"],
+            "A0D5CAFDE151CCCCA5342AB719D83130A775965C64429CCE26092FED50FCDDC5",
+        )
+        self.assertTrue(receipt["constraints"]["formalAuthorityReadOnly"])
+        self.assertTrue(receipt["constraints"]["rollingBriefNonArchival"])
+        self.assertTrue(receipt["constraints"]["phaseB1Point5NotStarted"])
+        self.assertTrue(receipt["constraints"]["phaseB2NotStarted"])
+        self.assertFalse(receipt["actionable"])
+
+    def test_phaseb1_ops_r2_boundary_changes_are_separately_authorized(self) -> None:
+        self.assertEqual(
+            sha256(PHASEB1_OPS_R2_ACCEPTANCE_RECORD),
+            PHASEB1_OPS_R2_ACCEPTANCE_SHA256,
+        )
+        receipt = json.loads(
+            PHASEB1_OPS_R2_ACCEPTANCE_RECORD.read_text(encoding="utf-8")
+        )
+        self.assertEqual(receipt["phase"], "PHASE_B1_OPS_R2")
+        self.assertEqual(receipt["pullRequest"], 10)
+        self.assertEqual(receipt["priorHead"], "5f744c458d0af270602723e3b6e6ca75777d3f58")
+        self.assertEqual(
+            receipt["authorizationPhrase"],
+            "OWNER_APPROVE_P1008_PHASE_B1_OPS_R2_CLEAN_CLONE_BOOTSTRAP_5F744C45",
+        )
+        self.assertTrue(receipt["implementationAuthorized"])
+        self.assertFalse(receipt["finalAcceptanceGranted"])
+        self.assertEqual(receipt["deliveryBoundary"], "DRAFT_PR_ONLY")
         for relative, change in receipt["authorizedBoundaryChanges"].items():
             with self.subTest(path=relative):
                 self.assertEqual(
                     sha256(PACKAGE_ROOT / relative),
-                    change["phaseB1OpsR1Sha256"],
+                    change["phaseB1OpsR2Sha256"],
                 )
         self.assertTrue(receipt["constraints"]["formalAuthorityReadOnly"])
         self.assertTrue(receipt["constraints"]["rollingBriefNonArchival"])

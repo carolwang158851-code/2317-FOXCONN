@@ -28,6 +28,21 @@ manifest remained at an older explicit report run.
   artifact and synchronizes both archive manifests. It no longer owns the
   rolling `latest_report.html` path.
 
+## R2 tracked UI and first-run bootstrap
+
+- The Command Center is tracked at
+  `ui/P1008_WARROOM_COMMAND_CENTER_v24.html`; Launcher, legacy UI, report
+  library, report viewer, SOP, and package preflight use this path only.
+  Production navigation never depends on the git-ignored `output/` directory.
+- The original local v24 source was copied byte-identically. Its provenance,
+  source and destination SHA-256 values are recorded in the R2 tracked-UI
+  source receipt.
+- On a true first run, when both archive manifests are absent, Launcher creates
+  the same versioned empty payload at both paths and records
+  `REPORT_LIBRARY_BOOTSTRAPPED_EMPTY`. This creates no archive report or card.
+- A single missing manifest, an invalid manifest, or a semantic mismatch is a
+  fail-closed Owner-review condition. Launcher must not reconstruct history.
+
 ## Fail-closed identity and health checks
 
 - A localhost server can be reused only when its resolved package root and Git
@@ -41,8 +56,10 @@ manifest remained at an older explicit report run.
 - Any report-library health status other than `PASS` returns
   `REPORT_LIBRARY_FAIL_CLOSED`; Launcher disables both the New UI and Research
   Library links until identity is restored.
-- Missing, invalid, or divergent identities return `FAIL_CLOSED` with the exact
-  recovery instruction to launch `P1008_APP.bat`.
+- Both missing manifests are `FIRST_RUN_UNINITIALIZED` and may be bootstrapped
+  by one normal Launcher run. Partial loss, invalid JSON, or divergent
+  manifests return `FAIL_CLOSED` and require Owner review rather than a fake
+  Daily Report.
 - `reports.html` and `report_viewer.html` reject unsupported interactive
   `file://` use instead of presenting stale content as current.
 

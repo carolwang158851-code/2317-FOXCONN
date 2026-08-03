@@ -180,7 +180,7 @@
       </div>
       <div class="buttons">
         <button id="fullscreen-toggle" type="button" aria-pressed="false">全螢幕</button>
-        <a id="new-ui-link" class="button" href="./output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html?from=launcher_manual">進入新 UI</a>
+        <a id="new-ui-link" class="button" href="./ui/P1008_WARROOM_COMMAND_CENTER_v24.html?from=launcher_manual">進入新 UI</a>
         <a id="research-library-link" class="button" href="./reports.html?from=launcher">研報庫</a>
         <a class="button" href="./SOP_v4.html?from=launcher">SOP</a>
       </div>
@@ -319,7 +319,7 @@
         </div>
         <div class="buttons" style="align-items:end">
           <button id="owner-publish" class="danger" disabled>正式發布 CSV</button>
-          <a id="open-new-ui" class="button primary" href="./output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html?from=launcher">進入新 UI</a>
+          <a id="open-new-ui" class="button primary" href="./ui/P1008_WARROOM_COMMAND_CENTER_v24.html?from=launcher">進入新 UI</a>
         </div>
       </div>
     </section>
@@ -751,7 +751,7 @@
         state.autoRedirected = true;
         $('auto-redirect-note').textContent = 'Gate 已通過，正在進入新 UI。';
         setTimeout(() => {
-          location.assign(withImmersive(`./output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html?from=launcher&ts=${Date.now()}`));
+          location.assign(withImmersive(`./ui/P1008_WARROOM_COMMAND_CENTER_v24.html?from=launcher&ts=${Date.now()}`));
         }, 900);
       }
     }

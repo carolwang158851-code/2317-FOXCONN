@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import http.server
 import json
 import shutil
 import sys
 import threading
+import urllib.request
 import unittest
 import uuid
 from datetime import datetime, timezone
@@ -118,7 +120,11 @@ class PhaseB1OpsLauncherReportRecoveryTests(unittest.TestCase):
     def setUp(self) -> None:
         self.root = PACKAGE_ROOT / "runtime" / "phaseb1_ops_test_scratch" / uuid.uuid4().hex
         (self.root / "data").mkdir(parents=True)
-        self.addCleanup(lambda: shutil.rmtree(self.root) if self.root.exists() else None)
+        self.addCleanup(
+            lambda: shutil.rmtree(self.root, ignore_errors=True)
+            if self.root.exists()
+            else None
+        )
         (self.root / "data/CSV_AUTHORITY_MANIFEST.json").write_text("{}\n", encoding="utf-8")
         (self.root / "data/2317_daily_price.csv").write_text(
             "Date,Close,QuarterKey,BVPS_ref,PB_daily,DataSupportLevel,Status\n"
@@ -164,6 +170,107 @@ class PhaseB1OpsLauncherReportRecoveryTests(unittest.TestCase):
             "formalPublishBlocked": False,
         }
         return manager.launcher_gate_status(review, state)
+
+    def test_tracked_production_ui_replaces_ignored_output_dependency(self) -> None:
+        tracked = "ui/P1008_WARROOM_COMMAND_CENTER_v24.html"
+        legacy_ignored = "output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html"
+        tracked_path = PACKAGE_ROOT / tracked
+        self.assertTrue(tracked_path.is_file())
+        source_receipt = json.loads(
+            (
+                PACKAGE_ROOT
+                / "contracts/p1008_report_production/acceptance/v1.1/PHASE_B1_OPS_R2_TRACKED_UI_SOURCE_RECEIPT.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(source_receipt["trackedDestinationPath"], tracked)
+        self.assertEqual(source_receipt["trackedDestinationSha256"], sha256(tracked_path))
+        self.assertTrue(source_receipt["byteIdentityVerified"])
+        for path in (
+            PACKAGE_ROOT / "launcher.html",
+            PACKAGE_ROOT / "reports.html",
+            PACKAGE_ROOT / "report_viewer.html",
+            PACKAGE_ROOT / "SOP_v4.html",
+            PACKAGE_ROOT / "src/index_p1008_v7.source.html",
+            PACKAGE_ROOT / "dist/index_p1008_v7.bundle.js",
+            PACKAGE_ROOT / "tools/p1008_app_server.py",
+        ):
+            contents = path.read_text(encoding="utf-8")
+            self.assertIn(tracked, contents, path)
+            self.assertNotIn(legacy_ignored, contents, path)
+
+    def test_preflight_requires_only_clean_clone_package_files(self) -> None:
+        source = (PACKAGE_ROOT / "tools/p1008_app_server.py").read_text(encoding="utf-8")
+        self.assertIn('"ui/P1008_WARROOM_COMMAND_CENTER_v24.html"', source)
+        self.assertNotIn('"output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html"', source)
+        self.assertNotIn('"index_p1008_v7.html"', source)
+
+    def test_tracked_ui_and_report_pages_are_served_over_local_http(self) -> None:
+        manager = app_server.P1008JobManager(PACKAGE_ROOT)
+
+        class Handler(app_server.P1008AppHandler):
+            pass
+
+        Handler.manager = manager
+        server = http.server.ThreadingHTTPServer(
+            ("127.0.0.1", 0),
+            lambda *args, **kwargs: Handler(*args, directory=str(PACKAGE_ROOT), **kwargs),
+        )
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(lambda: server.shutdown())
+        try:
+            base = f"http://127.0.0.1:{server.server_port}"
+            for rel in (
+                "/ui/P1008_WARROOM_COMMAND_CENTER_v24.html",
+                "/reports.html",
+                "/report_viewer.html",
+            ):
+                with urllib.request.urlopen(base + rel, timeout=5) as response:
+                    self.assertEqual(response.status, 200, rel)
+        finally:
+            server.shutdown()
+            thread.join(timeout=5)
+
+    def test_first_run_bootstrap_is_paired_empty_and_idempotent(self) -> None:
+        first = rolling_brief.bootstrap_report_library(
+            self.root, now=datetime(2026, 8, 3, tzinfo=timezone.utc)
+        )
+        runtime = self.root / rolling_brief.RUNTIME_MANIFEST_REL
+        report = self.root / rolling_brief.REPORT_MANIFEST_REL
+        self.assertEqual(first["status"], "REPORT_LIBRARY_BOOTSTRAPPED_EMPTY")
+        self.assertTrue(first["manifestByteIdentity"])
+        self.assertEqual(runtime.read_bytes(), report.read_bytes())
+        payload = json.loads(runtime.read_text(encoding="utf-8"))
+        self.assertEqual(payload["reports"], [])
+        self.assertFalse(payload["productionCsvModified"])
+        self.assertFalse(payload["actionable"])
+        before = runtime.read_bytes()
+        second = rolling_brief.bootstrap_report_library(
+            self.root, now=datetime(2026, 8, 4, tzinfo=timezone.utc)
+        )
+        self.assertEqual(second["status"], "REPORT_LIBRARY_EXISTING_HEALTHY")
+        self.assertEqual(runtime.read_bytes(), before)
+        self.assertEqual(report.read_bytes(), before)
+        self.assertEqual(second["archiveReportCount"], 0)
+
+    def test_one_missing_manifest_fails_closed_without_recreation(self) -> None:
+        rolling_brief.bootstrap_report_library(self.root)
+        report = self.root / rolling_brief.REPORT_MANIFEST_REL
+        report.unlink()
+        result = rolling_brief.bootstrap_report_library(self.root)
+        self.assertEqual(result["status"], "FAIL_CLOSED")
+        self.assertEqual(result["code"], "REPORT_LIBRARY_PARTIAL_MANIFEST_LOSS")
+        self.assertFalse(report.exists())
+
+    def test_invalid_manifest_fails_closed_without_recreation(self) -> None:
+        rolling_brief.bootstrap_report_library(self.root)
+        runtime = self.root / rolling_brief.RUNTIME_MANIFEST_REL
+        runtime.write_text("not-json\n", encoding="utf-8")
+        result = rolling_brief.bootstrap_report_library(self.root)
+        self.assertEqual(result["status"], "FAIL_CLOSED")
+        self.assertEqual(result["code"], "REPORT_LIBRARY_MANIFEST_INVALID")
+        self.assertEqual(runtime.read_text(encoding="utf-8"), "not-json\n")
 
     def test_stale_server_from_another_working_tree_is_rejected(self) -> None:
         responses = [
@@ -232,6 +339,20 @@ class PhaseB1OpsLauncherReportRecoveryTests(unittest.TestCase):
             },
         )
 
+    def test_default_update_bootstraps_before_rolling_brief(self) -> None:
+        manager = _PipelineManager(self.root)
+        manager._run_job_inner("default")
+        runtime = self.root / rolling_brief.RUNTIME_MANIFEST_REL
+        report = self.root / rolling_brief.REPORT_MANIFEST_REL
+        self.assertTrue(runtime.is_file())
+        self.assertEqual(runtime.read_bytes(), report.read_bytes())
+        manifest = json.loads(runtime.read_text(encoding="utf-8"))
+        self.assertEqual(manifest["reports"], [])
+        self.assertTrue((self.root / rolling_brief.CURRENT_BRIEF_REL).is_file())
+        self.assertTrue((self.root / rolling_brief.LATEST_REPORT_REL).is_file())
+        self.assertEqual(manager.state["componentStatus"]["reportLibrary"]["status"], "PASS")
+        self.assertNotIn("report", manager.calls)
+
     def test_explicit_report_job_appends_archive(self) -> None:
         self._write_matching_manifests()
         rolling_brief.refresh_current_brief(self.root)
@@ -272,8 +393,11 @@ class PhaseB1OpsLauncherReportRecoveryTests(unittest.TestCase):
     def test_manifest_mismatch_fails_closed(self) -> None:
         self._write_matching_manifests()
         rolling_brief.refresh_current_brief(self.root)
-        (self.root / rolling_brief.RUNTIME_MANIFEST_REL).write_text(
-            '{"reports":[{"id":"unexpected"}]}\n', encoding="utf-8"
+        runtime_path = self.root / rolling_brief.RUNTIME_MANIFEST_REL
+        divergent = json.loads(runtime_path.read_text(encoding="utf-8"))
+        divergent["reports"] = [{"id": "unexpected", "date": "2026-07-27"}]
+        runtime_path.write_text(
+            json.dumps(divergent, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
         health = rolling_brief.report_library_health(self.root)
         self.assertEqual(health["status"], "FAIL_CLOSED")
@@ -282,10 +406,10 @@ class PhaseB1OpsLauncherReportRecoveryTests(unittest.TestCase):
         self.assertEqual(gate["code"], "REPORT_LIBRARY_FAIL_CLOSED")
         self.assertFalse(gate["canEnterNewUi"])
 
-    def test_missing_manifest_has_actionable_recovery(self) -> None:
+    def test_first_run_manifest_state_blocks_navigation_until_bootstrapped(self) -> None:
         health = rolling_brief.report_library_health(self.root)
-        self.assertEqual(health["status"], "FAIL_CLOSED")
-        self.assertEqual(health["code"], "REPORT_LIBRARY_MANIFEST_MISSING")
+        self.assertEqual(health["status"], "FIRST_RUN_UNINITIALIZED")
+        self.assertEqual(health["code"], "REPORT_LIBRARY_FIRST_RUN_UNINITIALIZED")
         self.assertIn("P1008_APP.bat", health["recoveryInstruction"])
         gate = self._launcher_gate(health)
         self.assertEqual(gate["code"], "REPORT_LIBRARY_FAIL_CLOSED")

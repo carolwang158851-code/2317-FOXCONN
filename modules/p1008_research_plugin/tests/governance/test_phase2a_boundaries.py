@@ -183,6 +183,14 @@ PHASEB1_HASH_GOVERNED_PATHS = {
         "contracts/p1008_report_production/acceptance/v1.1/"
         "PHASE_B1_OPS_R1_OWNER_AUTHORIZATION_RECORD.json"
     ),
+    (
+        "contracts/p1008_report_production/acceptance/v1.1/"
+        "PHASE_B1_OPS_R2_OWNER_AUTHORIZATION_RECORD.json"
+    ),
+    (
+        "contracts/p1008_report_production/acceptance/v1.1/"
+        "PHASE_B1_OPS_R2_TRACKED_UI_SOURCE_RECEIPT.json"
+    ),
     "contracts/p1008_report_production/v1.0/REPORT_PRODUCTION_CONTRACT.md",
     "contracts/p1008_report_production/v1.0/contract.manifest.json",
     "contracts/p1008_report_production/v1.0/schemas/chart_data.schema.json",
@@ -193,6 +201,7 @@ PHASEB1_HASH_GOVERNED_PATHS = {
     "contracts/p1008_report_production/v1.0/schemas/shorts_duration_validation.schema.json",
     "docs/APP_WORKFLOW.md",
     "docs/P1008_PHASE_B1_OPS_LAUNCHER_REPORT_RECOVERY.md",
+    "ui/P1008_WARROOM_COMMAND_CENTER_v24.html",
     "modules/p1008_research_plugin/docs/phaseb1/PhaseB1_Analysis_Report_MVP.md",
     "modules/p1008_research_plugin/src/p1008_research_plugin/analysis/__init__.py",
     (
@@ -355,7 +364,7 @@ class Phase2ABoundaryTests(unittest.TestCase):
             entries.append(path)
         self.assertEqual(len(entries), len(set(entries)))
         self.assertEqual(set(entries), expected_hash_governed_paths())
-        self.assertEqual(len(entries), 154)
+        self.assertEqual(len(entries), 157)
 
     def test_crlf_and_mixed_manifest_bytes_are_rejected(self) -> None:
         for rejected in (MANIFEST_CRLF_SHA256, MANIFEST_MIXED_SHA256):

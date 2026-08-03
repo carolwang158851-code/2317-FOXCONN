@@ -775,6 +775,12 @@ class P1008JobManager:
             self._refresh(before)
             return
 
+        bootstrap_error = self._bootstrap_report_library_step()
+        if bootstrap_error:
+            self._add_error(bootstrap_error)
+            self._refresh(before)
+            return
+
         component_failures: list[str] = []
         if job_type in {"default", "update-data"}:
             daily_before = formal_csv_hashes(self.package_root)
@@ -1010,6 +1016,65 @@ class P1008JobManager:
             )
         return ""
 
+    def _bootstrap_report_library_step(self) -> str:
+        """Initialize only a truly empty archive index before the default job.
+
+        Archive history is never recreated when one paired manifest is lost or
+        both manifests disagree.  Those conditions remain fail-closed.
+        """
+        self._set_step(
+            "report-library-bootstrap",
+            "Validate or initialize report-library manifests",
+            "RUNNING",
+        )
+        try:
+            result = rolling_brief.bootstrap_report_library(self.package_root)
+        except (rolling_brief.RollingBriefError, OSError) as exc:
+            message = str(exc)
+            self._set_step(
+                "report-library-bootstrap",
+                "Validate or initialize report-library manifests",
+                "FAILED",
+                message=message,
+            )
+            self._set_component_status(
+                "reportLibrary", "FAIL_CLOSED", error=message, actionable=False
+            )
+            return f"Report library bootstrap failed: {message}"
+        status = str(result.get("status") or "FAIL_CLOSED")
+        if status == "FAIL_CLOSED":
+            message = str(result.get("message") or result.get("code") or "unknown error")
+            self._set_step(
+                "report-library-bootstrap",
+                "Validate or initialize report-library manifests",
+                "FAILED",
+                message=message,
+                code=result.get("code", ""),
+            )
+            self._set_component_status(
+                "reportLibrary",
+                "FAIL_CLOSED",
+                code=result.get("code", ""),
+                recoveryInstruction=result.get("message", ""),
+                actionable=False,
+            )
+            return f"Report library bootstrap failed: {message}"
+        self._set_step(
+            "report-library-bootstrap",
+            "Validate or initialize report-library manifests",
+            "SUCCEEDED",
+            message=status,
+        )
+        self._set_component_status(
+            "reportLibrary",
+            status,
+            code=result.get("classification", ""),
+            archiveReportCount=result.get("archiveReportCount", 0),
+            archiveAppended=False,
+            actionable=False,
+        )
+        return ""
+
     def _market_activity_last_date(self) -> str:
         path = self.package_root / "data/2317_daily_market_activity.csv"
         try:
@@ -1065,8 +1130,7 @@ class P1008JobManager:
     def _preflight(self) -> dict[str, str]:
         self._set_step("preflight", "Preflight checks", "RUNNING")
         required = [
-            "output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html",
-            "index_p1008_v7.html",
+            "ui/P1008_WARROOM_COMMAND_CENTER_v24.html",
             "tools/warroom_data_fetcher_v2.py",
             "tools/warroom_market_activity_updater.py",
             "P1008_1_UPDATE_DATA.bat",
