@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 import owner_publish_csv_v2 as owner_publish
+import warroom_report_governance as report_governance
 import warroom_rolling_brief as rolling_brief
 
 
@@ -896,19 +897,38 @@ class P1008JobManager:
                 component_failures.append(rolling_error)
 
         if job_type == "report":
-            self._run_python_step(
+            report_date = date.today().isoformat()
+            decision = report_governance.evaluate_report_trigger(
+                report_key=f"P1008_DAILY_{report_date.replace('-', '')}",
+                revision=1,
+                event_evidence=[],
+                evaluated_at_utc=now_iso(),
+            )
+            self._set_step(
+                "report-governance",
+                "Evaluate deterministic report trigger",
+                "SUCCEEDED",
+                decision=decision["decision"],
+                decisionId=decision["decision_id"],
+                actionable=False,
+            )
+            self._set_component_status(
+                "reportGovernance",
+                decision["decision"],
+                reportKey=decision["report_key"],
+                revision=decision["revision"],
+                reportTriggerValid=decision["report_trigger_valid"],
+                archiveEligible=False,
+                libraryAppended=False,
+                actionable=False,
+            )
+            self._set_step(
                 "report",
-                "Generate daily report",
-                [
-                    str(self.package_root / "tools" / "warroom_periodic_report_v1.py"),
-                    "--package-root",
-                    str(self.package_root),
-                    "--period",
-                    "daily",
-                    "--date",
-                    date.today().isoformat(),
-                ],
-                timeout_seconds=180,
+                "Generate daily archive report",
+                "BLOCKED",
+                code="REPORT_TRIGGER_RECEIPT_REQUIRED",
+                message="NO_MATERIAL_CHANGE: a validated material-event trigger receipt is required.",
+                actionable=False,
             )
         if job_type in {"analysis-candidate", "report-candidate"}:
             is_analysis = job_type == "analysis-candidate"

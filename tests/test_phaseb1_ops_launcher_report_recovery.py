@@ -23,6 +23,7 @@ import p1008_app_server as app_server  # noqa: E402
 import p1008_open_warroom as open_warroom  # noqa: E402
 import warroom_periodic_report_v1 as periodic_report  # noqa: E402
 import warroom_rolling_brief as rolling_brief  # noqa: E402
+import warroom_report_governance as governance  # noqa: E402
 
 
 def sha256(path: Path) -> str:
@@ -152,6 +153,58 @@ class PhaseB1OpsLauncherReportRecoveryTests(unittest.TestCase):
         runtime.write_bytes(body)
         report.write_bytes(body)
         return runtime.read_bytes(), report.read_bytes()
+
+    def _valid_trigger_handoff(self, *, report_date: str = "2026-07-27") -> dict:
+        now = "2026-08-09T00:00:00Z"
+        report_key = "P1008_MONTHLY_REVENUE_202607"
+        evidence = {
+            "event_id": "EV-001", "event_type": "MONTHLY_REVENUE",
+            "event_status": "MATERIAL_EVENT_CONFIRMED", "occurred_at_utc": now,
+            "published_at_utc": now, "received_at_utc": now, "data_cutoff": "2026-07-27",
+            "source_id": "SOURCE-001", "source_type": "AUTHORITY_DATASET",
+            "source_class": "AUTHORITY", "source_locator": "data/authority.csv#2026-07-27",
+            "source_tier": "OFFICIAL", "source_hash": "A" * 64,
+            "evidence_ids": ["E-001"], "claim_summary": "Validated fact.",
+            "affected_kpis": ["revenue"], "materiality": "MATERIAL", "novelty": "NEW",
+            "evidence_status": "CONFIRMED", "validation_status": "VERIFIED", "confidence": 0.95,
+            "quality_metadata": {"review": "deterministic"}, "provenance": {"collector": "test"},
+            "originating_chain_id": "CHAIN-001", "canonical_event_id": "MONTHLY_REVENUE_202607",
+            "verification_status": "VERIFIED", "counter_evidence_ids": [], "missing_evidence": [],
+            "source_conflicts": [], "actionable": False,
+        }
+        trigger = governance.evaluate_report_trigger(
+            report_key=report_key, revision=1, event_evidence=[evidence], evaluated_at_utc=now
+        )
+        core = governance.evaluate_core_view_change(
+            supporting_evidence_ids=[], counter_evidence_ids=[], official_confirmation=False,
+            independent_high_quality_source_count=0, financial_reflection=False,
+            thesis_invalidation=False, owner_approved=False, owner_approval_reference=None,
+            prior_core_view_hash="B" * 64, proposed_core_view_hash="C" * 64,
+        )
+        publication = governance.evaluate_publication(
+            report_key=report_key, revision=1, report_hash="D" * 64, audience="PRIVATE",
+            fact_check_status="PASS", owner_approved=False, owner_approval_reference=None,
+        )
+        receipt = governance.build_report_decision_receipt(
+            receipt_id="RECEIPT-001", report_key=report_key, revision=1,
+            authority_cutoffs=["2026-07-27"], event_evidence_ids=["E-001"],
+            report_trigger_decision=trigger, core_view_change_decision=core,
+            publication_decision=publication, model_provenances=[], report_validation_pass=True,
+            report_artifact_hashes=["E" * 64], created_at_utc=now,
+        )
+        return {
+            "report_key": report_key, "revision": 1, "report_date": report_date,
+            "event_type": "MONTHLY_REVENUE", "event_evidence": [evidence],
+            "threshold_policies": [], "report_trigger_decision": trigger,
+            "core_view_change_decision": core, "publication_decision": publication,
+            "report_decision_receipt": receipt,
+        }
+
+    def _write_trigger_handoff(self, payload: dict) -> Path:
+        path = self.root / "runtime/governance/report_trigger_handoff.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        return path
 
     def _launcher_gate(self, health: dict) -> dict:
         manager = app_server.P1008JobManager(self.root)
@@ -353,22 +406,77 @@ class PhaseB1OpsLauncherReportRecoveryTests(unittest.TestCase):
         self.assertEqual(manager.state["componentStatus"]["reportLibrary"]["status"], "PASS")
         self.assertNotIn("report", manager.calls)
 
-    def test_explicit_report_job_appends_archive(self) -> None:
+    def test_explicit_report_job_without_material_event_is_suppressed(self) -> None:
         self._write_matching_manifests()
         rolling_brief.refresh_current_brief(self.root)
+        before_runtime = (self.root / rolling_brief.RUNTIME_MANIFEST_REL).read_bytes()
+        before_report = (self.root / rolling_brief.REPORT_MANIFEST_REL).read_bytes()
         rolling_html_before = (self.root / rolling_brief.LATEST_REPORT_REL).read_bytes()
         manager = _PipelineManager(self.root)
         manager._run_job_inner("report")
-        manifest = json.loads((self.root / rolling_brief.REPORT_MANIFEST_REL).read_text(encoding="utf-8"))
-        self.assertEqual([item["id"] for item in manifest["reports"]], ["P1008_DAILY_20260727"])
-        self.assertEqual(
-            (self.root / rolling_brief.REPORT_MANIFEST_REL).read_bytes(),
-            (self.root / rolling_brief.RUNTIME_MANIFEST_REL).read_bytes(),
-        )
+        self.assertEqual(manager.state["componentStatus"]["reportGovernance"]["status"], "NO_MATERIAL_CHANGE")
+        self.assertFalse(manager.state["componentStatus"]["reportGovernance"]["reportTriggerValid"])
+        self.assertEqual((self.root / rolling_brief.RUNTIME_MANIFEST_REL).read_bytes(), before_runtime)
+        self.assertEqual((self.root / rolling_brief.REPORT_MANIFEST_REL).read_bytes(), before_report)
         self.assertEqual(
             (self.root / rolling_brief.LATEST_REPORT_REL).read_bytes(),
             rolling_html_before,
         )
+        self.assertNotIn("report", manager.calls)
+
+    def test_valid_material_trigger_receipt_allows_existing_archive_path(self) -> None:
+        self._write_matching_manifests()
+        handoff = self._write_trigger_handoff(self._valid_trigger_handoff())
+        result = periodic_report.build_report(
+            type("Args", (), {"package_root": str(self.root), "date": "2026-07-27", "period": "daily", "trigger_handoff": str(handoff)})()
+        )
+        self.assertEqual(result, 0)
+        manifest = json.loads((self.root / rolling_brief.REPORT_MANIFEST_REL).read_text(encoding="utf-8"))
+        self.assertEqual(len(manifest["reports"]), 1)
+        report = manifest["reports"][0]
+        self.assertEqual(report["reportKey"], "P1008_MONTHLY_REVENUE_202607")
+        self.assertEqual(report["revision"], 1)
+        self.assertEqual(report["eventType"], "MONTHLY_REVENUE")
+        self.assertFalse(report["actionable"])
+
+    def test_archive_path_fails_closed_for_missing_or_invalid_trigger_receipt(self) -> None:
+        self._write_matching_manifests()
+        base_args = {"package_root": str(self.root), "date": "2026-07-27", "period": "daily"}
+        with self.assertRaises(periodic_report.ReportTriggerReceiptError):
+            periodic_report.build_report(type("Args", (), {**base_args, "trigger_handoff": ""})())
+        cases = {}
+        invalid_receipt = self._valid_trigger_handoff()
+        invalid_receipt["report_decision_receipt"]["canonical_sha256"] = "F" * 64
+        cases["invalid receipt"] = invalid_receipt
+        identity_mismatch = self._valid_trigger_handoff()
+        identity_mismatch["revision"] = 2
+        cases["revision mismatch"] = identity_mismatch
+        event_mismatch = self._valid_trigger_handoff()
+        event_mismatch["event_type"] = "UNKNOWN_EVENT"
+        cases["event mismatch"] = event_mismatch
+        unsupported = self._valid_trigger_handoff()
+        unsupported["event_evidence"][0]["event_type"] = "UNKNOWN_EVENT"
+        unsupported["event_type"] = "UNKNOWN_EVENT"
+        cases["unsupported event"] = unsupported
+        anomaly_without_policy = self._valid_trigger_handoff()
+        anomaly_without_policy["event_evidence"][0]["event_type"] = "APPROVED_PRICE_VOLUME_POSITIONING_ANOMALY"
+        anomaly_without_policy["event_type"] = "APPROVED_PRICE_VOLUME_POSITIONING_ANOMALY"
+        cases["anomaly without approved policy"] = anomaly_without_policy
+        authority_conflict = self._valid_trigger_handoff()
+        conflicting = json.loads(json.dumps(authority_conflict["event_evidence"][0]))
+        conflicting.update({
+            "source_id": "SOURCE-002", "source_class": "SECONDARY", "source_tier": "MEDIA",
+            "originating_chain_id": "CHAIN-002", "claim_summary": "Contradictory fact.",
+        })
+        authority_conflict["event_evidence"].append(conflicting)
+        cases["authority conflict"] = authority_conflict
+        for label, invalid in cases.items():
+            with self.subTest(label=label):
+                path = self._write_trigger_handoff(invalid)
+                with self.assertRaises(periodic_report.ReportTriggerReceiptError):
+                    periodic_report.build_report(type("Args", (), {**base_args, "trigger_handoff": str(path)})())
+        manifest = json.loads((self.root / rolling_brief.REPORT_MANIFEST_REL).read_text(encoding="utf-8"))
+        self.assertEqual(manifest["reports"], [])
 
     def test_both_manifests_and_rolling_artifacts_agree(self) -> None:
         self._write_matching_manifests()
