@@ -12,13 +12,32 @@ from __future__ import annotations
 import argparse
 import csv
 import html
+import importlib.util
 import json
 import re
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-import warroom_report_governance as report_governance
+
+def _load_report_governance():
+    """Load the governed sibling module independently of the caller's CWD."""
+    module_name = "warroom_report_governance"
+    existing = sys.modules.get(module_name)
+    if existing is not None:
+        return existing
+    module_path = Path(__file__).with_name(f"{module_name}.py")
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load governed report module: {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+report_governance = _load_report_governance()
 
 
 TOOL_VERSION = "P1008_PERIODIC_REPORT_GENERATOR_v1"
