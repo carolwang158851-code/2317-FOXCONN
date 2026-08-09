@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "p1008://report-governance/v1.0/model_provenance", "type": "object",
+  "required": ["model_provenance_id", "model_surface", "model_identifier", "input_receipt_ids", "output_artifact_hash", "started_at_utc", "completed_at_utc", "status", "model_change_did_not_modify_runtime_configuration", "project_runtime_model_allowlist_unchanged", "actionable"],
+  "properties": {"model_provenance_id": {"type": "string", "minLength": 1}, "model_surface": {"type": "string", "minLength": 1}, "model_identifier": {"type": "string", "minLength": 1}, "input_receipt_ids": {"type": "array"}, "output_artifact_hash": {"type": "string", "pattern": "^[A-F0-9]{64}$"}, "started_at_utc": {"type": "string"}, "completed_at_utc": {"type": "string"}, "status": {"type": "string"}, "usage_metadata": {"type": ["object", "null"]}, "billing_metadata": {"type": ["object", "null"]}, "model_change_did_not_modify_runtime_configuration": {"const": true}, "project_runtime_model_allowlist_unchanged": {"const": true}, "actionable": {"const": false}}, "additionalProperties": false
+}

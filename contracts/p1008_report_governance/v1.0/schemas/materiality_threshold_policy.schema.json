@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "p1008://report-governance/v1.0/materiality_threshold_policy", "type": "object",
+  "required": ["threshold_policy_id", "metric", "operator", "threshold", "window", "minimum_observations", "effective_from", "version", "owner_approved", "status"],
+  "properties": {"threshold_policy_id": {"type": "string", "minLength": 1}, "metric": {"type": "string", "minLength": 1}, "operator": {"type": "string", "minLength": 1}, "threshold": {}, "window": {"type": "string", "minLength": 1}, "minimum_observations": {"type": "integer", "minimum": 0}, "effective_from": {"type": "string", "minLength": 1}, "effective_to": {"type": ["string", "null"]}, "version": {"type": "string", "minLength": 1}, "owner_approved": {"type": "boolean"}, "approval_reference": {"type": ["string", "null"]}, "status": {"enum": ["DRAFT", "APPROVED", "RETIRED"]}}, "additionalProperties": false
+}

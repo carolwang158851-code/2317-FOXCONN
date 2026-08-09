@@ -1,0 +1,20 @@
+{
+  "contractId": "P1008_REPORT_GOVERNANCE",
+  "contractVersion": "1.0",
+  "status": "G1_I1_DETERMINISTIC_CORE",
+  "supportedEventTypes": ["MONTHLY_REVENUE", "QUARTERLY_EARNINGS", "EARNINGS_CALL", "MATERIAL_COMPANY_DISCLOSURE", "APPLE_OFFICIAL_PRODUCT_EVENT", "APPLE_OFFICIAL_GUIDANCE_EVENT", "AI_SERVER_MAJOR_ORDER", "AI_SERVER_MATERIAL_SUPPLY_CHAIN_CHANGE", "MATERIAL_FX_CHANGE", "MATERIAL_TARIFF_OR_POLICY_CHANGE", "APPROVED_PRICE_VOLUME_POSITIONING_ANOMALY"],
+  "hashAlgorithm": "SHA-256",
+  "rootHash": "57A01B478EA51A3BC614FACDB5432AA6E3287F5D06D485E5D95F6222A8EF1832",
+  "artifacts": [
+    {"path": "REPORT_GOVERNANCE_CONTRACT.md", "sha256": "9E326882767782904C336ACC2D383B661525B8B5B42EE9F9A8B768B9CCEC36BE", "sizeBytes": 2112},
+    {"path": "schemas/core_view_change_decision.schema.json", "sha256": "79242A7C875D01EFDF70B8FCED975D6693C9F022AE8CDED5F295EE619CECC585", "sizeBytes": 1497},
+    {"path": "schemas/event_evidence.schema.json", "sha256": "11D7B29B95663A90B2A7678967BA20ACCEC978D2C74674A91A2370232D0B7053", "sizeBytes": 1873},
+    {"path": "schemas/materiality_threshold_policy.schema.json", "sha256": "E4916EE2991D8668921F1B5A144DFAF7D1E3B6DB36C40160BB64AE7A2DC240D9", "sizeBytes": 933},
+    {"path": "schemas/model_provenance.schema.json", "sha256": "F3AEB2FFC42BCBED8C6C3AC0E527193739F214C63D78B4EFDE1EB1FB8B2BB5AC", "sizeBytes": 1121},
+    {"path": "schemas/publication_decision.schema.json", "sha256": "389FDE777970DC2344986F04E64AA0489CEEB5C0A075A98535335DF355F02880", "sizeBytes": 1189},
+    {"path": "schemas/report_decision_receipt.schema.json", "sha256": "7DD4082927900EA69764A8C159C20BDF955917971ACDC554B4890DA1F36CCEFD", "sizeBytes": 1461},
+    {"path": "schemas/report_trigger_decision.schema.json", "sha256": "BDF179204ED1D17F8245E0E159F611AACEFEE2D797E7C30760AE18CFF5E9958C", "sizeBytes": 1557}
+  ],
+  "backwardCompatibility": "Additive G1-I1 governance core; frozen v1.0 contracts and runtime integrations are unchanged",
+  "actionable": false
+}
