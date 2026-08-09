@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -83,6 +84,18 @@ PHASEB1_OPS_R2_ACCEPTANCE_RECORD = (
 PHASEB1_OPS_R2_ACCEPTANCE_SHA256 = (
     "76D58C43D8622A1F069D554D0B435756EE1679E48DF54EF78EC4714DE1E8C781"
 )
+PHASEB1_OPS_R2_R1_PORTABILITY_AMENDMENT = (
+    PACKAGE_ROOT
+    / "contracts"
+    / "p1008_report_production"
+    / "acceptance"
+    / "v1.1"
+    / "PHASE_B1_OPS_R2_R1_CROSS_PLATFORM_BOUNDARY_PORTABILITY_AMENDMENT.json"
+)
+R2_ORIGINAL_HEAD = "48900b7d88202e06926caa7cdf6781f36de66c02"
+R2_PARENT_HEAD = "5f744c458d0af270602723e3b6e6ca75777d3f58"
+R2_LINK_FROM = "output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html"
+R2_LINK_TO = "ui/P1008_WARROOM_COMMAND_CENTER_v24.html"
 LEGACY_AUTHORITY_MANIFEST_SHA256 = (
     "8BA304C36C224F1F8ADF78CB871A8200FDA0656BD5824801330EAF6EAF855847"
 )
@@ -99,6 +112,39 @@ AUTHORITY_BASELINE_FIXTURE = (
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
+
+
+def canonical_git_blob_bytes(relative: str, revision: str = "HEAD") -> bytes:
+    if not relative or relative.startswith("/") or ".." in Path(relative).parts:
+        raise ValueError(f"invalid governed path: {relative!r}")
+    result = subprocess.run(
+        ["git", "-C", str(PACKAGE_ROOT), "cat-file", "blob", f"{revision}:{relative}"],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        raise ValueError(
+            f"canonical Git blob unavailable for {revision}:{relative}: "
+            f"{result.stderr.decode('utf-8', errors='replace').strip()}"
+        )
+    if not result.stdout:
+        raise ValueError(f"canonical Git blob is empty for {revision}:{relative}")
+    return result.stdout
+
+
+def verify_portability_boundary(relative: str, entry: dict[str, object]) -> None:
+    expected = entry.get("canonicalGitBlobSha256")
+    blob_id = entry.get("canonicalGitBlobId")
+    if not isinstance(expected, str) or not re.fullmatch(r"[A-F0-9]{64}", expected):
+        raise ValueError(f"missing or invalid canonical SHA for {relative}")
+    if not isinstance(blob_id, str) or not re.fullmatch(r"[0-9a-f]{40}", blob_id):
+        raise ValueError(f"missing or invalid canonical blob ID for {relative}")
+    actual = hashlib.sha256(canonical_git_blob_bytes(relative)).hexdigest().upper()
+    if actual != expected:
+        raise ValueError(
+            f"canonical Git blob SHA mismatch for {relative}: {actual} != {expected}"
+        )
 
 
 class GovernanceBoundaryTests(unittest.TestCase):
@@ -224,7 +270,7 @@ class GovernanceBoundaryTests(unittest.TestCase):
         self.assertTrue(receipt["constraints"]["phaseB2NotStarted"])
         self.assertFalse(receipt["actionable"])
 
-    def test_phaseb1_ops_r2_boundary_changes_are_separately_authorized(self) -> None:
+    def test_phaseb1_ops_r2_receipt_remains_immutable(self) -> None:
         self.assertEqual(
             sha256(PHASEB1_OPS_R2_ACCEPTANCE_RECORD),
             PHASEB1_OPS_R2_ACCEPTANCE_SHA256,
@@ -242,17 +288,96 @@ class GovernanceBoundaryTests(unittest.TestCase):
         self.assertTrue(receipt["implementationAuthorized"])
         self.assertFalse(receipt["finalAcceptanceGranted"])
         self.assertEqual(receipt["deliveryBoundary"], "DRAFT_PR_ONLY")
-        for relative, change in receipt["authorizedBoundaryChanges"].items():
-            with self.subTest(path=relative):
-                self.assertEqual(
-                    sha256(PACKAGE_ROOT / relative),
-                    change["phaseB1OpsR2Sha256"],
-                )
         self.assertTrue(receipt["constraints"]["formalAuthorityReadOnly"])
         self.assertTrue(receipt["constraints"]["rollingBriefNonArchival"])
         self.assertTrue(receipt["constraints"]["phaseB1Point5NotStarted"])
         self.assertTrue(receipt["constraints"]["phaseB2NotStarted"])
         self.assertFalse(receipt["actionable"])
+
+    def test_phaseb1_ops_r2_r1_portability_amendment_uses_canonical_git_blobs(
+        self,
+    ) -> None:
+        historical = json.loads(
+            PHASEB1_OPS_R2_ACCEPTANCE_RECORD.read_text(encoding="utf-8")
+        )
+        amendment = json.loads(
+            PHASEB1_OPS_R2_R1_PORTABILITY_AMENDMENT.read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            amendment["amendmentType"],
+            "CROSS_PLATFORM_BOUNDARY_BASELINE_PORTABILITY",
+        )
+        self.assertEqual(
+            amendment["defectClassification"],
+            "MIXED_BASELINE_PROVENANCE_DEFECT",
+        )
+        self.assertEqual(amendment["originalR2Candidate"], R2_ORIGINAL_HEAD)
+        self.assertTrue(amendment["originalR2AuthorizationReceipt"]["historicalRecordPreserved"])
+        self.assertFalse(amendment["productionSemanticContentChangedByAmendment"])
+        self.assertFalse(amendment["authorityChanged"])
+        self.assertFalse(amendment["ruleHoldMidrMrdChanged"])
+        self.assertFalse(amendment["sqliteChanged"])
+        self.assertFalse(amendment["actionable"])
+
+        boundaries = amendment["canonicalBoundaries"]
+        self.assertEqual(
+            set(boundaries),
+            {
+                "SOP_v4.html",
+                "report_viewer.html",
+                "reports.html",
+                "src/index_p1008_v7.source.html",
+                "dist/index_p1008_v7.bundle.js",
+            },
+        )
+        for relative, entry in boundaries.items():
+            with self.subTest(path=relative):
+                self.assertEqual(
+                    entry["historicalReceiptSha256"],
+                    historical["authorizedBoundaryChanges"][relative][
+                        "phaseB1OpsR2Sha256"
+                    ],
+                )
+                verify_portability_boundary(relative, entry)
+                canonical = canonical_git_blob_bytes(relative)
+                self.assertEqual(
+                    canonical_git_blob_bytes(relative, R2_PARENT_HEAD).replace(
+                        R2_LINK_FROM.encode("utf-8"), R2_LINK_TO.encode("utf-8")
+                    ),
+                    canonical,
+                )
+                self.assertEqual(
+                    hashlib.sha256(canonical.replace(b"\n", b"\r\n")).hexdigest().upper()
+                    != entry["canonicalGitBlobSha256"],
+                    True,
+                )
+
+    def test_phaseb1_ops_r2_r1_canonical_identity_fails_closed(self) -> None:
+        amendment = json.loads(
+            PHASEB1_OPS_R2_R1_PORTABILITY_AMENDMENT.read_text(encoding="utf-8")
+        )
+        entry = dict(amendment["canonicalBoundaries"]["SOP_v4.html"])
+        with self.assertRaisesRegex(ValueError, "unavailable"):
+            canonical_git_blob_bytes("missing-governed-boundary.html")
+        entry.pop("canonicalGitBlobSha256")
+        with self.assertRaisesRegex(ValueError, "missing or invalid canonical SHA"):
+            verify_portability_boundary("SOP_v4.html", entry)
+        wrong = dict(amendment["canonicalBoundaries"]["SOP_v4.html"])
+        wrong["canonicalGitBlobSha256"] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "canonical Git blob SHA mismatch"):
+            verify_portability_boundary("SOP_v4.html", wrong)
+
+    def test_phaseb1_ops_r2_r1_explicit_eol_policies_remain_declared(self) -> None:
+        for relative in ("report_viewer.html", "reports.html"):
+            with self.subTest(path=relative):
+                result = subprocess.run(
+                    ["git", "-C", str(PACKAGE_ROOT), "check-attr", "eol", "--", relative],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                self.assertEqual(result.stdout.strip(), f"{relative}: eol: lf")
 
     def test_contract_root_still_matches_owner_accepted_hash(self) -> None:
         result = self.loader.verify_manifest()
