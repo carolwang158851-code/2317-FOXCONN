@@ -263,6 +263,17 @@ PHASEB1_HASH_GOVERNED_PATHS = {
     "tools/warroom_periodic_report_v1.py",
     "tools/warroom_rolling_brief.py",
 }
+G1_REPORT_GOVERNANCE_HASH_GOVERNED_PATHS = {
+    "contracts/p1008_report_governance/v1.0/REPORT_GOVERNANCE_CONTRACT.md",
+    "contracts/p1008_report_governance/v1.0/contract.manifest.json",
+    "contracts/p1008_report_governance/v1.0/schemas/event_evidence.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/report_trigger_decision.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/core_view_change_decision.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/publication_decision.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/model_provenance.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/report_decision_receipt.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/materiality_threshold_policy.schema.json",
+}
 
 
 def sha256(path: Path) -> str:
@@ -288,6 +299,7 @@ def expected_hash_governed_paths() -> set[str]:
         set(PHASE3A_R_TARGETFILES)
         | set(TEST_CONSTANT_PATHS)
         | set(PHASEB1_HASH_GOVERNED_PATHS)
+        | set(G1_REPORT_GOVERNANCE_HASH_GOVERNED_PATHS)
     )
     for relative_root in (
         "contracts/p1008_research_plugin/v1.0",
@@ -364,7 +376,7 @@ class Phase2ABoundaryTests(unittest.TestCase):
             entries.append(path)
         self.assertEqual(len(entries), len(set(entries)))
         self.assertEqual(set(entries), expected_hash_governed_paths())
-        self.assertEqual(len(entries), 157)
+        self.assertEqual(len(entries), 166)
 
     def test_crlf_and_mixed_manifest_bytes_are_rejected(self) -> None:
         for rejected in (MANIFEST_CRLF_SHA256, MANIFEST_MIXED_SHA256):

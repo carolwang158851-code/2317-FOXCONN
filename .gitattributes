@@ -92,7 +92,15 @@ contracts/p1008_research_plugin/acceptance/v1.1/PHASE_ROUTING_ACCEPTANCE_RECORD.
 contracts/p1008_research_plugin/acceptance/v1.1/evidence/PHASE_A_MACRO_ROW_IDENTITY_RECEIPT.json text eol=lf
 contracts/p1008_research_plugin/acceptance/v1.1/evidence/phase_a_twse_202607/2026-07.twse.raw.csv binary
 contracts/p1008_research_plugin/acceptance/v1.1/evidence/phase_a_twse_202607/2026-07.receipt.json text eol=lf
-contracts/p1008_report_governance/** text eol=lf
+contracts/p1008_report_governance/v1.0/REPORT_GOVERNANCE_CONTRACT.md text eol=lf
+contracts/p1008_report_governance/v1.0/contract.manifest.json text eol=lf
+contracts/p1008_report_governance/v1.0/schemas/event_evidence.schema.json text eol=lf
+contracts/p1008_report_governance/v1.0/schemas/report_trigger_decision.schema.json text eol=lf
+contracts/p1008_report_governance/v1.0/schemas/core_view_change_decision.schema.json text eol=lf
+contracts/p1008_report_governance/v1.0/schemas/publication_decision.schema.json text eol=lf
+contracts/p1008_report_governance/v1.0/schemas/model_provenance.schema.json text eol=lf
+contracts/p1008_report_governance/v1.0/schemas/report_decision_receipt.schema.json text eol=lf
+contracts/p1008_report_governance/v1.0/schemas/materiality_threshold_policy.schema.json text eol=lf
 rules/RULE_STATUS_MANIFEST.json text eol=lf
 tools/p1008_app_server.py text eol=lf
 tools/p1008_build_phaseb1_final_review.py text eol=lf
