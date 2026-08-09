@@ -25,10 +25,12 @@ def evidence(event_type: str = "MONTHLY_REVENUE", **overrides: object) -> dict:
         "event_status": "MATERIAL_EVENT_CONFIRMED", "occurred_at_utc": NOW,
         "published_at_utc": NOW, "received_at_utc": NOW, "data_cutoff": "2026-07-27",
         "source_id": "SOURCE-001", "source_type": "AUTHORITY_DATASET",
-        "source_locator": "data/authority.csv#2026-07-27", "source_tier": 1,
+        "source_class": "AUTHORITY", "source_locator": "data/authority.csv#2026-07-27", "source_tier": "OFFICIAL",
         "source_hash": HASH, "evidence_ids": ["E-001"], "claim_summary": "Validated fact.",
         "affected_kpis": ["revenue"], "materiality": "MATERIAL", "novelty": "NEW",
-        "verification_status": "VERIFIED", "counter_evidence_ids": [],
+        "evidence_status": "CONFIRMED", "validation_status": "VERIFIED", "confidence": 0.95,
+        "quality_metadata": {"review": "deterministic"}, "provenance": {"collector": "test"}, "originating_chain_id": "CHAIN-001",
+        "canonical_event_id": "MONTHLY_REVENUE_202607", "verification_status": "VERIFIED", "counter_evidence_ids": [],
         "missing_evidence": [], "source_conflicts": [], "actionable": False,
     }
     value.update(overrides)
@@ -56,6 +58,46 @@ class ReportGovernanceG1Tests(unittest.TestCase):
         for field, value in (("source_id", ""), ("source_hash", "not-a-hash"), ("verification_status", "UNVERIFIED")):
             with self.subTest(field=field), self.assertRaises(governance.GovernanceValidationError):
                 governance.validate_event_evidence(evidence(**{field: value}))
+
+    def test_source_classes_and_discovery_cannot_self_confirm_or_trigger(self) -> None:
+        discovery = evidence(source_class="DISCOVERY", evidence_status="DISCOVERED", source_tier="UNVERIFIED")
+        self.assertFalse(governance.evaluate_report_trigger(report_key="P1008_DAILY_20260809", revision=1, event_evidence=[discovery], evaluated_at_utc=NOW)["report_trigger_valid"])
+        with self.assertRaises(governance.GovernanceValidationError):
+            governance.validate_event_evidence(evidence(source_class="DISCOVERY", evidence_status="CONFIRMED", source_tier="UNVERIFIED"))
+
+    def test_deduplication_and_cross_validation_preserve_authority_priority(self) -> None:
+        primary = evidence()
+        secondary = evidence(source_id="SOURCE-002", source_class="SECONDARY", source_tier="MEDIA", originating_chain_id="CHAIN-002")
+        dedup = governance.deduplicate_event_evidence([primary, secondary])
+        self.assertEqual(dedup["duplicate_count"], 0)
+        self.assertEqual(len(dedup["source_ids"]), 2)
+        self.assertEqual(governance.evaluate_cross_validation([primary, secondary])["evidence_state"], "AUTHORITY_CONFIRMED")
+        discovery = evidence(source_class="DISCOVERY", evidence_status="DISCOVERED", source_tier="UNVERIFIED")
+        self.assertEqual(governance.evaluate_cross_validation([discovery])["evidence_state"], "WATCH")
+        distinct = governance.canonical_event_fingerprint(event_type="MONTHLY_REVENUE", canonical_event_id="MONTHLY_REVENUE_202608", occurred_at_utc=NOW)
+        self.assertNotEqual(dedup["event_fingerprint"], distinct)
+
+    def test_two_independent_secondary_media_sources_are_cross_validated_but_not_authority_confirmed(self) -> None:
+        first = evidence(source_id="MEDIA-001", source_class="SECONDARY", source_tier="MEDIA", originating_chain_id="EDITORIAL-001")
+        second = evidence(source_id="MEDIA-002", source_class="SECONDARY", source_tier="MEDIA", originating_chain_id="EDITORIAL-002")
+        cross = governance.evaluate_cross_validation([first, second])
+        self.assertEqual(cross["evidence_state"], "CROSS_VALIDATED")
+        self.assertTrue(cross["cross_validation_passed"])
+        trigger = governance.evaluate_report_trigger(report_key="P1008_MONTHLY_REVENUE_202607", revision=1, event_evidence=[first, second], evaluated_at_utc=NOW)
+        self.assertTrue(trigger["report_trigger_valid"])
+        self.assertFalse(trigger["report_generated"])
+        republished = evidence(source_id="MEDIA-002", source_class="SECONDARY", source_tier="MEDIA", originating_chain_id="EDITORIAL-001")
+        self.assertEqual(governance.evaluate_cross_validation([first, republished])["evidence_state"], "REVIEW_REQUIRED")
+        conflicting = evidence(source_id="MEDIA-003", source_class="SECONDARY", source_tier="MEDIA", originating_chain_id="EDITORIAL-003", claim_summary="Contradictory claim.")
+        conflict = governance.evaluate_cross_validation([evidence(), conflicting])
+        self.assertEqual(conflict["evidence_state"], "AUTHORITY_CONFLICT")
+        self.assertFalse(governance.evaluate_report_trigger(report_key="P1008_MONTHLY_REVENUE_202607", revision=1, event_evidence=[evidence(), conflicting], evaluated_at_utc=NOW)["report_trigger_valid"])
+
+    def test_provider_failure_is_fail_closed_without_retry_or_authority_write(self) -> None:
+        outcome = governance.evaluate_provider_failure(provider_id="DISCOVERY_PROVIDER", failure_class="HTTP_403_POLICY_BLOCKED", retryable=False)
+        self.assertEqual(outcome["status"], "FAIL_CLOSED")
+        self.assertFalse(outcome["retry_performed"])
+        self.assertFalse(outcome["authority_write_permitted"])
 
     def test_no_material_change_never_generates_or_archives(self) -> None:
         decision = governance.evaluate_report_trigger(report_key="P1008_DAILY_20260809", revision=1, event_evidence=[], evaluated_at_utc=NOW)
@@ -88,15 +130,18 @@ class ReportGovernanceG1Tests(unittest.TestCase):
             with self.subTest(reason=reason):
                 kwargs = {"official_confirmation": False, "independent_high_quality_source_count": 0, "financial_reflection": False, "thesis_invalidation": False}
                 kwargs.update(reason)
-                decision = governance.evaluate_core_view_change(supporting_evidence_ids=["E-001"], counter_evidence_ids=[], owner_approved=False, owner_approval_reference=None, prior_core_view_hash=HASH, proposed_core_view_hash=OTHER_HASH, **kwargs)
+                support = [evidence(source_id="MEDIA-001", source_class="SECONDARY", source_tier="MEDIA", originating_chain_id="EDITORIAL-001"), evidence(source_id="MEDIA-002", source_class="SECONDARY", source_tier="MEDIA", originating_chain_id="EDITORIAL-002")] if kwargs["independent_high_quality_source_count"] else []
+                decision = governance.evaluate_core_view_change(supporting_evidence_ids=["E-001"], counter_evidence_ids=[], owner_approved=False, owner_approval_reference=None, prior_core_view_hash=HASH, proposed_core_view_hash=OTHER_HASH, supporting_evidence=support, **kwargs)
                 self.assertTrue(decision["eligibility"])
                 self.assertFalse(decision["core_view_changed"])
 
     def test_core_view_owner_approval_is_mandatory_and_tier_five_is_not_high_quality(self) -> None:
         accepted = governance.evaluate_core_view_change(supporting_evidence_ids=["E-001"], counter_evidence_ids=[], official_confirmation=True, independent_high_quality_source_count=0, financial_reflection=False, thesis_invalidation=False, owner_approved=True, owner_approval_reference="OWNER_APPROVE_CORE_VIEW", prior_core_view_hash=HASH, proposed_core_view_hash=OTHER_HASH)
         self.assertTrue(accepted["core_view_changed"])
-        tier_five_only = governance.evaluate_core_view_change(supporting_evidence_ids=["E-005"], counter_evidence_ids=[], official_confirmation=False, independent_high_quality_source_count=0, financial_reflection=False, thesis_invalidation=False, owner_approved=False, owner_approval_reference=None, prior_core_view_hash=HASH, proposed_core_view_hash=OTHER_HASH)
+        tier_five_only = governance.evaluate_core_view_change(supporting_evidence_ids=["E-005"], counter_evidence_ids=[], official_confirmation=False, independent_high_quality_source_count=0, financial_reflection=False, thesis_invalidation=False, owner_approved=False, owner_approval_reference=None, prior_core_view_hash=HASH, proposed_core_view_hash=OTHER_HASH, supporting_evidence=[evidence(source_class="SECONDARY", source_tier="UNVERIFIED")])
         self.assertFalse(tier_five_only["eligibility"])
+        with self.assertRaises(governance.GovernanceValidationError):
+            governance.evaluate_core_view_change(supporting_evidence_ids=["E-005"], counter_evidence_ids=[], official_confirmation=False, independent_high_quality_source_count=2, financial_reflection=False, thesis_invalidation=False, owner_approved=False, owner_approval_reference=None, prior_core_view_hash=HASH, proposed_core_view_hash=OTHER_HASH, supporting_evidence=[evidence(source_class="SECONDARY", source_tier="UNVERIFIED")])
         with self.assertRaises(governance.GovernanceValidationError):
             governance.evaluate_core_view_change(supporting_evidence_ids=[], counter_evidence_ids=[], official_confirmation=True, independent_high_quality_source_count=0, financial_reflection=False, thesis_invalidation=False, owner_approved=True, owner_approval_reference=None, prior_core_view_hash=HASH, proposed_core_view_hash=OTHER_HASH)
 
@@ -115,6 +160,12 @@ class ReportGovernanceG1Tests(unittest.TestCase):
         self.assertEqual(governance.validate_model_provenance(provenance)["status"], "NOT_USED")
         with self.assertRaises(governance.GovernanceValidationError):
             governance.validate_model_provenance({**provenance, "estimated_cost": 0})
+        with self.assertRaises(governance.GovernanceValidationError):
+            governance.validate_model_provenance({**provenance, "billing_metadata": {"estimated_cost": 0}})
+
+    def test_event_evidence_rejects_unknown_contract_fields(self) -> None:
+        with self.assertRaises(governance.GovernanceValidationError):
+            governance.validate_event_evidence(evidence(unapproved_field="not governed"))
 
     def test_private_library_eligibility_is_represented_but_never_appended(self) -> None:
         eligible = governance.evaluate_private_library_eligibility(material_event_confirmed=True, report_trigger_valid=True, report_validation_pass=True, actionable=False)
@@ -124,17 +175,18 @@ class ReportGovernanceG1Tests(unittest.TestCase):
 
     def test_receipt_binds_same_report_key_revision_and_is_canonical(self) -> None:
         trigger = governance.evaluate_report_trigger(report_key="P1008_MONTHLY_REVENUE_202607", revision=2, event_evidence=[evidence()], evaluated_at_utc=NOW)
-        trigger["decision_id"] = "TRIGGER-001"
         core = governance.evaluate_core_view_change(supporting_evidence_ids=[], counter_evidence_ids=[], official_confirmation=False, independent_high_quality_source_count=0, financial_reflection=False, thesis_invalidation=False, owner_approved=False, owner_approval_reference=None, prior_core_view_hash=HASH, proposed_core_view_hash=OTHER_HASH)
-        core["decision_id"] = "CORE-001"
         publication = governance.evaluate_publication(report_key="P1008_MONTHLY_REVENUE_202607", revision=2, report_hash=HASH, audience="PRIVATE", fact_check_status="PASS", owner_approved=False, owner_approval_reference=None)
-        publication["decision_id"] = "PUBLICATION-001"
         receipt = governance.build_report_decision_receipt(receipt_id="RECEIPT-001", report_key="P1008_MONTHLY_REVENUE_202607", revision=2, authority_cutoffs=["2026-07-27"], event_evidence_ids=["E-001"], report_trigger_decision=trigger, core_view_change_decision=core, publication_decision=publication, model_provenances=[], report_validation_pass=True, report_artifact_hashes=[HASH], created_at_utc=NOW)
         self.assertTrue(receipt["private_library_eligible"])
         self.assertFalse(receipt["library_appended"])
         self.assertRegex(receipt["canonical_sha256"], r"^[A-F0-9]{64}$")
         with self.assertRaises(governance.GovernanceValidationError):
             governance.build_report_decision_receipt(receipt_id="RECEIPT-002", report_key="P1008_OTHER_202607", revision=2, authority_cutoffs=[], event_evidence_ids=[], report_trigger_decision=trigger, core_view_change_decision=core, publication_decision=publication, model_provenances=[], report_validation_pass=True, report_artifact_hashes=[HASH], created_at_utc=NOW)
+        with self.assertRaises(governance.GovernanceValidationError):
+            governance.build_report_decision_receipt(receipt_id="RECEIPT-003", report_key="P1008_MONTHLY_REVENUE_202607", revision=2, authority_cutoffs=["2026-07-27"], event_evidence_ids=["WRONG"], report_trigger_decision=trigger, core_view_change_decision=core, publication_decision=publication, model_provenances=[], report_validation_pass=True, report_artifact_hashes=[HASH], created_at_utc=NOW)
+        with self.assertRaises(governance.GovernanceValidationError):
+            governance.build_report_decision_receipt(receipt_id="RECEIPT-004", report_key="P1008_MONTHLY_REVENUE_202607", revision=2, authority_cutoffs=["2026-07-27"], event_evidence_ids=["E-001"], report_trigger_decision={**trigger, "trigger_reason": "tampered"}, core_view_change_decision=core, publication_decision=publication, model_provenances=[], report_validation_pass=True, report_artifact_hashes=[HASH], created_at_utc=NOW)
 
     def test_contract_manifest_and_schemas_are_parseable(self) -> None:
         root = ROOT / "contracts/p1008_report_governance/v1.0"

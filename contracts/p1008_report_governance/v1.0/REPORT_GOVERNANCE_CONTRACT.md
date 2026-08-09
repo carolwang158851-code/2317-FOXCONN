@@ -35,3 +35,37 @@ All cross-platform receipt identity uses the established canonical JSON
 serialization in `phaseb1_common`: sorted keys, compact separators, UTF-8, LF,
 and no NaN values. This contract does not set business thresholds. A threshold
 is usable only when a supplied policy is explicitly Owner-approved.
+
+## Data and news minimum governance
+
+Every source is classified as `AUTHORITY`, `SECONDARY`, or `DISCOVERY`.
+`AUTHORITY` is the only class that can confirm an authority fact. `SECONDARY`
+can corroborate a claim through two independent, high-quality editorial chains.
+`DISCOVERY` is a lead only: it cannot self-confirm an event,
+change a core view, create a report, publish, or write authority.
+
+EventEvidence has a stable event identity, canonical event ID, source identity,
+publication and retrieval timestamps, source class, the frozen named source tier
+(`CSV_AUTHORITY`, `OFFICIAL`, `PUBLIC_MARKET`, `MEDIA`, `OWNER_NOTE`, or
+`UNVERIFIED`), an originating/editorial-chain ID, evidence/validation status,
+confidence, quality metadata, and provenance. Multiple reports of one event are
+deduplicated by the canonical event fingerprint, which is a canonical hash of
+event type, canonical event ID, and occurrence timestamp. Original authority
+and syndicated/secondary sources remain separately listed.
+
+Cross-validation is evidence-state only and never generates a report. Its states
+are `WATCH`, `REVIEW_REQUIRED`, `CROSS_VALIDATED`, `AUTHORITY_CONFIRMED`, and
+`AUTHORITY_CONFLICT`. Two independent `MEDIA` Secondary sources with different
+source IDs and different originating/editorial chains are `CROSS_VALIDATED`;
+they can satisfy a later ReportTriggerDecision prerequisite for an internal
+report. Actual report eligibility is owned exclusively by ReportTriggerDecision.
+Authority/news conflicts become `AUTHORITY_CONFLICT`, block that prerequisite,
+and require review. Authority facts prevail over conflicting news until a
+reviewer resolves the conflict.
+
+Write boundaries are strict: authority datasets are read-only to this contract;
+an evidence ledger or staging/shadow runtime may retain non-actionable records;
+Discovery providers may never overwrite authority. Provider outcomes are
+recorded as `SUCCESS_NO_RELEVANT_EVENT`, `HTTP_403_POLICY_BLOCKED`,
+`TIMEOUT_TRANSIENT`, or `SOURCE_FAILED`. They do not retry, publish, or write
+authority in G1-I1; non-success outcomes fail closed.
