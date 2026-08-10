@@ -195,7 +195,7 @@ class PhaseRoutingConformanceTests(unittest.TestCase):
         )
         receipt_ref = self.record["authorityBaselineReceipts"]["PHASE_A_CLOSURE_SIX"]
         self.assertEqual(
-            hashlib.sha256((ROOT / receipt_ref["path"]).read_bytes())
+            hashlib.sha256(self.runner.git_blob_bytes(ROOT, receipt_ref["path"]))
             .hexdigest()
             .upper(),
             receipt_ref["sha256"],

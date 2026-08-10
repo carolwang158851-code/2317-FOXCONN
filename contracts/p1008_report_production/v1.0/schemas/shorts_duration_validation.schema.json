@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://report/v1.0/shorts_duration_validation",
+  "type": "object",
+  "required": ["recordType", "speechRateAssumption", "spokenCharactersPerSecond", "spokenCharacterCount", "estimatedSpokenSeconds", "segmentCharacterCounts", "segmentEstimatedSeconds", "segmentIntegrity", "sentenceIntegrityStatus", "numericUnitStatus", "sentenceCompletenessPassed", "numericUnitsPreserved", "spokenTechnicalCodesAbsent", "balancedPunctuationPassed", "noMechanicalTruncation", "allSegmentsSemanticallyComplete", "durationGateStatus", "warnings", "errors", "actionable"],
+  "properties": {
+    "recordType": {"const": "P1008_SHORTS_DURATION_VALIDATION"},
+    "speechRateAssumption": {"type": "string", "minLength": 1},
+    "spokenCharactersPerSecond": {"type": "number", "exclusiveMinimum": 0},
+    "spokenCharacterCount": {"type": "integer", "minimum": 0},
+    "estimatedSpokenSeconds": {"type": "number", "minimum": 0},
+    "segmentCharacterCounts": {"type": "object"},
+    "segmentEstimatedSeconds": {"type": "object"},
+    "segmentIntegrity": {"type": "object", "additionalProperties": {"type": "boolean"}},
+    "sentenceIntegrityStatus": {"enum": ["PASS", "FAIL"]},
+    "numericUnitStatus": {"enum": ["PASS", "FAIL"]},
+    "sentenceCompletenessPassed": {"type": "boolean"},
+    "numericUnitsPreserved": {"type": "boolean"},
+    "spokenTechnicalCodesAbsent": {"type": "boolean"},
+    "balancedPunctuationPassed": {"type": "boolean"},
+    "noMechanicalTruncation": {"type": "boolean"},
+    "allSegmentsSemanticallyComplete": {"type": "boolean"},
+    "durationGateStatus": {"enum": ["PASS", "PASS_WITH_WARNING", "FAIL"]},
+    "warnings": {"type": "array", "items": {"type": "string"}},
+    "errors": {"type": "array", "items": {"type": "string"}},
+    "actionable": {"const": false}
+  },
+  "additionalProperties": false
+}

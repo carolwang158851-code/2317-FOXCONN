@@ -4,6 +4,7 @@ import csv
 import hashlib
 import json
 import re
+import subprocess
 import unittest
 from decimal import Decimal
 from pathlib import Path
@@ -38,10 +39,32 @@ EXPECTED_PATHS = {
     "data/macro_event_observations.csv",
     "data/fx_trend_observations.csv",
 }
+PHASE_A_CLOSURE_RECEIPT = (
+    "contracts/p1008_research_plugin/acceptance/v1.1/"
+    "PHASE_A_AUTHORITY_DATA_CLOSURE_RECEIPT.json"
+)
+PHASE_A_CLOSURE_PORTABILITY_AMENDMENT = (
+    ACCEPTANCE / "PHASE_A_CLOSURE_RECEIPT_PORTABILITY_AMENDMENT.json"
+)
 
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
+
+
+def canonical_git_blob_sha256(relative: str) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), "cat-file", "blob", f"HEAD:{relative}"],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"canonical Git blob unavailable for {relative}: "
+            f"{result.stderr.decode('utf-8', errors='replace').strip()}"
+        )
+    return hashlib.sha256(result.stdout).hexdigest().upper()
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:
@@ -145,9 +168,29 @@ class AuthorityIntegratedBaseline20260729Tests(unittest.TestCase):
         )
 
     def test_integration_receipt_preserves_historical_chain(self) -> None:
-        closure_path = ACCEPTANCE / "PHASE_A_AUTHORITY_DATA_CLOSURE_RECEIPT.json"
+        closure_path = ROOT / PHASE_A_CLOSURE_RECEIPT
         receipt_path = ACCEPTANCE / "PHASE_A_FINAL_INTEGRATION_AMENDMENT_RECEIPT.json"
-        self.assertEqual(sha256(closure_path), EXPECTED_CLOSURE_SHA)
+        self.assertEqual(
+            canonical_git_blob_sha256(PHASE_A_CLOSURE_RECEIPT), EXPECTED_CLOSURE_SHA
+        )
+        amendment = json.loads(
+            PHASE_A_CLOSURE_PORTABILITY_AMENDMENT.read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            amendment["defectClassification"],
+            "CROSS_PLATFORM_RECEIPT_REPRODUCIBILITY_DEFECT",
+        )
+        self.assertEqual(
+            amendment["remediationMethod"], "CANONICAL_GIT_BLOB_VERIFICATION"
+        )
+        self.assertTrue(amendment["historicalReceipt"]["historicalReceiptPreserved"])
+        self.assertEqual(
+            amendment["historicalReceipt"]["canonicalGitBlobSha256"],
+            EXPECTED_CLOSURE_SHA,
+        )
+        self.assertFalse(amendment["authorityChanged"])
+        self.assertFalse(amendment["productionCodeChanged"])
+        self.assertFalse(amendment["actionable"])
         self.assertEqual(sha256(receipt_path), EXPECTED_INTEGRATION_RECEIPT_SHA)
         receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
         self.assertEqual(

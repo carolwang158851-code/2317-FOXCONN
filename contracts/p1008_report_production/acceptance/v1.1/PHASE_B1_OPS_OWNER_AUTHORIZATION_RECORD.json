@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "1.0",
+  "recordId": "P1008_PHASE_B1_OPS_OWNER_AUTHORIZATION_20260802",
+  "scopeId": "P1008-PHASE-B1-OPS-LAUNCHER-REPORT-LIBRARY-RECOVERY",
+  "phase": "PHASE_B1_OPS",
+  "authorizationStatus": "IMPLEMENTATION_AUTHORIZED_DRAFT_PR_ONLY",
+  "implementationAuthorized": true,
+  "finalAcceptanceGranted": false,
+  "base": {
+    "branch": "main",
+    "commit": "bfe19f353a7c26676507beeeb566a6ad60fcbedf"
+  },
+  "priorAuthorization": {
+    "path": "contracts/p1008_report_production/acceptance/v1.0/PHASE_B1_OWNER_AUTHORIZATION_RECORD.json",
+    "sha256": "67AE473810DFD0C01049FDAA32FE5A7685297CBE579808C6A77475BB297C110D"
+  },
+  "authorizedBoundaryChanges": {
+    "launcher.html": {
+      "baseSha256": "41B349691AB6CDEDE6D622F4B5A7FE0ED707F42B8D7BD6D2CD6776EAC2607F91",
+      "phaseB1OpsSha256": "7A25A766D50F2A8514B5C51166FAD5274C6F05B58DB252CE97A325A0508BA998"
+    },
+    "reports.html": {
+      "baseSha256": "1F7012459970556C5B331152F1C658E5748B94F19A7D3C8EE48496EF3CD0F75E",
+      "phaseB1OpsSha256": "098EE5A8CA125E1C6DF5B3C032E6C75960380E736217C00E14FB9FDC7CDC53C9"
+    },
+    "report_viewer.html": {
+      "baseSha256": "2FD346FB24179BD415C8930B0509A56AC84403CD68B8539927AB1AB596C658CD",
+      "phaseB1OpsSha256": "73B34D0D9F95885490D659F2A02142D030561B34E099E0AFCF355201021946B8"
+    },
+    "tools/p1008_app_server.py": {
+      "baseSha256": "03FC1742F308E245B66237CD415FE0BE2184ACFB4E7D0FB2086EF609027B242B",
+      "phaseB1OpsSha256": "282C68BA845CC5CB3EC27AF14D9606806BB27F5312E5851F8E2822F9C959FFEA"
+    },
+    "tools/p1008_open_warroom.py": {
+      "baseSha256": "352AA9E496E9F4C437E49F57900AF32CA5B368327AA53081998B640D7AF3C1FE",
+      "phaseB1OpsSha256": "6D4831EA44DBCB6940DE98B9BEF5DAA3083C436E7A19D9CD5119CA03B2D6DBA2"
+    },
+    "tools/warroom_periodic_report_v1.py": {
+      "baseSha256": "00197A9332244146E094DA2294ADEE8FBF8544035E24AE29F0DC2E198A01523A",
+      "phaseB1OpsSha256": "844DDBDE2AA86FEF8D8AAF2277CFF9AFDC83143240B0A537CC732E3F9DD17EFA"
+    },
+    "tools/warroom_rolling_brief.py": {
+      "baseSha256": "NOT_PRESENT",
+      "phaseB1OpsSha256": "ADFCB93BE7C19BBA66BC19620FE7EE2731802BCA513949612A8B3CC30079A667"
+    },
+    "docs/P1008_PHASE_B1_OPS_LAUNCHER_REPORT_RECOVERY.md": {
+      "baseSha256": "NOT_PRESENT",
+      "phaseB1OpsSha256": "4DF0F79AAD43708A1D1BA0207EBD2EB5AB1D94ED9A65F3634595FA983FBD7DFE"
+    }
+  },
+  "constraints": {
+    "formalAuthorityReadOnly": true,
+    "ruleHoldMidrMrdReadOnly": true,
+    "runtimeSqliteReadOnly": true,
+    "rollingBriefNonArchival": true,
+    "archiveRequiresExplicitReportJob": true,
+    "phaseB1Point5NotStarted": true,
+    "phaseB2NotStarted": true,
+    "externalCalls": {
+      "openAiApi": 0,
+      "webSearch": 0,
+      "deepResearch": 0,
+      "canva": 0,
+      "gemini": 0,
+      "youtube": 0
+    }
+  },
+  "deliveryBoundary": "DRAFT_PR_ONLY",
+  "actionable": false
+}

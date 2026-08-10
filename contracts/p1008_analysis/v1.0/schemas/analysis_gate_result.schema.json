@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://analysis/v1.0/analysis_gate_result",
+  "type": "object",
+  "required": ["status", "analysisPacketSha256", "errors", "warnings", "checkedAtUtc", "actionable"],
+  "properties": {
+    "status": {"enum": ["PASS", "FAIL_CLOSED"]},
+    "analysisPacketSha256": {"type": ["string", "null"]},
+    "errors": {"type": "array"}, "warnings": {"type": "array"},
+    "checkedAtUtc": {"type": "string", "format": "date-time"},
+    "actionable": {"const": false}
+  },
+  "additionalProperties": false
+}

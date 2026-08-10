@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "1.0",
+  "amendmentId": "P1008-PHASE-B1-OPS-R2-R1-CROSS-PLATFORM-BOUNDARY-PORTABILITY",
+  "amendmentType": "CROSS_PLATFORM_BOUNDARY_BASELINE_PORTABILITY",
+  "defectClassification": "MIXED_BASELINE_PROVENANCE_DEFECT",
+  "originalR2AuthorizationReceipt": {
+    "path": "contracts/p1008_report_production/acceptance/v1.1/PHASE_B1_OPS_R2_OWNER_AUTHORIZATION_RECORD.json",
+    "sha256": "76D58C43D8622A1F069D554D0B435756EE1679E48DF54EF78EC4714DE1E8C781",
+    "historicalRecordPreserved": true
+  },
+  "originalR2Candidate": "48900b7d88202e06926caa7cdf6781f36de66c02",
+  "productionSemanticContentChangedByAmendment": false,
+  "authorityChanged": false,
+  "ruleHoldMidrMrdChanged": false,
+  "sqliteChanged": false,
+  "reason": "Historical R2 boundary hashes were calculated from non-canonical Windows worktree materialization. Canonical identity is the raw Git blob for HEAD:path; checkout materialization is verified separately.",
+  "canonicalBoundaries": {
+    "SOP_v4.html": {
+      "historicalReceiptSha256": "12DBEFDED16EDB48332E81B409EA4FA5DC26ACA67748E9D55CC13B321B3ECBD4",
+      "canonicalGitBlobId": "86e7a4a105292529e14e9956fce4b1874d5b77de",
+      "canonicalGitBlobSha256": "068C023E0128ED3D82BCFB35D4D43222C1CFF04EC0CCD6DEF8EC452AC34A893F",
+      "provenanceMethod": "git cat-file blob 48900b7d88202e06926caa7cdf6781f36de66c02:SOP_v4.html",
+      "semanticEquivalence": "LF-normalized Windows materialization equals canonical Git content",
+      "lineEndingMaterializationNote": "Historical expected SHA was a mixed-CRLF Windows worktree value; canonical blob is LF."
+    },
+    "report_viewer.html": {
+      "historicalReceiptSha256": "3852E0B5D04E064705062CF282120ED06279520498205BE0F0525E6A6778F3C3",
+      "canonicalGitBlobId": "87e6ce5ba227cd42bc240cc0be7bd9bd4900165c",
+      "canonicalGitBlobSha256": "49937364646EF73B984D7E19AD6AE754B2D020DCEC1D9084BC0C16B3A863C6C3",
+      "provenanceMethod": "git cat-file blob 48900b7d88202e06926caa7cdf6781f36de66c02:report_viewer.html",
+      "semanticEquivalence": "LF-normalized Windows materialization equals canonical Git content",
+      "lineEndingMaterializationNote": "Historical expected SHA was a mixed-CRLF Windows worktree value; canonical blob is LF."
+    },
+    "reports.html": {
+      "historicalReceiptSha256": "738E8763248E0BFDBEDEAD61BE0BA29254EE57D0FA58C085CA6E28DD3905C1E1",
+      "canonicalGitBlobId": "227c783d03824ba5deb7a6ffa50f3b09fcc35a1e",
+      "canonicalGitBlobSha256": "E6EC59D45DABE676D8D1EB0AE29E9521B1E70BA1577362E86F430DCFCB249861",
+      "provenanceMethod": "git cat-file blob 48900b7d88202e06926caa7cdf6781f36de66c02:reports.html",
+      "semanticEquivalence": "LF-normalized Windows materialization equals canonical Git content",
+      "lineEndingMaterializationNote": "Historical expected SHA was a mixed-CRLF Windows worktree value; canonical blob is LF."
+    },
+    "src/index_p1008_v7.source.html": {
+      "historicalReceiptSha256": "475E07E71D40CB7003B5940A0F2F62B58F57114ADCAB796D68FD4AEDD35C3CAC",
+      "canonicalGitBlobId": "3e26637e6b83454fabb8e0ea5d14a742c097be1a",
+      "canonicalGitBlobSha256": "ED1D1923A05CBC79124D91D10BEC9DD8C3E28F16223D151F3BC80820E834C04A",
+      "provenanceMethod": "git cat-file blob 48900b7d88202e06926caa7cdf6781f36de66c02:src/index_p1008_v7.source.html",
+      "semanticEquivalence": "LF-normalized Windows materialization equals canonical Git content",
+      "lineEndingMaterializationNote": "Historical expected SHA was a mixed-CRLF Windows worktree value; canonical blob is LF."
+    },
+    "dist/index_p1008_v7.bundle.js": {
+      "historicalReceiptSha256": "C881D07CE41F322C1BE7FA6A708E9ABF76B9EB67C0F1ABF9BEAA21811FE8E3CD",
+      "canonicalGitBlobId": "cfaaac9a89a0203ad031d04733349e7a25e1fd63",
+      "canonicalGitBlobSha256": "C881D07CE41F322C1BE7FA6A708E9ABF76B9EB67C0F1ABF9BEAA21811FE8E3CD",
+      "provenanceMethod": "git cat-file blob 48900b7d88202e06926caa7cdf6781f36de66c02:dist/index_p1008_v7.bundle.js",
+      "semanticEquivalence": "LF-normalized Windows materialization equals canonical Git content",
+      "lineEndingMaterializationNote": "Generated bundle canonical baseline is LF; Windows CI materializes this unpinned text file as CRLF."
+    }
+  },
+  "authorizedContentDelta": {
+    "parent": "5f744c458d0af270602723e3b6e6ca75777d3f58",
+    "replacement": {
+      "from": "output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html",
+      "to": "ui/P1008_WARROOM_COMMAND_CENTER_v24.html"
+    },
+    "paths": [
+      "SOP_v4.html",
+      "report_viewer.html",
+      "reports.html",
+      "src/index_p1008_v7.source.html",
+      "dist/index_p1008_v7.bundle.js"
+    ]
+  },
+  "actionable": false
+}

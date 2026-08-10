@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "1.0",
+  "recordId": "P1008_PHASE_B1_OPS_R1_OWNER_AUTHORIZATION_20260802",
+  "scopeId": "P1008-PHASE-B1-OPS-OWNER-REVIEW-REMEDIATION-R1",
+  "phase": "PHASE_B1_OPS_R1",
+  "authorizationStatus": "IMPLEMENTATION_AUTHORIZED_DRAFT_PR_ONLY",
+  "implementationAuthorized": true,
+  "finalAcceptanceGranted": false,
+  "pullRequest": 10,
+  "base": {
+    "branch": "main",
+    "commit": "bfe19f353a7c26676507beeeb566a6ad60fcbedf"
+  },
+  "priorHead": "3bcc36db1b2822bf53cdd4b1631380ca42196f6c",
+  "priorAuthorization": {
+    "path": "contracts/p1008_report_production/acceptance/v1.1/PHASE_B1_OPS_OWNER_AUTHORIZATION_RECORD.json",
+    "sha256": "4AD5A1622DC421865E99E62FC6636E104A30E706179971815A3B3CBAFDF53B3B"
+  },
+  "authorizedBoundaryChanges": {
+    "launcher.html": {
+      "phaseB1OpsSha256": "7A25A766D50F2A8514B5C51166FAD5274C6F05B58DB252CE97A325A0508BA998",
+      "phaseB1OpsR1Sha256": "A0D5CAFDE151CCCCA5342AB719D83130A775965C64429CCE26092FED50FCDDC5"
+    },
+    "tools/p1008_app_server.py": {
+      "phaseB1OpsSha256": "282C68BA845CC5CB3EC27AF14D9606806BB27F5312E5851F8E2822F9C959FFEA",
+      "phaseB1OpsR1Sha256": "B29A78E3F5F89026C2B116149186FBAADE6993A13F4137FDAEF6D7C498E8ADDD"
+    },
+    "tools/warroom_rolling_brief.py": {
+      "phaseB1OpsSha256": "ADFCB93BE7C19BBA66BC19620FE7EE2731802BCA513949612A8B3CC30079A667",
+      "phaseB1OpsR1Sha256": "845DA31F106CB02838971664D69E23E6AC1E3DDB3C4D0DF2585333F20392FF87"
+    },
+    "docs/P1008_PHASE_B1_OPS_LAUNCHER_REPORT_RECOVERY.md": {
+      "phaseB1OpsSha256": "4DF0F79AAD43708A1D1BA0207EBD2EB5AB1D94ED9A65F3634595FA983FBD7DFE",
+      "phaseB1OpsR1Sha256": "2766864047622490A613B6FA060E4974B363BC9489986BEB9C4F79C594477C42"
+    }
+  },
+  "requiredOutcomes": {
+    "launcherGate": "REPORT_LIBRARY_GATE_FAIL_CLOSED",
+    "rollingBriefAlignment": "ROLLING_BRIEF_DATA_ALIGNMENT_GOVERNED",
+    "rollingArtifactIdentity": "ROLLING_ARTIFACT_IDENTITY_VERIFIED"
+  },
+  "constraints": {
+    "formalAuthorityReadOnly": true,
+    "ruleHoldMidrMrdReadOnly": true,
+    "runtimeSqliteReadOnly": true,
+    "rollingBriefNonArchival": true,
+    "phaseB1Point5NotStarted": true,
+    "phaseB2NotStarted": true,
+    "externalCalls": {
+      "openAiApi": 0,
+      "webSearch": 0,
+      "deepResearch": 0,
+      "canva": 0,
+      "gemini": 0,
+      "youtube": 0
+    }
+  },
+  "deliveryBoundary": "DRAFT_PR_ONLY",
+  "actionable": false
+}

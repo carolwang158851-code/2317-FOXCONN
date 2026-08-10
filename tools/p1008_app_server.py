@@ -20,11 +20,14 @@ import sys
 import threading
 import time
 import urllib.parse
+import uuid
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import owner_publish_csv_v2 as owner_publish
+import warroom_report_governance as report_governance
+import warroom_rolling_brief as rolling_brief
 
 
 UTF8_MIME_TYPES = {
@@ -54,7 +57,7 @@ FORMAL_CSV_FILES = [
 STATE_REL = "runtime/p1008_app_state.json"
 MARKET_ACTIVITY_STATUS_REL = "runtime/market_activity_incremental/latest_status.json"
 SOURCE_MANIFEST_REL = "data/NEWS_SCAN_SOURCE_MANIFEST.json"
-SERVER_VERSION = "P1008_APP_SERVER_20260719_MARKET_ACTIVITY_V1"
+SERVER_VERSION = "P1008_APP_SERVER_20260802_PHASEB1_OPS_V1"
 
 WEEKDAY_ZH = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"]
 FIELD_LABEL_ZH = {
@@ -132,6 +135,23 @@ def formal_csv_hashes(package_root: Path) -> dict[str, str]:
         path = package_root / rel
         hashes[rel] = sha256_file(path) if path.exists() else "MISSING"
     return hashes
+
+
+def git_head(package_root: Path) -> str:
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(package_root), "rev-parse", "HEAD"],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "UNKNOWN"
+    value = completed.stdout.strip()
+    return value if completed.returncode == 0 and value else "UNKNOWN"
 
 
 def parse_candidate_date(value: str) -> date | None:
@@ -299,7 +319,10 @@ def approved_network_sources(manifest: dict[str, Any]) -> list[dict[str, Any]]:
 
 class P1008JobManager:
     def __init__(self, package_root: Path) -> None:
-        self.package_root = package_root
+        self.package_root = package_root.resolve()
+        self.resolved_package_root = str(self.package_root)
+        self.git_head = git_head(self.package_root)
+        self.server_instance_id = uuid.uuid4().hex
         self.lock = threading.Lock()
         self.active_thread: threading.Thread | None = None
         self.state = self._initial_state()
@@ -333,6 +356,13 @@ class P1008JobManager:
         with self.lock:
             state = dict(self.state)
         state["serverVersion"] = SERVER_VERSION
+        state["resolvedPackageRoot"] = self.resolved_package_root
+        state["gitHead"] = self.git_head
+        authority_manifest = self.package_root / "data/CSV_AUTHORITY_MANIFEST.json"
+        state["authorityManifestSha256"] = (
+            sha256_file(authority_manifest) if authority_manifest.is_file() else "MISSING"
+        )
+        state["serverInstanceId"] = self.server_instance_id
         state["serverContext"] = server_context()
         state["pendingOwnerReview"] = self.pending_owner_review()
         state["sourceManifest"] = self.source_manifest_status()
@@ -387,12 +417,16 @@ class P1008JobManager:
     def latest_report_status(self) -> dict[str, Any]:
         manifest = read_json(self.package_root / "runtime" / "warroom_report_manifest.json", default={}) or {}
         latest = manifest.get("latest", {}) if isinstance(manifest.get("latest", {}), dict) else {}
+        health = rolling_brief.report_library_health(self.package_root)
         return {
             "manifestPath": "runtime/warroom_report_manifest.json",
             "count": len(manifest.get("reports", []) or []),
             "latestDaily": latest.get("daily"),
             "latestWeekly": latest.get("weekly"),
             "latestMonthly": latest.get("monthly"),
+            "latestRollingBriefDate": health.get("latestRollingBriefDate", ""),
+            "latestArchivedReportDate": health.get("latestArchivedReportDate", ""),
+            "health": health,
         }
 
     def _resolve_staging_dir(self, date_str: str | None = None) -> Path:
@@ -489,7 +523,20 @@ class P1008JobManager:
             }
 
     def launcher_gate_status(self, review_package: dict[str, Any], state: dict[str, Any] | None = None) -> dict[str, Any]:
-        state = state or self.state
+        if state is None:
+            state = dict(self.state)
+            state["latestReport"] = self.latest_report_status()
+        latest_report = state.get("latestReport") or {}
+        report_health = latest_report.get("health") or {}
+        if report_health.get("status") != "PASS":
+            return {
+                "code": "REPORT_LIBRARY_FAIL_CLOSED",
+                "zh": (
+                    "Rolling brief／研報庫身分驗證未通過；新 UI 與研報庫入口已停用。"
+                    f" 請依 Launcher health 指示修復：{report_health.get('code', 'UNKNOWN')}。"
+                ),
+                "canEnterNewUi": False,
+            }
         if state.get("status") == "RUNNING":
             return {"code": "PIPELINE_RUNNING", "zh": "更新流程執行中，請留在 Launcher。", "canEnterNewUi": False}
         if state.get("errors"):
@@ -729,6 +776,12 @@ class P1008JobManager:
             self._refresh(before)
             return
 
+        bootstrap_error = self._bootstrap_report_library_step()
+        if bootstrap_error:
+            self._add_error(bootstrap_error)
+            self._refresh(before)
+            return
+
         component_failures: list[str] = []
         if job_type in {"default", "update-data"}:
             daily_before = formal_csv_hashes(self.package_root)
@@ -838,20 +891,70 @@ class P1008JobManager:
             )
             self._set_component_status("news", news_status, exitCode=news_step.get("exitCode"))
 
+        if job_type == "default":
+            rolling_error = self._refresh_rolling_brief_step()
+            if rolling_error:
+                component_failures.append(rolling_error)
+
         if job_type == "report":
-            self._run_python_step(
+            report_date = date.today().isoformat()
+            decision = report_governance.evaluate_report_trigger(
+                report_key=f"P1008_DAILY_{report_date.replace('-', '')}",
+                revision=1,
+                event_evidence=[],
+                evaluated_at_utc=now_iso(),
+            )
+            self._set_step(
+                "report-governance",
+                "Evaluate deterministic report trigger",
+                "SUCCEEDED",
+                decision=decision["decision"],
+                decisionId=decision["decision_id"],
+                actionable=False,
+            )
+            self._set_component_status(
+                "reportGovernance",
+                decision["decision"],
+                reportKey=decision["report_key"],
+                revision=decision["revision"],
+                reportTriggerValid=decision["report_trigger_valid"],
+                archiveEligible=False,
+                libraryAppended=False,
+                actionable=False,
+            )
+            self._set_step(
                 "report",
-                "Generate daily report",
-                [
-                    str(self.package_root / "tools" / "warroom_periodic_report_v1.py"),
-                    "--package-root",
-                    str(self.package_root),
-                    "--period",
-                    "daily",
-                    "--date",
-                    date.today().isoformat(),
-                ],
+                "Generate daily archive report",
+                "BLOCKED",
+                code="REPORT_TRIGGER_RECEIPT_REQUIRED",
+                message="NO_MATERIAL_CHANGE: a validated material-event trigger receipt is required.",
+                actionable=False,
+            )
+        if job_type in {"analysis-candidate", "report-candidate"}:
+            is_analysis = job_type == "analysis-candidate"
+            bat_name = "P1008_BUILD_ANALYSIS.bat" if is_analysis else "P1008_BUILD_REPORT.bat"
+            label = "Build Phase B1 Analysis candidate" if is_analysis else "Build Phase B1 Report candidate"
+            exit_code = self._run_bat_step(
+                job_type,
+                label,
+                self.package_root / bat_name,
+                [],
                 timeout_seconds=180,
+            )
+            latest = self._latest_phaseb1_status()
+            status = (
+                "ANALYSIS_CANDIDATE_READY"
+                if is_analysis and exit_code == 0
+                else "REPORT_CANDIDATE_READY"
+                if not is_analysis and exit_code == 0
+                else "FAIL_CLOSED"
+            )
+            self._set_component_status(
+                "phaseB1",
+                status,
+                runId=latest.get("runId", ""),
+                outputPath=latest.get("outputPath", ""),
+                actionable=False,
             )
         if job_type in {"default", "update-data"}:
             if component_failures:
@@ -860,8 +963,8 @@ class P1008JobManager:
             components = self.state.get("componentStatus", {}) or {}
             partial = any(
                 str((components.get(name) or {}).get("status", ""))
-                in {"FAILED", "STALE", "BLOCKED"}
-                for name in ("dailyPrice", "marketActivity", "news")
+                in {"FAILED", "STALE", "BLOCKED", "FAIL_CLOSED"}
+                for name in ("dailyPrice", "marketActivity", "news", "rollingBrief", "reportLibrary")
             )
             with self.lock:
                 self.state["overallStatus"] = "PARTIAL_FAILURE" if partial else "SUCCEEDED"
@@ -875,6 +978,123 @@ class P1008JobManager:
             self.state["componentStatus"] = components
             self._persist_locked()
 
+    def _refresh_rolling_brief_step(self) -> str:
+        """Refresh the current view and verify archive-index consistency."""
+        self._set_step(
+            "rolling-brief",
+            "Refresh rolling current war-room brief",
+            "RUNNING",
+        )
+        try:
+            result = rolling_brief.refresh_current_brief(self.package_root)
+        except (rolling_brief.RollingBriefError, OSError) as exc:
+            message = str(exc)
+            self._set_step(
+                "rolling-brief",
+                "Refresh rolling current war-room brief",
+                "FAILED",
+                message=message,
+            )
+            self._set_component_status(
+                "rollingBrief", "FAILED", error=message, actionable=False
+            )
+            return f"Rolling brief refresh failed: {message}"
+
+        self._set_step(
+            "rolling-brief",
+            "Refresh rolling current war-room brief",
+            "SUCCEEDED",
+            message=result.get("authorityDate", ""),
+        )
+        self._set_component_status(
+            "rollingBrief",
+            "UPDATED",
+            authorityDate=result.get("authorityDate", ""),
+            dataCutoffs=result.get("dataCutoffs", {}),
+            dataAlignmentStatus=result.get("dataAlignmentStatus", ""),
+            marketActivityFreshness=result.get("marketActivityFreshness", {}),
+            briefContentSha256=result.get("briefContentSha256", ""),
+            briefPath=result.get("briefPath", ""),
+            htmlPath=result.get("htmlPath", ""),
+            archiveAppended=False,
+            actionable=False,
+        )
+        health = rolling_brief.report_library_health(self.package_root)
+        health_status = str(health.get("status") or "FAIL_CLOSED")
+        self._set_component_status(
+            "reportLibrary",
+            health_status,
+            code=health.get("code", ""),
+            latestArchivedReportDate=health.get("latestArchivedReportDate", ""),
+            recoveryInstruction=health.get("recoveryInstruction", ""),
+            actionable=False,
+        )
+        if health_status != "PASS":
+            return (
+                "Report library health check failed: "
+                f"{health.get('code', 'UNKNOWN')} — {health.get('message', '')}"
+            )
+        return ""
+
+    def _bootstrap_report_library_step(self) -> str:
+        """Initialize only a truly empty archive index before the default job.
+
+        Archive history is never recreated when one paired manifest is lost or
+        both manifests disagree.  Those conditions remain fail-closed.
+        """
+        self._set_step(
+            "report-library-bootstrap",
+            "Validate or initialize report-library manifests",
+            "RUNNING",
+        )
+        try:
+            result = rolling_brief.bootstrap_report_library(self.package_root)
+        except (rolling_brief.RollingBriefError, OSError) as exc:
+            message = str(exc)
+            self._set_step(
+                "report-library-bootstrap",
+                "Validate or initialize report-library manifests",
+                "FAILED",
+                message=message,
+            )
+            self._set_component_status(
+                "reportLibrary", "FAIL_CLOSED", error=message, actionable=False
+            )
+            return f"Report library bootstrap failed: {message}"
+        status = str(result.get("status") or "FAIL_CLOSED")
+        if status == "FAIL_CLOSED":
+            message = str(result.get("message") or result.get("code") or "unknown error")
+            self._set_step(
+                "report-library-bootstrap",
+                "Validate or initialize report-library manifests",
+                "FAILED",
+                message=message,
+                code=result.get("code", ""),
+            )
+            self._set_component_status(
+                "reportLibrary",
+                "FAIL_CLOSED",
+                code=result.get("code", ""),
+                recoveryInstruction=result.get("message", ""),
+                actionable=False,
+            )
+            return f"Report library bootstrap failed: {message}"
+        self._set_step(
+            "report-library-bootstrap",
+            "Validate or initialize report-library manifests",
+            "SUCCEEDED",
+            message=status,
+        )
+        self._set_component_status(
+            "reportLibrary",
+            status,
+            code=result.get("classification", ""),
+            archiveReportCount=result.get("archiveReportCount", 0),
+            archiveAppended=False,
+            actionable=False,
+        )
+        return ""
+
     def _market_activity_last_date(self) -> str:
         path = self.package_root / "data/2317_daily_market_activity.csv"
         try:
@@ -883,6 +1103,22 @@ class P1008JobManager:
             return rows[-1].get("date", "") if rows else ""
         except OSError:
             return ""
+
+    def _latest_phaseb1_status(self) -> dict[str, str]:
+        root = self.package_root / "runtime" / "report_production"
+        candidates: list[tuple[str, dict[str, Any], Path]] = []
+        if root.is_dir():
+            for path in root.glob("*/run_manifest.json"):
+                payload = read_json(path, default={}) or {}
+                if payload.get("eventType") == "MONTHLY_REVENUE":
+                    candidates.append((str(payload.get("generatedAtUtc") or ""), payload, path.parent))
+        if not candidates:
+            return {"runId": "", "outputPath": ""}
+        _timestamp, payload, output_path = sorted(candidates, key=lambda item: (item[0], str(item[2])))[-1]
+        return {
+            "runId": str(payload.get("runId") or ""),
+            "outputPath": str(output_path),
+        }
 
     def _write_launcher_market_status(
         self, status: str, launcher_status: str, error: str
@@ -914,8 +1150,7 @@ class P1008JobManager:
     def _preflight(self) -> dict[str, str]:
         self._set_step("preflight", "Preflight checks", "RUNNING")
         required = [
-            "output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html",
-            "index_p1008_v7.html",
+            "ui/P1008_WARROOM_COMMAND_CENTER_v24.html",
             "tools/warroom_data_fetcher_v2.py",
             "tools/warroom_market_activity_updater.py",
             "P1008_1_UPDATE_DATA.bat",
@@ -1165,6 +1400,8 @@ class P1008AppHandler(http.server.SimpleHTTPRequestHandler):
             "/api/p1008/run/update-data": "update-data",
             "/api/p1008/run/news-scan": "news-scan",
             "/api/p1008/run/report": "report",
+            "/api/p1008/run/analysis-candidate": "analysis-candidate",
+            "/api/p1008/run/report-candidate": "report-candidate",
         }
         if parsed.path in {"/api/p1008/publish/formal", "/api/p1008/owner-publish/formal"}:
             try:

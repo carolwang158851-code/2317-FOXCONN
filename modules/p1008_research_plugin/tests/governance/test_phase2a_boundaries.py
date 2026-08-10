@@ -115,6 +115,30 @@ TEST_CONSTANT_PATHS = {
         "PHASE_A_FINAL_INTEGRATION_AMENDMENT_RECEIPT.json"
     ),
     (
+        "contracts/p1008_research_plugin/acceptance/v1.1/"
+        "PHASE_A_AUTHORITY_BASELINE_RECEIPT.json"
+    ),
+    (
+        "contracts/p1008_research_plugin/acceptance/v1.1/"
+        "PHASE_A_AUTHORITY_DATA_CLOSURE_RECEIPT.json"
+    ),
+    (
+        "contracts/p1008_research_plugin/acceptance/v1.1/"
+        "PHASE_A_DAILY_PRICE_STAGE1_PUBLISH_RECEIPT.json"
+    ),
+    (
+        "contracts/p1008_research_plugin/acceptance/v1.1/"
+        "PHASE_A_MACRO_STAGE2B_PUBLISH_RECEIPT.json"
+    ),
+    (
+        "contracts/p1008_research_plugin/acceptance/v1.1/"
+        "PHASE_A_MARKET_ACTIVITY_STAGE2A_PUBLISH_RECEIPT.json"
+    ),
+    (
+        "contracts/p1008_research_plugin/acceptance/v1.1/"
+        "PHASE_ROUTING_ACCEPTANCE_RECORD.json"
+    ),
+    (
         "contracts/p1008_research_plugin/acceptance/v1.1/evidence/"
         "PHASE_A_MACRO_ROW_IDENTITY_RECEIPT.json"
     ),
@@ -133,6 +157,134 @@ RAW_BINARY_EVIDENCE_PATHS = {
         "phase_a_twse_202607/2026-07.twse.raw.csv"
     ),
 }
+PHASEB1_HASH_GOVERNED_PATHS = {
+    ".github/workflows/p1008-phaseb1-analysis-report.yml",
+    "P1008_BUILD_ANALYSIS.bat",
+    "P1008_BUILD_REPORT.bat",
+    "contracts/p1008_analysis/v1.0/ANALYSIS_CONTRACT.md",
+    "contracts/p1008_analysis/v1.0/contract.manifest.json",
+    "contracts/p1008_analysis/v1.0/schemas/analysis_gate_result.schema.json",
+    "contracts/p1008_analysis/v1.0/schemas/analysis_packet.schema.json",
+    "contracts/p1008_analysis/v1.0/schemas/financial_trend.schema.json",
+    "contracts/p1008_analysis/v1.0/schemas/market_psychology.schema.json",
+    "contracts/p1008_analysis/v1.0/schemas/market_regime.schema.json",
+    "contracts/p1008_analysis/v1.0/schemas/price_and_market_activity.schema.json",
+    "contracts/p1008_analysis/v1.0/schemas/thesis_scorecard.schema.json",
+    "contracts/p1008_analysis/v1.0/schemas/valuation_analysis.schema.json",
+    (
+        "contracts/p1008_report_production/acceptance/v1.0/"
+        "PHASE_B1_OWNER_AUTHORIZATION_RECORD.json"
+    ),
+    (
+        "contracts/p1008_report_production/acceptance/v1.1/"
+        "PHASE_B1_OPS_OWNER_AUTHORIZATION_RECORD.json"
+    ),
+    (
+        "contracts/p1008_report_production/acceptance/v1.1/"
+        "PHASE_B1_OPS_R1_OWNER_AUTHORIZATION_RECORD.json"
+    ),
+    (
+        "contracts/p1008_report_production/acceptance/v1.1/"
+        "PHASE_B1_OPS_R2_OWNER_AUTHORIZATION_RECORD.json"
+    ),
+    (
+        "contracts/p1008_report_production/acceptance/v1.1/"
+        "PHASE_B1_OPS_R2_TRACKED_UI_SOURCE_RECEIPT.json"
+    ),
+    "contracts/p1008_report_production/v1.0/REPORT_PRODUCTION_CONTRACT.md",
+    "contracts/p1008_report_production/v1.0/contract.manifest.json",
+    "contracts/p1008_report_production/v1.0/schemas/chart_data.schema.json",
+    "contracts/p1008_report_production/v1.0/schemas/editorial_validation.schema.json",
+    "contracts/p1008_report_production/v1.0/schemas/evidence_reference.schema.json",
+    "contracts/p1008_report_production/v1.0/schemas/report_candidate.schema.json",
+    "contracts/p1008_report_production/v1.0/schemas/report_gate_result.schema.json",
+    "contracts/p1008_report_production/v1.0/schemas/shorts_duration_validation.schema.json",
+    "docs/APP_WORKFLOW.md",
+    "docs/P1008_PHASE_B1_OPS_LAUNCHER_REPORT_RECOVERY.md",
+    "ui/P1008_WARROOM_COMMAND_CENTER_v24.html",
+    "modules/p1008_research_plugin/docs/phaseb1/PhaseB1_Analysis_Report_MVP.md",
+    "modules/p1008_research_plugin/src/p1008_research_plugin/analysis/__init__.py",
+    (
+        "modules/p1008_research_plugin/src/p1008_research_plugin/analysis/"
+        "analysis_builder.py"
+    ),
+    (
+        "modules/p1008_research_plugin/src/p1008_research_plugin/analysis/"
+        "analysis_contracts.py"
+    ),
+    (
+        "modules/p1008_research_plugin/src/p1008_research_plugin/analysis/"
+        "analysis_validator.py"
+    ),
+    "modules/p1008_research_plugin/src/p1008_research_plugin/phaseb1_common.py",
+    "modules/p1008_research_plugin/src/p1008_research_plugin/phaseb1_pipeline.py",
+    "modules/p1008_research_plugin/tests/fixtures/phaseb1/monthly_revenue_fixture_alt_dates.json",
+    "modules/p1008_research_plugin/tests/phaseb1/test_owner_review_remediation_r1.py",
+    "modules/p1008_research_plugin/src/p1008_research_plugin/reporting/__init__.py",
+    (
+        "modules/p1008_research_plugin/src/p1008_research_plugin/reporting/"
+        "chart_data_builder.py"
+    ),
+    (
+        "modules/p1008_research_plugin/src/p1008_research_plugin/reporting/"
+        "report_builder.py"
+    ),
+    (
+        "modules/p1008_research_plugin/src/p1008_research_plugin/reporting/"
+        "report_contracts.py"
+    ),
+    (
+        "modules/p1008_research_plugin/src/p1008_research_plugin/reporting/"
+        "report_renderer_markdown.py"
+    ),
+    (
+        "modules/p1008_research_plugin/src/p1008_research_plugin/reporting/"
+        "report_validator.py"
+    ),
+    (
+        "modules/p1008_research_plugin/src/p1008_research_plugin/reporting/"
+        "script_builder.py"
+    ),
+    "modules/p1008_research_plugin/tests/fixtures/phaseb1/monthly_revenue_fixture.json",
+    "modules/p1008_research_plugin/tests/phaseb1/__init__.py",
+    "modules/p1008_research_plugin/tests/phaseb1/helpers.py",
+    "modules/p1008_research_plugin/tests/phaseb1/test_analysis_layer.py",
+    "modules/p1008_research_plugin/tests/phaseb1/test_report_production.py",
+    "modules/p1008_research_plugin/tests/phaseb1/test_script_candidates.py",
+    "tests/test_phaseb1_launcher.py",
+    "report_viewer.html",
+    "reports.html",
+    "tests/test_p1008_app_market_activity_pipeline.py",
+    "tests/test_phaseb1_ops_launcher_report_recovery.py",
+    "tools/p1008_build_analysis.py",
+    "tools/p1008_build_report.py",
+    "tools/p1008_build_phaseb1_final_review.py",
+    "tools/p1008_open_warroom.py",
+    "tools/warroom_periodic_report_v1.py",
+    "tools/warroom_rolling_brief.py",
+}
+G1_REPORT_GOVERNANCE_HASH_GOVERNED_PATHS = {
+    "contracts/p1008_report_governance/v1.0/REPORT_GOVERNANCE_CONTRACT.md",
+    "contracts/p1008_report_governance/v1.0/contract.manifest.json",
+    "contracts/p1008_report_governance/v1.0/EXTERNAL_DISCOVERY_PROVIDER_CONTRACT.md",
+    "contracts/p1008_report_governance/v1.0/policies/external_discovery_provider_policy.json",
+    "contracts/p1008_report_governance/v1.0/repins/ANYSEARCH_V3_0_1_GOVERNED_REPIN.json",
+    "contracts/p1008_report_governance/v1.0/schemas/event_evidence.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/report_trigger_decision.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/core_view_change_decision.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/publication_decision.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/model_provenance.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/report_decision_receipt.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/materiality_threshold_policy.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/trigger_issuance_receipt.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/trigger_issuance_index.schema.json",
+    "modules/p1008_research_plugin/src/p1008_research_plugin/adapters/anysearch_runtime.py",
+    "modules/p1008_research_plugin/src/p1008_research_plugin/adapters/research_skill_governance_adapter.py",
+}
+
+GOVERNED_ANYSEARCH_RUNTIME_PATH = (
+    "src/p1008_research_plugin/adapters/anysearch_runtime.py"
+)
 
 
 def sha256(path: Path) -> str:
@@ -154,7 +306,12 @@ def load_json(path: Path) -> dict[str, object]:
 
 
 def expected_hash_governed_paths() -> set[str]:
-    expected = set(PHASE3A_R_TARGETFILES) | set(TEST_CONSTANT_PATHS)
+    expected = (
+        set(PHASE3A_R_TARGETFILES)
+        | set(TEST_CONSTANT_PATHS)
+        | set(PHASEB1_HASH_GOVERNED_PATHS)
+        | set(G1_REPORT_GOVERNANCE_HASH_GOVERNED_PATHS)
+    )
     for relative_root in (
         "contracts/p1008_research_plugin/v1.0",
         "contracts/p1008_research_plugin/v2.0",
@@ -230,7 +387,7 @@ class Phase2ABoundaryTests(unittest.TestCase):
             entries.append(path)
         self.assertEqual(len(entries), len(set(entries)))
         self.assertEqual(set(entries), expected_hash_governed_paths())
-        self.assertEqual(len(entries), 89)
+        self.assertEqual(len(entries), 173)
 
     def test_crlf_and_mixed_manifest_bytes_are_rejected(self) -> None:
         for rejected in (MANIFEST_CRLF_SHA256, MANIFEST_MIXED_SHA256):
@@ -327,12 +484,35 @@ class Phase2ABoundaryTests(unittest.TestCase):
         secret_reads = []
         for path in SRC_ROOT.rglob("*.py"):
             text = path.read_text(encoding="utf-8")
-            if pattern.search(text):
-                violations.append(path.relative_to(MODULE_ROOT).as_posix())
-            if "OPENAI_API_KEY" in text or "os.environ" in text:
-                secret_reads.append(path.relative_to(MODULE_ROOT).as_posix())
+            relative = path.relative_to(MODULE_ROOT).as_posix()
+            if pattern.search(text) and relative != GOVERNED_ANYSEARCH_RUNTIME_PATH:
+                violations.append(relative)
+            if ("OPENAI_API_KEY" in text or "os.environ" in text) and relative != GOVERNED_ANYSEARCH_RUNTIME_PATH:
+                secret_reads.append(relative)
         self.assertEqual(violations, [])
         self.assertEqual(secret_reads, [])
+
+    def test_governed_anysearch_network_and_secret_exception_is_exact(self) -> None:
+        runtime_path = MODULE_ROOT / GOVERNED_ANYSEARCH_RUNTIME_PATH
+        text = runtime_path.read_text(encoding="utf-8")
+        network_imports = re.findall(
+            r"^\s*(?:from|import)\s+(?:openai|agents|requests|httpx|socket|urllib\.request|http\.client)\b[^\n]*",
+            text,
+            re.MULTILINE,
+        )
+        self.assertEqual(
+            network_imports,
+            ["from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener"],
+        )
+        self.assertIn('_SECRET_NAME = "ANYSEARCH_API_KEY"', text)
+        self.assertEqual(text.count("os.environ.get(_SECRET_NAME)"), 1)
+        self.assertNotIn("OPENAI_API_KEY", text)
+        self.assertIn("build_opener(ProxyHandler({}), _RejectRedirect())", text)
+        self.assertIn("if endpoint != _ALLOWED_ENDPOINT", text)
+        self.assertIn("if response.geturl() != _ALLOWED_ENDPOINT", text)
+        self.assertIn("max_attempts", text)
+        self.assertIn("fallback_enabled", text)
+        self.assertNotIn("owner_authorized_smoke_request", text)
 
     def test_no_runtime_or_governance_store_is_created(self) -> None:
         watched = [

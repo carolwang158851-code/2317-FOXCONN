@@ -12,11 +12,38 @@ from __future__ import annotations
 import argparse
 import csv
 import html
+import importlib.util
 import json
+import os
 import re
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+
+def _load_report_governance():
+    """Load the governed sibling module independently of the caller's CWD."""
+    module_name = "warroom_report_governance"
+    existing = sys.modules.get(module_name)
+    if existing is not None:
+        return existing
+    module_path = Path(__file__).with_name(f"{module_name}.py")
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load governed report module: {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+report_governance = _load_report_governance()
+
+from p1008_research_plugin.adapters.research_skill_governance_adapter import (
+    ValidatedResearchSkillTrigger,
+    _mint_validated_research_skill_trigger,
+)
 
 
 TOOL_VERSION = "P1008_PERIODIC_REPORT_GENERATOR_v1"
@@ -24,6 +51,317 @@ REPORT_MANIFEST = "reports/P1008_REPORT_MANIFEST.json"
 RUNTIME_REPORT_MANIFEST = "runtime/warroom_report_manifest.json"
 EVENT_REVIEW_STATE = "runtime/warroom_event_review_state.json"
 PLUGIN_SHADOW_CANDIDATE = "runtime/research_plugin/latest_report_candidate.json"
+TRIGGER_ISSUANCE_RECEIPT_DIR = "runtime/governance/trigger_issuance_receipts"
+TRIGGER_ISSUANCE_INDEX = "runtime/governance/trigger_issuance_index.json"
+TRIGGER_ISSUANCE_PRODUCER_ID = "P1008_G1_I2_PERIODIC_REPORT_ORCHESTRATOR"
+
+
+class ReportTriggerReceiptError(RuntimeError):
+    """Raised before any archive artifact is written without governed permission."""
+
+
+def load_validated_report_trigger_handoff(
+    handoff_path: Path, report_date: str
+) -> dict[str, Any]:
+    """Validate a deterministic G1 trigger and receipt before archive generation.
+
+    The handoff is deliberately an explicit, canonical governance boundary.  It
+    is not an informal ``generate_report`` flag and is never synthesized from
+    a Launcher request.  Re-evaluating the supplied evidence catches tampered
+    trigger decisions while rebuilding the receipt catches identity, revision,
+    actionability, core-view, and publication drift before report files exist.
+    """
+
+    try:
+        handoff = json.loads(handoff_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ReportTriggerReceiptError(
+            f"REPORT_TRIGGER_RECEIPT_INVALID: {exc}"
+        ) from exc
+    if not isinstance(handoff, dict):
+        raise ReportTriggerReceiptError("REPORT_TRIGGER_RECEIPT_INVALID: expected object")
+
+    required = {
+        "report_key",
+        "revision",
+        "report_date",
+        "event_type",
+        "event_evidence",
+        "threshold_policies",
+        "report_trigger_decision",
+        "core_view_change_decision",
+        "publication_decision",
+        "report_decision_receipt",
+    }
+    missing = sorted(required - set(handoff))
+    if missing:
+        raise ReportTriggerReceiptError(
+            "REPORT_TRIGGER_RECEIPT_INVALID: missing " + ", ".join(missing)
+        )
+    if handoff["report_date"] != report_date:
+        raise ReportTriggerReceiptError("REPORT_TRIGGER_REPORT_DATE_MISMATCH")
+
+    trigger = handoff["report_trigger_decision"]
+    core = handoff["core_view_change_decision"]
+    publication = handoff["publication_decision"]
+    receipt = handoff["report_decision_receipt"]
+    if not all(isinstance(value, dict) for value in (trigger, core, publication, receipt)):
+        raise ReportTriggerReceiptError("REPORT_TRIGGER_RECEIPT_INVALID: decisions must be objects")
+    if trigger.get("report_key") != handoff["report_key"] or trigger.get("revision") != handoff["revision"]:
+        raise ReportTriggerReceiptError("REPORT_TRIGGER_IDENTITY_MISMATCH")
+    if trigger.get("event_type") != handoff["event_type"]:
+        raise ReportTriggerReceiptError("REPORT_TRIGGER_EVENT_MISMATCH")
+    if core.get("core_view_changed") is not False:
+        raise ReportTriggerReceiptError("REPORT_TRIGGER_CORE_VIEW_MUTATION_BLOCKED")
+    if publication.get("publication_ready") is not False or publication.get("published_externally") is not False:
+        raise ReportTriggerReceiptError("REPORT_TRIGGER_PUBLICATION_BLOCKED")
+
+    try:
+        expected_trigger = report_governance.evaluate_report_trigger(
+            report_key=handoff["report_key"],
+            revision=handoff["revision"],
+            event_evidence=handoff["event_evidence"],
+            evaluated_at_utc=trigger.get("evaluated_at_utc", ""),
+            threshold_policies=handoff["threshold_policies"],
+            previous_decision_id=trigger.get("previous_decision_id"),
+        )
+        if expected_trigger != trigger:
+            raise ReportTriggerReceiptError("REPORT_TRIGGER_DECISION_INVALID")
+        expected_receipt = report_governance.build_report_decision_receipt(
+            receipt_id=receipt.get("receipt_id", ""),
+            report_key=handoff["report_key"],
+            revision=handoff["revision"],
+            authority_cutoffs=receipt.get("authority_cutoffs", []),
+            event_evidence_ids=receipt.get("event_evidence_ids", []),
+            report_trigger_decision=trigger,
+            core_view_change_decision=core,
+            publication_decision=publication,
+            model_provenances=handoff.get("model_provenances", []),
+            report_validation_pass=receipt.get("report_validation_pass") is True,
+            report_artifact_hashes=receipt.get("report_artifact_hashes", []),
+            created_at_utc=receipt.get("created_at_utc", ""),
+        )
+    except report_governance.GovernanceValidationError as exc:
+        raise ReportTriggerReceiptError(f"REPORT_TRIGGER_RECEIPT_INVALID: {exc}") from exc
+    if expected_receipt != receipt:
+        raise ReportTriggerReceiptError("REPORT_TRIGGER_RECEIPT_INVALID")
+    if not (
+        trigger.get("decision") == "TRIGGERED_INTERNAL_REPORT"
+        and trigger.get("material_event_confirmed") is True
+        and trigger.get("report_trigger_valid") is True
+        and trigger.get("actionable") is False
+        and receipt.get("archive_eligibility") is True
+        and receipt.get("private_library_eligible") is True
+        and receipt.get("library_appended") is False
+        and receipt.get("actionable") is False
+    ):
+        raise ReportTriggerReceiptError("REPORT_TRIGGER_ARCHIVE_NOT_ELIGIBLE")
+    return handoff
+
+
+def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n"
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_bytes(body)
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def _receipt_relative_locator(receipt_id: str) -> str:
+    if not isinstance(receipt_id, str) or not re.fullmatch(r"[A-Z0-9_:-]+", receipt_id):
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_RECEIPT_ID_INVALID")
+    return f"{TRIGGER_ISSUANCE_RECEIPT_DIR}/{receipt_id}.json"
+
+
+def _issuance_context_from_handoff(
+    handoff: dict[str, Any], *, event_reference: str, run_id: str, created_at_utc: str
+) -> dict[str, Any]:
+    """Internal producer context after the legacy archive validator has succeeded.
+
+    This accepts an already validated aggregate rather than caller scalar flags.
+    The producer is trusted only in the Owner-approved untrusted-data-caller model.
+    """
+    if not all(isinstance(value, str) and value for value in (event_reference, run_id, created_at_utc)):
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_CONTEXT_INVALID")
+    evidence = handoff.get("event_evidence")
+    if not isinstance(evidence, list) or not evidence or not isinstance(evidence[0], dict):
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_CONTEXT_INVALID")
+    first = evidence[0]
+    event_fingerprint = report_governance.canonical_event_fingerprint(
+        event_type=handoff["event_type"],
+        canonical_event_id=first.get("canonical_event_id", ""),
+        occurred_at_utc=first.get("occurred_at_utc", ""),
+    )
+    return {
+        "handoff": handoff,
+        "event_reference": event_reference,
+        "event_fingerprint": event_fingerprint,
+        "run_id": run_id,
+        "created_at_utc": created_at_utc,
+    }
+
+
+def issue_trusted_trigger_issuance(
+    package_root: Path, *, validated_handoff: dict[str, Any], event_reference: str,
+    run_id: str, created_at_utc: str,
+) -> dict[str, Any]:
+    """Persist a pre-research issuance receipt and independently indexed context.
+
+    Receipt existence is deliberately insufficient: only a successfully written
+    matching index entry makes the receipt eligible for capability lookup.
+    """
+    context = _issuance_context_from_handoff(
+        validated_handoff, event_reference=event_reference, run_id=run_id,
+        created_at_utc=created_at_utc,
+    )
+    handoff = context["handoff"]
+    trigger = handoff["report_trigger_decision"]
+    decision_seed = {
+        "report_key": handoff["report_key"], "revision": handoff["revision"],
+        "event_reference": event_reference, "trigger_decision_id": trigger["decision_id"],
+        "run_id": run_id,
+    }
+    receipt_id = "P1008_TRIGGER_ISSUANCE_" + report_governance.sha256_bytes(
+        report_governance.canonical_json_bytes(decision_seed)
+    )[:20]
+    locator = _receipt_relative_locator(receipt_id)
+    receipt = report_governance.build_trigger_issuance_receipt(
+        issuance_receipt_id=receipt_id, report_key=handoff["report_key"],
+        revision=handoff["revision"], event_reference=event_reference,
+        event_fingerprint=context["event_fingerprint"], event_type=handoff["event_type"],
+        report_trigger_decision=trigger,
+        report_decision_receipt=handoff["report_decision_receipt"],
+        producer_id=TRIGGER_ISSUANCE_PRODUCER_ID, run_id=run_id,
+        created_at_utc=created_at_utc,
+    )
+    root = package_root.resolve()
+    receipt_path = root / locator
+    index_path = root / TRIGGER_ISSUANCE_INDEX
+    if receipt_path.exists():
+        try:
+            existing = json.loads(receipt_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_RECEIPT_INVALID") from exc
+        if existing != receipt:
+            raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_RECEIPT_COLLISION")
+    else:
+        _atomic_write_json(receipt_path, receipt)
+    # Receipt identity is the canonical payload hash, rather than a worktree
+    # byte hash: JSON line endings must not redefine governed identity.
+    persisted = report_governance.validate_trigger_issuance_receipt(
+        json.loads(receipt_path.read_text(encoding="utf-8"))
+    )
+    if persisted != receipt:
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_RECEIPT_WRITE_VERIFY_FAILED")
+    if index_path.exists():
+        try:
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_INVALID") from exc
+    else:
+        index = {"schema_version": "1.0", "entries": []}
+    if not isinstance(index, dict) or index.get("schema_version") != "1.0" or not isinstance(index.get("entries"), list):
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_INVALID")
+    entry = report_governance.build_trigger_issuance_index_entry(receipt=receipt, receipt_locator=locator)
+    matches = [item for item in index["entries"] if isinstance(item, dict) and item.get("issuance_receipt_id") == receipt_id]
+    if matches and matches != [entry]:
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_COLLISION")
+    if not matches:
+        index["entries"].append(entry)
+        index["entries"].sort(key=lambda item: item["issuance_receipt_id"])
+        _atomic_write_json(index_path, index)
+    return {"issuance_receipt_id": receipt_id, "issuance_receipt_hash": receipt["receipt_hash"], "state": "ISSUED", "actionable": False}
+
+
+def load_validated_research_skill_trigger_capability(
+    package_root: Path, *, issuance_receipt_id: str, report_key: str, revision: int,
+    event_reference: str, trigger_decision_id: str,
+) -> ValidatedResearchSkillTrigger:
+    """Mint only after controlled index lookup and receipt/context verification."""
+    root = package_root.resolve()
+    locator = _receipt_relative_locator(issuance_receipt_id)
+    index_path = root / TRIGGER_ISSUANCE_INDEX
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_NOT_TRUSTED") from exc
+    if not isinstance(index, dict) or index.get("schema_version") != "1.0" or not isinstance(index.get("entries"), list):
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_NOT_TRUSTED")
+    matches = [item for item in index["entries"] if isinstance(item, dict) and item.get("issuance_receipt_id") == issuance_receipt_id]
+    if len(matches) != 1:
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_NOT_TRUSTED")
+    entry = report_governance.validate_trigger_issuance_index_entry(matches[0])
+    if entry["receipt_locator"] != locator or entry["state"] != "ISSUED":
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_NOT_TRUSTED")
+    try:
+        receipt = report_governance.validate_trigger_issuance_receipt(
+            json.loads((root / locator).read_text(encoding="utf-8"))
+        )
+    except (OSError, json.JSONDecodeError, report_governance.GovernanceValidationError) as exc:
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_RECEIPT_NOT_TRUSTED") from exc
+    fields = ("issuance_receipt_id", "report_key", "revision", "event_reference", "event_fingerprint", "trigger_decision_id", "producer_id", "run_id", "created_at")
+    if any(receipt[field] != entry[field] for field in fields) or receipt["receipt_hash"] != entry["issuance_receipt_hash"]:
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_CONTEXT_MISMATCH")
+    if (receipt["report_key"], receipt["revision"], receipt["event_reference"], receipt["trigger_decision_id"]) != (report_key, revision, event_reference, trigger_decision_id):
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_REQUEST_CONTEXT_MISMATCH")
+
+    def consume_once() -> None:
+        lock_path = index_path.with_name(index_path.name + ".consume.lock")
+        try:
+            os.mkdir(lock_path)
+        except OSError as exc:
+            raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_CONSUME_LOCKED") from exc
+        try:
+            try:
+                current = json.loads(index_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_NOT_TRUSTED") from exc
+            current_entries = current.get("entries") if isinstance(current, dict) else None
+            if not isinstance(current_entries, list) or not all(isinstance(item, dict) for item in current_entries):
+                raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_NOT_TRUSTED")
+            current_matches = [
+                item for item in current_entries
+                if item.get("issuance_receipt_id") == issuance_receipt_id
+            ]
+            if len(current_matches) != 1:
+                raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_NOT_TRUSTED")
+            current_entry = report_governance.validate_trigger_issuance_index_entry(current_matches[0])
+            if current_entry != entry or current_entry["state"] != "ISSUED":
+                raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_ALREADY_CONSUMED")
+            consumed_entry = report_governance.validate_trigger_issuance_index_entry({
+                **current_entry, "state": "CONSUMED",
+            })
+            current["entries"] = [
+                consumed_entry if item.get("issuance_receipt_id") == issuance_receipt_id else item
+                for item in current_entries
+            ]
+            _atomic_write_json(index_path, current)
+            verified = json.loads(index_path.read_text(encoding="utf-8"))
+            verified_matches = [
+                item for item in verified.get("entries", [])
+                if isinstance(item, dict) and item.get("issuance_receipt_id") == issuance_receipt_id
+            ] if isinstance(verified, dict) else []
+            if len(verified_matches) != 1 or report_governance.validate_trigger_issuance_index_entry(verified_matches[0]) != consumed_entry:
+                raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_CONSUME_VERIFY_FAILED")
+        finally:
+            try:
+                os.rmdir(lock_path)
+            except OSError:
+                pass
+
+    return _mint_validated_research_skill_trigger(
+        report_key=receipt["report_key"], revision=receipt["revision"], event_type=receipt["event_type"],
+        decision_id=receipt["trigger_decision_id"], receipt_id=receipt["report_decision_receipt_id"],
+        event_reference=receipt["event_reference"], event_fingerprint=receipt["event_fingerprint"],
+        issuance_receipt_id=receipt["issuance_receipt_id"], issuance_receipt_hash=receipt["receipt_hash"],
+        producer_id=receipt["producer_id"], run_id=receipt["run_id"], material_event_confirmed=True,
+        report_trigger_valid=True, actionable=False, authority_conflict=False, policy_status="PASS",
+        consume_callback=consume_once,
+    )
 
 DAILY_COLUMNS = ["Date", "Close", "QuarterKey", "BVPS_ref", "PB_daily", "DataSupportLevel", "Status"]
 MACRO_COLUMNS = [
@@ -1466,6 +1804,12 @@ def build_report(args: argparse.Namespace) -> int:
     generated_at = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     report_date = args.date or datetime.now().strftime("%Y-%m-%d")
     period = args.period
+    handoff_arg = getattr(args, "trigger_handoff", "")
+    if not handoff_arg:
+        raise ReportTriggerReceiptError("REPORT_TRIGGER_RECEIPT_REQUIRED")
+    trigger_handoff = load_validated_report_trigger_handoff(
+        Path(handoff_arg).resolve(), report_date
+    )
 
     daily_rows, daily_issues = read_csv_rows(package_root / "data/2317_daily_price.csv", DAILY_COLUMNS)
     macro_rows, macro_issues = read_csv_rows(package_root / "data/macro_snapshot.csv", MACRO_COLUMNS)
@@ -1506,7 +1850,6 @@ def build_report(args: argparse.Namespace) -> int:
     html_rel = f"generated/{report_id}.html"
     md_path = report_dir / f"{report_id}.md"
     html_path = report_dir / f"{report_id}.html"
-    latest_html_path = report_dir / "latest_report.html"
     charts = write_report_charts(package_root, report_id, data)
     markdown = build_report_markdown(period, report_date, generated_at, data)
     markdown = append_chart_markdown(markdown, charts)
@@ -1515,7 +1858,6 @@ def build_report(args: argparse.Namespace) -> int:
     md_path.parent.mkdir(parents=True, exist_ok=True)
     md_path.write_text(markdown, encoding="utf-8", newline="\n")
     write_report_html(html_path, report_id, title, markdown)
-    write_report_html(latest_html_path, report_id, title, markdown)
 
     issues = daily_issues + macro_issues + master_issues + event_issues + fx_issues
     report = {
@@ -1542,7 +1884,7 @@ def build_report(args: argparse.Namespace) -> int:
 
     log(f"Report markdown: {md_path}")
     log(f"Report html: {html_path}")
-    log(f"Latest direct html: {latest_html_path}")
+    log("Rolling latest HTML is owned by the default Launcher brief refresh.")
     log(f"Report manifest: {package_root / REPORT_MANIFEST}")
     log(f"Runtime report manifest: {package_root / RUNTIME_REPORT_MANIFEST}")
     log(f"Reports in manifest: {len(manifest.get('reports', []))}")
@@ -1555,6 +1897,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--package-root", default=str(Path(__file__).resolve().parents[1]))
     parser.add_argument("--date", default="")
     parser.add_argument("--period", choices=["daily", "weekly", "monthly"], default="daily")
+    parser.add_argument(
+        "--trigger-handoff",
+        default="",
+        help="Path to the validated deterministic G1 report-trigger handoff JSON.",
+    )
     return parser.parse_args()
 
 
@@ -2516,12 +2863,10 @@ def build_report(args: argparse.Namespace) -> int:
     html_rel = f"generated/{report_id}.html"
     md_path = report_dir / f"{report_id}.md"
     html_path = report_dir / f"{report_id}.html"
-    latest_html_path = report_dir / "latest_report.html"
     markdown = build_report_markdown(period, report_date, generated_at, data)
     md_path.parent.mkdir(parents=True, exist_ok=True)
     md_path.write_text(markdown, encoding="utf-8", newline="\n")
     write_report_html(html_path, report_id, title, markdown)
-    write_report_html(latest_html_path, report_id, title, markdown)
 
     issues = daily_issues + macro_issues + master_issues + event_issues + fx_issues
     report = {
@@ -2543,7 +2888,7 @@ def build_report(args: argparse.Namespace) -> int:
 
     log(f"Report markdown: {md_path}")
     log(f"Report html: {html_path}")
-    log(f"Latest direct html: {latest_html_path}")
+    log("Rolling latest HTML is owned by the default Launcher brief refresh.")
     log(f"Report manifest: {package_root / REPORT_MANIFEST}")
     log(f"Runtime report manifest: {package_root / RUNTIME_REPORT_MANIFEST}")
     log(f"Reports in manifest: {len(manifest.get('reports', []))}")
@@ -2713,7 +3058,6 @@ def build_report(args: argparse.Namespace) -> int:
     html_rel = f"generated/{report_id}.html"
     md_path = report_dir / f"{report_id}.md"
     html_path = report_dir / f"{report_id}.html"
-    latest_html_path = report_dir / "latest_report.html"
     charts = write_report_charts(package_root, report_id, data)
     markdown = build_report_markdown(period, report_date, generated_at, data)
     markdown = append_chart_markdown(markdown, charts)
@@ -2722,7 +3066,6 @@ def build_report(args: argparse.Namespace) -> int:
     md_path.parent.mkdir(parents=True, exist_ok=True)
     md_path.write_text(markdown, encoding="utf-8", newline="\n")
     write_report_html(html_path, report_id, title, markdown)
-    write_report_html(latest_html_path, report_id, title, markdown)
 
     issues = daily_issues + macro_issues + master_issues + event_issues + fx_issues
     report = {
@@ -2748,7 +3091,7 @@ def build_report(args: argparse.Namespace) -> int:
 
     log(f"Report markdown: {md_path}")
     log(f"Report html: {html_path}")
-    log(f"Latest direct html: {latest_html_path}")
+    log("Rolling latest HTML is owned by the default Launcher brief refresh.")
     log(f"Report manifest: {package_root / REPORT_MANIFEST}")
     log(f"Runtime report manifest: {package_root / RUNTIME_REPORT_MANIFEST}")
     log(f"Reports in manifest: {len(manifest.get('reports', []))}")
@@ -3213,6 +3556,41 @@ def build_report_markdown(
             "",
         ]
     )
+
+
+_build_report_legacy = build_report
+
+
+def build_report(args: argparse.Namespace) -> int:
+    """Generate an archive report only after a valid G1 receipt handoff."""
+
+    report_date = args.date or datetime.now().strftime("%Y-%m-%d")
+    handoff_arg = getattr(args, "trigger_handoff", "")
+    if not handoff_arg:
+        raise ReportTriggerReceiptError("REPORT_TRIGGER_RECEIPT_REQUIRED")
+    trigger_handoff = load_validated_report_trigger_handoff(
+        Path(handoff_arg).resolve(), report_date
+    )
+    result = _build_report_legacy(args)
+    package_root = Path(args.package_root).resolve()
+    report_id = f"P1008_{args.period.upper()}_REPORT_{report_date.replace('-', '')}"
+    governed_fields = {
+        "reportKey": trigger_handoff["report_key"],
+        "revision": trigger_handoff["revision"],
+        "eventType": trigger_handoff["event_type"],
+        "reportDecisionReceiptId": trigger_handoff["report_decision_receipt"]["receipt_id"],
+    }
+    manifest = read_json(package_root / REPORT_MANIFEST, default={}) or {}
+    reports = manifest.get("reports")
+    if not isinstance(reports, list):
+        raise ReportTriggerReceiptError("REPORT_TRIGGER_MANIFEST_INVALID")
+    matching = [item for item in reports if isinstance(item, dict) and item.get("id") == report_id]
+    if len(matching) != 1:
+        raise ReportTriggerReceiptError("REPORT_TRIGGER_ARCHIVE_IDENTITY_MISMATCH")
+    matching[0].update(governed_fields)
+    write_json(package_root / REPORT_MANIFEST, manifest)
+    write_json(package_root / RUNTIME_REPORT_MANIFEST, manifest)
+    return result
 
 
 if __name__ == "__main__":

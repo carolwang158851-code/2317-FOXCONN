@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://analysis/v1.0/market_psychology",
+  "type": "object",
+  "required": ["classification", "interpretation", "evidenceBasis", "alternativeExplanation", "counterEvidence", "confidence", "invalidationCondition"],
+  "properties": {
+    "classification": {"const": "INFERENCE"},
+    "interpretation": {"type": "string", "minLength": 1},
+    "evidenceBasis": {"type": "array"},
+    "alternativeExplanation": {"type": "string", "minLength": 1},
+    "counterEvidence": {"type": "array"},
+    "confidence": {"enum": ["HIGH", "MEDIUM", "LOW"]},
+    "invalidationCondition": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": false
+}

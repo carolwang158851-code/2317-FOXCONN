@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://analysis/v1.0/analysis_packet",
+  "type": "object",
+  "required": ["recordType", "runId", "eventType", "generatedAtUtc", "authorityManifestSha256", "authorityFileHashes", "authorityDataCutoffs", "analysisContractVersion", "inputEvidenceHashes", "deterministicMode", "financialTrend", "valuationAnalysis", "priceAndMarketActivity", "marketRegime", "marketPsychology", "eventImpactChain", "thesisScorecard", "investorViews", "audienceLenses", "materialConclusions", "sourceEvidenceIds", "actionable"],
+  "properties": {
+    "recordType": {"const": "P1008_ANALYSIS_PACKET"},
+    "runId": {"type": "string", "minLength": 1},
+    "eventType": {"const": "MONTHLY_REVENUE"},
+    "generatedAtUtc": {"type": "string", "format": "date-time"},
+    "authorityManifestSha256": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+    "authorityFileHashes": {"type": "object", "minProperties": 7},
+    "authorityDataCutoffs": {"type": "object", "minProperties": 7},
+    "analysisContractVersion": {"const": "1.0"},
+    "inputEvidenceHashes": {"type": "object", "minProperties": 1},
+    "deterministicMode": {"const": true},
+    "financialTrend": {"$ref": "financial_trend.schema.json"},
+    "valuationAnalysis": {"$ref": "valuation_analysis.schema.json"},
+    "priceAndMarketActivity": {"$ref": "price_and_market_activity.schema.json"},
+    "marketRegime": {"$ref": "market_regime.schema.json"},
+    "marketPsychology": {"$ref": "market_psychology.schema.json"},
+    "eventImpactChain": {"type": "array", "minItems": 6},
+    "thesisScorecard": {"$ref": "thesis_scorecard.schema.json"},
+    "investorViews": {"type": "object"},
+    "audienceLenses": {"type": "array", "minItems": 3, "maxItems": 3},
+    "materialConclusions": {"type": "array", "minItems": 1},
+    "sourceEvidenceIds": {"type": "array", "minItems": 1},
+    "actionable": {"const": false}
+  },
+  "additionalProperties": false
+}

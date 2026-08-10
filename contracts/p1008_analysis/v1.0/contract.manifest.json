@@ -1,0 +1,21 @@
+{
+  "contractId": "P1008_ANALYSIS",
+  "contractVersion": "1.0",
+  "status": "PHASE_B1_ADDITIVE",
+  "supportedEventTypes": ["MONTHLY_REVENUE"],
+  "hashAlgorithm": "SHA-256",
+  "rootHash": "5BDD1813056F60F3F4CE88DCD36CFFA8E5BCCDEE3430E6334DD64890C132C7AB",
+  "artifacts": [
+    {"path": "ANALYSIS_CONTRACT.md", "sha256": "03C67C35EF1AB9E1D2903A1C55627E5511DA0D8F6F9239F526F11E43881B0C3E", "sizeBytes": 2262},
+    {"path": "schemas/analysis_gate_result.schema.json", "sha256": "AB95287FB9E085471C8BAF0CEFFF345DCC62AD07A73B9ACC1243D1AFE1FDA076", "sizeBytes": 566},
+    {"path": "schemas/analysis_packet.schema.json", "sha256": "220710A5D184EC4CFA800BF8211E5CCEF13F952B7196CDD9D01AC3D806CFBA4B", "sizeBytes": 1955},
+    {"path": "schemas/financial_trend.schema.json", "sha256": "FC5F7E59DA18E9123756D3B0B3DF697C9EE5B84384252BBFC957F2288905A9BD", "sizeBytes": 757},
+    {"path": "schemas/market_psychology.schema.json", "sha256": "72FBEF1907B777101FFEEC80821A07CB98F9C2AFA75E593EF9AF990DC7164BB9", "sizeBytes": 716},
+    {"path": "schemas/market_regime.schema.json", "sha256": "A6374D65A0B474C66323FCC23E552D3E1A486F6D900E4F0361707BA0CBD436EF", "sizeBytes": 1228},
+    {"path": "schemas/price_and_market_activity.schema.json", "sha256": "569098AA4DE9A5F9A7B39E32F013D1E5A5C4B9E0E320A67D3B390DCF74EF85FC", "sizeBytes": 1399},
+    {"path": "schemas/thesis_scorecard.schema.json", "sha256": "0FDD7FBF89082653C53BBF67D111ECA1B474FB8E942935F5CB7492E3B1CB2246", "sizeBytes": 635},
+    {"path": "schemas/valuation_analysis.schema.json", "sha256": "788DE7742FE41C1056FCDA34699EF16D4A954F4A2A4D1AE5D47FDB52EF9F329D", "sizeBytes": 1061}
+  ],
+  "backwardCompatibility": "Does not modify frozen Research Plugin contract bytes",
+  "actionable": false
+}

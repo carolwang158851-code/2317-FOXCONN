@@ -1,0 +1,19 @@
+{
+  "contractId": "P1008_REPORT_PRODUCTION",
+  "contractVersion": "1.0",
+  "status": "PHASE_B1_ADDITIVE",
+  "supportedEventTypes": ["MONTHLY_REVENUE"],
+  "hashAlgorithm": "SHA-256",
+  "rootHash": "E00E88B5B6657672CE00CCA56629096A0F9EE97BB0F78B3317F0F80FEA98DF9E",
+  "artifacts": [
+    {"path": "REPORT_PRODUCTION_CONTRACT.md", "sha256": "3A6BC98D4F616EA883AE36A06362446C6163E14366DBAA736B1E1A28B3B7A9D2", "sizeBytes": 2406},
+    {"path": "schemas/chart_data.schema.json", "sha256": "41C17314FE466E7807A0D94D430C0740012150E3AA3CF812B39394AB1BBD535B", "sizeBytes": 679},
+    {"path": "schemas/editorial_validation.schema.json", "sha256": "32CE403D32D68BE158601247648ABA39538FC5F296A69F5A850FB353FFD05766", "sizeBytes": 2041},
+    {"path": "schemas/evidence_reference.schema.json", "sha256": "7B5134D5C3EA13A20E84B461C44D2D7D0AE5EEEFB78757E42186BDC88CDC7823", "sizeBytes": 526},
+    {"path": "schemas/report_candidate.schema.json", "sha256": "7D81D396518D0346C7AC0821CAAF7913C3426030B984E86B8D3FAAC009AE9043", "sizeBytes": 1811},
+    {"path": "schemas/report_gate_result.schema.json", "sha256": "BBCA2BFCA79D6B4C8A6EF8D8D5CB7F6DEF9B9A3FEF4B6BB53D6877EA6ECA2A8C", "sizeBytes": 513},
+    {"path": "schemas/shorts_duration_validation.schema.json", "sha256": "1F56F5A25DC3BD82BCEF3C1DE090692FC3E9F46C002024027209A0B25998F38E", "sizeBytes": 1881}
+  ],
+  "backwardCompatibility": "Consumes Analysis v1.0 and does not modify frozen Research Plugin contracts",
+  "actionable": false
+}

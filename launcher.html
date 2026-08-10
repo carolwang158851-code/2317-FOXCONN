@@ -180,8 +180,8 @@
       </div>
       <div class="buttons">
         <button id="fullscreen-toggle" type="button" aria-pressed="false">全螢幕</button>
-        <a class="button" href="./output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html?from=launcher_manual">進入新 UI</a>
-        <a class="button" href="./reports.html?from=launcher">研報庫</a>
+        <a id="new-ui-link" class="button" href="./ui/P1008_WARROOM_COMMAND_CENTER_v24.html?from=launcher_manual">進入新 UI</a>
+        <a id="research-library-link" class="button" href="./reports.html?from=launcher">研報庫</a>
         <a class="button" href="./SOP_v4.html?from=launcher">SOP</a>
       </div>
     </header>
@@ -201,7 +201,7 @@
       <div class="between">
         <div>
           <h2>一鍵資料流程</h2>
-          <p style="margin-top:6px">更新 staging/runtime、觀察型新聞掃描、產生日報。此流程不做正式 CSV append。</p>
+          <p style="margin-top:6px">更新 staging/runtime 與觀察型新聞掃描；不會自動產生日報，也不做正式 CSV append。</p>
         </div>
         <span id="job-badge" class="badge blue">IDLE</span>
       </div>
@@ -212,11 +212,33 @@
         <button id="run-report">產生日報</button>
         <button id="refresh">刷新狀態</button>
       </div>
+      <div class="notice violet" style="margin-top:12px">
+        <div class="between">
+          <div>
+            <strong>Phase B1 手動候選流程</strong>
+            <div class="small">先產生並驗證 Analysis，再由同一 Run ID 產生 Report；兩者都不會加入一鍵資料流程。</div>
+          </div>
+          <div class="buttons">
+            <button id="run-analysis-candidate">產生分析候選</button>
+            <button id="run-report-candidate">產生戰報候選</button>
+          </div>
+        </div>
+        <div class="grid two" style="margin-top:10px">
+          <div class="stat"><div class="label">Phase B1 Run ID</div><div id="phaseb1-run-id" class="value">N/A</div></div>
+          <div class="stat"><div class="label">候選輸出</div><div id="phaseb1-output" class="small">N/A</div></div>
+        </div>
+      </div>
       <div class="grid four" style="margin-top:12px">
         <div class="stat"><div class="label">目前任務</div><div id="job-type" class="value">N/A</div><div id="job-id" class="small">等待啟動</div></div>
         <div class="stat"><div class="label">正式 CSV 邊界</div><div id="formal-boundary" class="value">檢查中</div><div class="small">一鍵資料流程前後 hash 必須不變</div></div>
         <div class="stat"><div class="label">新聞 connector</div><div id="connector-status" class="value">N/A</div><div class="small">未核准來源不得連網</div></div>
         <div class="stat"><div class="label">最新戰報</div><div id="latest-report" class="value">N/A</div><div class="small">日報 / 週報 / 月報 manifest</div></div>
+      </div>
+      <div class="grid four" style="margin-top:12px">
+        <div class="stat"><div class="label">Served package root</div><div id="served-package-root" class="small">N/A</div></div>
+        <div class="stat"><div class="label">Served git HEAD</div><div id="served-git-head" class="small">N/A</div></div>
+        <div class="stat"><div class="label">Latest rolling brief date</div><div id="latest-rolling-brief-date" class="value">N/A</div></div>
+        <div class="stat"><div class="label">Latest archived report date</div><div id="latest-archived-report-date" class="value">N/A</div><div id="report-library-health" class="small">CHECKING</div></div>
       </div>
       <div class="notice blue" style="margin-top:12px">
         <div class="between">
@@ -297,7 +319,7 @@
         </div>
         <div class="buttons" style="align-items:end">
           <button id="owner-publish" class="danger" disabled>正式發布 CSV</button>
-          <a id="open-new-ui" class="button primary" href="./output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html?from=launcher">進入新 UI</a>
+          <a id="open-new-ui" class="button primary" href="./ui/P1008_WARROOM_COMMAND_CENTER_v24.html?from=launcher">進入新 UI</a>
         </div>
       </div>
     </section>
@@ -545,16 +567,29 @@
       'update-data': '只更新資料',
       'news-scan': '只掃描新聞',
       report: '產生日報',
+      'analysis-candidate': '產生分析候選',
+      'report-candidate': '產生戰報候選',
       'owner-publish': 'Owner 正式發布 CSV',
     };
 
     function setBusy(disabled) {
-      ['run-default', 'run-update', 'run-news', 'run-report', 'owner-publish', 'copy-approval-phrase'].forEach((id) => {
+      ['run-default', 'run-update', 'run-news', 'run-report', 'run-analysis-candidate', 'run-report-candidate', 'owner-publish', 'copy-approval-phrase'].forEach((id) => {
         const el = $(id);
         if (!el) return;
         if (id === 'owner-publish') el.disabled = disabled || !canPublish();
         else if (id === 'copy-approval-phrase') el.disabled = disabled || !(state.review || {}).ownerApprovalPhrase;
         else el.disabled = disabled;
+      });
+    }
+
+    function setReportNavigationBlocked(blocked) {
+      ['new-ui-link', 'research-library-link'].forEach((id) => {
+        const link = $(id);
+        if (!link) return;
+        link.classList.toggle('disabled', blocked);
+        link.setAttribute('aria-disabled', blocked ? 'true' : 'false');
+        if (blocked) link.setAttribute('tabindex', '-1');
+        else link.removeAttribute('tabindex');
       });
     }
 
@@ -580,19 +615,24 @@
       const dailyComponent = components.dailyPrice || {};
       const marketComponent = components.marketActivity || app.marketActivity || {};
       const newsComponent = components.news || {};
+      const phaseB1 = components.phaseB1 || {};
       const busy = app.status === 'RUNNING';
 
       $('gate-badge').className = badgeClass(gate.code || 'CHECKING');
       $('gate-badge').textContent = gate.code || 'CHECKING';
       $('gate-message').textContent = gate.zh || '讀取 Launcher gate 中。';
-      $('gate-panel').className = `panel ${gate.canEnterNewUi ? 'accent-green' : gate.code === 'PIPELINE_FAILED' || gate.code === 'FORMAL_CSV_BOUNDARY_VIOLATED' ? 'accent-red' : 'accent-amber'}`;
+      const reportLibraryBlocked = gate.code === 'REPORT_LIBRARY_FAIL_CLOSED';
+      setReportNavigationBlocked(reportLibraryBlocked);
+      $('gate-panel').className = `panel ${gate.canEnterNewUi ? 'accent-green' : gate.code === 'PIPELINE_FAILED' || gate.code === 'FORMAL_CSV_BOUNDARY_VIOLATED' || reportLibraryBlocked ? 'accent-red' : 'accent-amber'}`;
       $('auto-redirect-note').className = `notice ${gate.canEnterNewUi ? 'green' : 'amber'}`;
       const stayMode = new URLSearchParams(location.search).get('stay') === '1';
       $('auto-redirect-note').textContent = gate.canEnterNewUi
         ? stayMode
           ? 'Gate 已通過；目前為 Launcher 審查停留模式，請按「進入新 UI」進入決策摘要。'
           : 'Gate 已通過；若剛完成一鍵資料流程或正式發布，Launcher 會自動進入新 UI。'
-        : 'Gate 尚未通過；請先完成候選資料、總經/新聞/FX 或 Owner 審查。';
+        : reportLibraryBlocked
+          ? '研報庫驗證失敗：新 UI 與研報庫導覽已停用，請依 health 訊息修復後重新整理。'
+          : 'Gate 尚未通過；請先完成候選資料、總經/新聞/FX 或 Owner 審查。';
 
       $('job-badge').className = badgeClass(app.status || 'IDLE');
       $('job-badge').textContent = app.status || 'IDLE';
@@ -601,6 +641,8 @@
       $('market-activity-date').textContent = `最後成功日期：${marketComponent.lastSuccessDate || marketComponent.last_success_date || 'N/A'}`;
       $('news-component-status').textContent = newsComponent.status || 'NO_CHANGE';
       $('overall-component-status').textContent = app.overallStatus || app.status || 'IDLE';
+      $('phaseb1-run-id').textContent = phaseB1.runId || 'N/A';
+      $('phaseb1-output').textContent = phaseB1.outputPath || 'N/A';
       const receiptPaths = marketComponent.receiptPaths || marketComponent.receipt_paths || [];
       $('market-activity-log').textContent = `Receipt／log：${receiptPaths[0] || marketComponent.logPath || marketComponent.run_dir || 'N/A'}`;
       $('job-type').textContent = JOB_TYPE_ZH[app.jobType] || app.jobType || '無執行中任務';
@@ -613,6 +655,11 @@
       const checkedCount = networkSummary.checked ?? sourceHealth.length;
       $('connector-status').textContent = `${successCount}/${checkedCount || approvedCount} success`;
       $('latest-report').textContent = latestDaily?.date || latestDaily?.title || 'N/A';
+      $('served-package-root').textContent = app.resolvedPackageRoot || 'N/A';
+      $('served-git-head').textContent = app.gitHead || 'N/A';
+      $('latest-rolling-brief-date').textContent = latest.latestRollingBriefDate || 'N/A';
+      $('latest-archived-report-date').textContent = latest.latestArchivedReportDate || 'N/A';
+      $('report-library-health').textContent = `${latest.health?.status || 'UNKNOWN'} ${latest.health?.code || ''}`.trim();
       $('network-status-badge').className = badgeClass(networkSummary.status || 'NO_SCAN');
       $('network-status-badge').textContent = networkSummary.status || 'NO_SCAN';
       $('connector-health-summary').textContent = networkSummary.status
@@ -704,7 +751,7 @@
         state.autoRedirected = true;
         $('auto-redirect-note').textContent = 'Gate 已通過，正在進入新 UI。';
         setTimeout(() => {
-          location.assign(withImmersive(`./output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html?from=launcher&ts=${Date.now()}`));
+          location.assign(withImmersive(`./ui/P1008_WARROOM_COMMAND_CENTER_v24.html?from=launcher&ts=${Date.now()}`));
         }, 900);
       }
     }
@@ -798,6 +845,8 @@
     $('run-update').addEventListener('click', () => runJob('/api/p1008/run/update-data'));
     $('run-news').addEventListener('click', () => runJob('/api/p1008/run/news-scan'));
     $('run-report').addEventListener('click', () => runJob('/api/p1008/run/report'));
+    $('run-analysis-candidate').addEventListener('click', () => runJob('/api/p1008/run/analysis-candidate'));
+    $('run-report-candidate').addEventListener('click', () => runJob('/api/p1008/run/report-candidate'));
     $('refresh').addEventListener('click', refreshAll);
     $('owner-publish').addEventListener('click', ownerPublish);
     $('copy-approval-phrase').addEventListener('click', copyApprovalPhrase);
@@ -809,10 +858,12 @@
   <script>
     (function installDecisionUiPolish() {
       const jobTypeZh = {
-        default: '一鍵更新：資料 + 新聞 + 日報',
+        default: '一鍵更新：資料 + 新聞 + rolling brief（不追加研報庫）',
         'update-data': '只更新資料',
         'news-scan': '只掃描新聞',
         report: '產生日報',
+        'analysis-candidate': '產生分析候選',
+        'report-candidate': '產生戰報候選',
         'owner-publish': 'Owner 正式發布 CSV',
       };
       const datasetZh = {
@@ -988,6 +1039,8 @@
           ['run-update', '只更新資料'],
           ['run-news', '只掃描新聞'],
           ['run-report', '產生日報'],
+          ['run-analysis-candidate', '產生分析候選'],
+          ['run-report-candidate', '產生戰報候選'],
           ['refresh', '刷新狀態'],
           ['owner-publish', '正式發布 CSV'],
         ];

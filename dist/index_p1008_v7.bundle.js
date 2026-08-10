@@ -4961,7 +4961,7 @@ const App = () => {
     href: "launcher.html?stay=1",
     className: "px-4 py-2 rounded border border-emerald-500/40 bg-emerald-600/20 text-emerald-100 hover:bg-emerald-600/30"
   }, "\u56DE Launcher \u66F4\u65B0 / \u5BE9\u67E5"), React.createElement("a", {
-    href: "output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html?from=oldui",
+    href: "ui/P1008_WARROOM_COMMAND_CENTER_v24.html?from=oldui",
     className: "px-4 py-2 rounded border border-sky-500/40 bg-sky-600/20 text-sky-100 hover:bg-sky-600/30"
   }, "\u9032\u5165\u516D\u5927\u7CFB\u7D71\u65B0 UI"), React.createElement("a", {
     href: "launcher.html?stay=1#publish-panel",
