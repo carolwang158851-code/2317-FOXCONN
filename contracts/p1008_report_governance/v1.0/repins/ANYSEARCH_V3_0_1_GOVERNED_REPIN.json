@@ -1,0 +1,104 @@
+{
+  "recordId": "P1008_ANYSEARCH_V3_0_1_GOVERNED_REPIN",
+  "status": "VALIDATED_READY_TO_COMMIT_REPIN",
+  "ownerAuthorizationReference": "OWNER_INSTRUCTION_P1008_ANYSEARCH_V3_0_1_GOVERNED_REPIN_20260810",
+  "authorizationScope": "GOVERNED_IDENTITY_REPIN_ONLY",
+  "minimumGovernanceClosureCommit": "f658e3292429b834ddaea29fbe2fa229d7093c52",
+  "minimumGovernanceContractReady": true,
+  "previousGovernedIdentity": {
+    "provider_id": "ANYSEARCH",
+    "release_version": "v2.1.0",
+    "immutable_source_revision": "6ff6aa958ad9747659d669b5e9984f07c896f2aa",
+    "artifact_sha256": "C98E3B5401E8407F9B52B3E03A2554AF30E849E6DE11160A967531B48E4AD031"
+  },
+  "newGovernedIdentity": {
+    "provider_id": "ANYSEARCH",
+    "vendor": "AnySearch",
+    "distribution_source": "anysearch-ai/anysearch-skill",
+    "release_version": "v3.0.1",
+    "immutable_source_revision": "caed9eac2eb6e869b89faa2f3e92d8956b013b56",
+    "artifact_sha256": "1F42E68ECC290EDB224050D2BD4F80E7068F5AFC0FA3DC8076E6E22412334743",
+    "acquired_at_utc": "2026-08-09T05:44:45Z",
+    "allowed_endpoint_identities": [
+      "https://api.anysearch.com/mcp"
+    ]
+  },
+  "supplyChainEvidence": {
+    "phase1ValidationReference": "P1008-ANYSEARCH-SHADOW-TEST-001",
+    "expectedArchiveRoot": "anysearch-skill-3.0.1/",
+    "zipSha256Verified": true,
+    "archiveRootVerified": true,
+    "isolatedInstallPassed": true,
+    "offlineSmokePassed": true,
+    "singleConnectivityProbePassed": true,
+    "unexpectedEndpointsObserved": false,
+    "secretExposureObserved": false,
+    "repositoryWritesDuringValidation": 0
+  },
+  "governanceBinding": {
+    "role": "DISCOVERY",
+    "sourceClass": "DISCOVERY",
+    "sourceTier": "UNVERIFIED",
+    "authoritative": false,
+    "actionable": false,
+    "coreViewDirectModificationAllowed": false,
+    "formalReportGenerationOrPublicationAllowed": false,
+    "authorityWritesAllowed": false,
+    "productionEvidenceLedgerWritesAllowed": false,
+    "credentialMode": "CREDENTIALS_OPTIONAL",
+    "anonymousExecutionRequiresSeparateRuntimeAuthorization": true,
+    "identityMismatchOutcome": "FAIL_CLOSED"
+  },
+  "capabilityControl": {
+    "adapterAllowlistedCommands": [
+      "SEARCH",
+      "GET_SUB_DOMAINS"
+    ],
+    "deferredCommands": [
+      "EXTRACT_PUBLIC_URL"
+    ],
+    "upstreamSupportedButProhibited": [
+      "CLI_API_KEY_ARGUMENT",
+      "AUTOMATIC_SECRET_PERSISTENCE",
+      "AUTOMATIC_KEY_REGISTRATION_OR_ROTATION",
+      "BATCH_SEARCH_FILE_INPUT"
+    ],
+    "automaticRetryAllowed": false,
+    "fallbackAllowed": false
+  },
+  "migrationImpact": {
+    "category": "SUPPLY_CHAIN_IDENTITY_REPIN",
+    "runtimeExecutionIntegrated": false,
+    "requestAndReceiptIdentityChanges": true,
+    "provenanceFieldsAddedToActiveIdentity": true,
+    "historicalV2ReceiptsRemainHistoricalEvidence": true,
+    "historicalV2IdentityAcceptedAsCurrent": false,
+    "authorityOrCoreViewSemanticsChanged": false
+  },
+  "rollbackPlan": {
+    "rollbackIdentity": {
+      "provider_id": "ANYSEARCH",
+      "release_version": "v2.1.0",
+      "immutable_source_revision": "6ff6aa958ad9747659d669b5e9984f07c896f2aa",
+      "artifact_sha256": "C98E3B5401E8407F9B52B3E03A2554AF30E849E6DE11160A967531B48E4AD031"
+    },
+    "automaticRollbackAllowed": false,
+    "separateOwnerAuthorizationRequired": true,
+    "rollbackArtifactReverificationRequired": true
+  },
+  "validationScope": {
+    "offlineOnly": true,
+    "adapterPath": "modules/p1008_research_plugin/src/p1008_research_plugin/adapters/research_skill_governance_adapter.py",
+    "adapterSha256": "6A2BA750D101BE1F91C1B936BE45D23963397A95C3F84435B336B6991CF32163",
+    "testCommands": [
+      "python -B -m unittest -v tests.test_report_governance_g1 tests.test_research_skill_governance_adapter"
+    ],
+    "testStatus": "PASS",
+    "testCount": 63,
+    "networkCalls": 0,
+    "authorityWrites": 0
+  },
+  "runtimePromotionAuthorized": false,
+  "phase2Started": false,
+  "actionable": false
+}

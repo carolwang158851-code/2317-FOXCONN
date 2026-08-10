@@ -110,6 +110,66 @@ def request(**overrides: object) -> dict:
 
 
 class ResearchSkillGovernanceAdapterTests(unittest.TestCase):
+    def repin_record(self) -> dict:
+        path = ROOT / "contracts/p1008_report_governance/v1.0/repins/ANYSEARCH_V3_0_1_GOVERNED_REPIN.json"
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def test_v3_governed_identity_matches_authorized_repin(self) -> None:
+        record = self.repin_record()
+        target = record["newGovernedIdentity"]
+        identity = adapter.PINNED_SKILL_IDENTITY
+        self.assertEqual(identity["provider_id"], target["provider_id"])
+        self.assertEqual(identity["release_version"], target["release_version"])
+        self.assertEqual(identity["immutable_source_revision"], target["immutable_source_revision"])
+        self.assertEqual(identity["artifact_sha256"], target["artifact_sha256"])
+        self.assertEqual(identity["acquired_at_utc"], target["acquired_at_utc"])
+        self.assertEqual(list(identity["allowed_endpoint_identities"]), target["allowed_endpoint_identities"])
+        self.assertEqual(identity["tag"], "v3.0.1")
+        self.assertEqual(identity["commit_sha"], "caed9eac2eb6e869b89faa2f3e92d8956b013b56")
+        self.assertEqual(record["status"], "VALIDATED_READY_TO_COMMIT_REPIN")
+        adapter_path = ROOT / record["validationScope"]["adapterPath"]
+        self.assertEqual(governance.sha256_bytes(adapter_path.read_bytes()), record["validationScope"]["adapterSha256"])
+        self.assertNotIn(b"\r", adapter_path.read_bytes())
+        attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8").splitlines()
+        self.assertIn(f"{record['validationScope']['adapterPath']} text eol=lf", attributes)
+        self.assertEqual(record["validationScope"]["testStatus"], "PASS")
+        self.assertEqual(record["validationScope"]["testCount"], 63)
+
+    def test_repin_retains_v2_rollback_and_does_not_authorize_runtime_promotion(self) -> None:
+        record = self.repin_record()
+        rollback = record["rollbackPlan"]
+        self.assertEqual(rollback["rollbackIdentity"], record["previousGovernedIdentity"])
+        self.assertEqual(rollback["rollbackIdentity"]["release_version"], "v2.1.0")
+        self.assertFalse(rollback["automaticRollbackAllowed"])
+        self.assertTrue(rollback["separateOwnerAuthorizationRequired"])
+        self.assertFalse(record["runtimePromotionAuthorized"])
+        self.assertFalse(record["phase2Started"])
+
+    def test_repin_preserves_capability_and_authority_restrictions(self) -> None:
+        record = self.repin_record()
+        binding = record["governanceBinding"]
+        self.assertEqual(binding["role"], "DISCOVERY")
+        self.assertEqual(binding["sourceClass"], "DISCOVERY")
+        for field in (
+            "authoritative", "actionable", "coreViewDirectModificationAllowed",
+            "formalReportGenerationOrPublicationAllowed", "authorityWritesAllowed",
+            "productionEvidenceLedgerWritesAllowed",
+        ):
+            with self.subTest(field=field):
+                self.assertFalse(binding[field])
+        self.assertEqual(binding["identityMismatchOutcome"], "FAIL_CLOSED")
+        capabilities = record["capabilityControl"]
+        self.assertEqual(set(capabilities["adapterAllowlistedCommands"]), {"SEARCH", "GET_SUB_DOMAINS"})
+        self.assertEqual(
+            set(capabilities["upstreamSupportedButProhibited"]),
+            {
+                "CLI_API_KEY_ARGUMENT", "AUTOMATIC_SECRET_PERSISTENCE",
+                "AUTOMATIC_KEY_REGISTRATION_OR_ROTATION", "BATCH_SEARCH_FILE_INPUT",
+            },
+        )
+        self.assertFalse(capabilities["automaticRetryAllowed"])
+        self.assertFalse(capabilities["fallbackAllowed"])
+
     def test_no_material_change_and_invalid_trigger_make_zero_calls(self) -> None:
         no_change = governance.evaluate_report_trigger(report_key="P1008_DAILY_20260809", revision=1, event_evidence=[], evaluated_at_utc=NOW)
         self.assertEqual(adapter.evaluate_invocation_eligibility(no_change)["skill_calls"], 0)
@@ -231,7 +291,7 @@ class ResearchSkillGovernanceAdapterTests(unittest.TestCase):
                 request(command=command)
 
     def test_query_policy_blocks_files_secrets_and_file_input(self) -> None:
-        for query in ("data/2317_daily_price.csv", "RULE HOLD MIDR", "C:\\private\\report.txt", "@private.txt", "ANYSEARCH_API_KEY=secret", ".env dump"):
+        for query in ("data/2317_daily_price.csv", "RULE HOLD MIDR", "C:\\private\\report.txt", "@private.txt", "ANYSEARCH_API_KEY=secret", "--api_key secret", ".env dump"):
             with self.subTest(query=query), self.assertRaisesRegex(adapter.ResearchSkillGovernanceError, "QUERY_POLICY_BLOCKED"):
                 request(query=query)
 

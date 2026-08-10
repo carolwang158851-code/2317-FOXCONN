@@ -96,6 +96,7 @@ contracts/p1008_report_governance/v1.0/REPORT_GOVERNANCE_CONTRACT.md text eol=lf
 contracts/p1008_report_governance/v1.0/contract.manifest.json text eol=lf
 contracts/p1008_report_governance/v1.0/EXTERNAL_DISCOVERY_PROVIDER_CONTRACT.md text eol=lf
 contracts/p1008_report_governance/v1.0/policies/external_discovery_provider_policy.json text eol=lf
+contracts/p1008_report_governance/v1.0/repins/ANYSEARCH_V3_0_1_GOVERNED_REPIN.json text eol=lf
 contracts/p1008_report_governance/v1.0/schemas/event_evidence.schema.json text eol=lf
 contracts/p1008_report_governance/v1.0/schemas/report_trigger_decision.schema.json text eol=lf
 contracts/p1008_report_governance/v1.0/schemas/core_view_change_decision.schema.json text eol=lf
@@ -146,6 +147,7 @@ modules/p1008_research_plugin/src/p1008_research_plugin/analysis/analysis_contra
 modules/p1008_research_plugin/src/p1008_research_plugin/analysis/analysis_validator.py text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/phaseb1_common.py text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/phaseb1_pipeline.py text eol=lf
+modules/p1008_research_plugin/src/p1008_research_plugin/adapters/research_skill_governance_adapter.py text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/reporting/__init__.py text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/reporting/chart_data_builder.py text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/reporting/report_builder.py text eol=lf

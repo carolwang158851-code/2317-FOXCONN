@@ -4,10 +4,11 @@
   "status": "G1_MINIMUM_GOVERNANCE_CONTRACT_PENDING_OWNER_ACCEPTANCE",
   "supportedEventTypes": ["MONTHLY_REVENUE", "QUARTERLY_EARNINGS", "EARNINGS_CALL", "MATERIAL_COMPANY_DISCLOSURE", "APPLE_OFFICIAL_PRODUCT_EVENT", "APPLE_OFFICIAL_GUIDANCE_EVENT", "AI_SERVER_MAJOR_ORDER", "AI_SERVER_MATERIAL_SUPPLY_CHAIN_CHANGE", "MATERIAL_FX_CHANGE", "MATERIAL_TARIFF_OR_POLICY_CHANGE", "APPROVED_PRICE_VOLUME_POSITIONING_ANOMALY"],
   "hashAlgorithm": "SHA-256",
-  "rootHash": "22575E51E20C05E7A658CDA8BC8734C979414A48E6D778D3FF139CF9FB171EB1",
+  "rootHash": "0FDDD6123D16C8284862AD8C81E671880E563AF29DCB3C9C75C531817261A159",
   "artifacts": [
     {"path": "EXTERNAL_DISCOVERY_PROVIDER_CONTRACT.md", "sha256": "4142227578CC91A7E3A47EE3C64E581EFB31A65ACA880EC09E56B9BC8794BD78", "sizeBytes": 5652},
     {"path": "policies/external_discovery_provider_policy.json", "sha256": "5B12EE713547E683BD71D54660FCD9A078BD496C029C82C03B412A2C04F58593", "sizeBytes": 2904},
+    {"path": "repins/ANYSEARCH_V3_0_1_GOVERNED_REPIN.json", "sha256": "7A5DB3056D747E4C7F2A02CA38E1B1C6512BEB5FF4B819203D2BB86BC2EC0D7D", "sizeBytes": 3934},
     {"path": "REPORT_GOVERNANCE_CONTRACT.md", "sha256": "29970B5C601D259C53CAAD3C716F44944F23EA8F2CD3CF05E0EA090F3125F6E2", "sizeBytes": 5537},
     {"path": "schemas/core_view_change_decision.schema.json", "sha256": "79242A7C875D01EFDF70B8FCED975D6693C9F022AE8CDED5F295EE619CECC585", "sizeBytes": 1497},
     {"path": "schemas/event_evidence.schema.json", "sha256": "2C5BD52E623F859492FA830F31E32C22F985588336700DC77FDD36B506A7447D", "sizeBytes": 2543},
@@ -19,6 +20,6 @@
     {"path": "schemas/trigger_issuance_receipt.schema.json", "sha256": "24F02FB7570F6C09CB062C96B0B436D65A26B9A2BB3AC95DEEB25E8348C2E608", "sizeBytes": 1410},
     {"path": "schemas/trigger_issuance_index.schema.json", "sha256": "FDEDD69DCB6A33B5D7F1127619B74E8ACEC8E85ACBC17C302C78906B18C1529A", "sizeBytes": 1605}
   ],
-  "backwardCompatibility": "Additive G1 minimum-governance contract; runtime integrations, provider pins, and authority state are unchanged",
+  "backwardCompatibility": "Additive G1 minimum-governance contract; runtime integrations and authority state are unchanged; the governed provider pin is changed only by the recorded repin evidence",
   "actionable": false
 }

@@ -25,14 +25,20 @@ class ResearchSkillGovernanceError(ValueError):
 
 
 PINNED_SKILL_IDENTITY = {
+    "provider_id": "ANYSEARCH",
     "skill_name": "AnySearch Skill",
     "vendor": "AnySearch",
     "repository": "anysearch-ai/anysearch-skill",
+    "distribution_source": "anysearch-ai/anysearch-skill",
     # The tag is descriptive only.  The immutable commit and acquired artifact
     # digest are the governing supply-chain identity.
-    "tag": "v2.1.0",
-    "commit_sha": "6ff6aa958ad9747659d669b5e9984f07c896f2aa",
-    "artifact_sha256": "C98E3B5401E8407F9B52B3E03A2554AF30E849E6DE11160A967531B48E4AD031",
+    "tag": "v3.0.1",
+    "release_version": "v3.0.1",
+    "commit_sha": "caed9eac2eb6e869b89faa2f3e92d8956b013b56",
+    "immutable_source_revision": "caed9eac2eb6e869b89faa2f3e92d8956b013b56",
+    "artifact_sha256": "1F42E68ECC290EDB224050D2BD4F80E7068F5AFC0FA3DC8076E6E22412334743",
+    "acquired_at_utc": "2026-08-09T05:44:45Z",
+    "allowed_endpoint_identities": ("https://api.anysearch.com/mcp",),
 }
 PROVIDER_ENDPOINT_IDENTITY = "https://api.anysearch.com/mcp"
 MAX_ATTEMPTS = 1
