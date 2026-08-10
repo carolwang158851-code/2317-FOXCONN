@@ -12,9 +12,9 @@ from dataclasses import dataclass
 import ipaddress
 import json
 import re
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 import unicodedata
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import weakref
 
 from ..phaseb1_common import canonical_json_bytes, sha256_bytes
@@ -77,6 +77,10 @@ _FORBIDDEN_COMMAND_TERMS = re.compile(
     r"retry|fallback|write[_ -]?mode|state[_ -]?mutation)",
     re.IGNORECASE,
 )
+_SECRET_LOCATOR_KEYS = frozenset({
+    "sig", "signature", "session", "code", "jwt", "token", "access_token",
+    "api_key", "key", "auth", "authorization", "credential", "secret",
+})
 
 
 @dataclass(frozen=True)
@@ -90,7 +94,7 @@ class RawSkillResponse:
     raw_response_hash: str
 
     def decoded_payload(self) -> Mapping[str, Any]:
-        """Return a fresh decoded view; it cannot alter the captured identity."""
+        """Return a fresh decoded view; it cannot change the captured identity."""
 
         value = json.loads(self.canonical_payload_json)
         if not isinstance(value, dict):
@@ -128,6 +132,7 @@ class ValidatedResearchSkillTrigger:
     actionable: bool
     authority_conflict: bool
     policy_status: str
+    _consume_callback: Callable[[], None]
 
     def __init__(self) -> None:
         raise TypeError(
@@ -135,7 +140,7 @@ class ValidatedResearchSkillTrigger:
         )
 
 
-_VALIDATED_RESEARCH_TRIGGER_MINTS: weakref.WeakSet[ValidatedResearchSkillTrigger] = weakref.WeakSet()
+_VALIDATED_RESEARCH_TRIGGER_STATES: weakref.WeakKeyDictionary[ValidatedResearchSkillTrigger, str] = weakref.WeakKeyDictionary()
 
 
 def _mint_validated_research_skill_trigger(
@@ -156,6 +161,7 @@ def _mint_validated_research_skill_trigger(
     actionable: bool,
     authority_conflict: bool,
     policy_status: str,
+    consume_callback: Callable[[], None],
 ) -> ValidatedResearchSkillTrigger:
     """Mint the capability for the verified G1-I2 validator only.
 
@@ -176,6 +182,8 @@ def _mint_validated_research_skill_trigger(
         material_event_confirmed, report_trigger_valid, actionable, authority_conflict,
     )):
         raise ResearchSkillGovernanceError("TRUSTED_TRIGGER_MINT_INVALID")
+    if not callable(consume_callback):
+        raise ResearchSkillGovernanceError("TRUSTED_TRIGGER_MINT_INVALID")
     capability = object.__new__(ValidatedResearchSkillTrigger)
     for name, value in {
         "report_key": report_key,
@@ -194,14 +202,27 @@ def _mint_validated_research_skill_trigger(
         "actionable": actionable,
         "authority_conflict": authority_conflict,
         "policy_status": policy_status,
+        "_consume_callback": consume_callback,
     }.items():
         object.__setattr__(capability, name, value)
-    _VALIDATED_RESEARCH_TRIGGER_MINTS.add(capability)
+    _VALIDATED_RESEARCH_TRIGGER_STATES[capability] = "ISSUED"
     return capability
 
 
 def _is_validated_research_skill_trigger(value: object) -> bool:
-    return isinstance(value, ValidatedResearchSkillTrigger) and value in _VALIDATED_RESEARCH_TRIGGER_MINTS
+    return isinstance(value, ValidatedResearchSkillTrigger) and value in _VALIDATED_RESEARCH_TRIGGER_STATES
+
+
+def consume_validated_research_skill_trigger(value: object) -> None:
+    """Consume one indexed capability immediately before provider execution."""
+
+    if not _is_validated_research_skill_trigger(value):
+        raise ResearchSkillGovernanceError("SKILL_INVOCATION_NOT_ELIGIBLE")
+    assert isinstance(value, ValidatedResearchSkillTrigger)
+    if _VALIDATED_RESEARCH_TRIGGER_STATES.get(value) != "ISSUED":
+        raise ResearchSkillGovernanceError("SKILL_AUTHORIZATION_ALREADY_CONSUMED")
+    value._consume_callback()
+    _VALIDATED_RESEARCH_TRIGGER_STATES[value] = "CONSUMED"
 
 
 def _required(value: Mapping[str, Any], *fields: str) -> None:
@@ -246,7 +267,8 @@ def evaluate_invocation_eligibility(validated_trigger: object) -> dict[str, Any]
             "failure_code": "SOURCE_FAILED", "actionable": False,
         }
     valid = (
-        validated_trigger.material_event_confirmed is True
+        _VALIDATED_RESEARCH_TRIGGER_STATES.get(validated_trigger) == "ISSUED"
+        and validated_trigger.material_event_confirmed is True
         and validated_trigger.report_trigger_valid is True
         and validated_trigger.actionable is False
         and validated_trigger.policy_status == "PASS"
@@ -268,7 +290,7 @@ def sanitize_query(query: str) -> str:
     if not isinstance(query, str) or not query.strip() or len(query) > 512:
         raise ResearchSkillGovernanceError("QUERY_POLICY_BLOCKED")
     normalized = " ".join(unicodedata.normalize("NFKC", query).split())
-    policy_view = normalized.replace("\\", "/")
+    policy_view = normalized.translate(str.maketrans({"\\": "/"}))
     if _FORBIDDEN_QUERY.search(policy_view) or _FORBIDDEN_COMMAND_TERMS.search(policy_view):
         raise ResearchSkillGovernanceError("QUERY_POLICY_BLOCKED")
     return normalized
@@ -296,6 +318,56 @@ def _validate_discovery_locator(locator: object) -> str:
     if not literal.is_global:
         raise ResearchSkillGovernanceError("PROVENANCE_INCOMPLETE")
     return parsed.geturl()
+
+
+def sanitize_source_locator(locator: object) -> str:
+    """Strip userinfo and secret-bearing query parameters before capture."""
+
+    if not isinstance(locator, str) or not locator:
+        raise ResearchSkillGovernanceError("PROVENANCE_INCOMPLETE")
+    parsed = urlsplit(locator)
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+        raise ResearchSkillGovernanceError("PROVENANCE_INCOMPLETE")
+    host = parsed.hostname
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ResearchSkillGovernanceError("PROVENANCE_INCOMPLETE") from exc
+    netloc = host if port is None else f"{host}:{port}"
+    query = urlencode([
+        (key, value)
+        for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+        if key.casefold() not in _SECRET_LOCATOR_KEYS
+    ], doseq=True)
+    return _validate_discovery_locator(
+        urlunsplit((parsed.scheme.lower(), netloc, parsed.path, query, ""))
+    )
+
+
+def validate_skill_request_authorization(
+    skill_request: Mapping[str, Any], validated_trigger: object
+) -> ValidatedResearchSkillTrigger:
+    """Bind a request to the live opaque capability that created its context."""
+
+    if not _is_validated_research_skill_trigger(validated_trigger):
+        raise ResearchSkillGovernanceError("SKILL_INVOCATION_NOT_ELIGIBLE")
+    assert isinstance(validated_trigger, ValidatedResearchSkillTrigger)
+    if not evaluate_invocation_eligibility(validated_trigger)["eligible"]:
+        raise ResearchSkillGovernanceError("SKILL_INVOCATION_NOT_ELIGIBLE")
+    expected = {
+        "report_key": validated_trigger.report_key,
+        "revision": validated_trigger.revision,
+        "event_reference": validated_trigger.event_reference,
+        "trigger_receipt_reference": validated_trigger.issuance_receipt_id,
+        "trigger_decision_id": validated_trigger.decision_id,
+        "trigger_receipt_hash": validated_trigger.issuance_receipt_hash,
+        "actionable": False,
+    }
+    if any(skill_request.get(field) != value for field, value in expected.items()):
+        raise ResearchSkillGovernanceError("SKILL_AUTHORIZATION_CONTEXT_MISMATCH")
+    return validated_trigger
 
 
 def build_skill_request(
@@ -389,7 +461,7 @@ def build_skill_call_receipt(
     *, skill_request: Mapping[str, Any], raw_response: RawSkillResponse | None,
     started_at_utc: str, completed_at_utc: str, failure_code: str,
 ) -> dict[str, Any]:
-    """Create a secret-free receipt for a future single-attempt provider call."""
+    """Build a secret-free receipt for a future single-attempt provider call."""
 
     validate_skill_identity(skill_request)
     _required(skill_request, "skill_call_id", "report_key", "revision", "event_reference", "trigger_receipt_reference", "command")
@@ -430,7 +502,7 @@ def build_discovery_evidence_candidate(
     required = ("source_id", "source_locator", "source_type", "source_hash", "content_hash")
     if any(result.get(field) in (None, "") for field in required):
         raise ResearchSkillGovernanceError("PROVENANCE_INCOMPLETE")
-    normalized_locator = _validate_discovery_locator(result["source_locator"])
+    normalized_locator = sanitize_source_locator(result["source_locator"])
     if not all(isinstance(result[field], str) and _SHA256.fullmatch(result[field]) for field in ("source_hash", "content_hash")):
         raise ResearchSkillGovernanceError("PROVENANCE_INCOMPLETE")
     if result["source_hash"] == raw_response.raw_response_hash:

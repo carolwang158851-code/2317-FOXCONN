@@ -308,6 +308,51 @@ def load_validated_research_skill_trigger_capability(
         raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_CONTEXT_MISMATCH")
     if (receipt["report_key"], receipt["revision"], receipt["event_reference"], receipt["trigger_decision_id"]) != (report_key, revision, event_reference, trigger_decision_id):
         raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_REQUEST_CONTEXT_MISMATCH")
+
+    def consume_once() -> None:
+        lock_path = index_path.with_name(index_path.name + ".consume.lock")
+        try:
+            os.mkdir(lock_path)
+        except OSError as exc:
+            raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_CONSUME_LOCKED") from exc
+        try:
+            try:
+                current = json.loads(index_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_NOT_TRUSTED") from exc
+            current_entries = current.get("entries") if isinstance(current, dict) else None
+            if not isinstance(current_entries, list) or not all(isinstance(item, dict) for item in current_entries):
+                raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_NOT_TRUSTED")
+            current_matches = [
+                item for item in current_entries
+                if item.get("issuance_receipt_id") == issuance_receipt_id
+            ]
+            if len(current_matches) != 1:
+                raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_NOT_TRUSTED")
+            current_entry = report_governance.validate_trigger_issuance_index_entry(current_matches[0])
+            if current_entry != entry or current_entry["state"] != "ISSUED":
+                raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_ALREADY_CONSUMED")
+            consumed_entry = report_governance.validate_trigger_issuance_index_entry({
+                **current_entry, "state": "CONSUMED",
+            })
+            current["entries"] = [
+                consumed_entry if item.get("issuance_receipt_id") == issuance_receipt_id else item
+                for item in current_entries
+            ]
+            _atomic_write_json(index_path, current)
+            verified = json.loads(index_path.read_text(encoding="utf-8"))
+            verified_matches = [
+                item for item in verified.get("entries", [])
+                if isinstance(item, dict) and item.get("issuance_receipt_id") == issuance_receipt_id
+            ] if isinstance(verified, dict) else []
+            if len(verified_matches) != 1 or report_governance.validate_trigger_issuance_index_entry(verified_matches[0]) != consumed_entry:
+                raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_CONSUME_VERIFY_FAILED")
+        finally:
+            try:
+                os.rmdir(lock_path)
+            except OSError:
+                pass
+
     return _mint_validated_research_skill_trigger(
         report_key=receipt["report_key"], revision=receipt["revision"], event_type=receipt["event_type"],
         decision_id=receipt["trigger_decision_id"], receipt_id=receipt["report_decision_receipt_id"],
@@ -315,6 +360,7 @@ def load_validated_research_skill_trigger_capability(
         issuance_receipt_id=receipt["issuance_receipt_id"], issuance_receipt_hash=receipt["receipt_hash"],
         producer_id=receipt["producer_id"], run_id=receipt["run_id"], material_event_confirmed=True,
         report_trigger_valid=True, actionable=False, authority_conflict=False, policy_status="PASS",
+        consume_callback=consume_once,
     )
 
 DAILY_COLUMNS = ["Date", "Close", "QuarterKey", "BVPS_ref", "PB_daily", "DataSupportLevel", "Status"]

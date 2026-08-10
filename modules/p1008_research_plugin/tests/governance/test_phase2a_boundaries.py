@@ -266,6 +266,9 @@ PHASEB1_HASH_GOVERNED_PATHS = {
 G1_REPORT_GOVERNANCE_HASH_GOVERNED_PATHS = {
     "contracts/p1008_report_governance/v1.0/REPORT_GOVERNANCE_CONTRACT.md",
     "contracts/p1008_report_governance/v1.0/contract.manifest.json",
+    "contracts/p1008_report_governance/v1.0/EXTERNAL_DISCOVERY_PROVIDER_CONTRACT.md",
+    "contracts/p1008_report_governance/v1.0/policies/external_discovery_provider_policy.json",
+    "contracts/p1008_report_governance/v1.0/repins/ANYSEARCH_V3_0_1_GOVERNED_REPIN.json",
     "contracts/p1008_report_governance/v1.0/schemas/event_evidence.schema.json",
     "contracts/p1008_report_governance/v1.0/schemas/report_trigger_decision.schema.json",
     "contracts/p1008_report_governance/v1.0/schemas/core_view_change_decision.schema.json",
@@ -275,7 +278,13 @@ G1_REPORT_GOVERNANCE_HASH_GOVERNED_PATHS = {
     "contracts/p1008_report_governance/v1.0/schemas/materiality_threshold_policy.schema.json",
     "contracts/p1008_report_governance/v1.0/schemas/trigger_issuance_receipt.schema.json",
     "contracts/p1008_report_governance/v1.0/schemas/trigger_issuance_index.schema.json",
+    "modules/p1008_research_plugin/src/p1008_research_plugin/adapters/anysearch_runtime.py",
+    "modules/p1008_research_plugin/src/p1008_research_plugin/adapters/research_skill_governance_adapter.py",
 }
+
+GOVERNED_ANYSEARCH_RUNTIME_PATH = (
+    "src/p1008_research_plugin/adapters/anysearch_runtime.py"
+)
 
 
 def sha256(path: Path) -> str:
@@ -378,7 +387,7 @@ class Phase2ABoundaryTests(unittest.TestCase):
             entries.append(path)
         self.assertEqual(len(entries), len(set(entries)))
         self.assertEqual(set(entries), expected_hash_governed_paths())
-        self.assertEqual(len(entries), 168)
+        self.assertEqual(len(entries), 173)
 
     def test_crlf_and_mixed_manifest_bytes_are_rejected(self) -> None:
         for rejected in (MANIFEST_CRLF_SHA256, MANIFEST_MIXED_SHA256):
@@ -475,12 +484,35 @@ class Phase2ABoundaryTests(unittest.TestCase):
         secret_reads = []
         for path in SRC_ROOT.rglob("*.py"):
             text = path.read_text(encoding="utf-8")
-            if pattern.search(text):
-                violations.append(path.relative_to(MODULE_ROOT).as_posix())
-            if "OPENAI_API_KEY" in text or "os.environ" in text:
-                secret_reads.append(path.relative_to(MODULE_ROOT).as_posix())
+            relative = path.relative_to(MODULE_ROOT).as_posix()
+            if pattern.search(text) and relative != GOVERNED_ANYSEARCH_RUNTIME_PATH:
+                violations.append(relative)
+            if ("OPENAI_API_KEY" in text or "os.environ" in text) and relative != GOVERNED_ANYSEARCH_RUNTIME_PATH:
+                secret_reads.append(relative)
         self.assertEqual(violations, [])
         self.assertEqual(secret_reads, [])
+
+    def test_governed_anysearch_network_and_secret_exception_is_exact(self) -> None:
+        runtime_path = MODULE_ROOT / GOVERNED_ANYSEARCH_RUNTIME_PATH
+        text = runtime_path.read_text(encoding="utf-8")
+        network_imports = re.findall(
+            r"^\s*(?:from|import)\s+(?:openai|agents|requests|httpx|socket|urllib\.request|http\.client)\b[^\n]*",
+            text,
+            re.MULTILINE,
+        )
+        self.assertEqual(
+            network_imports,
+            ["from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener"],
+        )
+        self.assertIn('_SECRET_NAME = "ANYSEARCH_API_KEY"', text)
+        self.assertEqual(text.count("os.environ.get(_SECRET_NAME)"), 1)
+        self.assertNotIn("OPENAI_API_KEY", text)
+        self.assertIn("build_opener(ProxyHandler({}), _RejectRedirect())", text)
+        self.assertIn("if endpoint != _ALLOWED_ENDPOINT", text)
+        self.assertIn("if response.geturl() != _ALLOWED_ENDPOINT", text)
+        self.assertIn("max_attempts", text)
+        self.assertIn("fallback_enabled", text)
+        self.assertNotIn("owner_authorized_smoke_request", text)
 
     def test_no_runtime_or_governance_store_is_created(self) -> None:
         watched = [

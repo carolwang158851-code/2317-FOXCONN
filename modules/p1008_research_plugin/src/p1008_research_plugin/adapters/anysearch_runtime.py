@@ -17,8 +17,7 @@ from pathlib import Path
 import re
 from typing import Any, Callable, Mapping
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 from . import research_skill_governance_adapter as governance
 from ..phaseb1_common import canonical_json_bytes, sha256_bytes
@@ -28,11 +27,16 @@ class GovernedAnySearchRuntimeError(RuntimeError):
     """A fail-closed runtime error with no provider response or secret text."""
 
 
-SMOKE_QUERY = "Hon Hai Foxconn 2317 latest company developments"
-SMOKE_AUTHORIZATION_REFERENCE = "OWNER_ANYSEARCH_V3_RUNTIME_INTEGRATION_20260810"
 _ALLOWED_ENDPOINT = governance.PROVIDER_ENDPOINT_IDENTITY
 _SECRET_NAME = "ANYSEARCH_API_KEY"
-_SECRETISH_KEY = re.compile(r"(?:api[_-]?key|authorization|token|password|secret)", re.IGNORECASE)
+_SECRETISH_KEY = re.compile(
+    r"^(?:sig|signature|session|code|jwt|token|access_token|api[_-]?key|key|auth|authorization|credential|secret|password)$",
+    re.IGNORECASE,
+)
+_SECRET_ASSIGNMENT = re.compile(
+    r"\b(sig|signature|session|code|jwt|token|access_token|api[_-]?key|key|auth|authorization|credential|secret|password)=([^&\s]+)",
+    re.IGNORECASE,
+)
 _URL = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
 
 
@@ -49,7 +53,10 @@ def _identity() -> dict[str, Any]:
     return dict(governance.PINNED_SKILL_IDENTITY)
 
 
-def _require_governed_search_request(skill_request: Mapping[str, Any], *, allow_anonymous: bool) -> None:
+def _require_governed_search_request(
+    validated_trigger: object, skill_request: Mapping[str, Any], *, allow_anonymous: bool
+) -> None:
+    governance.validate_skill_request_authorization(skill_request, validated_trigger)
     governance.validate_skill_identity(skill_request)
     if skill_request.get("command") != "SEARCH" or skill_request.get("provider_command") != "search":
         raise GovernedAnySearchRuntimeError("COMMAND_NOT_ALLOWED")
@@ -87,7 +94,7 @@ def _post_once(endpoint: str, payload: Mapping[str, Any], headers: Mapping[str, 
     if endpoint != _ALLOWED_ENDPOINT:
         raise GovernedAnySearchRuntimeError("UNEXPECTED_ENDPOINT")
     request = Request(endpoint, data=canonical_json_bytes(dict(payload)), headers=dict(headers), method="POST")
-    opener = build_opener(_RejectRedirect())
+    opener = build_opener(ProxyHandler({}), _RejectRedirect())
     try:
         with opener.open(request, timeout=timeout_seconds) as response:
             if response.geturl() != _ALLOWED_ENDPOINT:
@@ -111,6 +118,18 @@ def _scrub(value: Any) -> Any:
         return {str(key): _scrub(item) for key, item in value.items() if not _SECRETISH_KEY.search(str(key))}
     if isinstance(value, list):
         return [_scrub(item) for item in value]
+    if isinstance(value, str):
+        redacted = _SECRET_ASSIGNMENT.sub(lambda match: f"{match.group(1)}=[REDACTED]", value)
+
+        def clean_url(match: re.Match[str]) -> str:
+            candidate = match.group(0).rstrip(".,;:)]}")
+            suffix = match.group(0)[len(candidate):]
+            try:
+                return governance.sanitize_source_locator(candidate) + suffix
+            except governance.ResearchSkillGovernanceError:
+                return "[REDACTED_URL]" + suffix
+
+        return _URL.sub(clean_url, redacted)
     return value
 
 
@@ -156,16 +175,11 @@ def _normalize_result(item: Mapping[str, Any], index: int) -> dict[str, Any]:
     locator = item.get("url") or item.get("link") or item.get("source_locator")
     if not isinstance(locator, str) or not locator:
         raise GovernedAnySearchRuntimeError("MALFORMED_RESPONSE")
-    title = item.get("title") or item.get("name") or "AnySearch result"
-    snippet = item.get("snippet") or item.get("content") or item.get("description") or ""
+    title = _scrub(item.get("title") or item.get("name") or "AnySearch result")
+    snippet = _scrub(item.get("snippet") or item.get("content") or item.get("description") or "")
     if not isinstance(title, str) or not isinstance(snippet, str):
         raise GovernedAnySearchRuntimeError("MALFORMED_RESPONSE")
-    parsed = urlsplit(locator)
-    query = urlencode(
-        [(key, value) for key, value in parse_qsl(parsed.query, keep_blank_values=True) if not _SECRETISH_KEY.search(key)],
-        doseq=True,
-    )
-    locator = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, query, ""))
+    locator = governance.sanitize_source_locator(locator)
     locator_hash = sha256_bytes(canonical_json_bytes(locator))
     content_hash = sha256_bytes(canonical_json_bytes({"locator": locator, "title": title, "snippet": snippet}))
     return {
@@ -180,6 +194,7 @@ def _normalize_result(item: Mapping[str, Any], index: int) -> dict[str, Any]:
 
 
 def execute_governed_search(
+    validated_trigger: governance.ValidatedResearchSkillTrigger,
     skill_request: Mapping[str, Any],
     *,
     allow_anonymous: bool,
@@ -188,10 +203,11 @@ def execute_governed_search(
 ) -> dict[str, Any]:
     """Execute exactly one governed SEARCH and normalize only Discovery candidates."""
 
-    _require_governed_search_request(skill_request, allow_anonymous=allow_anonymous)
+    _require_governed_search_request(validated_trigger, skill_request, allow_anonymous=allow_anonymous)
     started_at = _utc_now()
     rpc_payload = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "search", "arguments": {"query": skill_request["normalized_query"]}}}
     headers = _authorization_header(str(skill_request["auth_mode"]))
+    governance.consume_validated_research_skill_trigger(validated_trigger)
     response = (transport or _post_once)(_ALLOWED_ENDPOINT, rpc_payload, headers)
     if not isinstance(response, Mapping):
         raise GovernedAnySearchRuntimeError("MALFORMED_RESPONSE")
@@ -223,33 +239,6 @@ def execute_governed_search(
         "authority_writes": 0,
         "core_view_changes": 0,
         "formal_reports_generated": 0,
-        "actionable": False,
-    }
-
-
-def owner_authorized_smoke_request() -> dict[str, Any]:
-    """Build the single fixed Owner-authorized smoke request; not a general bypass."""
-
-    query = governance.sanitize_query(SMOKE_QUERY)
-    return {
-        "skill_call_id": "SMOKE-" + sha256_bytes(canonical_json_bytes({"authorization": SMOKE_AUTHORIZATION_REFERENCE, "query": query}))[:16],
-        **_identity(),
-        "report_key": "P1008_NEWS_RD_ANYSEARCH_RUNTIME_SMOKE",
-        "revision": 1,
-        "event_reference": SMOKE_AUTHORIZATION_REFERENCE,
-        "trigger_receipt_reference": SMOKE_AUTHORIZATION_REFERENCE,
-        "trigger_decision_id": SMOKE_AUTHORIZATION_REFERENCE,
-        "trigger_receipt_hash": sha256_bytes(canonical_json_bytes(SMOKE_AUTHORIZATION_REFERENCE)),
-        "command": "SEARCH",
-        "provider_command": "search",
-        "normalized_query": query,
-        "normalized_query_hash": sha256_bytes(canonical_json_bytes(query)),
-        "target_url": None,
-        "target_url_hash": None,
-        "auth_mode": "NONE",
-        "max_attempts": 1,
-        "fallback_enabled": False,
-        "provider_endpoint_identity": _ALLOWED_ENDPOINT,
         "actionable": False,
     }
 

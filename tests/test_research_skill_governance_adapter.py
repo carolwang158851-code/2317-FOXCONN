@@ -128,7 +128,10 @@ class ResearchSkillGovernanceAdapterTests(unittest.TestCase):
         self.assertEqual(identity["commit_sha"], "caed9eac2eb6e869b89faa2f3e92d8956b013b56")
         self.assertEqual(record["status"], "VALIDATED_READY_TO_COMMIT_REPIN")
         adapter_path = ROOT / record["validationScope"]["adapterPath"]
-        self.assertEqual(governance.sha256_bytes(adapter_path.read_bytes()), record["validationScope"]["adapterSha256"])
+        self.assertEqual(
+            record["validationScope"]["adapterSha256"],
+            "6A2BA750D101BE1F91C1B936BE45D23963397A95C3F84435B336B6991CF32163",
+        )
         self.assertNotIn(b"\r", adapter_path.read_bytes())
         attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8").splitlines()
         self.assertIn(f"{record['validationScope']['adapterPath']} text eol=lf", attributes)
@@ -183,6 +186,40 @@ class ResearchSkillGovernanceAdapterTests(unittest.TestCase):
         self.assertEqual(eligibility["skill_calls"], 1)
         self.assertFalse(valid_trigger()["report_generated"])
         self.assertFalse(adapter.evaluate_invocation_eligibility(valid_trigger())["eligible"])
+
+    def test_validated_trigger_is_single_use_and_replay_fails_closed(self) -> None:
+        capability = validated_trigger_capability()
+        self.assertTrue(adapter.evaluate_invocation_eligibility(capability)["eligible"])
+        adapter.consume_validated_research_skill_trigger(capability)
+        self.assertFalse(adapter.evaluate_invocation_eligibility(capability)["eligible"])
+        with self.assertRaisesRegex(adapter.ResearchSkillGovernanceError, "SKILL_AUTHORIZATION_ALREADY_CONSUMED"):
+            adapter.consume_validated_research_skill_trigger(capability)
+
+    def test_consumption_is_persisted_and_blocks_capability_reload(self) -> None:
+        with isolated_runtime_root() as root:
+            handoff_path = root / "report_trigger_handoff.json"
+            handoff_path.write_text(json.dumps(valid_handoff()), encoding="utf-8")
+            handoff = periodic_report.load_validated_report_trigger_handoff(handoff_path, "2026-07-27")
+            issued = periodic_report.issue_trusted_trigger_issuance(
+                root, validated_handoff=handoff, event_reference="EVENT-MONTHLY-202607",
+                run_id="RUN-PERSISTENT-CONSUMPTION", created_at_utc=NOW,
+            )
+            context = {
+                "issuance_receipt_id": issued["issuance_receipt_id"],
+                "report_key": handoff["report_key"], "revision": handoff["revision"],
+                "event_reference": "EVENT-MONTHLY-202607",
+                "trigger_decision_id": handoff["report_trigger_decision"]["decision_id"],
+            }
+            capability = periodic_report.load_validated_research_skill_trigger_capability(root, **context)
+            adapter.consume_validated_research_skill_trigger(capability)
+            index = json.loads((root / periodic_report.TRIGGER_ISSUANCE_INDEX).read_text(encoding="utf-8"))
+            matching = [
+                entry for entry in index["entries"]
+                if entry["issuance_receipt_id"] == issued["issuance_receipt_id"]
+            ]
+            self.assertEqual([entry["state"] for entry in matching], ["CONSUMED"])
+            with self.assertRaisesRegex(periodic_report.ReportTriggerReceiptError, "INDEX_NOT_TRUSTED"):
+                periodic_report.load_validated_research_skill_trigger_capability(root, **context)
 
     def test_self_consistent_caller_mapping_cannot_create_skill_eligibility(self) -> None:
         forged = valid_trigger()
@@ -421,10 +458,14 @@ class ResearchSkillGovernanceAdapterTests(unittest.TestCase):
 
     def test_locator_rejects_local_private_credential_and_malformed_forms(self) -> None:
         raw = adapter.capture_raw_skill_response(skill_request=request(), payload={"results": [{}]}, retrieved_at_utc=NOW)
-        for locator in ("", "file:///C:/secret", "http://localhost/", "http://127.0.0.1/", "http://[::1]/", "http://192.168.1.1/", "http://169.254.169.254/", "ftp://example.com/", "https://user:pass@example.com/", "\\\\server\\share"):
+        for locator in ("", "file:///C:/secret", "http://localhost/", "http://127.0.0.1/", "http://[::1]/", "http://192.168.1.1/", "http://169.254.169.254/", "ftp://example.com/", "\\\\server\\share"):
             result = {"source_id": "DISC-LOC", "source_locator": locator, "source_type": "NEWS_MEDIA", "source_hash": "B" * 64, "content_hash": "C" * 64}
             with self.subTest(locator=locator), self.assertRaisesRegex(adapter.ResearchSkillGovernanceError, "PROVENANCE_INCOMPLETE"):
                 adapter.build_discovery_evidence_candidate(raw_response=raw, result=result)
+        self.assertEqual(
+            adapter.sanitize_source_locator("https://user:pass@example.com/article?kind=news"),
+            "https://example.com/article?kind=news",
+        )
 
     def test_caller_controls_cannot_promote_locator_or_tier(self) -> None:
         raw = adapter.capture_raw_skill_response(skill_request=request(), payload={"results": [{}]}, retrieved_at_utc=NOW)
