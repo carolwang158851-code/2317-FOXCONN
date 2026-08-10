@@ -84,3 +84,9 @@ Discovery providers may never overwrite authority. Provider outcomes are
 recorded as `SUCCESS_NO_RELEVANT_EVENT`, `HTTP_403_POLICY_BLOCKED`,
 `TIMEOUT_TRANSIENT`, or `SOURCE_FAILED`. They do not retry, publish, or write
 authority in G1-I1; non-success outcomes fail closed.
+
+The provider-neutral identity, repin, capability, secret, network, write, and
+promotion controls for an external Discovery provider are defined in
+`EXTERNAL_DISCOVERY_PROVIDER_CONTRACT.md`. That contract is additive to these
+source-class and evidence-promotion controls; it does not authorize a provider
+runtime, a provider pin change, or a network request.

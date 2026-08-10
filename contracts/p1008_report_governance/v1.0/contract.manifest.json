@@ -1,12 +1,14 @@
 {
   "contractId": "P1008_REPORT_GOVERNANCE",
   "contractVersion": "1.0",
-  "status": "G1_I1_DETERMINISTIC_CORE",
+  "status": "G1_MINIMUM_GOVERNANCE_CONTRACT_PENDING_OWNER_ACCEPTANCE",
   "supportedEventTypes": ["MONTHLY_REVENUE", "QUARTERLY_EARNINGS", "EARNINGS_CALL", "MATERIAL_COMPANY_DISCLOSURE", "APPLE_OFFICIAL_PRODUCT_EVENT", "APPLE_OFFICIAL_GUIDANCE_EVENT", "AI_SERVER_MAJOR_ORDER", "AI_SERVER_MATERIAL_SUPPLY_CHAIN_CHANGE", "MATERIAL_FX_CHANGE", "MATERIAL_TARIFF_OR_POLICY_CHANGE", "APPROVED_PRICE_VOLUME_POSITIONING_ANOMALY"],
   "hashAlgorithm": "SHA-256",
-  "rootHash": "EA17BE1CAFC68FD78A306C2B81FDF1C5E445689B46B67168DD11CC68240B991E",
+  "rootHash": "22575E51E20C05E7A658CDA8BC8734C979414A48E6D778D3FF139CF9FB171EB1",
   "artifacts": [
-    {"path": "REPORT_GOVERNANCE_CONTRACT.md", "sha256": "0F6BAA60BD13DD4ABCA718AC4D6E7437FE9B76AF3C6924BAC69D15DADBC03E1A", "sizeBytes": 5178},
+    {"path": "EXTERNAL_DISCOVERY_PROVIDER_CONTRACT.md", "sha256": "4142227578CC91A7E3A47EE3C64E581EFB31A65ACA880EC09E56B9BC8794BD78", "sizeBytes": 5652},
+    {"path": "policies/external_discovery_provider_policy.json", "sha256": "5B12EE713547E683BD71D54660FCD9A078BD496C029C82C03B412A2C04F58593", "sizeBytes": 2904},
+    {"path": "REPORT_GOVERNANCE_CONTRACT.md", "sha256": "29970B5C601D259C53CAAD3C716F44944F23EA8F2CD3CF05E0EA090F3125F6E2", "sizeBytes": 5537},
     {"path": "schemas/core_view_change_decision.schema.json", "sha256": "79242A7C875D01EFDF70B8FCED975D6693C9F022AE8CDED5F295EE619CECC585", "sizeBytes": 1497},
     {"path": "schemas/event_evidence.schema.json", "sha256": "2C5BD52E623F859492FA830F31E32C22F985588336700DC77FDD36B506A7447D", "sizeBytes": 2543},
     {"path": "schemas/materiality_threshold_policy.schema.json", "sha256": "E4916EE2991D8668921F1B5A144DFAF7D1E3B6DB36C40160BB64AE7A2DC240D9", "sizeBytes": 933},
@@ -17,6 +19,6 @@
     {"path": "schemas/trigger_issuance_receipt.schema.json", "sha256": "24F02FB7570F6C09CB062C96B0B436D65A26B9A2BB3AC95DEEB25E8348C2E608", "sizeBytes": 1410},
     {"path": "schemas/trigger_issuance_index.schema.json", "sha256": "FDEDD69DCB6A33B5D7F1127619B74E8ACEC8E85ACBC17C302C78906B18C1529A", "sizeBytes": 1605}
   ],
-  "backwardCompatibility": "Additive G1-I1 governance core; frozen v1.0 contracts and runtime integrations are unchanged",
+  "backwardCompatibility": "Additive G1 minimum-governance contract; runtime integrations, provider pins, and authority state are unchanged",
   "actionable": false
 }

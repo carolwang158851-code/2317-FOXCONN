@@ -245,6 +245,103 @@ class ReportGovernanceG1Tests(unittest.TestCase):
             with self.subTest(path=path.name):
                 self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["$schema"], "https://json-schema.org/draft/2020-12/schema")
 
+    def external_discovery_policy(self) -> dict:
+        path = ROOT / "contracts/p1008_report_governance/v1.0/policies/external_discovery_provider_policy.json"
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def test_external_discovery_provider_policy_is_generic_and_identity_fail_closed(self) -> None:
+        policy = self.external_discovery_policy()
+        identity = policy["identityGovernance"]
+        self.assertTrue(policy["providerNeutral"])
+        self.assertFalse(policy["actionable"])
+        self.assertEqual(identity["identityMismatchOutcome"], "FAIL_CLOSED")
+        self.assertFalse(identity["mutableTagIsAuthority"])
+        self.assertFalse(identity["shadowIdentityMayReplaceGovernedIdentity"])
+        self.assertEqual(
+            set(identity["requiredFields"]),
+            {
+                "provider_id", "vendor", "distribution_source", "release_version",
+                "immutable_source_revision", "artifact_sha256", "acquired_at_utc",
+                "allowed_endpoint_identities",
+            },
+        )
+        repin = policy["repinGovernance"]
+        for required in (
+            "explicitOwnerAuthorizationRequired", "impactAnalysisRequired",
+            "migrationPlanRequired", "rollbackPlanRequired",
+            "validationAndRegressionEvidenceRequired", "automaticRollbackProhibited",
+        ):
+            with self.subTest(required=required):
+                self.assertTrue(repin[required])
+        self.assertFalse(repin["successfulShadowValidationMayOverrideGovernedPin"])
+        contract = (ROOT / "contracts/p1008_report_governance/v1.0/EXTERNAL_DISCOVERY_PROVIDER_CONTRACT.md").read_text(encoding="utf-8")
+        self.assertNotIn("AnySearch", contract)
+        self.assertNotIn("AnySearch", json.dumps(policy))
+
+    def test_external_discovery_promotion_requires_quality_evidence_and_owner_authorization(self) -> None:
+        promotion = self.external_discovery_policy()["promotionGovernance"]
+        self.assertEqual(
+            set(promotion["requiredEvidenceDimensions"]),
+            {
+                "coverage", "precision", "source_quality", "duplication_noise",
+                "validation_behavior", "failure_behavior", "output_provenance",
+            },
+        )
+        self.assertTrue(promotion["allEvidenceDimensionsRequired"])
+        self.assertFalse(promotion["connectivitySuccessSufficient"])
+        self.assertFalse(promotion["searchOrRetrievalSuccessSufficient"])
+        self.assertTrue(promotion["explicitOwnerAuthorizationRequired"])
+
+    def test_external_discovery_credentials_and_runtime_are_fail_closed(self) -> None:
+        policy = self.external_discovery_policy()
+        credentials = policy["credentialGovernance"]
+        self.assertEqual(
+            set(credentials["allowedModes"]),
+            {"CREDENTIALS_REQUIRED", "CREDENTIALS_OPTIONAL", "ANONYMOUS_ONLY"},
+        )
+        self.assertTrue(credentials["modeBoundToGovernedIdentityPolicy"])
+        self.assertEqual(
+            credentials["credentialsRequiredOutcomes"],
+            {
+                "missingSecret": "FAIL_CLOSED",
+                "invalidSecret": "FAIL_CLOSED",
+                "secretLoadFailure": "FAIL_CLOSED",
+                "anonymousDowngrade": "PROHIBITED",
+            },
+        )
+        self.assertTrue(credentials["credentialsOptionalAnonymousExecutionRequiresExplicitOwnerAuthorization"])
+        self.assertTrue(credentials["credentialsOptionalSilentDowngradeProhibited"])
+        for prohibition in (
+            "anonymousOnlySecretLoadingProhibited", "secretPersistenceProhibited",
+            "secretLoggingProhibited", "secretInEvidenceArtifactsProhibited",
+            "automaticRegistrationOrRotationProhibited",
+        ):
+            with self.subTest(prohibition=prohibition):
+                self.assertTrue(credentials[prohibition])
+        runtime = policy["runtimeGovernance"]
+        self.assertEqual(runtime["networkDefault"], "DENY")
+        for condition in (
+            "missingRequiredRuntimeOutcome", "unavailableRequiredCapabilityOutcome",
+            "unexpectedEndpointOutcome", "unauthorizedCapabilityOutcome", "providerFailureOutcome",
+        ):
+            with self.subTest(condition=condition):
+                self.assertEqual(runtime[condition], "FAIL_CLOSED")
+
+    def test_external_discovery_contract_artifacts_are_lf_and_manifest_governed(self) -> None:
+        root = ROOT / "contracts/p1008_report_governance/v1.0"
+        manifest = json.loads((root / "contract.manifest.json").read_text(encoding="utf-8"))
+        governed_paths = {
+            "EXTERNAL_DISCOVERY_PROVIDER_CONTRACT.md",
+            "policies/external_discovery_provider_policy.json",
+        }
+        self.assertTrue(governed_paths.issubset({item["path"] for item in manifest["artifacts"]}))
+        attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8").splitlines()
+        for relative in governed_paths:
+            with self.subTest(relative=relative):
+                self.assertIn(f"contracts/p1008_report_governance/v1.0/{relative} text eol=lf", attributes)
+                data = (root / relative).read_bytes()
+                self.assertNotIn(b"\r", data)
+
 
 if __name__ == "__main__":
     unittest.main()

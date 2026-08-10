@@ -94,6 +94,8 @@ contracts/p1008_research_plugin/acceptance/v1.1/evidence/phase_a_twse_202607/202
 contracts/p1008_research_plugin/acceptance/v1.1/evidence/phase_a_twse_202607/2026-07.receipt.json text eol=lf
 contracts/p1008_report_governance/v1.0/REPORT_GOVERNANCE_CONTRACT.md text eol=lf
 contracts/p1008_report_governance/v1.0/contract.manifest.json text eol=lf
+contracts/p1008_report_governance/v1.0/EXTERNAL_DISCOVERY_PROVIDER_CONTRACT.md text eol=lf
+contracts/p1008_report_governance/v1.0/policies/external_discovery_provider_policy.json text eol=lf
 contracts/p1008_report_governance/v1.0/schemas/event_evidence.schema.json text eol=lf
 contracts/p1008_report_governance/v1.0/schemas/report_trigger_decision.schema.json text eol=lf
 contracts/p1008_report_governance/v1.0/schemas/core_view_change_decision.schema.json text eol=lf
