@@ -49,6 +49,48 @@ def approved_policy(**overrides: object) -> dict:
 
 
 class ReportGovernanceG1Tests(unittest.TestCase):
+    def test_trigger_issuance_receipt_is_canonical_context_bound_and_non_actionable(self) -> None:
+        trigger = governance.evaluate_report_trigger(
+            report_key="P1008_MONTHLY_REVENUE_202608", revision=1,
+            event_evidence=[evidence()], evaluated_at_utc=NOW,
+        )
+        core = governance.evaluate_core_view_change(
+            supporting_evidence_ids=[], counter_evidence_ids=[], official_confirmation=False,
+            independent_high_quality_source_count=0, financial_reflection=False,
+            thesis_invalidation=False, owner_approved=False, owner_approval_reference=None,
+            prior_core_view_hash=HASH, proposed_core_view_hash=OTHER_HASH,
+        )
+        publication = governance.evaluate_publication(
+            report_key=trigger["report_key"], revision=1, report_hash=HASH,
+            audience="PRIVATE", fact_check_status="PASS", owner_approved=False,
+            owner_approval_reference=None,
+        )
+        decision_receipt = governance.build_report_decision_receipt(
+            receipt_id="RECEIPT-ISSUANCE-001", report_key=trigger["report_key"], revision=1,
+            authority_cutoffs=["2026-07-27"], event_evidence_ids=["E-001"],
+            report_trigger_decision=trigger, core_view_change_decision=core,
+            publication_decision=publication, model_provenances=[],
+            report_validation_pass=True, report_artifact_hashes=[HASH], created_at_utc=NOW,
+        )
+        issuance = governance.build_trigger_issuance_receipt(
+            issuance_receipt_id="P1008_TRIGGER_ISSUANCE_001", report_key=trigger["report_key"],
+            revision=1, event_reference="EVENT-001", event_fingerprint=HASH,
+            event_type="MONTHLY_REVENUE", report_trigger_decision=trigger,
+            report_decision_receipt=decision_receipt, producer_id="P1008_G1_TEST",
+            run_id="RUN-001", created_at_utc=NOW,
+        )
+        self.assertFalse(issuance["actionable"])
+        self.assertEqual(governance.validate_trigger_issuance_receipt(issuance), issuance)
+        entry = governance.build_trigger_issuance_index_entry(
+            receipt=issuance,
+            receipt_locator="runtime/governance/trigger_issuance_receipts/P1008_TRIGGER_ISSUANCE_001.json",
+        )
+        self.assertEqual(governance.validate_trigger_issuance_index_entry(entry)["state"], "ISSUED")
+
+    def test_trigger_issuance_receipt_rejects_self_hash_only_or_authority_conflict(self) -> None:
+        with self.assertRaises(governance.GovernanceValidationError):
+            governance.validate_trigger_issuance_receipt({"receipt_hash": HASH})
+
     def test_event_evidence_accepts_non_url_authority_locator(self) -> None:
         item = evidence()
         item.pop("source_url", None)

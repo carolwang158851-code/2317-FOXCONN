@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://report-governance/v1.0/trigger_issuance_index",
+  "type": "object",
+  "required": ["schema_version", "entries"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["issuance_receipt_id", "issuance_receipt_hash", "receipt_locator", "report_key", "revision", "event_reference", "event_fingerprint", "trigger_decision_id", "producer_id", "run_id", "created_at", "state", "actionable"],
+        "properties": {
+          "issuance_receipt_id": {"type": "string", "minLength": 1},
+          "issuance_receipt_hash": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+          "receipt_locator": {"type": "string", "pattern": "^runtime/governance/trigger_issuance_receipts/[A-Z0-9_:-]+\\.json$"},
+          "report_key": {"type": "string", "pattern": "^P1008_[A-Z0-9_:-]+$"},
+          "revision": {"type": "integer", "minimum": 1},
+          "event_reference": {"type": "string", "minLength": 1},
+          "event_fingerprint": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+          "trigger_decision_id": {"type": "string", "minLength": 1},
+          "producer_id": {"type": "string", "minLength": 1},
+          "run_id": {"type": "string", "minLength": 1},
+          "created_at": {"type": "string", "minLength": 1},
+          "state": {"enum": ["ISSUED", "CONSUMED"]},
+          "actionable": {"const": false}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

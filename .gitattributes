@@ -136,6 +136,8 @@ contracts/p1008_report_production/v1.0/schemas/evidence_reference.schema.json te
 contracts/p1008_report_production/v1.0/schemas/report_candidate.schema.json text eol=lf
 contracts/p1008_report_production/v1.0/schemas/report_gate_result.schema.json text eol=lf
 contracts/p1008_report_production/v1.0/schemas/shorts_duration_validation.schema.json text eol=lf
+contracts/p1008_report_governance/v1.0/schemas/trigger_issuance_receipt.schema.json text eol=lf
+contracts/p1008_report_governance/v1.0/schemas/trigger_issuance_index.schema.json text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/analysis/__init__.py text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/analysis/analysis_builder.py text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/analysis/analysis_contracts.py text eol=lf

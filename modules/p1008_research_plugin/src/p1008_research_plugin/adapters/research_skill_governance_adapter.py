@@ -111,6 +111,12 @@ class ValidatedResearchSkillTrigger:
     event_type: str
     decision_id: str
     receipt_id: str
+    event_reference: str
+    event_fingerprint: str
+    issuance_receipt_id: str
+    issuance_receipt_hash: str
+    producer_id: str
+    run_id: str
     material_event_confirmed: bool
     report_trigger_valid: bool
     actionable: bool
@@ -133,6 +139,12 @@ def _mint_validated_research_skill_trigger(
     event_type: str,
     decision_id: str,
     receipt_id: str,
+    event_reference: str,
+    event_fingerprint: str,
+    issuance_receipt_id: str,
+    issuance_receipt_hash: str,
+    producer_id: str,
+    run_id: str,
     material_event_confirmed: bool,
     report_trigger_valid: bool,
     actionable: bool,
@@ -147,7 +159,12 @@ def _mint_validated_research_skill_trigger(
     """
 
     _validate_report_identity(report_key, revision)
-    if not all(isinstance(value, str) and value for value in (event_type, decision_id, receipt_id, policy_status)):
+    if not all(isinstance(value, str) and value for value in (
+        event_type, decision_id, receipt_id, event_reference, event_fingerprint,
+        issuance_receipt_id, issuance_receipt_hash, producer_id, run_id, policy_status,
+    )):
+        raise ResearchSkillGovernanceError("TRUSTED_TRIGGER_MINT_INVALID")
+    if not re.fullmatch(r"[A-F0-9]{64}", event_fingerprint) or not re.fullmatch(r"[A-F0-9]{64}", issuance_receipt_hash):
         raise ResearchSkillGovernanceError("TRUSTED_TRIGGER_MINT_INVALID")
     if not all(isinstance(value, bool) for value in (
         material_event_confirmed, report_trigger_valid, actionable, authority_conflict,
@@ -160,6 +177,12 @@ def _mint_validated_research_skill_trigger(
         "event_type": event_type,
         "decision_id": decision_id,
         "receipt_id": receipt_id,
+        "event_reference": event_reference,
+        "event_fingerprint": event_fingerprint,
+        "issuance_receipt_id": issuance_receipt_id,
+        "issuance_receipt_hash": issuance_receipt_hash,
+        "producer_id": producer_id,
+        "run_id": run_id,
         "material_event_confirmed": material_event_confirmed,
         "report_trigger_valid": report_trigger_valid,
         "actionable": actionable,
@@ -291,7 +314,11 @@ def build_skill_request(
     eligibility = evaluate_invocation_eligibility(validated_trigger)
     if not eligibility["eligible"]:
         raise ResearchSkillGovernanceError("SKILL_INVOCATION_NOT_ELIGIBLE")
-    if validated_trigger.report_key != report_key or validated_trigger.revision != revision:
+    if (
+        validated_trigger.report_key != report_key
+        or validated_trigger.revision != revision
+        or validated_trigger.event_reference != event_reference
+    ):
         raise ResearchSkillGovernanceError("Trigger report identity mismatch")
     if command not in COMMAND_MAP:
         raise ResearchSkillGovernanceError("SKILL_COMMAND_NOT_ALLOWED")
@@ -308,14 +335,19 @@ def build_skill_request(
         normalized_query = sanitize_query(query or "")
     request_seed = {
         "report_key": report_key, "revision": revision, "event_reference": event_reference,
-        "trigger_receipt_reference": validated_trigger.decision_id, "command": command,
+        "trigger_receipt_reference": validated_trigger.issuance_receipt_id,
+        "trigger_decision_id": validated_trigger.decision_id,
+        "trigger_receipt_hash": validated_trigger.issuance_receipt_hash,
+        "command": command,
         "normalized_query": normalized_query, "target_url": normalized_target,
     }
     skill_call_id = "SKILL-" + sha256_bytes(canonical_json_bytes(request_seed))[:16]
     return {
         "skill_call_id": skill_call_id, **dict(PINNED_SKILL_IDENTITY),
         "report_key": report_key, "revision": revision, "event_reference": event_reference,
-        "trigger_receipt_reference": validated_trigger.decision_id,
+        "trigger_receipt_reference": validated_trigger.issuance_receipt_id,
+        "trigger_decision_id": validated_trigger.decision_id,
+        "trigger_receipt_hash": validated_trigger.issuance_receipt_hash,
         "command": command, "provider_command": COMMAND_MAP[command],
         "normalized_query": normalized_query,
         "normalized_query_hash": sha256_bytes(canonical_json_bytes(normalized_query)) if normalized_query else None,

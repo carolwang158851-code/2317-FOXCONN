@@ -395,3 +395,138 @@ def build_report_decision_receipt(*, receipt_id: str, report_key: str, revision:
     }
     receipt["canonical_sha256"] = sha256_bytes(canonical_json_bytes(receipt))
     return receipt
+
+
+TRIGGER_ISSUANCE_SCHEMA_VERSION = "1.0"
+TRIGGER_ISSUANCE_STATES = frozenset({"ISSUED", "CONSUMED"})
+
+
+def _validate_issuable_trigger(trigger: dict[str, Any]) -> None:
+    """Require an already validated G1 result before research can be issued."""
+    _validate_decision_identity("TRIGGER", trigger)
+    if not (
+        trigger.get("decision") == "TRIGGERED_INTERNAL_REPORT"
+        and trigger.get("material_event_confirmed") is True
+        and trigger.get("report_trigger_valid") is True
+        and trigger.get("status") == "PASS"
+        and trigger.get("actionable") is False
+    ):
+        raise GovernanceValidationError("Trigger is not eligible for trusted research issuance")
+    if trigger.get("authority_conflict") is True or trigger.get("conflict_detected") is True:
+        raise GovernanceValidationError("Authority conflict blocks trusted research issuance")
+
+
+def _validate_report_receipt(receipt: dict[str, Any]) -> None:
+    _required(receipt, "receipt_id", "canonical_sha256", "report_key", "revision")
+    _false(receipt)
+    expected = sha256_bytes(canonical_json_bytes({
+        key: value for key, value in receipt.items() if key != "canonical_sha256"
+    }))
+    if receipt.get("canonical_sha256") != expected:
+        raise GovernanceValidationError("Report decision receipt canonical hash mismatch")
+
+
+def build_trigger_issuance_receipt(*, issuance_receipt_id: str, report_key: str,
+                                   revision: int, event_reference: str,
+                                   event_fingerprint: str, event_type: str,
+                                   report_trigger_decision: dict[str, Any],
+                                   report_decision_receipt: dict[str, Any],
+                                   producer_id: str, run_id: str,
+                                   created_at_utc: str) -> dict[str, Any]:
+    """Build the pre-research provenance record; this function does not write it."""
+    _report_identity(report_key, revision)
+    _validate_issuable_trigger(report_trigger_decision)
+    _validate_report_receipt(report_decision_receipt)
+    if report_trigger_decision.get("report_key") != report_key or report_trigger_decision.get("revision") != revision:
+        raise GovernanceValidationError("Issuance trigger report identity mismatch")
+    if report_trigger_decision.get("event_type") != event_type:
+        raise GovernanceValidationError("Issuance trigger event type mismatch")
+    if report_decision_receipt.get("report_key") != report_key or report_decision_receipt.get("revision") != revision:
+        raise GovernanceValidationError("Issuance receipt report identity mismatch")
+    if report_decision_receipt.get("report_trigger_decision_id") != report_trigger_decision.get("decision_id"):
+        raise GovernanceValidationError("Issuance receipt trigger reference mismatch")
+    if not all(isinstance(item, str) and item for item in (
+        issuance_receipt_id, event_reference, event_fingerprint, event_type,
+        producer_id, run_id, created_at_utc,
+    )) or not SHA256.fullmatch(event_fingerprint):
+        raise GovernanceValidationError("Invalid trigger issuance context")
+    payload = {
+        "issuance_receipt_id": issuance_receipt_id,
+        "receipt_schema_version": TRIGGER_ISSUANCE_SCHEMA_VERSION,
+        "report_key": report_key,
+        "revision": revision,
+        "event_reference": event_reference,
+        "event_fingerprint": event_fingerprint,
+        "event_type": event_type,
+        "trigger_decision_id": report_trigger_decision["decision_id"],
+        "report_decision_receipt_id": report_decision_receipt["receipt_id"],
+        "report_decision_receipt_hash": report_decision_receipt["canonical_sha256"],
+        "producer_id": producer_id,
+        "run_id": run_id,
+        "created_at": created_at_utc,
+        "actionable": False,
+    }
+    return {**payload, "receipt_hash": sha256_bytes(canonical_json_bytes(payload))}
+
+
+def validate_trigger_issuance_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
+    required = {
+        "issuance_receipt_id", "receipt_schema_version", "report_key", "revision",
+        "event_reference", "event_fingerprint", "event_type", "trigger_decision_id",
+        "report_decision_receipt_id", "report_decision_receipt_hash", "producer_id",
+        "run_id", "created_at", "actionable", "receipt_hash",
+    }
+    if set(receipt) != required:
+        raise GovernanceValidationError("Trigger issuance receipt shape mismatch")
+    if receipt.get("receipt_schema_version") != TRIGGER_ISSUANCE_SCHEMA_VERSION:
+        raise GovernanceValidationError("Unsupported trigger issuance receipt schema")
+    _report_identity(receipt.get("report_key"), receipt.get("revision"))
+    _false(receipt)
+    for field in ("event_reference", "event_type", "trigger_decision_id", "report_decision_receipt_id", "producer_id", "run_id", "created_at"):
+        if not isinstance(receipt.get(field), str) or not receipt[field]:
+            raise GovernanceValidationError("Trigger issuance receipt context is invalid")
+    for field in ("event_fingerprint", "report_decision_receipt_hash", "receipt_hash"):
+        if not isinstance(receipt.get(field), str) or not SHA256.fullmatch(receipt[field]):
+            raise GovernanceValidationError("Trigger issuance receipt hash is invalid")
+    expected = sha256_bytes(canonical_json_bytes({key: value for key, value in receipt.items() if key != "receipt_hash"}))
+    if receipt["receipt_hash"] != expected:
+        raise GovernanceValidationError("Trigger issuance receipt hash mismatch")
+    return dict(receipt)
+
+
+def build_trigger_issuance_index_entry(*, receipt: dict[str, Any], receipt_locator: str,
+                                       state: str = "ISSUED") -> dict[str, Any]:
+    receipt = validate_trigger_issuance_receipt(receipt)
+    if state not in TRIGGER_ISSUANCE_STATES or not isinstance(receipt_locator, str) or not receipt_locator:
+        raise GovernanceValidationError("Invalid trigger issuance index state")
+    return {
+        "issuance_receipt_id": receipt["issuance_receipt_id"],
+        "issuance_receipt_hash": receipt["receipt_hash"],
+        "receipt_locator": receipt_locator,
+        "report_key": receipt["report_key"], "revision": receipt["revision"],
+        "event_reference": receipt["event_reference"], "event_fingerprint": receipt["event_fingerprint"],
+        "trigger_decision_id": receipt["trigger_decision_id"], "producer_id": receipt["producer_id"],
+        "run_id": receipt["run_id"], "created_at": receipt["created_at"],
+        "state": state, "actionable": False,
+    }
+
+
+def validate_trigger_issuance_index_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    required = {
+        "issuance_receipt_id", "issuance_receipt_hash", "receipt_locator", "report_key", "revision",
+        "event_reference", "event_fingerprint", "trigger_decision_id", "producer_id", "run_id",
+        "created_at", "state", "actionable",
+    }
+    if set(entry) != required:
+        raise GovernanceValidationError("Trigger issuance index shape mismatch")
+    _report_identity(entry.get("report_key"), entry.get("revision"))
+    _false(entry)
+    if entry.get("state") not in TRIGGER_ISSUANCE_STATES:
+        raise GovernanceValidationError("Trigger issuance index state invalid")
+    for field in ("issuance_receipt_id", "receipt_locator", "event_reference", "trigger_decision_id", "producer_id", "run_id", "created_at"):
+        if not isinstance(entry.get(field), str) or not entry[field]:
+            raise GovernanceValidationError("Trigger issuance index context invalid")
+    for field in ("issuance_receipt_hash", "event_fingerprint"):
+        if not isinstance(entry.get(field), str) or not SHA256.fullmatch(entry[field]):
+            raise GovernanceValidationError("Trigger issuance index hash invalid")
+    return dict(entry)

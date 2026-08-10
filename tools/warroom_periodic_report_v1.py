@@ -14,6 +14,7 @@ import csv
 import html
 import importlib.util
 import json
+import os
 import re
 import sys
 from datetime import datetime, timedelta
@@ -50,6 +51,9 @@ REPORT_MANIFEST = "reports/P1008_REPORT_MANIFEST.json"
 RUNTIME_REPORT_MANIFEST = "runtime/warroom_report_manifest.json"
 EVENT_REVIEW_STATE = "runtime/warroom_event_review_state.json"
 PLUGIN_SHADOW_CANDIDATE = "runtime/research_plugin/latest_report_candidate.json"
+TRIGGER_ISSUANCE_RECEIPT_DIR = "runtime/governance/trigger_issuance_receipts"
+TRIGGER_ISSUANCE_INDEX = "runtime/governance/trigger_issuance_index.json"
+TRIGGER_ISSUANCE_PRODUCER_ID = "P1008_G1_I2_PERIODIC_REPORT_ORCHESTRATOR"
 
 
 class ReportTriggerReceiptError(RuntimeError):
@@ -155,34 +159,162 @@ def load_validated_report_trigger_handoff(
     return handoff
 
 
-def load_validated_research_skill_trigger_capability(
-    handoff_path: Path, report_date: str
-) -> ValidatedResearchSkillTrigger:
-    """Mint an in-process research capability after the existing G1-I2 gate.
+def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n"
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_bytes(body)
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
 
-    The returned capability is not a serialized receipt and cannot be created
-    by handing the research adapter a self-consistent Mapping.  This function
-    deliberately reuses ``load_validated_report_trigger_handoff`` rather than
-    recreating its validation rules.
+
+def _receipt_relative_locator(receipt_id: str) -> str:
+    if not isinstance(receipt_id, str) or not re.fullmatch(r"[A-Z0-9_:-]+", receipt_id):
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_RECEIPT_ID_INVALID")
+    return f"{TRIGGER_ISSUANCE_RECEIPT_DIR}/{receipt_id}.json"
+
+
+def _issuance_context_from_handoff(
+    handoff: dict[str, Any], *, event_reference: str, run_id: str, created_at_utc: str
+) -> dict[str, Any]:
+    """Internal producer context after the legacy archive validator has succeeded.
+
+    This accepts an already validated aggregate rather than caller scalar flags.
+    The producer is trusted only in the Owner-approved untrusted-data-caller model.
     """
-
-    handoff = load_validated_report_trigger_handoff(handoff_path, report_date)
-    trigger = handoff["report_trigger_decision"]
-    receipt = handoff["report_decision_receipt"]
-    return _mint_validated_research_skill_trigger(
-        report_key=handoff["report_key"],
-        revision=handoff["revision"],
+    if not all(isinstance(value, str) and value for value in (event_reference, run_id, created_at_utc)):
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_CONTEXT_INVALID")
+    evidence = handoff.get("event_evidence")
+    if not isinstance(evidence, list) or not evidence or not isinstance(evidence[0], dict):
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_CONTEXT_INVALID")
+    first = evidence[0]
+    event_fingerprint = report_governance.canonical_event_fingerprint(
         event_type=handoff["event_type"],
-        decision_id=trigger["decision_id"],
-        receipt_id=receipt["receipt_id"],
-        material_event_confirmed=trigger["material_event_confirmed"],
-        report_trigger_valid=trigger["report_trigger_valid"],
-        actionable=trigger["actionable"],
-        authority_conflict=(
-            trigger.get("authority_conflict") is True
-            or trigger.get("conflict_detected") is True
-        ),
-        policy_status=trigger["status"],
+        canonical_event_id=first.get("canonical_event_id", ""),
+        occurred_at_utc=first.get("occurred_at_utc", ""),
+    )
+    return {
+        "handoff": handoff,
+        "event_reference": event_reference,
+        "event_fingerprint": event_fingerprint,
+        "run_id": run_id,
+        "created_at_utc": created_at_utc,
+    }
+
+
+def issue_trusted_trigger_issuance(
+    package_root: Path, *, validated_handoff: dict[str, Any], event_reference: str,
+    run_id: str, created_at_utc: str,
+) -> dict[str, Any]:
+    """Persist a pre-research issuance receipt and independently indexed context.
+
+    Receipt existence is deliberately insufficient: only a successfully written
+    matching index entry makes the receipt eligible for capability lookup.
+    """
+    context = _issuance_context_from_handoff(
+        validated_handoff, event_reference=event_reference, run_id=run_id,
+        created_at_utc=created_at_utc,
+    )
+    handoff = context["handoff"]
+    trigger = handoff["report_trigger_decision"]
+    decision_seed = {
+        "report_key": handoff["report_key"], "revision": handoff["revision"],
+        "event_reference": event_reference, "trigger_decision_id": trigger["decision_id"],
+        "run_id": run_id,
+    }
+    receipt_id = "P1008_TRIGGER_ISSUANCE_" + report_governance.sha256_bytes(
+        report_governance.canonical_json_bytes(decision_seed)
+    )[:20]
+    locator = _receipt_relative_locator(receipt_id)
+    receipt = report_governance.build_trigger_issuance_receipt(
+        issuance_receipt_id=receipt_id, report_key=handoff["report_key"],
+        revision=handoff["revision"], event_reference=event_reference,
+        event_fingerprint=context["event_fingerprint"], event_type=handoff["event_type"],
+        report_trigger_decision=trigger,
+        report_decision_receipt=handoff["report_decision_receipt"],
+        producer_id=TRIGGER_ISSUANCE_PRODUCER_ID, run_id=run_id,
+        created_at_utc=created_at_utc,
+    )
+    root = package_root.resolve()
+    receipt_path = root / locator
+    index_path = root / TRIGGER_ISSUANCE_INDEX
+    if receipt_path.exists():
+        try:
+            existing = json.loads(receipt_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_RECEIPT_INVALID") from exc
+        if existing != receipt:
+            raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_RECEIPT_COLLISION")
+    else:
+        _atomic_write_json(receipt_path, receipt)
+    # Receipt identity is the canonical payload hash, rather than a worktree
+    # byte hash: JSON line endings must not redefine governed identity.
+    persisted = report_governance.validate_trigger_issuance_receipt(
+        json.loads(receipt_path.read_text(encoding="utf-8"))
+    )
+    if persisted != receipt:
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_RECEIPT_WRITE_VERIFY_FAILED")
+    if index_path.exists():
+        try:
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_INVALID") from exc
+    else:
+        index = {"schema_version": "1.0", "entries": []}
+    if not isinstance(index, dict) or index.get("schema_version") != "1.0" or not isinstance(index.get("entries"), list):
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_INVALID")
+    entry = report_governance.build_trigger_issuance_index_entry(receipt=receipt, receipt_locator=locator)
+    matches = [item for item in index["entries"] if isinstance(item, dict) and item.get("issuance_receipt_id") == receipt_id]
+    if matches and matches != [entry]:
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_COLLISION")
+    if not matches:
+        index["entries"].append(entry)
+        index["entries"].sort(key=lambda item: item["issuance_receipt_id"])
+        _atomic_write_json(index_path, index)
+    return {"issuance_receipt_id": receipt_id, "issuance_receipt_hash": receipt["receipt_hash"], "state": "ISSUED", "actionable": False}
+
+
+def load_validated_research_skill_trigger_capability(
+    package_root: Path, *, issuance_receipt_id: str, report_key: str, revision: int,
+    event_reference: str, trigger_decision_id: str,
+) -> ValidatedResearchSkillTrigger:
+    """Mint only after controlled index lookup and receipt/context verification."""
+    root = package_root.resolve()
+    locator = _receipt_relative_locator(issuance_receipt_id)
+    index_path = root / TRIGGER_ISSUANCE_INDEX
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_NOT_TRUSTED") from exc
+    if not isinstance(index, dict) or index.get("schema_version") != "1.0" or not isinstance(index.get("entries"), list):
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_NOT_TRUSTED")
+    matches = [item for item in index["entries"] if isinstance(item, dict) and item.get("issuance_receipt_id") == issuance_receipt_id]
+    if len(matches) != 1:
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_NOT_TRUSTED")
+    entry = report_governance.validate_trigger_issuance_index_entry(matches[0])
+    if entry["receipt_locator"] != locator or entry["state"] != "ISSUED":
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_NOT_TRUSTED")
+    try:
+        receipt = report_governance.validate_trigger_issuance_receipt(
+            json.loads((root / locator).read_text(encoding="utf-8"))
+        )
+    except (OSError, json.JSONDecodeError, report_governance.GovernanceValidationError) as exc:
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_RECEIPT_NOT_TRUSTED") from exc
+    fields = ("issuance_receipt_id", "report_key", "revision", "event_reference", "event_fingerprint", "trigger_decision_id", "producer_id", "run_id", "created_at")
+    if any(receipt[field] != entry[field] for field in fields) or receipt["receipt_hash"] != entry["issuance_receipt_hash"]:
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_INDEX_CONTEXT_MISMATCH")
+    if (receipt["report_key"], receipt["revision"], receipt["event_reference"], receipt["trigger_decision_id"]) != (report_key, revision, event_reference, trigger_decision_id):
+        raise ReportTriggerReceiptError("TRIGGER_ISSUANCE_REQUEST_CONTEXT_MISMATCH")
+    return _mint_validated_research_skill_trigger(
+        report_key=receipt["report_key"], revision=receipt["revision"], event_type=receipt["event_type"],
+        decision_id=receipt["trigger_decision_id"], receipt_id=receipt["report_decision_receipt_id"],
+        event_reference=receipt["event_reference"], event_fingerprint=receipt["event_fingerprint"],
+        issuance_receipt_id=receipt["issuance_receipt_id"], issuance_receipt_hash=receipt["receipt_hash"],
+        producer_id=receipt["producer_id"], run_id=receipt["run_id"], material_event_confirmed=True,
+        report_trigger_valid=True, actionable=False, authority_conflict=False, policy_status="PASS",
     )
 
 DAILY_COLUMNS = ["Date", "Close", "QuarterKey", "BVPS_ref", "PB_daily", "DataSupportLevel", "Status"]

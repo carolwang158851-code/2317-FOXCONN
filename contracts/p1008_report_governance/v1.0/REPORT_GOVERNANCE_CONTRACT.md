@@ -36,6 +36,21 @@ serialization in `phaseb1_common`: sorted keys, compact separators, UTF-8, LF,
 and no NaN values. This contract does not set business thresholds. A threshold
 is usable only when a supplied policy is explicitly Owner-approved.
 
+## Trusted research issuance provenance
+
+`decision_id` identifies deterministic content; it is not a capability. A
+`report decision receipt` represents a deterministic decision; it is not proof
+that a research request was issued. Before optional G1-S1 research enrichment,
+the governed producer persists a canonical `trigger issuance receipt` and then
+atomically records a matching entry in the controlled trigger-issuance index.
+The index binds receipt hash, report key, revision, event reference/fingerprint,
+trigger decision, producer, and run context. A receipt file without a matching
+index entry is not trusted. Capability lookup accepts only an issuance receipt
+reference and verifies the controlled locator, actual receipt, index hash, and
+all context fields; arbitrary handoff or receipt paths are not research
+authority. `ISSUED` is retained while this phase constructs no live provider
+call; request construction never fabricates `CONSUMED` execution history.
+
 ## Data and news minimum governance
 
 Every source is classified as `AUTHORITY`, `SECONDARY`, or `DISCOVERY`.

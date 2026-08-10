@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import sys
-import tempfile
 import unittest
+import uuid
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -21,6 +22,14 @@ from p1008_research_plugin.adapters import research_skill_governance_adapter as 
 
 HASH = "A" * 64
 NOW = "2026-08-09T00:00:00Z"
+
+
+@contextmanager
+def isolated_runtime_root():
+    """Avoid system TEMP: Windows security tooling can deny its child paths."""
+    root = ROOT / "runtime" / "test_scratch" / "g1_s1_p1" / uuid.uuid4().hex
+    root.mkdir(parents=True)
+    yield root
 
 
 def evidence() -> dict:
@@ -75,11 +84,19 @@ def valid_handoff() -> dict:
 
 
 def validated_trigger_capability() -> adapter.ValidatedResearchSkillTrigger:
-    with tempfile.TemporaryDirectory() as scratch:
-        handoff_path = Path(scratch) / "report_trigger_handoff.json"
+    with isolated_runtime_root() as root:
+        handoff_path = root / "report_trigger_handoff.json"
         handoff_path.write_text(json.dumps(valid_handoff()), encoding="utf-8")
+        handoff = periodic_report.load_validated_report_trigger_handoff(handoff_path, "2026-07-27")
+        issued = periodic_report.issue_trusted_trigger_issuance(
+            root, validated_handoff=handoff, event_reference="EVENT-MONTHLY-202607",
+            run_id="RUN-RESEARCH-SKILL-001", created_at_utc=NOW,
+        )
         return periodic_report.load_validated_research_skill_trigger_capability(
-            handoff_path, "2026-07-27"
+            root, issuance_receipt_id=issued["issuance_receipt_id"],
+            report_key=handoff["report_key"], revision=handoff["revision"],
+            event_reference="EVENT-MONTHLY-202607",
+            trigger_decision_id=handoff["report_trigger_decision"]["decision_id"],
         )
 
 
@@ -125,6 +142,86 @@ class ResearchSkillGovernanceAdapterTests(unittest.TestCase):
     def test_adapter_has_no_mapping_to_capability_constructor(self) -> None:
         with self.assertRaises(TypeError):
             adapter.ValidatedResearchSkillTrigger()  # type: ignore[call-arg]
+
+    def test_self_created_handoff_is_legacy_readable_but_not_trusted_skill_issuance(self) -> None:
+        with isolated_runtime_root() as root:
+            handoff_path = root / "forged-handoff.json"
+            handoff_path.write_text(json.dumps(valid_handoff()), encoding="utf-8")
+            handoff = periodic_report.load_validated_report_trigger_handoff(handoff_path, "2026-07-27")
+            self.assertTrue(handoff["report_trigger_decision"]["report_trigger_valid"])
+            with self.assertRaisesRegex(periodic_report.ReportTriggerReceiptError, "INDEX_NOT_TRUSTED"):
+                periodic_report.load_validated_research_skill_trigger_capability(
+                    root, issuance_receipt_id="P1008_TRIGGER_ISSUANCE_FORGED",
+                    report_key=handoff["report_key"], revision=1,
+                    event_reference="EVENT-MONTHLY-202607",
+                    trigger_decision_id=handoff["report_trigger_decision"]["decision_id"],
+                )
+
+    def test_self_created_receipt_and_partial_write_are_not_trusted(self) -> None:
+        with isolated_runtime_root() as root:
+            handoff = valid_handoff()
+            receipt = governance.build_trigger_issuance_receipt(
+                issuance_receipt_id="P1008_TRIGGER_ISSUANCE_FORGED", report_key=handoff["report_key"],
+                revision=1, event_reference="EVENT-MONTHLY-202607", event_fingerprint="F" * 64,
+                event_type=handoff["event_type"], report_trigger_decision=handoff["report_trigger_decision"],
+                report_decision_receipt=handoff["report_decision_receipt"], producer_id="FORGED",
+                run_id="FORGED", created_at_utc=NOW,
+            )
+            path = root / "runtime/governance/trigger_issuance_receipts/P1008_TRIGGER_ISSUANCE_FORGED.json"
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps(receipt), encoding="utf-8")
+            with self.assertRaisesRegex(periodic_report.ReportTriggerReceiptError, "INDEX_NOT_TRUSTED"):
+                periodic_report.load_validated_research_skill_trigger_capability(
+                    root, issuance_receipt_id=receipt["issuance_receipt_id"], report_key=handoff["report_key"],
+                    revision=1, event_reference="EVENT-MONTHLY-202607",
+                    trigger_decision_id=handoff["report_trigger_decision"]["decision_id"],
+                )
+
+    def test_index_hash_and_context_mismatch_fail_closed(self) -> None:
+        with isolated_runtime_root() as root:
+            handoff_path = root / "handoff.json"
+            handoff_path.write_text(json.dumps(valid_handoff()), encoding="utf-8")
+            handoff = periodic_report.load_validated_report_trigger_handoff(handoff_path, "2026-07-27")
+            issued = periodic_report.issue_trusted_trigger_issuance(root, validated_handoff=handoff, event_reference="EVENT-MONTHLY-202607", run_id="RUN-1", created_at_utc=NOW)
+            index_path = root / periodic_report.TRIGGER_ISSUANCE_INDEX
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            index["entries"][0]["issuance_receipt_hash"] = "F" * 64
+            index_path.write_text(json.dumps(index), encoding="utf-8")
+            with self.assertRaisesRegex(periodic_report.ReportTriggerReceiptError, "CONTEXT_MISMATCH"):
+                periodic_report.load_validated_research_skill_trigger_capability(root, issuance_receipt_id=issued["issuance_receipt_id"], report_key=handoff["report_key"], revision=1, event_reference="EVENT-MONTHLY-202607", trigger_decision_id=handoff["report_trigger_decision"]["decision_id"])
+
+    def test_lookup_rejects_cross_report_revision_event_and_decision_replay(self) -> None:
+        with isolated_runtime_root() as root:
+            handoff_path = root / "handoff.json"
+            handoff_path.write_text(json.dumps(valid_handoff()), encoding="utf-8")
+            handoff = periodic_report.load_validated_report_trigger_handoff(handoff_path, "2026-07-27")
+            issued = periodic_report.issue_trusted_trigger_issuance(
+                root, validated_handoff=handoff, event_reference="EVENT-MONTHLY-202607",
+                run_id="RUN-1", created_at_utc=NOW,
+            )
+            correct = {
+                "issuance_receipt_id": issued["issuance_receipt_id"],
+                "report_key": handoff["report_key"], "revision": handoff["revision"],
+                "event_reference": "EVENT-MONTHLY-202607",
+                "trigger_decision_id": handoff["report_trigger_decision"]["decision_id"],
+            }
+            for field, value in (
+                ("report_key", "P1008_MONTHLY_REVENUE_OTHER"),
+                ("revision", 2),
+                ("event_reference", "EVENT-OTHER"),
+                ("trigger_decision_id", "D" * 64),
+            ):
+                with self.subTest(field=field), self.assertRaisesRegex(
+                    periodic_report.ReportTriggerReceiptError, "REQUEST_CONTEXT_MISMATCH"
+                ):
+                    periodic_report.load_validated_research_skill_trigger_capability(
+                        root, **{**correct, field: value}
+                    )
+
+    def test_context_replay_is_rejected_before_skill_request(self) -> None:
+        capability = validated_trigger_capability()
+        with self.assertRaisesRegex(adapter.ResearchSkillGovernanceError, "Trigger report identity mismatch"):
+            adapter.build_skill_request(validated_trigger=capability, report_key=capability.report_key, revision=capability.revision, event_reference="EVENT-OTHER", command="SEARCH", query="Hon Hai")
 
     def test_command_allowlist_and_forbidden_commands_fail_closed(self) -> None:
         self.assertEqual(request()["provider_command"], "search")
