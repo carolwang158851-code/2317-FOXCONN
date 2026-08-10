@@ -44,7 +44,7 @@ def valid_trigger() -> dict:
 def request(**overrides: object) -> dict:
     value = {
         "trigger_decision": valid_trigger(), "report_key": "P1008_MONTHLY_REVENUE_202607", "revision": 1,
-        "event_reference": "EVENT-MONTHLY-202607", "command": "SEARCH", "query": "鴻海 2026年7月 月營收",
+        "event_reference": "EVENT-MONTHLY-202607", "command": "SEARCH", "query": "Hon Hai July 2026 monthly revenue",
     }
     value.update(overrides)
     return adapter.build_skill_request(**value)
@@ -75,12 +75,10 @@ class ResearchSkillGovernanceAdapterTests(unittest.TestCase):
             with self.subTest(query=query), self.assertRaisesRegex(adapter.ResearchSkillGovernanceError, "QUERY_POLICY_BLOCKED"):
                 request(query=query)
 
-    def test_extract_requires_proven_public_url_and_rejects_private_or_local(self) -> None:
-        extracted = request(command="EXTRACT_PUBLIC_URL", query=None, target_url="https://www.honhai.com/news", resolved_ip_addresses=["93.184.216.34"])
-        self.assertEqual(extracted["provider_command"], "extract")
-        for url, ips in (("file:///C:/secret", []), ("http://localhost/x", ["127.0.0.1"]), ("http://192.168.1.9/x", ["192.168.1.9"]), ("https://user:pass@example.com/x", ["93.184.216.34"]), ("https://example.com/x", [])):
-            with self.subTest(url=url), self.assertRaisesRegex(adapter.ResearchSkillGovernanceError, "URL_POLICY_BLOCKED"):
-                request(command="EXTRACT_PUBLIC_URL", query=None, target_url=url, resolved_ip_addresses=ips)
+    def test_extract_is_deferred_until_runtime_dns_request_binding_exists(self) -> None:
+        for url in ("https://www.honhai.com/news", "http://localhost/x", "http://127.0.0.1/x", "http://[::1]/x", "http://192.168.1.9/x", "http://169.254.169.254/x", "https://user:pass@example.com/x", "file:///C:/secret", "\\\\server\\share\\file", "ftp://example.com/file"):
+            with self.subTest(url=url), self.assertRaisesRegex(adapter.ResearchSkillGovernanceError, "EXTRACT_RUNTIME_VALIDATION_REQUIRED"):
+                request(command="EXTRACT_PUBLIC_URL", query=None, target_url=url)
 
     def test_retry_fallback_and_auth_policy_are_fixed(self) -> None:
         self.assertEqual(request()["max_attempts"], 1)
@@ -104,20 +102,21 @@ class ResearchSkillGovernanceAdapterTests(unittest.TestCase):
     def test_discovery_cannot_promote_class_or_provider_confidence_to_tier(self) -> None:
         raw = adapter.capture_raw_skill_response(skill_request=request(), payload={"results": [{}]}, retrieved_at_utc=NOW)
         result = {"source_id": "DISC-001", "source_locator": "https://example.com/article", "source_type": "NEWS_MEDIA", "source_hash": "B" * 64, "content_hash": "C" * 64, "source_class": "AUTHORITY", "source_tier": "OFFICIAL", "provider_confidence": 1.0}
-        candidate = adapter.build_discovery_evidence_candidate(raw_response=raw, result=result, source_locator_verified=True)
+        candidate = adapter.build_discovery_evidence_candidate(raw_response=raw, result=result)
         self.assertEqual(candidate["source_class"], "DISCOVERY")
         self.assertEqual(candidate["source_tier"], "UNVERIFIED")
+        self.assertEqual(candidate["locator_validation_status"], "LOCATOR_FORMAT_VALID")
         self.assertEqual(candidate["provider_confidence_advisory"], 1.0)
 
     def test_response_hash_is_not_source_hash_and_independence_is_unresolved_without_chain(self) -> None:
         raw = adapter.capture_raw_skill_response(skill_request=request(), payload={"results": [{}]}, retrieved_at_utc=NOW)
-        candidate = adapter.build_discovery_evidence_candidate(raw_response=raw, result={"source_id": "DISC-002", "source_locator": "https://example.com/article", "source_type": "NEWS_MEDIA", "source_hash": "B" * 64, "content_hash": "C" * 64}, source_locator_verified=True)
+        candidate = adapter.build_discovery_evidence_candidate(raw_response=raw, result={"source_id": "DISC-002", "source_locator": "https://example.com/article", "source_type": "NEWS_MEDIA", "source_hash": "B" * 64, "content_hash": "C" * 64})
         self.assertNotEqual(candidate["raw_response_hash"], candidate["source_hash"])
         self.assertEqual(candidate["independence_status"], "INDEPENDENCE_UNRESOLVED")
 
     def test_external_content_cannot_change_core_view_or_publication(self) -> None:
         raw = adapter.capture_raw_skill_response(skill_request=request(), payload={"results": [{}]}, retrieved_at_utc=NOW)
-        candidate = adapter.build_discovery_evidence_candidate(raw_response=raw, result={"source_id": "DISC-003", "source_locator": "https://example.com/article", "source_type": "NEWS_MEDIA", "source_hash": "B" * 64, "content_hash": "C" * 64, "core_view_changed": True, "publication_ready": True, "published_externally": True}, source_locator_verified=True)
+        candidate = adapter.build_discovery_evidence_candidate(raw_response=raw, result={"source_id": "DISC-003", "source_locator": "https://example.com/article", "source_type": "NEWS_MEDIA", "source_hash": "B" * 64, "content_hash": "C" * 64, "core_view_changed": True, "publication_ready": True, "published_externally": True})
         self.assertFalse(candidate["core_view_changed"])
         self.assertFalse(candidate["publication_ready"])
         self.assertFalse(candidate["published_externally"])
@@ -164,20 +163,22 @@ class ResearchSkillGovernanceAdapterTests(unittest.TestCase):
             request(command="generate.py")
 
     def test_local_unc_path_is_not_an_extract_target(self) -> None:
-        with self.assertRaisesRegex(adapter.ResearchSkillGovernanceError, "URL_POLICY_BLOCKED"):
-            request(command="EXTRACT_PUBLIC_URL", query=None, target_url="\\\\server\\share\\file", resolved_ip_addresses=[])
+        with self.assertRaisesRegex(adapter.ResearchSkillGovernanceError, "EXTRACT_RUNTIME_VALIDATION_REQUIRED"):
+            request(command="EXTRACT_PUBLIC_URL", query=None, target_url="\\\\server\\share\\file")
 
-    def test_unverified_locator_cannot_become_discovery_evidence(self) -> None:
+    def test_syntactically_valid_locator_is_discovery_only(self) -> None:
         raw = adapter.capture_raw_skill_response(skill_request=request(), payload={"results": [{}]}, retrieved_at_utc=NOW)
         result = {"source_id": "DISC-004", "source_locator": "https://example.com/article", "source_type": "NEWS_MEDIA", "source_hash": "B" * 64, "content_hash": "C" * 64}
-        with self.assertRaisesRegex(adapter.ResearchSkillGovernanceError, "PROVENANCE_INCOMPLETE"):
-            adapter.build_discovery_evidence_candidate(raw_response=raw, result=result)
+        candidate = adapter.build_discovery_evidence_candidate(raw_response=raw, result=result)
+        self.assertEqual(candidate["source_class"], "DISCOVERY")
+        self.assertEqual(candidate["source_tier"], "UNVERIFIED")
+        self.assertEqual(candidate["locator_validation_status"], "LOCATOR_FORMAT_VALID")
 
     def test_response_hash_cannot_be_represented_as_source_hash(self) -> None:
         raw = adapter.capture_raw_skill_response(skill_request=request(), payload={"results": [{}]}, retrieved_at_utc=NOW)
         result = {"source_id": "DISC-005", "source_locator": "https://example.com/article", "source_type": "NEWS_MEDIA", "source_hash": raw.raw_response_hash, "content_hash": "C" * 64}
         with self.assertRaisesRegex(adapter.ResearchSkillGovernanceError, "PROVENANCE_INCOMPLETE"):
-            adapter.build_discovery_evidence_candidate(raw_response=raw, result=result, source_locator_verified=True)
+            adapter.build_discovery_evidence_candidate(raw_response=raw, result=result)
 
     def test_success_no_relevant_result_is_a_controlled_non_evidence_state(self) -> None:
         receipt = adapter.build_skill_call_receipt(skill_request=request(), raw_response=None, started_at_utc=NOW, completed_at_utc=NOW, failure_code="SUCCESS_NO_RELEVANT_RESULT")
@@ -190,8 +191,36 @@ class ResearchSkillGovernanceAdapterTests(unittest.TestCase):
 
     def test_candidate_is_always_non_actionable(self) -> None:
         raw = adapter.capture_raw_skill_response(skill_request=request(), payload={"results": [{}]}, retrieved_at_utc=NOW)
-        candidate = adapter.build_discovery_evidence_candidate(raw_response=raw, result={"source_id": "DISC-006", "source_locator": "https://example.com/article", "source_type": "NEWS_MEDIA", "source_hash": "B" * 64, "content_hash": "C" * 64}, source_locator_verified=True)
+        candidate = adapter.build_discovery_evidence_candidate(raw_response=raw, result={"source_id": "DISC-006", "source_locator": "https://example.com/article", "source_type": "NEWS_MEDIA", "source_hash": "B" * 64, "content_hash": "C" * 64})
         self.assertFalse(candidate["actionable"])
+
+    def test_query_normalization_blocks_windows_unc_relative_and_file_forms(self) -> None:
+        for query in ("data/foo", "data\\foo", ".\\data\\foo", "./data/foo", "C:\\foo", "C:/foo", "c:\\foo", "c:/foo", "\\\\server\\share", "//server/share", "file:///C:/secret", ".env", "warroom.sqlite3", "@C:\\file", "@C:/file", "@.\\file", "@../file", "@..\\file"):
+            with self.subTest(query=query), self.assertRaisesRegex(adapter.ResearchSkillGovernanceError, "QUERY_POLICY_BLOCKED"):
+                request(query=query)
+
+    def test_locator_rejects_local_private_credential_and_malformed_forms(self) -> None:
+        raw = adapter.capture_raw_skill_response(skill_request=request(), payload={"results": [{}]}, retrieved_at_utc=NOW)
+        for locator in ("", "file:///C:/secret", "http://localhost/", "http://127.0.0.1/", "http://[::1]/", "http://192.168.1.1/", "http://169.254.169.254/", "ftp://example.com/", "https://user:pass@example.com/", "\\\\server\\share"):
+            result = {"source_id": "DISC-LOC", "source_locator": locator, "source_type": "NEWS_MEDIA", "source_hash": "B" * 64, "content_hash": "C" * 64}
+            with self.subTest(locator=locator), self.assertRaisesRegex(adapter.ResearchSkillGovernanceError, "PROVENANCE_INCOMPLETE"):
+                adapter.build_discovery_evidence_candidate(raw_response=raw, result=result)
+
+    def test_caller_controls_cannot_promote_locator_or_tier(self) -> None:
+        raw = adapter.capture_raw_skill_response(skill_request=request(), payload={"results": [{}]}, retrieved_at_utc=NOW)
+        result = {"source_id": "DISC-CONTROL", "source_locator": "https://example.com/article", "source_type": "NEWS_MEDIA", "source_hash": "B" * 64, "content_hash": "C" * 64}
+        for controls in ({"source_locator_verified": True}, {"source_tier_assigned_by_policy": "OFFICIAL"}, {"source_tier": "MEDIA"}):
+            with self.subTest(controls=controls), self.assertRaisesRegex(adapter.ResearchSkillGovernanceError, "PROVENANCE_INCOMPLETE"):
+                adapter.build_discovery_evidence_candidate(raw_response=raw, result=result, **controls)
+
+    def test_raw_response_capture_is_immutable_after_caller_payload_mutation(self) -> None:
+        original_payload = {"results": [{"id": 1}]}
+        raw = adapter.capture_raw_skill_response(skill_request=request(), payload=original_payload, retrieved_at_utc=NOW)
+        original_hash = raw.raw_response_hash
+        original_payload["results"][0]["id"] = 2
+        original_payload["results"].append({"id": 3})
+        self.assertEqual(raw.raw_response_hash, original_hash)
+        self.assertEqual(raw.decoded_payload(), {"results": [{"id": 1}]})
 
 
 if __name__ == "__main__":

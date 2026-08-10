@@ -10,8 +10,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import ipaddress
+import json
 import re
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping
+import unicodedata
 from urllib.parse import urlsplit
 
 from ..phaseb1_common import canonical_json_bytes, sha256_bytes
@@ -52,13 +54,15 @@ FAILURE_CODES = frozenset({
     "COMMAND_NOT_ALLOWED",
     "QUERY_POLICY_BLOCKED",
     "URL_POLICY_BLOCKED",
+    "EXTRACT_RUNTIME_VALIDATION_REQUIRED",
 })
 _REPORT_KEY = re.compile(r"^P1008_[A-Z0-9_:-]+$")
 _SHA256 = re.compile(r"^[A-F0-9]{64}$")
 _FORBIDDEN_QUERY = re.compile(
-    r"(?:\bdata/|\brules/|\bruntime/|\.sqlite(?:3)?\b|\bhold\b|\bmidr\b|\bmrd\b|"
+    r"(?:\b(?:data|rules|runtime)/|(?:^|[\s@])(?:\.?\.?/)+(?:data|rules|runtime)/|"
+    r"(?:^|[\s@])[a-z]:/|(?:^|[\s@])//|\.sqlite(?:3)?\b|\bhold\b|\bmidr\b|\bmrd\b|"
     r"api[_ -]?key\b|\btoken\b|\bpassword\b|\benv(?:ironment)?\b|\.env\b|"
-    r"(?:[A-Za-z]:\\)|(?:^|\s)\\\\|\bfile://|\bowner private|\bprivate annotation)",
+    r"\bfile:/|\bowner private|\bprivate annotation)",
     re.IGNORECASE,
 )
 _FORBIDDEN_COMMAND_TERMS = re.compile(
@@ -75,11 +79,21 @@ class RawSkillResponse:
     skill_call_id: str
     command: str
     retrieved_at_utc: str
-    payload: Mapping[str, Any]
+    canonical_payload_json: str
+    raw_response_hash: str
+
+    def decoded_payload(self) -> Mapping[str, Any]:
+        """Return a fresh decoded view; it cannot alter the captured identity."""
+
+        value = json.loads(self.canonical_payload_json)
+        if not isinstance(value, dict):
+            raise ResearchSkillGovernanceError("MALFORMED_RESPONSE")
+        return value
 
     @property
-    def raw_response_hash(self) -> str:
-        return sha256_bytes(canonical_json_bytes(dict(self.payload)))
+    def result_count(self) -> int | None:
+        results = self.decoded_payload().get("results")
+        return len(results) if isinstance(results, list) else None
 
 
 def _required(value: Mapping[str, Any], *fields: str) -> None:
@@ -111,7 +125,12 @@ def validate_skill_identity(identity: Mapping[str, Any]) -> dict[str, str]:
 
 
 def evaluate_invocation_eligibility(trigger_decision: Mapping[str, Any]) -> dict[str, Any]:
-    """Permit at most one future call only after the G1 trigger is already valid."""
+    """Permit one future call only after a supplied G1 trigger is already valid.
+
+    The deterministic trigger ID establishes payload integrity, not a signed or
+    persisted receipt.  G1-S1 never manufactures a trigger decision; a future
+    runtime must supply the already-validated G1 decision context.
+    """
 
     _false(trigger_decision)
     report_key = trigger_decision.get("report_key")
@@ -151,36 +170,34 @@ def sanitize_query(query: str) -> str:
 
     if not isinstance(query, str) or not query.strip() or len(query) > 512:
         raise ResearchSkillGovernanceError("QUERY_POLICY_BLOCKED")
-    normalized = " ".join(query.split())
-    if _FORBIDDEN_QUERY.search(normalized) or _FORBIDDEN_COMMAND_TERMS.search(normalized):
+    normalized = " ".join(unicodedata.normalize("NFKC", query).split())
+    policy_view = normalized.replace("\\", "/")
+    if _FORBIDDEN_QUERY.search(policy_view) or _FORBIDDEN_COMMAND_TERMS.search(policy_view):
         raise ResearchSkillGovernanceError("QUERY_POLICY_BLOCKED")
     return normalized
 
 
-def validate_public_extract_url(url: str, *, resolved_ip_addresses: Sequence[str]) -> str:
-    """Validate a public HTTP(S) extraction target using caller-supplied DNS proof.
+def _validate_discovery_locator(locator: object) -> str:
+    """Establish syntax only; this is not source or DNS authenticity proof."""
 
-    DNS resolution is intentionally not performed here.  A later, separately
-    authorized runtime must supply one or more observed resolved IP addresses;
-    missing or private/ambiguous resolution fails closed before extraction.
-    """
-
-    if not isinstance(url, str) or not url or url.startswith("\\\\"):
-        raise ResearchSkillGovernanceError("URL_POLICY_BLOCKED")
-    parsed = urlsplit(url)
+    if not isinstance(locator, str) or not locator or locator.startswith("\\\\") or locator.startswith("//"):
+        raise ResearchSkillGovernanceError("PROVENANCE_INCOMPLETE")
+    parsed = urlsplit(locator)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
-        raise ResearchSkillGovernanceError("URL_POLICY_BLOCKED")
+        raise ResearchSkillGovernanceError("PROVENANCE_INCOMPLETE")
     host = parsed.hostname.rstrip(".").lower()
     if host in {"localhost", "localhost.localdomain"} or host.endswith(".local"):
-        raise ResearchSkillGovernanceError("URL_POLICY_BLOCKED")
-    if not isinstance(resolved_ip_addresses, Sequence) or isinstance(resolved_ip_addresses, (str, bytes)) or not resolved_ip_addresses:
-        raise ResearchSkillGovernanceError("URL_POLICY_BLOCKED")
+        raise ResearchSkillGovernanceError("PROVENANCE_INCOMPLETE")
     try:
-        addresses = [ipaddress.ip_address(value) for value in resolved_ip_addresses]
+        literal = ipaddress.ip_address(host)
     except ValueError as exc:
-        raise ResearchSkillGovernanceError("URL_POLICY_BLOCKED") from exc
-    if any(not address.is_global for address in addresses):
-        raise ResearchSkillGovernanceError("URL_POLICY_BLOCKED")
+        # A DNS hostname may be syntactically public, but is deliberately not
+        # claimed DNS-verified in this deterministic, non-network phase.
+        if "." not in host:
+            raise ResearchSkillGovernanceError("PROVENANCE_INCOMPLETE") from exc
+        return parsed.geturl()
+    if not literal.is_global:
+        raise ResearchSkillGovernanceError("PROVENANCE_INCOMPLETE")
     return parsed.geturl()
 
 
@@ -193,7 +210,6 @@ def build_skill_request(
     command: str,
     query: str | None,
     target_url: str | None = None,
-    resolved_ip_addresses: Sequence[str] = (),
     auth_mode: str = "NONE",
     max_attempts: int = MAX_ATTEMPTS,
     fallback_enabled: bool = False,
@@ -214,11 +230,10 @@ def build_skill_request(
     normalized_query: str | None = None
     normalized_target: str | None = None
     if command == "EXTRACT_PUBLIC_URL":
-        if query is not None:
-            raise ResearchSkillGovernanceError("QUERY_POLICY_BLOCKED")
-        normalized_target = validate_public_extract_url(
-            target_url or "", resolved_ip_addresses=resolved_ip_addresses
-        )
+        # The future provider would resolve the hostname itself.  Because this
+        # phase cannot bind request-time DNS resolution to that provider fetch,
+        # extraction remains unavailable rather than trusting caller evidence.
+        raise ResearchSkillGovernanceError("EXTRACT_RUNTIME_VALIDATION_REQUIRED")
     else:
         if target_url is not None:
             raise ResearchSkillGovernanceError("URL_POLICY_BLOCKED")
@@ -254,11 +269,13 @@ def capture_raw_skill_response(
         raise ResearchSkillGovernanceError("COMMAND_NOT_ALLOWED")
     if not isinstance(payload, Mapping) or not isinstance(retrieved_at_utc, str) or not retrieved_at_utc:
         raise ResearchSkillGovernanceError("MALFORMED_RESPONSE")
+    canonical_payload = canonical_json_bytes(dict(payload)).decode("utf-8")
     return RawSkillResponse(
         skill_call_id=str(skill_request["skill_call_id"]),
         command=str(skill_request["command"]),
         retrieved_at_utc=retrieved_at_utc,
-        payload=dict(payload),
+        canonical_payload_json=canonical_payload,
+        raw_response_hash=sha256_bytes(canonical_payload.encode("utf-8")),
     )
 
 
@@ -276,8 +293,8 @@ def build_skill_call_receipt(
     if raw_response is not None and raw_response.skill_call_id != skill_request["skill_call_id"]:
         raise ResearchSkillGovernanceError("Raw response call identity mismatch")
     result_count: int | None = None
-    if raw_response is not None and isinstance(raw_response.payload.get("results"), list):
-        result_count = len(raw_response.payload["results"])
+    if raw_response is not None:
+        result_count = raw_response.result_count
     status = "SUCCESS" if failure_code in {"SUCCESS", "SUCCESS_NO_RELEVANT_RESULT"} else "FAIL_CLOSED"
     return {
         "skill_call_id": skill_request["skill_call_id"], **dict(PINNED_SKILL_IDENTITY),
@@ -298,20 +315,16 @@ def build_skill_call_receipt(
 
 def build_discovery_evidence_candidate(
     *, raw_response: RawSkillResponse, result: Mapping[str, Any],
-    source_tier_assigned_by_policy: str = "UNVERIFIED",
-    source_locator_verified: bool = False,
+    **caller_controls: Any,
 ) -> dict[str, Any]:
     """Qualify one response item as Discovery only, never as authority evidence."""
 
-    if not isinstance(result, Mapping):
+    if caller_controls or not isinstance(result, Mapping):
         raise ResearchSkillGovernanceError("PROVENANCE_INCOMPLETE")
     required = ("source_id", "source_locator", "source_type", "source_hash", "content_hash")
     if any(result.get(field) in (None, "") for field in required):
         raise ResearchSkillGovernanceError("PROVENANCE_INCOMPLETE")
-    if not isinstance(result["source_locator"], str) or not result["source_locator"].strip() or source_locator_verified is not True:
-        raise ResearchSkillGovernanceError("PROVENANCE_INCOMPLETE")
-    if source_tier_assigned_by_policy not in {"UNVERIFIED", "MEDIA", "OFFICIAL", "PUBLIC_MARKET", "CSV_AUTHORITY", "OWNER_NOTE"}:
-        raise ResearchSkillGovernanceError("PROVENANCE_INCOMPLETE")
+    normalized_locator = _validate_discovery_locator(result["source_locator"])
     if not all(isinstance(result[field], str) and _SHA256.fullmatch(result[field]) for field in ("source_hash", "content_hash")):
         raise ResearchSkillGovernanceError("PROVENANCE_INCOMPLETE")
     if result["source_hash"] == raw_response.raw_response_hash:
@@ -323,9 +336,9 @@ def build_discovery_evidence_candidate(
         "skill_call_id": raw_response.skill_call_id,
         "provider": PINNED_SKILL_IDENTITY["vendor"],
         "command": raw_response.command, "retrieved_at_utc": raw_response.retrieved_at_utc,
-        "source_id": result["source_id"], "source_locator": result["source_locator"],
+        "source_id": result["source_id"], "source_locator": normalized_locator,
         "source_type": result["source_type"], "source_class": "DISCOVERY",
-        "source_tier": source_tier_assigned_by_policy,
+        "source_tier": "UNVERIFIED", "locator_validation_status": "LOCATOR_FORMAT_VALID",
         "source_hash": result["source_hash"], "content_hash": result["content_hash"],
         "originating_chain_id": chain if independence == "UNVERIFIED" else None,
         "independence_status": independence,
