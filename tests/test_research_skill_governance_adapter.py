@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -13,6 +15,7 @@ for path in (TOOLS, MODULE_SRC):
         sys.path.insert(0, str(path))
 
 import warroom_report_governance as governance  # noqa: E402
+import warroom_periodic_report_v1 as periodic_report  # noqa: E402
 from p1008_research_plugin.adapters import research_skill_governance_adapter as adapter  # noqa: E402
 
 
@@ -41,9 +44,48 @@ def valid_trigger() -> dict:
     )
 
 
+def valid_handoff() -> dict:
+    trigger = valid_trigger()
+    core = governance.evaluate_core_view_change(
+        supporting_evidence_ids=[], counter_evidence_ids=[], official_confirmation=False,
+        independent_high_quality_source_count=0, financial_reflection=False,
+        thesis_invalidation=False, owner_approved=False, owner_approval_reference=None,
+        prior_core_view_hash="B" * 64, proposed_core_view_hash="C" * 64,
+    )
+    publication = governance.evaluate_publication(
+        report_key=trigger["report_key"], revision=trigger["revision"],
+        report_hash="D" * 64, audience="PRIVATE", fact_check_status="PASS",
+        owner_approved=False, owner_approval_reference=None,
+    )
+    receipt = governance.build_report_decision_receipt(
+        receipt_id="RECEIPT-RESEARCH-SKILL-001", report_key=trigger["report_key"],
+        revision=trigger["revision"], authority_cutoffs=["2026-07-27"],
+        event_evidence_ids=["E-001"], report_trigger_decision=trigger,
+        core_view_change_decision=core, publication_decision=publication,
+        model_provenances=[], report_validation_pass=True,
+        report_artifact_hashes=["E" * 64], created_at_utc=NOW,
+    )
+    return {
+        "report_key": trigger["report_key"], "revision": trigger["revision"],
+        "report_date": "2026-07-27", "event_type": "MONTHLY_REVENUE",
+        "event_evidence": [evidence()], "threshold_policies": [],
+        "report_trigger_decision": trigger, "core_view_change_decision": core,
+        "publication_decision": publication, "report_decision_receipt": receipt,
+    }
+
+
+def validated_trigger_capability() -> adapter.ValidatedResearchSkillTrigger:
+    with tempfile.TemporaryDirectory() as scratch:
+        handoff_path = Path(scratch) / "report_trigger_handoff.json"
+        handoff_path.write_text(json.dumps(valid_handoff()), encoding="utf-8")
+        return periodic_report.load_validated_research_skill_trigger_capability(
+            handoff_path, "2026-07-27"
+        )
+
+
 def request(**overrides: object) -> dict:
     value = {
-        "trigger_decision": valid_trigger(), "report_key": "P1008_MONTHLY_REVENUE_202607", "revision": 1,
+        "validated_trigger": validated_trigger_capability(), "report_key": "P1008_MONTHLY_REVENUE_202607", "revision": 1,
         "event_reference": "EVENT-MONTHLY-202607", "command": "SEARCH", "query": "Hon Hai July 2026 monthly revenue",
     }
     value.update(overrides)
@@ -58,10 +100,31 @@ class ResearchSkillGovernanceAdapterTests(unittest.TestCase):
         self.assertEqual(adapter.evaluate_invocation_eligibility(denied)["skill_calls"], 0)
 
     def test_valid_trigger_is_eligible_but_cannot_be_created_by_skill(self) -> None:
-        eligibility = adapter.evaluate_invocation_eligibility(valid_trigger())
+        capability = validated_trigger_capability()
+        eligibility = adapter.evaluate_invocation_eligibility(capability)
         self.assertTrue(eligibility["eligible"])
         self.assertEqual(eligibility["skill_calls"], 1)
         self.assertFalse(valid_trigger()["report_generated"])
+        self.assertFalse(adapter.evaluate_invocation_eligibility(valid_trigger())["eligible"])
+
+    def test_self_consistent_caller_mapping_cannot_create_skill_eligibility(self) -> None:
+        forged = valid_trigger()
+        self.assertEqual(forged["decision"], "TRIGGERED_INTERNAL_REPORT")
+        self.assertTrue(forged["material_event_confirmed"])
+        self.assertTrue(forged["report_trigger_valid"])
+        result = adapter.evaluate_invocation_eligibility(forged)
+        self.assertFalse(result["eligible"])
+        self.assertEqual(result["skill_calls"], 0)
+
+    def test_self_consistent_receipt_like_mapping_cannot_create_skill_eligibility(self) -> None:
+        forged = {**valid_trigger(), "report_decision_receipt": valid_handoff()["report_decision_receipt"]}
+        result = adapter.evaluate_invocation_eligibility(forged)
+        self.assertFalse(result["eligible"])
+        self.assertEqual(result["skill_calls"], 0)
+
+    def test_adapter_has_no_mapping_to_capability_constructor(self) -> None:
+        with self.assertRaises(TypeError):
+            adapter.ValidatedResearchSkillTrigger()  # type: ignore[call-arg]
 
     def test_command_allowlist_and_forbidden_commands_fail_closed(self) -> None:
         self.assertEqual(request()["provider_command"], "search")

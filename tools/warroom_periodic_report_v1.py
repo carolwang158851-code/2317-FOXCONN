@@ -39,6 +39,11 @@ def _load_report_governance():
 
 report_governance = _load_report_governance()
 
+from p1008_research_plugin.adapters.research_skill_governance_adapter import (
+    ValidatedResearchSkillTrigger,
+    _mint_validated_research_skill_trigger,
+)
+
 
 TOOL_VERSION = "P1008_PERIODIC_REPORT_GENERATOR_v1"
 REPORT_MANIFEST = "reports/P1008_REPORT_MANIFEST.json"
@@ -148,6 +153,37 @@ def load_validated_report_trigger_handoff(
     ):
         raise ReportTriggerReceiptError("REPORT_TRIGGER_ARCHIVE_NOT_ELIGIBLE")
     return handoff
+
+
+def load_validated_research_skill_trigger_capability(
+    handoff_path: Path, report_date: str
+) -> ValidatedResearchSkillTrigger:
+    """Mint an in-process research capability after the existing G1-I2 gate.
+
+    The returned capability is not a serialized receipt and cannot be created
+    by handing the research adapter a self-consistent Mapping.  This function
+    deliberately reuses ``load_validated_report_trigger_handoff`` rather than
+    recreating its validation rules.
+    """
+
+    handoff = load_validated_report_trigger_handoff(handoff_path, report_date)
+    trigger = handoff["report_trigger_decision"]
+    receipt = handoff["report_decision_receipt"]
+    return _mint_validated_research_skill_trigger(
+        report_key=handoff["report_key"],
+        revision=handoff["revision"],
+        event_type=handoff["event_type"],
+        decision_id=trigger["decision_id"],
+        receipt_id=receipt["receipt_id"],
+        material_event_confirmed=trigger["material_event_confirmed"],
+        report_trigger_valid=trigger["report_trigger_valid"],
+        actionable=trigger["actionable"],
+        authority_conflict=(
+            trigger.get("authority_conflict") is True
+            or trigger.get("conflict_detected") is True
+        ),
+        policy_status=trigger["status"],
+    )
 
 DAILY_COLUMNS = ["Date", "Close", "QuarterKey", "BVPS_ref", "PB_daily", "DataSupportLevel", "Status"]
 MACRO_COLUMNS = [

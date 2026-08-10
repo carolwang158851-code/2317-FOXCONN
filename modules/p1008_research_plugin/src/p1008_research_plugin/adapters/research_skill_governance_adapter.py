@@ -15,6 +15,7 @@ import re
 from typing import Any, Mapping
 import unicodedata
 from urllib.parse import urlsplit
+import weakref
 
 from ..phaseb1_common import canonical_json_bytes, sha256_bytes
 
@@ -96,6 +97,84 @@ class RawSkillResponse:
         return len(results) if isinstance(results, list) else None
 
 
+@dataclass(frozen=True, eq=False, init=False)
+class ValidatedResearchSkillTrigger:
+    """Opaque in-process capability minted only after G1-I2 handoff validation.
+
+    ``decision_id`` is a canonical identity reference, not an authentication
+    token.  Membership in the private mint registry proves only that the
+    existing G1-I2 validator accepted the handoff in this process.
+    """
+
+    report_key: str
+    revision: int
+    event_type: str
+    decision_id: str
+    receipt_id: str
+    material_event_confirmed: bool
+    report_trigger_valid: bool
+    actionable: bool
+    authority_conflict: bool
+    policy_status: str
+
+    def __init__(self) -> None:
+        raise TypeError(
+            "ValidatedResearchSkillTrigger must be minted by the G1-I2 validator"
+        )
+
+
+_VALIDATED_RESEARCH_TRIGGER_MINTS: weakref.WeakSet[ValidatedResearchSkillTrigger] = weakref.WeakSet()
+
+
+def _mint_validated_research_skill_trigger(
+    *,
+    report_key: str,
+    revision: int,
+    event_type: str,
+    decision_id: str,
+    receipt_id: str,
+    material_event_confirmed: bool,
+    report_trigger_valid: bool,
+    actionable: bool,
+    authority_conflict: bool,
+    policy_status: str,
+) -> ValidatedResearchSkillTrigger:
+    """Mint the capability for the verified G1-I2 validator only.
+
+    This intentionally has no Mapping/JSON convenience constructor: raw
+    caller data must pass the existing G1-I2 handoff validator before the
+    capability exists.
+    """
+
+    _validate_report_identity(report_key, revision)
+    if not all(isinstance(value, str) and value for value in (event_type, decision_id, receipt_id, policy_status)):
+        raise ResearchSkillGovernanceError("TRUSTED_TRIGGER_MINT_INVALID")
+    if not all(isinstance(value, bool) for value in (
+        material_event_confirmed, report_trigger_valid, actionable, authority_conflict,
+    )):
+        raise ResearchSkillGovernanceError("TRUSTED_TRIGGER_MINT_INVALID")
+    capability = object.__new__(ValidatedResearchSkillTrigger)
+    for name, value in {
+        "report_key": report_key,
+        "revision": revision,
+        "event_type": event_type,
+        "decision_id": decision_id,
+        "receipt_id": receipt_id,
+        "material_event_confirmed": material_event_confirmed,
+        "report_trigger_valid": report_trigger_valid,
+        "actionable": actionable,
+        "authority_conflict": authority_conflict,
+        "policy_status": policy_status,
+    }.items():
+        object.__setattr__(capability, name, value)
+    _VALIDATED_RESEARCH_TRIGGER_MINTS.add(capability)
+    return capability
+
+
+def _is_validated_research_skill_trigger(value: object) -> bool:
+    return isinstance(value, ValidatedResearchSkillTrigger) and value in _VALIDATED_RESEARCH_TRIGGER_MINTS
+
+
 def _required(value: Mapping[str, Any], *fields: str) -> None:
     missing = [field for field in fields if value.get(field) in (None, "")]
     if missing:
@@ -124,37 +203,26 @@ def validate_skill_identity(identity: Mapping[str, Any]) -> dict[str, str]:
     return dict(PINNED_SKILL_IDENTITY)
 
 
-def evaluate_invocation_eligibility(trigger_decision: Mapping[str, Any]) -> dict[str, Any]:
-    """Permit one future call only after a supplied G1 trigger is already valid.
+def evaluate_invocation_eligibility(validated_trigger: object) -> dict[str, Any]:
+    """Permit one future call only through a validated G1-I2 capability.
 
-    The deterministic trigger ID establishes payload integrity, not a signed or
-    persisted receipt.  G1-S1 never manufactures a trigger decision; a future
-    runtime must supply the already-validated G1 decision context.
+    Canonical decision identity proves representation integrity only.  Raw
+    Mapping/JSON data, including a self-consistent decision ID or receipt, is
+    never accepted as invocation authority.
     """
 
-    _false(trigger_decision)
-    report_key = trigger_decision.get("report_key")
-    revision = trigger_decision.get("revision")
-    try:
-        _validate_report_identity(report_key, revision)
-    except ResearchSkillGovernanceError:
+    if not _is_validated_research_skill_trigger(validated_trigger):
         return {
-            "eligible": False, "skill_calls": 0, "status": "FAIL_CLOSED",
+            "eligible": False, "skill_calls": 0, "status": "NOT_ELIGIBLE",
             "failure_code": "SOURCE_FAILED", "actionable": False,
         }
-    canonical_trigger = dict(trigger_decision)
-    supplied_decision_id = canonical_trigger.pop("decision_id", None)
-    verified_trigger_identity = isinstance(supplied_decision_id, str) and supplied_decision_id == (
-        "TRIGGER-" + sha256_bytes(canonical_json_bytes(canonical_trigger))[:16]
-    )
     valid = (
-        trigger_decision.get("material_event_confirmed") is True
-        and trigger_decision.get("report_trigger_valid") is True
-        and trigger_decision.get("decision") == "TRIGGERED_INTERNAL_REPORT"
-        and verified_trigger_identity
+        validated_trigger.material_event_confirmed is True
+        and validated_trigger.report_trigger_valid is True
+        and validated_trigger.actionable is False
+        and validated_trigger.policy_status == "PASS"
     )
-    conflict = trigger_decision.get("authority_conflict") is True or trigger_decision.get("conflict_detected") is True
-    if not valid or conflict:
+    if not valid or validated_trigger.authority_conflict:
         return {
             "eligible": False, "skill_calls": 0, "status": "NOT_ELIGIBLE",
             "failure_code": "SOURCE_FAILED", "actionable": False,
@@ -203,7 +271,7 @@ def _validate_discovery_locator(locator: object) -> str:
 
 def build_skill_request(
     *,
-    trigger_decision: Mapping[str, Any],
+    validated_trigger: ValidatedResearchSkillTrigger,
     report_key: str,
     revision: int,
     event_reference: str,
@@ -220,10 +288,10 @@ def build_skill_request(
     _required({"event_reference": event_reference}, "event_reference")
     if auth_mode not in AUTH_MODES or max_attempts != MAX_ATTEMPTS or fallback_enabled is not False:
         raise ResearchSkillGovernanceError("SKILL_COMMAND_NOT_ALLOWED")
-    eligibility = evaluate_invocation_eligibility(trigger_decision)
+    eligibility = evaluate_invocation_eligibility(validated_trigger)
     if not eligibility["eligible"]:
         raise ResearchSkillGovernanceError("SKILL_INVOCATION_NOT_ELIGIBLE")
-    if trigger_decision.get("report_key") != report_key or trigger_decision.get("revision") != revision:
+    if validated_trigger.report_key != report_key or validated_trigger.revision != revision:
         raise ResearchSkillGovernanceError("Trigger report identity mismatch")
     if command not in COMMAND_MAP:
         raise ResearchSkillGovernanceError("SKILL_COMMAND_NOT_ALLOWED")
@@ -240,14 +308,14 @@ def build_skill_request(
         normalized_query = sanitize_query(query or "")
     request_seed = {
         "report_key": report_key, "revision": revision, "event_reference": event_reference,
-        "trigger_receipt_reference": trigger_decision["decision_id"], "command": command,
+        "trigger_receipt_reference": validated_trigger.decision_id, "command": command,
         "normalized_query": normalized_query, "target_url": normalized_target,
     }
     skill_call_id = "SKILL-" + sha256_bytes(canonical_json_bytes(request_seed))[:16]
     return {
         "skill_call_id": skill_call_id, **dict(PINNED_SKILL_IDENTITY),
         "report_key": report_key, "revision": revision, "event_reference": event_reference,
-        "trigger_receipt_reference": trigger_decision["decision_id"],
+        "trigger_receipt_reference": validated_trigger.decision_id,
         "command": command, "provider_command": COMMAND_MAP[command],
         "normalized_query": normalized_query,
         "normalized_query_hash": sha256_bytes(canonical_json_bytes(normalized_query)) if normalized_query else None,
