@@ -65,3 +65,14 @@ date,stock_id,trade_volume,trade_value,transaction_count,source_url,source_month
 2026-07-23,2317,63787974,16358184879,53611,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260701&stockNo=2317&response=csv,2026-07
 2026-07-24,2317,33694573,8518599943,32769,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260701&stockNo=2317&response=csv,2026-07
 2026-07-27,2317,35908207,8967672916,32663,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260701&stockNo=2317&response=csv,2026-07
+2026-07-28,2317,52860433,12780302040,61879,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260701&stockNo=2317&response=csv,2026-07
+2026-07-29,2317,84937463,20205542596,71078,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260701&stockNo=2317&response=csv,2026-07
+2026-07-30,2317,77132664,17818235582,84798,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260701&stockNo=2317&response=csv,2026-07
+2026-07-31,2317,99413798,24664339053,79109,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260701&stockNo=2317&response=csv,2026-07
+2026-08-03,2317,52666207,13128239101,43086,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260801&stockNo=2317&response=csv,2026-08
+2026-08-04,2317,41095656,10291326035,40377,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260801&stockNo=2317&response=csv,2026-08
+2026-08-05,2317,72633762,18765599956,59395,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260801&stockNo=2317&response=csv,2026-08
+2026-08-06,2317,82178728,21570563960,69628,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260801&stockNo=2317&response=csv,2026-08
+2026-08-07,2317,38813488,10147169859,69620,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260801&stockNo=2317&response=csv,2026-08
+2026-08-10,2317,34854398,9214462439,35990,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260801&stockNo=2317&response=csv,2026-08
+2026-08-11,2317,24592444,6470373444,23177,https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260801&stockNo=2317&response=csv,2026-08

@@ -3211,5 +3211,152 @@ def main() -> int:
     return 0
 
 
+def publish_daily_price_reconcile(
+    package_root: Path,
+    candidate_path: Path,
+    output_dir: Path,
+    *,
+    immutable_through: str,
+) -> dict[str, Any]:
+    """Atomically replace a TWSE-validated price suffix and refresh the manifest."""
+
+    package_root = package_root.resolve()
+    candidate_path = candidate_path.resolve()
+    output_dir = output_dir.resolve()
+    runtime_root = (package_root / "runtime").resolve()
+    if not candidate_path.is_relative_to(runtime_root) or not output_dir.is_relative_to(runtime_root):
+        raise ValueError("Daily-price candidate and journal must remain under runtime/")
+    formal_path = package_root / DAILY_TARGET
+    manifest_path = package_root / MANIFEST_PATH
+    if output_dir.exists():
+        raise FileExistsError(output_dir)
+
+    formal_header, formal_rows, _ = read_csv_header_and_rows(formal_path)
+    candidate_header, candidate_rows, _ = read_csv_header_and_rows(candidate_path)
+    if formal_header != candidate_header:
+        raise ValueError("Daily-price reconcile schema mismatch")
+    formal_prefix = [row for row in formal_rows if row[0] <= immutable_through]
+    candidate_prefix = [row for row in candidate_rows if row[0] <= immutable_through]
+    if formal_prefix != candidate_prefix:
+        raise ValueError("Daily-price reconcile would rewrite immutable history")
+    candidate_dates = [row[0] for row in candidate_rows]
+    if candidate_dates != sorted(set(candidate_dates)):
+        raise ValueError("Daily-price candidate dates are not unique and increasing")
+    for row in (item for item in candidate_rows if item[0] > immutable_through):
+        close = _decimal(row[1], field="Close", row_date=row[0])
+        bvps = _decimal(row[3], field="BVPS_ref", row_date=row[0])
+        pb = _decimal(row[4], field="PB_daily", row_date=row[0])
+        if pb != (close / bvps).quantize(Decimal("0.001")):
+            raise ValueError(f"Daily-price PB formula mismatch for {row[0]}")
+        if row[5] not in {"OFFICIAL_TWSE_A1", "OFFICIAL_TWSE_STOCK_DAY"} or row[6] != "OK":
+            raise ValueError(f"Daily-price reconciled row is not governed TWSE authority: {row[0]}")
+
+    candidate_bytes = candidate_path.read_bytes()
+    candidate_sha = hashlib.sha256(candidate_bytes).hexdigest().upper()
+    manifest = read_json(manifest_path)
+    entry = next(
+        (item for item in manifest.get("authoritativeFiles", []) if item.get("path") == DAILY_TARGET),
+        None,
+    )
+    formal_sha = sha256_file(formal_path)
+    if entry is None or entry.get("sha256") != formal_sha or entry.get("rowCount") != len(formal_rows):
+        raise ValueError("Daily-price manifest does not match formal pre-publish CSV")
+    published_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    entry.update(
+        {
+            "sha256": candidate_sha,
+            "fileSizeBytes": len(candidate_bytes),
+            "rowCount": len(candidate_rows),
+            "lastPublishedAt": published_at,
+            "dataProvenance": "OFFICIAL_TWSE_STOCK_DAY_MONTHLY_CSV",
+            "dataSupportLevel": "OFFICIAL_TWSE_A1",
+            "validationStatus": "PASS",
+            "lastIncrementalReconcile": {
+                "immutableThrough": immutable_through,
+                "start": next(row[0] for row in candidate_rows if row[0] > immutable_through),
+                "end": candidate_dates[-1],
+                "candidateSha256": candidate_sha,
+                "publishedAt": published_at,
+                "publisher": "owner_publish_csv_v2.py",
+                "mode": "TWSE_DAILY_PRICE_ATOMIC_SUFFIX_RECONCILE",
+                "actionable": False,
+            },
+        }
+    )
+    entry.setdefault("dateRange", {})["end"] = candidate_dates[-1]
+    manifest["approvedAt"] = published_at[:10]
+    manifest_bytes = (json.dumps(manifest, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+
+    output_dir.mkdir(parents=True)
+    backup_dir = output_dir / "backup"
+    staged_dir = output_dir / "staged"
+    backup_dir.mkdir()
+    staged_dir.mkdir()
+    shutil.copy2(formal_path, backup_dir / formal_path.name)
+    shutil.copy2(manifest_path, backup_dir / manifest_path.name)
+    (staged_dir / formal_path.name).write_bytes(candidate_bytes)
+    (staged_dir / manifest_path.name).write_bytes(manifest_bytes)
+    pre_hashes = {DAILY_TARGET: formal_sha, MANIFEST_PATH: sha256_file(manifest_path)}
+    journal_path = output_dir / "PUBLISH_JOURNAL.json"
+    journal: dict[str, Any] = {
+        "mode": "TWSE_DAILY_PRICE_ATOMIC_SUFFIX_RECONCILE",
+        "status": "BACKUP_VERIFIED",
+        "created_at_utc": published_at,
+        "immutable_through": immutable_through,
+        "candidate_sha256": candidate_sha,
+        "pre_hashes": pre_hashes,
+        "actionable": False,
+    }
+    _atomic_write_json(journal_path, journal)
+    try:
+        _atomic_write_bytes(formal_path, candidate_bytes)
+        _atomic_write_bytes(manifest_path, manifest_bytes)
+        published_manifest = read_json(manifest_path)
+        published_entry = next(
+            item for item in published_manifest.get("authoritativeFiles", [])
+            if item.get("path") == DAILY_TARGET
+        )
+        if sha256_file(formal_path) != candidate_sha or published_entry.get("sha256") != candidate_sha:
+            raise ValueError("Daily-price reconcile post-publish validation failed")
+        journal.update(
+            {
+                "status": "PUBLISHED",
+                "post_hashes": {DAILY_TARGET: candidate_sha, MANIFEST_PATH: sha256_file(manifest_path)},
+                "total_rows": len(candidate_rows),
+                "last_date": candidate_dates[-1],
+                "rollback_available": True,
+                "rollback_performed": False,
+            }
+        )
+        _atomic_write_json(journal_path, journal)
+        return journal
+    except Exception as publish_error:
+        rollback_errors: list[str] = []
+        for target, backup in (
+            (formal_path, backup_dir / formal_path.name),
+            (manifest_path, backup_dir / manifest_path.name),
+        ):
+            try:
+                _atomic_write_bytes(target, backup.read_bytes())
+            except Exception as rollback_error:
+                rollback_errors.append(f"{target}: {rollback_error}")
+        restored = {DAILY_TARGET: sha256_file(formal_path), MANIFEST_PATH: sha256_file(manifest_path)}
+        rollback_ok = not rollback_errors and restored == pre_hashes
+        journal.update(
+            {
+                "status": "ROLLED_BACK" if rollback_ok else "ROLLBACK_FAILED",
+                "publish_error": str(publish_error),
+                "rollback_errors": rollback_errors,
+                "restored_hashes": restored,
+                "rollback_performed": True,
+                "rollback_verified": rollback_ok,
+            }
+        )
+        _atomic_write_json(journal_path, journal)
+        if not rollback_ok:
+            raise RuntimeError("Daily-price reconcile rollback was incomplete") from publish_error
+        raise RuntimeError("Daily-price reconcile failed; CSV and manifest restored") from publish_error
+
+
 if __name__ == "__main__":
     raise SystemExit(main())

@@ -1,8 +1,7 @@
-"""Build an incremental P1008 market-activity candidate from official TWSE CSVs.
+"""Incrementally update P1008 formal market activity from official TWSE monthly CSVs.
 
 The updater is fail-closed, uses at most three monthly requests, never retries,
-and never mutates formal CSV or manifest state. Formal publication is a separate
-Owner-gated action in owner_publish_csv_v2.py.
+and delegates formal CSV/manifest mutation to owner_publish_csv_v2.
 """
 
 from __future__ import annotations
@@ -22,24 +21,18 @@ from pathlib import Path
 from typing import Any, Iterator
 from urllib.parse import urlencode
 
+import owner_publish_csv_v2 as publisher
+
+
 TWSE_HOST = "www.twse.com.tw"
 TWSE_PATH = "/rwd/zh/afterTrading/STOCK_DAY"
 FORMAL_REL = Path("data/2317_daily_market_activity.csv")
 PRICE_REL = Path("data/2317_daily_price.csv")
-MANIFEST_REL = Path("data/CSV_AUTHORITY_MANIFEST.json")
 STATUS_REL = Path("runtime/market_activity_incremental/latest_status.json")
 RUNTIME_REL = Path("runtime/market_activity_incremental")
-FORMAL_FIELDS = (
-    "date",
-    "stock_id",
-    "trade_volume",
-    "trade_value",
-    "transaction_count",
-    "source_url",
-    "source_month",
-)
+FORMAL_FIELDS = publisher.MARKET_ACTIVITY_FIELDS
 
-STATUS_CANDIDATE_READY = "MARKET_ACTIVITY_CANDIDATE_READY"
+STATUS_UPDATED = "UPDATED"
 STATUS_NO_NEW = "NO_NEW_MARKET_ACTIVITY"
 STATUS_STALE = "MARKET_ACTIVITY_STALE"
 STATUS_BLOCKED = "MARKET_ACTIVITY_BLOCKED_BY_DAILY_PRICE"
@@ -101,17 +94,6 @@ def source_url(month: str) -> str:
         }
     )
     return f"https://{TWSE_HOST}{TWSE_PATH}?{query}"
-
-
-def owner_approval_phrase(rows: list[dict[str, Any]]) -> str:
-    dates = [str(row["date"]) for row in rows]
-    if not dates:
-        raise UpdateFailure("Cannot build Owner approval phrase for an empty candidate")
-    return (
-        "OWNER_APPROVE_MARKET_ACTIVITY_"
-        f"{dates[0].replace('-', '')}_"
-        f"{dates[-1].replace('-', '')}"
-    )
 
 
 def parse_twse_month(content: bytes, month: str) -> dict[str, dict[str, Any]]:
@@ -216,7 +198,7 @@ def load_offline_month(receipt_dir: Path, month: str) -> tuple[bytes, dict[str, 
     content = raw_path.read_bytes()
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     raw_sha = sha256_bytes(content)
-    if receipt.get("status") != "SUCCESS" or receipt.get("request_url") != source_url(month):
+    if receipt.get("status") not in {"SUCCESS", "SUCCESS_OFFLINE_RECEIPT"} or receipt.get("request_url") != source_url(month):
         raise UpdateFailure(f"Offline TWSE receipt validation failed for {month}")
     expected_sha = receipt.get("raw_artifact_sha256") or receipt.get("raw_sha256")
     if expected_sha != raw_sha:
@@ -312,7 +294,7 @@ def run_update(
     if not formal_path.is_file() or not price_path.is_file():
         raise UpdateFailure("Formal market-activity or price authority is missing", status=STATUS_LIMITED)
     formal_hash_before = sha256_file(formal_path)
-    manifest_path = package_root / MANIFEST_REL
+    manifest_path = package_root / publisher.MANIFEST_PATH
     manifest_hash_before = sha256_file(manifest_path)
     formal_rows = read_formal_activity(formal_path)
     price = read_price(price_path)
@@ -373,40 +355,25 @@ def run_update(
                     if int(formal[formal_field]) != int(source[source_field]):
                         raise UpdateFailure(f"Historical market-activity rewrite detected for {row_date}")
 
-            invalid_price_dates = sorted(
-                row_date
-                for row_date in price
-                if last_formal_date < row_date <= as_of_date.isoformat()
-                and dt.date.fromisoformat(row_date).weekday() >= 5
-            )
-            eligible_price_dates = sorted(
-                row_date
-                for row_date in price
-                if last_formal_date < row_date <= as_of_date.isoformat()
-                and dt.date.fromisoformat(row_date).weekday() < 5
-            )
-            price_authority_missing_dates = sorted(
-                row_date
-                for row_date in twse_rows
-                if last_formal_date < row_date <= as_of_date.isoformat()
-                and row_date not in price
-            )
             new_rows: list[dict[str, Any]] = []
-            for row_date in eligible_price_dates:
-                source = twse_rows.get(row_date)
-                if source is None:
+            for row_date in sorted(twse_rows):
+                if row_date > as_of_date.isoformat() or row_date in formal_by_date:
+                    continue
+                if row_date <= last_formal_date:
+                    raise UpdateFailure(f"Historical gap requires separate backfill approval: {row_date}")
+                if row_date not in price:
                     raise UpdateFailure(
-                        f"TWSE month file does not contain eligible price date {row_date}",
+                        f"Price authority does not contain TWSE date {row_date}",
                         status=STATUS_BLOCKED,
                         exit_code=EXIT_BLOCKED,
                     )
-                if price[row_date] != source["close"]:
+                if price[row_date] != twse_rows[row_date]["close"]:
                     raise UpdateFailure(
                         f"TWSE Close does not match price authority for {row_date}",
                         status=STATUS_BLOCKED,
                         exit_code=EXIT_BLOCKED,
                     )
-                new_rows.append(source)
+                new_rows.append(twse_rows[row_date])
 
             if not new_rows:
                 result = {
@@ -427,56 +394,60 @@ def run_update(
             else:
                 candidate_path = run_dir / "2317_daily_market_activity.incremental.candidate.csv"
                 write_candidate(candidate_path, new_rows)
-                result = {
-                    "run_id": run_id,
-                    "status": STATUS_CANDIDATE_READY,
-                    "launcher_status": "CANDIDATE_READY",
-                    "market_liquidity_analysis_status": STATUS_LIMITED,
-                    "last_success_date": last_formal_date,
-                    "candidate_last_date": new_rows[-1]["date"],
-                    "months_checked": months,
-                    "price_authority_missing_dates": price_authority_missing_dates,
-                    "ignored_invalid_price_dates": invalid_price_dates,
-                    "rows_added": 0,
-                    "candidate_rows": len(new_rows),
-                    "candidate_path": str(candidate_path.resolve()),
-                    "candidate_sha256": sha256_file(candidate_path),
-                    "http_calls": http_calls,
-                    "receipt_paths": receipt_paths,
-                    "run_dir": str(run_dir.resolve()),
-                    "candidate_only": True,
-                    "owner_publish_required": True,
-                    "owner_approval_phrase": owner_approval_phrase(new_rows),
-                    "dry_run": dry_run,
-                    "exit_code": EXIT_OK,
-                    "actionable": False,
-                }
-                review = {
-                    "run_id": run_id,
-                    "status": "OWNER_REVIEW_REQUIRED",
-                    "candidate_path": result["candidate_path"],
-                    "candidate_sha256": result["candidate_sha256"],
-                    "candidate_rows": [
-                        {
-                            field: str(row[field])
-                            for field in FORMAL_FIELDS
-                        }
-                        for row in new_rows
-                    ],
-                    "price_authority_missing_dates": price_authority_missing_dates,
-                    "ignored_invalid_price_dates": invalid_price_dates,
-                    "receipt_paths": receipt_paths,
-                    "formal_csv_modified": False,
-                    "owner_publish_required": True,
-                    "owner_approval_phrase": result["owner_approval_phrase"],
-                    "actionable": False,
-                }
-                atomic_json(run_dir / "OWNER_REVIEW.json", review)
-            if (
+                if dry_run:
+                    result = {
+                        "run_id": run_id,
+                        "status": "DRY_RUN_READY",
+                        "launcher_status": "UPDATED",
+                        "market_liquidity_analysis_status": STATUS_READY,
+                        "last_success_date": last_formal_date,
+                        "candidate_last_date": new_rows[-1]["date"],
+                        "months_checked": months,
+                        "rows_added": 0,
+                        "candidate_rows": len(new_rows),
+                        "candidate_path": str(candidate_path.resolve()),
+                        "candidate_sha256": sha256_file(candidate_path),
+                        "http_calls": http_calls,
+                        "receipt_paths": receipt_paths,
+                        "run_dir": str(run_dir.resolve()),
+                        "dry_run": True,
+                        "exit_code": EXIT_OK,
+                        "actionable": False,
+                    }
+                else:
+                    publish_result = publisher.publish_market_activity_append(
+                        package_root,
+                        candidate_path,
+                        run_dir / "publish",
+                        approval_phrase=publisher.market_activity_approval_phrase(
+                            [row["date"] for row in new_rows]
+                        ),
+                    )
+                    result = {
+                        "run_id": run_id,
+                        "status": STATUS_UPDATED,
+                        "launcher_status": "UPDATED",
+                        "market_liquidity_analysis_status": STATUS_READY,
+                        "last_success_date": publish_result["last_date"],
+                        "months_checked": months,
+                        "rows_added": len(new_rows),
+                        "candidate_path": str(candidate_path.resolve()),
+                        "candidate_sha256": sha256_file(candidate_path),
+                        "publish_journal": str((run_dir / "publish" / "PUBLISH_JOURNAL.json").resolve()),
+                        "formal_sha256": publish_result["post_hashes"][str(FORMAL_REL).replace('\\', '/')],
+                        "manifest_sha256": publish_result["post_hashes"][publisher.MANIFEST_PATH],
+                        "http_calls": http_calls,
+                        "receipt_paths": receipt_paths,
+                        "run_dir": str(run_dir.resolve()),
+                        "dry_run": False,
+                        "exit_code": EXIT_OK,
+                        "actionable": False,
+                    }
+            if dry_run and (
                 sha256_file(formal_path) != formal_hash_before
                 or sha256_file(manifest_path) != manifest_hash_before
             ):
-                raise UpdateFailure("Candidate update changed formal CSV or manifest")
+                raise UpdateFailure("Dry-run changed formal CSV or manifest")
             atomic_json(run_dir / "RESULT.json", result)
             atomic_json(status_path, result)
             return result
