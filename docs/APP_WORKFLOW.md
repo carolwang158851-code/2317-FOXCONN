@@ -25,13 +25,14 @@ POST /api/p1008/run/default
 固定順序：
 
 1. `preflight`：檢查必要工具、manifest、正式 CSV，建立 hash baseline。
-2. `update-data`：呼叫既有 Daily Price BAT，只產生日價、Macro 與 FX staging candidate／runtime snapshot。
-3. `market-activity`：呼叫 `P1008_1B_UPDATE_MARKET_ACTIVITY.bat`，以 Bundled Python 3.12 產生 TWSE Market Activity candidate、raw receipt 與 Owner review；不發布正式 CSV。
-4. `news-scan`：呼叫 `tools/warroom_news_scanner_v2.py`，只產生新聞／事件 candidate 與逐來源 `networkSummary` / `sourceHealth`。
-5. `validation/readiness`：重新整理 review package 並確認所有正式 CSV 與 manifest hash 未變，停在 Owner review。
+2. `daily-price-authority`：呼叫 `P1008_1A_UPDATE_DAILY_PRICE.bat`，以驗證過的 TWSE month receipt 增量更新 Daily Price 與 manifest；兩檔必須原子更新，否則 rollback 並 fail closed。
+3. `market-activity`：呼叫 `P1008_1B_UPDATE_MARKET_ACTIVITY.bat`，驗證 Daily Price Close 與同一份 TWSE receipt 後，原子 append Market Activity 與 manifest。
+4. `authority-freshness`：檢查 TWSE 最新有效交易日、Daily Price 與 Market Activity 的日期連續性及一致性。
+5. `update-data`：只有前三項全部成功後，才執行其他 Macro／FX staging candidate 與 runtime snapshot 更新。
+6. `news-scan`：只有 authority chain 全部成功後，才產生新聞／事件 candidate 與逐來源 `networkSummary` / `sourceHealth`。
+7. `validation/readiness`：重新整理 review package；只有上述 TWSE authority updater 可變更其限定的正式 CSV 與 manifest，其餘正式 authority 仍受 hash boundary 保護。
 
-一鍵資料流程永遠不 append 正式 CSV，也不自動產生日報。`POST /api/p1008/run/report`
-是分離的手動入口，不屬於 default job。
+任一 Daily Price、Market Activity 或 freshness gate 失敗時，後續資料、新聞與 rolling brief 均不執行。`POST /api/p1008/run/report` 是分離的手動入口，不屬於 default job。
 
 ## Phase B1 手動分析／戰報候選
 
@@ -54,10 +55,7 @@ calls 均為 0，且所有候選 `actionable=false`。
 
 ## Phase A Authority Data Closure
 
-- `warroom_market_activity_updater.py` 永遠是 candidate-only。即使存在新交易日，也只寫入
-  `runtime/market_activity_incremental/<RUN_ID>/`；正式
-  `data/2317_daily_market_activity.csv` 只能由 `owner_publish_csv_v2.py`
-  配合日期範圍專屬 Owner phrase 發布。
+- `warroom_daily_price_updater.py` 與 `warroom_market_activity_updater.py` 是限定範圍的正式 TWSE authority updater：只接受已驗證 receipt，並透過 `owner_publish_csv_v2.py` 原子更新對應 CSV 與 manifest。一般 staging candidate 仍須經 Owner gate。
 - 日價 publisher 在最終寫入前會再次拒絕週六／週日、非
   `OFFICIAL_TWSE_*` 或 `OWNER_APPROVED` 來源、無效／零值 Close、PB 不一致及衝突
   Date。相同 Date 且完整列一致時視為 idempotent，不重複追加。
@@ -66,8 +64,7 @@ calls 均為 0，且所有候選 `actionable=false`。
   atomic replace 與 rollback。本次 Phase A closure 不執行正式移除。
 - `Hon_Hai_Rev_YoY` 的文字值不得當作數字或 0。無可追溯數值來源時，remediation
   candidate 留空並列為資料缺口，等待 Owner gate。
-- Market Activity、Macro 與 Daily Price candidate 建立前後，正式 CSV 與
-  `CSV_AUTHORITY_MANIFEST.json` hash 必須完全不變。
+- 每個 TWSE authority step 只能變更其對應 CSV 與 `CSV_AUTHORITY_MANIFEST.json`；非 `UPDATED` 狀態不得變更任何正式檔。Macro、FX 與 News candidate 建立前後，正式 CSV 與 manifest hash 必須完全不變。
 
 若候選日期是週末或交易所休市日，Launcher / 新 UI 會沿用最近正式交易日的 2317 Close/PB 供畫面連續，並標示 `MARKET_CLOSED_CARRY_FORWARD`。此列不 append 到正式 `2317_daily_price.csv`，正式 publish 只會處理已生成且通過 readiness 的候選 CSV。
 

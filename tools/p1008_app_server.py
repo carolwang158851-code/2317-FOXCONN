@@ -55,7 +55,9 @@ FORMAL_CSV_FILES = [
 ]
 
 STATE_REL = "runtime/p1008_app_state.json"
+DAILY_PRICE_STATUS_REL = "runtime/daily_price_incremental/latest_status.json"
 MARKET_ACTIVITY_STATUS_REL = "runtime/market_activity_incremental/latest_status.json"
+FRESHNESS_STATUS_REL = "runtime/authority_freshness/latest_status.json"
 SOURCE_MANIFEST_REL = "data/NEWS_SCAN_SOURCE_MANIFEST.json"
 SERVER_VERSION = "P1008_APP_SERVER_20260802_PHASEB1_OPS_V1"
 
@@ -786,34 +788,30 @@ class P1008JobManager:
         if job_type in {"default", "update-data"}:
             daily_before = formal_csv_hashes(self.package_root)
             daily_exit = self._run_bat_step(
-                "update-data",
-                "Daily Price staging/runtime update",
-                self.package_root / "P1008_1_UPDATE_DATA.bat",
+                "daily-price-authority",
+                "TWSE Daily Price incremental authority update",
+                self.package_root / "P1008_1A_UPDATE_DAILY_PRICE.bat",
                 [],
-                timeout_seconds=420,
+                timeout_seconds=180,
             )
             daily_after = formal_csv_hashes(self.package_root)
-            if daily_exit != 0 or daily_after != daily_before:
+            daily_result = read_json(
+                self.package_root / DAILY_PRICE_STATUS_REL, default={}
+            ) or {}
+            daily_status = str(daily_result.get("launcher_status") or "BLOCKED")
+            daily_boundary = self._daily_price_boundary_error(
+                daily_before, daily_after, daily_status
+            )
+            if daily_exit != 0 or daily_boundary:
                 daily_status = "FAILED"
-                reason = (
-                    f"Daily Price BAT exit={daily_exit}"
-                    if daily_exit != 0
-                    else "Daily Price BAT changed formal authority unexpectedly"
-                )
+                reason = daily_boundary or f"Daily Price BAT exit={daily_exit}"
                 component_failures.append(reason)
-            else:
-                review = self.review_package()
-                generated = review.get("generatedFiles", []) or []
-                daily_status = (
-                    "UPDATED"
-                    if any("2317_daily_price" in str(item) for item in generated)
-                    else "NO_CHANGE"
-                )
             self._set_component_status(
                 "dailyPrice",
                 daily_status,
                 exitCode=daily_exit,
-                lastSuccessDate=(self.review_package().get("candidateDate") or ""),
+                lastSuccessDate=daily_result.get("last_success_date", ""),
+                receiptPaths=daily_result.get("receipt_paths", []) or [],
             )
 
             if daily_status == "FAILED":
@@ -864,6 +862,36 @@ class P1008JobManager:
                         market_status,
                         failure,
                     )
+                if not component_failures:
+                    receipt_paths = market_result.get("receipt_paths", []) or []
+                    receipt_dir = (
+                        str(Path(receipt_paths[0]).parent) if receipt_paths else ""
+                    )
+                    freshness_exit = self._run_bat_step(
+                        "authority-freshness",
+                        "TWSE authority freshness and continuity gate",
+                        self.package_root / "tools/p1008_validate_authority_freshness.cmd",
+                        ["--receipt-dir", receipt_dir],
+                        timeout_seconds=60,
+                    )
+                    freshness_result = read_json(
+                        self.package_root / FRESHNESS_STATUS_REL, default={}
+                    ) or {}
+                    freshness_status = str(
+                        freshness_result.get("status") or "FAIL_CLOSED"
+                    )
+                    self._set_component_status(
+                        "freshness",
+                        freshness_status,
+                        exitCode=freshness_exit,
+                        twseLatestDate=freshness_result.get(
+                            "twse_latest_validated_trading_date", ""
+                        ),
+                    )
+                    if freshness_exit != 0:
+                        component_failures.append(
+                            f"Authority Freshness BAT exit={freshness_exit}"
+                        )
             self._set_component_status(
                 "marketActivity",
                 market_status,
@@ -874,7 +902,18 @@ class P1008JobManager:
                 logPath=(market_result.get("run_dir") or "logs/last_market_activity_update.log"),
             )
 
-        if job_type in {"default", "news-scan"}:
+            if not component_failures:
+                other_data_exit = self._run_bat_step(
+                    "update-data",
+                    "Other staging/runtime data update",
+                    self.package_root / "P1008_1_UPDATE_DATA.bat",
+                    [],
+                    timeout_seconds=420,
+                )
+                if other_data_exit != 0:
+                    component_failures.append(f"Other Data BAT exit={other_data_exit}")
+
+        if job_type in {"default", "news-scan"} and not component_failures:
             self._run_news_scan_step()
             news_step = next(
                 (step for step in self.state.get("steps", []) if step.get("id") == "news-scan"),
@@ -891,7 +930,7 @@ class P1008JobManager:
             )
             self._set_component_status("news", news_status, exitCode=news_step.get("exitCode"))
 
-        if job_type == "default":
+        if job_type == "default" and not component_failures:
             rolling_error = self._refresh_rolling_brief_step()
             if rolling_error:
                 component_failures.append(rolling_error)
@@ -969,7 +1008,10 @@ class P1008JobManager:
             with self.lock:
                 self.state["overallStatus"] = "PARTIAL_FAILURE" if partial else "SUCCEEDED"
                 self._persist_locked()
-        self._refresh(before)
+        self._refresh(
+            before,
+            allow_authority_change=job_type in {"default", "update-data"},
+        )
 
     def _set_component_status(self, component: str, status: str, **extra: Any) -> None:
         with self.lock:
@@ -1139,12 +1181,40 @@ class P1008JobManager:
         return payload
 
     @staticmethod
+    def _daily_price_boundary_error(
+        before: dict[str, str], after: dict[str, str], launcher_status: str
+    ) -> str:
+        allowed = {"data/2317_daily_price.csv", "data/CSV_AUTHORITY_MANIFEST.json"}
+        changed = {key for key in before if before.get(key) != after.get(key)}
+        unexpected = changed - allowed
+        if unexpected:
+            return "Daily Price changed unauthorized formal files: " + ", ".join(
+                sorted(unexpected)
+            )
+        if launcher_status == "UPDATED" and changed != allowed:
+            return "Daily Price UPDATED did not atomically change CSV and manifest only"
+        if launcher_status != "UPDATED" and changed:
+            return "Daily Price non-update status changed formal CSV or manifest"
+        return ""
+
+    @staticmethod
     def _market_activity_boundary_error(
         before: dict[str, str], after: dict[str, str], launcher_status: str
     ) -> str:
+        allowed = {
+            "data/2317_daily_market_activity.csv",
+            "data/CSV_AUTHORITY_MANIFEST.json",
+        }
         changed = {key for key in before if before.get(key) != after.get(key)}
-        if changed:
-            return "Market Activity candidate step changed formal files: " + ", ".join(sorted(changed))
+        unexpected = changed - allowed
+        if unexpected:
+            return "Market Activity changed unauthorized formal files: " + ", ".join(
+                sorted(unexpected)
+            )
+        if launcher_status == "UPDATED" and changed != allowed:
+            return "Market Activity UPDATED did not atomically change CSV and manifest only"
+        if launcher_status != "UPDATED" and changed:
+            return "Market Activity non-update status changed formal CSV or manifest"
         return ""
 
     def _preflight(self) -> dict[str, str]:
@@ -1152,9 +1222,13 @@ class P1008JobManager:
         required = [
             "ui/P1008_WARROOM_COMMAND_CENTER_v24.html",
             "tools/warroom_data_fetcher_v2.py",
+            "tools/warroom_daily_price_updater.py",
             "tools/warroom_market_activity_updater.py",
+            "tools/warroom_authority_freshness.py",
             "P1008_1_UPDATE_DATA.bat",
+            "P1008_1A_UPDATE_DAILY_PRICE.bat",
             "P1008_1B_UPDATE_MARKET_ACTIVITY.bat",
+            "tools/p1008_validate_authority_freshness.cmd",
             "tools/warroom_news_scanner_v2.py",
             "tools/warroom_periodic_report_v1.py",
             SOURCE_MANIFEST_REL,
@@ -1304,16 +1378,31 @@ class P1008JobManager:
         if after != before:
             self._add_error("Formal CSV hash changed during app pipeline; stopping before any further action.")
 
-    def _refresh(self, before: dict[str, str]) -> None:
+    def _refresh(
+        self, before: dict[str, str], *, allow_authority_change: bool = False
+    ) -> None:
         self._set_step("refresh", "Refresh app state", "RUNNING")
         after = formal_csv_hashes(self.package_root)
         latest_date = latest_staging_date(self.package_root)
         with self.lock:
             self.state["formalCsvHashesAfter"] = after
             self.state["formalCsvModified"] = after != before
+            changed = {key for key in before if before.get(key) != after.get(key)}
+            expected_authority_change = (
+                allow_authority_change
+                and bool(changed)
+                and changed.issubset(
+                    {
+                        "data/2317_daily_price.csv",
+                        "data/2317_daily_market_activity.csv",
+                        "data/CSV_AUTHORITY_MANIFEST.json",
+                    }
+                )
+            )
+            self.state["formalCsvModifiedExpected"] = expected_authority_change
             self.state["latestStagingDate"] = latest_date or date.today().isoformat()
             self.state["pendingOwnerReview"] = self.pending_owner_review()
-            if after != before:
+            if after != before and not expected_authority_change:
                 self.state.setdefault("errors", []).append("Formal CSV hash changed; Owner gate boundary violated.")
                 self.state["status"] = "FAILED"
             self._persist_locked()

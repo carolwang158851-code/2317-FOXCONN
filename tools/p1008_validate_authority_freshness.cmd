@@ -1,0 +1,10 @@
+@echo off
+setlocal EnableExtensions
+for %%I in ("%~dp0..") do set "ROOT=%%~fI"
+set "PYTHON_EXE=%USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
+set "VALIDATOR=%ROOT%\tools\warroom_authority_freshness.py"
+if not exist "%PYTHON_EXE%" echo [ERROR] Approved Bundled Python is missing: "%PYTHON_EXE%" & exit /b 21
+"%PYTHON_EXE%" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)" >nul 2>nul
+if errorlevel 1 echo [ERROR] Approved runtime must be Python 3.12. & exit /b 22
+"%PYTHON_EXE%" "%VALIDATOR%" --package-root "%ROOT%" %*
+exit /b %ERRORLEVEL%
