@@ -1,0 +1,22 @@
+{
+  "authorizationIdentity": "P1008_ANYSEARCH_DISCOVERY_SCAN_AUTHORIZATION_V1",
+  "authorizationVersion": "1.0",
+  "ownerDecision": "APPROVED",
+  "scope": "PRE_TRIGGER_DISCOVERY_SCAN",
+  "provider": {
+    "provider_id": "ANYSEARCH",
+    "release_version": "v3.0.1",
+    "immutable_source_revision": "caed9eac2eb6e869b89faa2f3e92d8956b013b56",
+    "artifact_sha256": "1F42E68ECC290EDB224050D2BD4F80E7068F5AFC0FA3DC8076E6E22412334743",
+    "endpoint": "https://api.anysearch.com/mcp"
+  },
+  "command": "SEARCH",
+  "max_attempts": 1,
+  "fallback_enabled": false,
+  "actionable": false,
+  "source_class": "DISCOVERY",
+  "authority_writes": 0,
+  "core_view_changes": 0,
+  "formal_reports_generated": 0,
+  "publication_actions": 0
+}

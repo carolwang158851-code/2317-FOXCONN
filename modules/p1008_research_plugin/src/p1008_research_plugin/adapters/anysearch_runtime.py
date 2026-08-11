@@ -54,9 +54,16 @@ def _identity() -> dict[str, Any]:
 
 
 def _require_governed_search_request(
-    validated_trigger: object, skill_request: Mapping[str, Any], *, allow_anonymous: bool
+    validated_authorization: object, skill_request: Mapping[str, Any], *, allow_anonymous: bool
 ) -> None:
-    governance.validate_skill_request_authorization(skill_request, validated_trigger)
+    if skill_request.get("authorization_scope") == "DISCOVERY_SCAN":
+        governance.validate_discovery_skill_request_authorization(
+            skill_request, validated_authorization
+        )
+    else:
+        governance.validate_skill_request_authorization(
+            skill_request, validated_authorization
+        )
     governance.validate_skill_identity(skill_request)
     if skill_request.get("command") != "SEARCH" or skill_request.get("provider_command") != "search":
         raise GovernedAnySearchRuntimeError("COMMAND_NOT_ALLOWED")
@@ -194,7 +201,7 @@ def _normalize_result(item: Mapping[str, Any], index: int) -> dict[str, Any]:
 
 
 def execute_governed_search(
-    validated_trigger: governance.ValidatedResearchSkillTrigger,
+    validated_trigger: governance.ValidatedResearchSkillTrigger | governance.ValidatedDiscoveryScan,
     skill_request: Mapping[str, Any],
     *,
     allow_anonymous: bool,
@@ -207,7 +214,10 @@ def execute_governed_search(
     started_at = _utc_now()
     rpc_payload = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "search", "arguments": {"query": skill_request["normalized_query"]}}}
     headers = _authorization_header(str(skill_request["auth_mode"]))
-    governance.consume_validated_research_skill_trigger(validated_trigger)
+    if skill_request.get("authorization_scope") == "DISCOVERY_SCAN":
+        governance.consume_validated_discovery_scan(validated_trigger)
+    else:
+        governance.consume_validated_research_skill_trigger(validated_trigger)
     response = (transport or _post_once)(_ALLOWED_ENDPOINT, rpc_payload, headers)
     if not isinstance(response, Mapping):
         raise GovernedAnySearchRuntimeError("MALFORMED_RESPONSE")
@@ -225,7 +235,12 @@ def execute_governed_search(
         candidates.append(candidate)
     completed_at = _utc_now()
     failure_code = "SUCCESS" if candidates else "SUCCESS_NO_RELEVANT_RESULT"
-    receipt = governance.build_skill_call_receipt(skill_request=skill_request, raw_response=raw, started_at_utc=started_at, completed_at_utc=completed_at, failure_code=failure_code)
+    receipt_builder = (
+        governance.build_discovery_skill_call_receipt
+        if skill_request.get("authorization_scope") == "DISCOVERY_SCAN"
+        else governance.build_skill_call_receipt
+    )
+    receipt = receipt_builder(skill_request=skill_request, raw_response=raw, started_at_utc=started_at, completed_at_utc=completed_at, failure_code=failure_code)
     return {
         "record_type": "P1008_ANYSEARCH_DISCOVERY_STAGING",
         "schema_version": "1.0",
