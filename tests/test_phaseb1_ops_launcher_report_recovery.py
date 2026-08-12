@@ -110,7 +110,7 @@ class _PipelineManager(app_server.P1008JobManager):
             )
         self._set_step(step_id, label, "SUCCEEDED", exitCode=0)
 
-    def _refresh(self, before):
+    def _refresh(self, before, **_kwargs):
         self.calls.append("refresh")
 
     def _market_activity_last_date(self):

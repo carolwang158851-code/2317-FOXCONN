@@ -160,8 +160,8 @@ class MarketActivityTests(unittest.TestCase):
         result = analyze_optional_files(
             PACKAGE_ROOT / "data/2317_daily_price.csv",
             PACKAGE_ROOT / "data/2317_daily_market_activity.csv",
-            as_of_date=dt.date(2026, 7, 27),
-            now_utc=dt.datetime(2026, 7, 29, 12, 0, tzinfo=dt.timezone.utc),
+            as_of_date=dt.date(2026, 8, 11),
+            now_utc=dt.datetime(2026, 8, 12, 12, 0, tzinfo=dt.timezone.utc),
         )
         self.assertEqual(result["status"], READY)
         self.assertFalse(result["actionable"])

@@ -29,8 +29,11 @@ class PhaseB1LauncherTests(unittest.TestCase):
         self.assertIsNotNone(match)
         first_default_block = self.server[
             self.server.index('if job_type in {"default", "update-data"}:') :
-            self.server.index('if job_type in {"default", "news-scan"}:')
+            self.server.index(
+                'if job_type in {"default", "news-scan"} and not component_failures:'
+            )
         ]
+        self.assertIn("and not component_failures", self.server)
         self.assertNotIn("P1008_BUILD_ANALYSIS.bat", first_default_block)
         self.assertNotIn("P1008_BUILD_REPORT.bat", first_default_block)
 

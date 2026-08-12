@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import json
+import csv
 import unittest
 
 from pydantic import ValidationError
 
 try:
-    from .helpers import PACKAGE_ROOT, fixture, scratch
+    from .helpers import PACKAGE_ROOT, fixture, fixture_pipeline, scratch
 except ImportError:  # direct discovery with phaseb1 as the start directory
-    from helpers import PACKAGE_ROOT, fixture, scratch
+    from helpers import PACKAGE_ROOT, fixture, fixture_pipeline, scratch
 
 from p1008_research_plugin.phaseb1_common import sha256_file
 from p1008_research_plugin.phaseb1_pipeline import PhaseB1Pipeline, PhaseB1PipelineError
@@ -20,7 +21,7 @@ class PhaseB1ReportProductionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         with scratch("report-valid-") as output:
-            result = PhaseB1Pipeline(PACKAGE_ROOT).run_all(output_base=output)
+            result = fixture_pipeline(output).run_all(output_base=output)
             cls.analysis = result["analysis"]
             cls.report = result["report"]
 
@@ -56,7 +57,7 @@ class PhaseB1ReportProductionTests(unittest.TestCase):
 
     def test_report_requires_prior_analysis_artifacts(self) -> None:
         with scratch("no-analysis-") as output:
-            pipeline = PhaseB1Pipeline(PACKAGE_ROOT)
+            pipeline = fixture_pipeline(output)
             with self.assertRaises(PhaseB1PipelineError):
                 pipeline.build_report(
                     run_id=pipeline.deterministic_run_id(fixture()),
@@ -65,7 +66,7 @@ class PhaseB1ReportProductionTests(unittest.TestCase):
 
     def test_report_rejects_drifted_validated_evidence_manifest(self) -> None:
         with scratch("evidence-drift-") as output:
-            pipeline = PhaseB1Pipeline(PACKAGE_ROOT)
+            pipeline = fixture_pipeline(output)
             result = pipeline.build_analysis(output_base=output)
             evidence_path = output / result["run_id"] / "evidence_manifest.json"
             payload = json.loads(evidence_path.read_text(encoding="utf-8"))
@@ -80,8 +81,8 @@ class PhaseB1ReportProductionTests(unittest.TestCase):
 
     def test_deterministic_outputs_match_across_fresh_roots(self) -> None:
         with scratch("replay-a-") as first, scratch("replay-b-") as second:
-            first_result = PhaseB1Pipeline(PACKAGE_ROOT).run_all(output_base=first)
-            second_result = PhaseB1Pipeline(PACKAGE_ROOT).run_all(output_base=second)
+            first_result = fixture_pipeline(first).run_all(output_base=first)
+            second_result = fixture_pipeline(second).run_all(output_base=second)
             for name in (
                 "analysis_packet.json",
                 "report_candidate.json",
@@ -95,16 +96,33 @@ class PhaseB1ReportProductionTests(unittest.TestCase):
 
     def test_fixture_output_hashes_match(self) -> None:
         with scratch("hash-golden-") as output:
-            result = PhaseB1Pipeline(PACKAGE_ROOT).run_all(output_base=output)
+            pipeline = fixture_pipeline(output)
+            result = pipeline.run_all(output_base=output)
             run_root = output / result["run_id"]
             expected = fixture()["expectedOutputSha256"]
             for name, digest in expected.items():
                 with self.subTest(name=name):
                     self.assertEqual(sha256_file(run_root / name), digest)
+            with (pipeline.package_root / "data/2317_daily_price.csv").open(
+                encoding="utf-8"
+            ) as handle:
+                frozen_price = list(csv.DictReader(handle))[-1]
+            with (PACKAGE_ROOT / "data/2317_daily_price.csv").open(
+                encoding="utf-8"
+            ) as handle:
+                current_price = list(csv.DictReader(handle))[-1]
+            self.assertEqual(
+                (frozen_price["Date"], frozen_price["PB_daily"]),
+                ("2026-07-27", "1.99"),
+            )
+            self.assertEqual(
+                (current_price["Date"], current_price["PB_daily"]),
+                ("2026-08-11", "2.069"),
+            )
 
     def test_run_manifest_records_zero_external_calls(self) -> None:
         with scratch("zero-calls-") as output:
-            result = PhaseB1Pipeline(PACKAGE_ROOT).run_all(output_base=output)
+            result = fixture_pipeline(output).run_all(output_base=output)
             manifest = json.loads((output / result["run_id"] / "run_manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(set(manifest["externalCalls"].values()), {0})
             self.assertFalse(manifest["actionable"])
