@@ -379,6 +379,9 @@ class ResearchContentOrchestrator:
         authority_summary = dict(self.authority.manifest_summary())
         return {
             "record_type": "P1008_RESEARCH_CONTENT_INTEGRATION_V1",
+            "report_key": report_key,
+            "revision": revision,
+            "evaluated_at_utc": evaluated_at_utc,
             "run_identity": {
                 "run_id": validated_scan.run_id,
                 "scan_id": validated_scan.scan_id,
@@ -410,6 +413,10 @@ class ResearchContentOrchestrator:
                 "conflicts": [cross_validation["validation_status"]] if cross_validation["conflict_detected"] else [],
                 "cross_validation": cross_validation,
             },
+            # This is the already-validated G1 input, not a second evidence
+            # ledger.  The runtime bridge seals the complete integration result
+            # before Launcher may consume it.
+            "validated_event_evidence": evidence,
             "research_state": trigger["decision"],
             "display_state": display_state,
             "report_trigger_decision": trigger,

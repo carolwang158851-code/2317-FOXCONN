@@ -16,9 +16,24 @@ def main() -> int:
     sys.path.insert(0, str(package_root / "modules" / "p1008_research_plugin" / "src"))
 
     from p1008_research_plugin.phaseb1_pipeline import PhaseB1Pipeline
+    import warroom_report_trigger_runtime as trigger_runtime
 
     try:
-        result = PhaseB1Pipeline(package_root).build_analysis()
+        trigger = trigger_runtime.require_valid_trigger(package_root)
+        # Routing is owned by the existing PluginRouter.  The deterministic
+        # monthly vertical slice remains fail-closed for event modes whose
+        # official Phase B1 packet fixture has not been supplied.
+        from p1008_research_plugin.plugin_module.contracts import RunType
+        from p1008_research_plugin.plugin_module.router import PluginRouter, RouteSignals
+        PluginRouter().route(RunType(trigger["event_type"]), RouteSignals(earnings_event=True))
+        pipeline = PhaseB1Pipeline(package_root)
+        if trigger["event_type"] != pipeline.SUPPORTED_EVENT:
+            raise RuntimeError(
+                f"PHASE_B1_OFFICIAL_PACKET_REQUIRED: {trigger['event_type']}"
+            )
+        result = pipeline.build_analysis(
+            trigger_lineage=trigger_runtime.trigger_lineage(trigger)
+        )
     except Exception as exc:  # noqa: BLE001 - CLI must return a precise fail-closed reason.
         print(json.dumps({"status": "FAIL_CLOSED", "error": str(exc), "actionable": False}, ensure_ascii=False))
         return 1

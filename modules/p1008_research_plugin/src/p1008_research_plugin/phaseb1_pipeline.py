@@ -100,7 +100,10 @@ class PhaseB1Pipeline:
         generated = self._utc(fixture["generatedAtUtc"])
         return f"P1008-B1-MONTHLY-REVENUE-{generated:%Y%m%d}-DET-{suffix}"
 
-    def build_analysis(self, *, output_base: Path | None = None) -> dict[str, Any]:
+    def build_analysis(
+        self, *, output_base: Path | None = None,
+        trigger_lineage: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         fixture, evidence = self.load_inputs()
         run_id = self.deterministic_run_id(fixture)
         run_root = self._run_root(run_id, output_base)
@@ -158,6 +161,8 @@ class PhaseB1Pipeline:
             "externalCalls": self._zero_calls(),
             "actionable": False,
         }
+        if trigger_lineage is not None:
+            manifest["triggerLineage"] = dict(trigger_lineage)
         atomic_write_json(run_root / "run_manifest.json", manifest)
         return {
             "run_id": run_id,
@@ -167,7 +172,10 @@ class PhaseB1Pipeline:
             "analysis_sha256": analysis_sha,
         }
 
-    def build_report(self, *, run_id: str, output_base: Path | None = None) -> dict[str, Any]:
+    def build_report(
+        self, *, run_id: str, output_base: Path | None = None,
+        trigger_lineage: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         fixture, evidence = self.load_inputs()
         expected_run_id = self.deterministic_run_id(fixture)
         if run_id != expected_run_id:
@@ -191,6 +199,8 @@ class PhaseB1Pipeline:
         if gate.get("status") != "PASS" or gate.get("analysisPacketSha256") != sha256_file(analysis_path):
             raise PhaseB1PipelineError("Analysis validation gate is missing or stale")
         stored_run_manifest = json.loads(run_manifest_path.read_text(encoding="utf-8"))
+        if trigger_lineage is not None and stored_run_manifest.get("triggerLineage") != trigger_lineage:
+            raise PhaseB1PipelineError("Analysis trigger lineage is missing or stale")
         expected_analysis_artifacts = {
             "analysis_packet.json": sha256_file(analysis_path),
             "analysis_validation.json": sha256_file(gate_path),
@@ -298,6 +308,8 @@ class PhaseB1Pipeline:
             "externalCalls": self._zero_calls(),
             "actionable": False,
         }
+        if trigger_lineage is not None:
+            manifest["triggerLineage"] = dict(trigger_lineage)
         atomic_write_json(run_root / "run_manifest.json", manifest, overwrite=True)
         return {
             "run_id": run_id,
