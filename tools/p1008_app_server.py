@@ -947,12 +947,16 @@ class P1008JobManager:
             if official_step.get("status") != "SUCCEEDED":
                 official_status = "FAIL_CLOSED"
                 component_failures.append("REPORT_TRIGGER_EVIDENCE_INCOMPLETE")
-            detected = official.get("detected_evidence") or []
-            first = detected[0] if detected else {}
+            active = official.get("active_event_evidence") or official.get("validated_event_evidence") or []
+            first = active[0] if active else {}
             self._set_component_status(
                 "officialIR", official_status,
                 event=official.get("canonical_event_id", ""),
-                fiscalPeriod=(official.get("schedule") or {}).get("fiscal_period", ""),
+                fiscalPeriod=official.get("active_fiscal_period", ""),
+                activeCanonicalEventId=official.get("canonical_event_id", ""),
+                activeReportKey=official.get("report_key", ""),
+                activeEvidenceCount=official.get("active_event_evidence_count", len(active)),
+                historicalEvidenceCount=official.get("historical_evidence_count", 0),
                 officialSource=first.get("source_id", "") or (official.get("schedule") or {}).get("source_id", ""),
                 documentType=(first.get("quality_metadata") or {}).get("document_type", ""),
                 retrievedAt=official.get("evaluated_at_utc", ""),
