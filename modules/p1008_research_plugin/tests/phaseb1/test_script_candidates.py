@@ -5,9 +5,9 @@ import unittest
 from pathlib import Path
 
 try:
-    from .helpers import PACKAGE_ROOT, scratch
+    from .helpers import PACKAGE_ROOT, fixture_pipeline, scratch
 except ImportError:  # direct discovery with phaseb1 as the start directory
-    from helpers import PACKAGE_ROOT, scratch
+    from helpers import PACKAGE_ROOT, fixture_pipeline, scratch
 
 from p1008_research_plugin.phaseb1_pipeline import PhaseB1Pipeline
 from p1008_research_plugin.reporting.script_builder import ScriptBuilder, ScriptInputError
@@ -17,7 +17,7 @@ class PhaseB1ScriptCandidateTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         with scratch("script-valid-") as output:
-            result = PhaseB1Pipeline(PACKAGE_ROOT).run_all(output_base=output)
+            result = fixture_pipeline(output).run_all(output_base=output)
             cls.report = result["report"]
 
     def test_script_generator_rejects_raw_csv_path(self) -> None:

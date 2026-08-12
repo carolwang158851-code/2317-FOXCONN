@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import json
 import shutil
+import subprocess
 import sys
 import unittest
 import uuid
@@ -21,6 +22,7 @@ if SPEC is None or SPEC.loader is None:
 PUBLISHER = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = PUBLISHER
 SPEC.loader.exec_module(PUBLISHER)
+FROZEN_PHASE_A_REVISION = "ac53c1dd151e2e2645cdd3128a7dd70cfad7c582"
 
 
 def sha256(path: Path) -> str:
@@ -38,11 +40,21 @@ class OwnerPublishCsvV2RemediationTests(unittest.TestCase):
         (self.root / "data").mkdir(parents=True)
         (self.root / "runtime").mkdir()
         self.addCleanup(
-            lambda: shutil.rmtree(self.root) if self.root.exists() else None
+            lambda: shutil.rmtree(self.root, ignore_errors=True)
+            if self.root.exists()
+            else None
         )
         self.formal = self.root / PUBLISHER.DAILY_TARGET
         self.manifest = self.root / PUBLISHER.MANIFEST_PATH
-        shutil.copy2(PACKAGE_ROOT / PUBLISHER.DAILY_TARGET, self.formal)
+        frozen = subprocess.run(
+            [
+                "git", "-C", str(PACKAGE_ROOT), "show",
+                f"{FROZEN_PHASE_A_REVISION}:{PUBLISHER.DAILY_TARGET}",
+            ],
+            check=True,
+            capture_output=True,
+        ).stdout
+        self.formal.write_bytes(frozen)
         header, rows, comments = PUBLISHER.read_csv_header_and_rows(self.formal)
         rows = [
             row

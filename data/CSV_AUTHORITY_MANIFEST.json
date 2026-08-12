@@ -1,6 +1,6 @@
 {
   "manifestVersion": "1.4.0",
-  "approvedAt": "2026-07-29",
+  "approvedAt": "2026-08-11",
   "approvedBy": "Owner",
   "approvalSource": "Owner conversation approvals P1008 items 16-18, 25-29, 75, 77, 80 and approved P2-03B-07 Release Manifest; Owner approval 2026-06-29 for 2317_daily_price.csv PB correction and formal daily CSV authority; Owner approval 2026-06-29 for MARKET INTELLIGENCE observation boundary; Owner approval 2026-06-29 via owner_publish_csv_v2.py; appended 2 row(s); Owner approval 2026-06-29 for macro_snapshot.csv historical format correction and manifest hash update; Owner approval 2026-06-30 via owner_publish_csv_v2.py; appended 2 row(s); 2026-06-30 TWSE official close correction, no new row appended; Owner approval 2026-07-03 for macro_event_observations.csv and fx_trend_observations.csv observation-only sidecar contracts; Owner approval 2026-07-05 via owner_publish_csv_v2.py; appended 48 row(s); Owner approval 2026-07-06 via owner_publish_csv_v2.py; appended 49 row(s); Owner approval 2026-07-07 via owner_publish_csv_v2.py; appended 43 row(s); Owner approval 2026-07-08 via owner_publish_csv_v2.py; appended 50 row(s); Owner approval 2026-07-10 via owner_publish_csv_v2.py; appended 44 row(s); Owner approval 2026-07-16 via owner_publish_csv_v2.py; appended 48 row(s); Owner approval 2026-07-17 via owner_publish_csv_v2.py; appended 45 row(s); Owner-approved 2026-07-18 price authority remediation via owner_publish_csv_v2.py replace mode; Owner-approved 2026-07-18 initial TWSE market-activity authority publish via owner_publish_csv_v2.py; Owner approval 2026-07-19 via owner_publish_csv_v2.py; appended 35 row(s); Owner approval 2026-07-19 for official FCF authority and paper-style cross-references; Owner approval 2026-07-20 via owner_publish_csv_v2.py; appended 38 row(s); Owner approval 2026-07-21 via owner_publish_csv_v2.py; appended 41 row(s); Owner approval 2026-07-23 via owner_publish_csv_v2.py; appended 42 row(s); Owner approval 2026-07-27 via owner_publish_csv_v2.py; appended 46 row(s); Owner-approved removal of invalid daily-price row 2026-07-19 via owner_publish_csv_v2.py; Owner-approved official TWSE daily-price gaps 2026-07-22 and 2026-07-24 via owner_publish_csv_v2.py; Owner-approved P1008 Final Integration Reconciliation adds the previously verified Cash Flow authority without changing Daily Price, Market Activity, Macro, RULE, HOLD, MIDR, or Runtime SQLite",
   "authorityPolicy": {
@@ -183,21 +183,21 @@
       "fileName": "2317_daily_price.csv",
       "fileVersion": "daily-v1.0",
       "schemaVersion": "daily-price-v1-7-columns",
-      "sha256": "2581AF868AA0D8C4BFCEA913B156DBB515AF3929FAAE7D0FDC947EA4A8256304",
-      "fileSizeBytes": 6565,
-      "rowCount": 116,
+      "sha256": "1C32081288731725CBA000C1CCC5144A24DD2A6F9A15A2964F930D8953839C6D",
+      "fileSizeBytes": 7191,
+      "rowCount": 127,
       "columnCount": 7,
       "dateRange": {
         "start": "2026-01-28",
-        "end": "2026-07-27"
+        "end": "2026-08-11"
       },
       "validationStatus": "PASS",
       "validationStatusZh": "欄位完整、日期未重複、PB_daily已依Close/BVPS_ref三位小數重算通過",
       "fileAuthority": "CSV_AUTHORITY",
       "fileAuthorityZh": "此每日價格CSV版本已由Owner核准並以SHA-256鎖定",
-      "dataProvenance": "USER_CURATED_WEB_DATA",
+      "dataProvenance": "OFFICIAL_TWSE_STOCK_DAY_MONTHLY_CSV",
       "dataProvenanceZh": "使用者整理並核准的每日收盤與PB資料",
-      "dataSupportLevel": "L3",
+      "dataSupportLevel": "OFFICIAL_TWSE_A1",
       "dataSupportLevelZh": "第三級條件性資料支援；可作UI與正式日價格基準，但不自動觸發交易規則",
       "requiredColumns": [
         "Date",
@@ -293,7 +293,7 @@
           "zh": "此權威資格只代表檔案版本與PB計算被核准，不代表任何買賣規則啟用"
         }
       ],
-      "lastPublishedAt": "2026-07-29T05:11:32Z",
+      "lastPublishedAt": "2026-08-11T15:47:05Z",
       "publishApprovalZh": "Owner approved append; MARKET INTELLIGENCE sidecar remains observation only; actionable:false.",
       "statusNormalizationAt": "2026-06-30T06:29:29Z",
       "statusNormalizationZh": "Owner ???????? append ???? Status ? STAGING_CANDIDATE ???? OK??????? PB ???",
@@ -322,6 +322,16 @@
         "publisher": "owner_publish_csv_v2.py",
         "runtimeSqliteModified": false,
         "actionable": false
+      },
+      "lastIncrementalReconcile": {
+        "immutableThrough": "2026-07-27",
+        "start": "2026-07-28",
+        "end": "2026-08-11",
+        "candidateSha256": "1C32081288731725CBA000C1CCC5144A24DD2A6F9A15A2964F930D8953839C6D",
+        "publishedAt": "2026-08-11T15:47:05Z",
+        "publisher": "owner_publish_csv_v2.py",
+        "mode": "TWSE_DAILY_PRICE_ATOMIC_SUFFIX_RECONCILE",
+        "actionable": false
       }
     },
     {
@@ -329,13 +339,13 @@
       "fileName": "2317_daily_market_activity.csv",
       "fileVersion": "market-activity-v1.0",
       "schemaVersion": "daily-market-activity-v1-7-columns",
-      "sha256": "FE7B33B649012E7D8143838793FE5ED6244BB2183B966C0DAD2C9775FB0E4807",
-      "fileSizeBytes": 9675,
-      "rowCount": 66,
+      "sha256": "021244A6E25894DB93C2223CA493EBA0BD72610D7CE06D4B95BCB5FBFD82D4BB",
+      "fileSizeBytes": 11268,
+      "rowCount": 77,
       "columnCount": 7,
       "dateRange": {
         "start": "2026-04-22",
-        "end": "2026-07-27"
+        "end": "2026-08-11"
       },
       "validationStatus": "PASS",
       "fileAuthority": "CSV_AUTHORITY",
@@ -364,16 +374,16 @@
         "stock_id"
       ],
       "analysisStatus": "MARKET_LIQUIDITY_ANALYSIS_READY",
-      "lastPublishedAt": "2026-07-29T05:45:54Z",
+      "lastPublishedAt": "2026-08-11T15:47:12Z",
       "publisher": "owner_publish_csv_v2.py",
       "publishMode": "MARKET_ACTIVITY_INITIAL_ATOMIC_PUBLISH",
       "actionable": false,
       "lastAppend": {
-        "rowsAdded": 6,
-        "start": "2026-07-20",
-        "end": "2026-07-27",
-        "candidateSha256": "D48730840F5449BE8DF815F58D262173FACF4884593DE11D0B9AF89392792941",
-        "publishedAt": "2026-07-29T05:45:54Z",
+        "rowsAdded": 11,
+        "start": "2026-07-28",
+        "end": "2026-08-11",
+        "candidateSha256": "47CA70671BEC45181417004DEB1649350198E3328CCF4AB376503CE41877995A",
+        "publishedAt": "2026-08-11T15:47:12Z",
         "publisher": "owner_publish_csv_v2.py",
         "mode": "MARKET_ACTIVITY_ATOMIC_APPEND",
         "actionable": false

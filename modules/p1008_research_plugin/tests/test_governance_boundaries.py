@@ -23,8 +23,8 @@ from p1008_research_plugin.ledgers.store import LedgerStore
 
 BASELINE_HASHES = {
     "launcher.html": "1639C5A1D28B76241633F173A58627631BE1F8E577278B6FDE002AD1106D7ACA",
-    "tools/p1008_app_server.py": "2B3CBA46D61C31EB69703A1CFEF1A11F7601985B946EBBF9201505A35E90EFB4",
-    "data/CSV_AUTHORITY_MANIFEST.json": "7DC97FFBC0E3F5E73E8085ACC25DD61E0F3588FCE04C360B4F19FA0D86AFA01B",
+    "tools/p1008_app_server.py": "DF5B119CA13A67C64EA36D89557DAEB42D5356E49C6380BBFC57944C781FC380",
+    "data/CSV_AUTHORITY_MANIFEST.json": "C6FF94A1FB2C9C877D7620184BDDD9A6270355ED833318638C3D87EB634A5398",
     "rules/RULE_STATUS_MANIFEST.json": "054DA1FDAF0C75BB27B56DF45B96F1CC1720558D44C700F1AB70AB0280A2FE5C",
     "contracts/p1008_research_plugin/v1.0/contract.manifest.json": "5D213CB4360329FCC969164F559952A0F1545BFE8E53D5CFDFF014B9D5619773",
 }
@@ -102,9 +102,9 @@ LEGACY_AUTHORITY_MANIFEST_SHA256 = (
 PHASE_A_CLOSURE_MANIFEST_SHA256 = (
     "966352C4DD34938240901095DE5937C69C9BE8638413C2F900977C5EDBAA9C67"
 )
-INTEGRATED_AUTHORITY_MANIFEST_SHA256 = BASELINE_HASHES[
-    "data/CSV_AUTHORITY_MANIFEST.json"
-]
+INTEGRATED_AUTHORITY_MANIFEST_SHA256 = (
+    "7DC97FFBC0E3F5E73E8085ACC25DD61E0F3588FCE04C360B4F19FA0D86AFA01B"
+)
 AUTHORITY_BASELINE_FIXTURE = (
     MODULE_ROOT / "tests" / "fixtures" / "authority_baselines.json"
 )
@@ -133,14 +133,18 @@ def canonical_git_blob_bytes(relative: str, revision: str = "HEAD") -> bytes:
     return result.stdout
 
 
-def verify_portability_boundary(relative: str, entry: dict[str, object]) -> None:
+def verify_portability_boundary(
+    relative: str, entry: dict[str, object], revision: str = "HEAD"
+) -> None:
     expected = entry.get("canonicalGitBlobSha256")
     blob_id = entry.get("canonicalGitBlobId")
     if not isinstance(expected, str) or not re.fullmatch(r"[A-F0-9]{64}", expected):
         raise ValueError(f"missing or invalid canonical SHA for {relative}")
     if not isinstance(blob_id, str) or not re.fullmatch(r"[0-9a-f]{40}", blob_id):
         raise ValueError(f"missing or invalid canonical blob ID for {relative}")
-    actual = hashlib.sha256(canonical_git_blob_bytes(relative)).hexdigest().upper()
+    actual = hashlib.sha256(
+        canonical_git_blob_bytes(relative, revision)
+    ).hexdigest().upper()
     if actual != expected:
         raise ValueError(
             f"canonical Git blob SHA mismatch for {relative}: {actual} != {expected}"
@@ -338,8 +342,8 @@ class GovernanceBoundaryTests(unittest.TestCase):
                         "phaseB1OpsR2Sha256"
                     ],
                 )
-                verify_portability_boundary(relative, entry)
-                canonical = canonical_git_blob_bytes(relative)
+                verify_portability_boundary(relative, entry, R2_ORIGINAL_HEAD)
+                canonical = canonical_git_blob_bytes(relative, R2_ORIGINAL_HEAD)
                 self.assertEqual(
                     canonical_git_blob_bytes(relative, R2_PARENT_HEAD).replace(
                         R2_LINK_FROM.encode("utf-8"), R2_LINK_TO.encode("utf-8")

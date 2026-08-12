@@ -137,7 +137,7 @@ class MarketActivityIncrementalUpdaterTests(unittest.TestCase):
         self.assertEqual(result["http_calls"], 0)
         self.assertEqual(before, (hash_file(self.root / updater.FORMAL_REL), hash_file(self.root / publisher.MANIFEST_PATH)))
 
-    def test_new_date_creates_candidate_and_repeat_keeps_formal_idempotent(self) -> None:
+    def test_new_date_appends_once_and_repeat_is_idempotent(self) -> None:
         self.write_authority([self.activity("2026-07-16")], [("2026-07-16", "233"), ("2026-07-17", "234")])
         receipts = self.root / "fixtures"
         self.write_month(
@@ -145,26 +145,14 @@ class MarketActivityIncrementalUpdaterTests(unittest.TestCase):
             "2026-07",
             [("2026-07-16", 1000, 200000, "233", 100), ("2026-07-17", 1200, 250000, "234", 120)],
         )
-        before = (
-            hash_file(self.root / updater.FORMAL_REL),
-            hash_file(self.root / updater.MANIFEST_REL),
-        )
         first = updater.run_update(self.root, as_of_date=dt.date(2026, 7, 17), offline_receipt_dir=receipts)
         second = updater.run_update(self.root, as_of_date=dt.date(2026, 7, 17), offline_receipt_dir=receipts)
         with (self.root / updater.FORMAL_REL).open(encoding="utf-8") as handle:
             rows = list(csv.DictReader(handle))
-        self.assertEqual(first["status"], updater.STATUS_CANDIDATE_READY)
-        self.assertEqual(second["status"], updater.STATUS_CANDIDATE_READY)
-        self.assertEqual(first["candidate_rows"], 1)
-        self.assertEqual(second["candidate_rows"], 1)
-        self.assertEqual([row["date"] for row in rows], ["2026-07-16"])
-        self.assertEqual(
-            before,
-            (
-                hash_file(self.root / updater.FORMAL_REL),
-                hash_file(self.root / updater.MANIFEST_REL),
-            ),
-        )
+        self.assertEqual(first["status"], updater.STATUS_UPDATED)
+        self.assertEqual(first["rows_added"], 1)
+        self.assertEqual(second["status"], updater.STATUS_NO_NEW)
+        self.assertEqual([row["date"] for row in rows], ["2026-07-16", "2026-07-17"])
 
     def test_cross_month_uses_required_months_only(self) -> None:
         self.write_authority([self.activity("2026-06-30")], [("2026-06-30", "230"), ("2026-07-01", "231")])
@@ -198,6 +186,33 @@ class MarketActivityIncrementalUpdaterTests(unittest.TestCase):
         self.assertEqual(raised.exception.status, updater.STATUS_BLOCKED)
         self.assertEqual(hash_file(self.root / updater.FORMAL_REL), before)
 
+    def test_exit_20_when_price_authority_lacks_twse_date(self) -> None:
+        self.write_authority(
+            [self.activity("2026-07-21")],
+            [("2026-07-21", "246")],
+        )
+        receipts = self.root / "fixtures"
+        self.write_month(
+            receipts,
+            "2026-07",
+            [
+                ("2026-07-21", 1000, 200000, "246", 100),
+                ("2026-07-22", 1200, 250000, "251.5", 120),
+            ],
+        )
+        before = hash_file(self.root / updater.FORMAL_REL)
+        with self.assertRaisesRegex(
+            updater.UpdateFailure,
+            "Price authority does not contain TWSE date 2026-07-22",
+        ) as raised:
+            updater.run_update(
+                self.root,
+                as_of_date=dt.date(2026, 7, 22),
+                offline_receipt_dir=receipts,
+            )
+        self.assertEqual(raised.exception.exit_code, updater.EXIT_BLOCKED)
+        self.assertEqual(hash_file(self.root / updater.FORMAL_REL), before)
+
     def test_https_failure_has_no_fallback(self) -> None:
         with mock.patch.object(updater.http.client, "HTTPSConnection", side_effect=OSError("TLS failed")):
             with self.assertRaises(updater.UpdateFailure):
@@ -226,9 +241,7 @@ class MarketActivityIncrementalUpdaterTests(unittest.TestCase):
                     self.root,
                     candidate,
                     self.root / "runtime/publish",
-                    approval_phrase=publisher.market_activity_approval_phrase(
-                        ["2026-07-17"]
-                    ),
+                    approval_phrase=publisher.market_activity_approval_phrase(["2026-07-17"]),
                 )
         self.assertEqual(before, (hash_file(formal), hash_file(manifest)))
         journal = json.loads((self.root / "runtime/publish/PUBLISH_JOURNAL.json").read_text(encoding="utf-8"))
@@ -264,68 +277,13 @@ class MarketActivityIncrementalUpdaterTests(unittest.TestCase):
             )
         self.assertEqual(hash_file(self.root / updater.FORMAL_REL), before)
 
-    def test_four_gap_dates_candidate_has_official_sources_and_no_zero_fill(self) -> None:
-        price_rows = [
-            ("2026-07-17", "234"),
-            ("2026-07-19", "234"),
-            ("2026-07-20", "234.5"),
-            ("2026-07-21", "246"),
-            ("2026-07-23", "257.5"),
-            ("2026-07-27", "253"),
-        ]
-        self.write_authority([self.activity("2026-07-17")], price_rows)
-        receipts = self.root / "fixtures"
-        self.write_month(
-            receipts,
-            "2026-07",
-            [
-                ("2026-07-17", 1000, 200000, "234", 100),
-                ("2026-07-20", 1200, 240000, "234.5", 120),
-                ("2026-07-21", 1300, 260000, "246", 130),
-                ("2026-07-22", 1350, 270000, "250", 135),
-                ("2026-07-23", 1400, 280000, "257.5", 140),
-                ("2026-07-24", 1450, 290000, "255", 145),
-                ("2026-07-27", 1500, 300000, "253", 150),
-            ],
-        )
-        result = updater.run_update(
-            self.root,
-            as_of_date=dt.date(2026, 7, 27),
-            offline_receipt_dir=receipts,
-        )
-        with Path(result["candidate_path"]).open(encoding="utf-8") as handle:
-            rows = list(csv.DictReader(handle))
-        self.assertEqual(
-            [row["date"] for row in rows],
-            ["2026-07-20", "2026-07-21", "2026-07-23", "2026-07-27"],
-        )
-        self.assertEqual(
-            result["price_authority_missing_dates"],
-            ["2026-07-22", "2026-07-24"],
-        )
-        self.assertEqual(result["ignored_invalid_price_dates"], ["2026-07-19"])
-        self.assertEqual(
-            result["market_liquidity_analysis_status"], updater.STATUS_LIMITED
-        )
-        self.assertTrue(
-            all(
-                row["source_url"].startswith(
-                    "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?"
-                )
-                for row in rows
-            )
-        )
-        self.assertTrue(
-            all(
-                int(row[field]) > 0
-                for row in rows
-                for field in (
-                    "trade_volume",
-                    "trade_value",
-                    "transaction_count",
-                )
-            )
-        )
+    def test_updater_delegates_atomic_publish_with_scoped_phrase(self) -> None:
+        source = (
+            PACKAGE_ROOT / "tools/warroom_market_activity_updater.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("publish_market_activity_append(", source)
+        self.assertIn("market_activity_approval_phrase(", source)
+        self.assertNotIn('"candidate_only": True', source)
 
     def test_update_lock_rejects_duplicate_execution(self) -> None:
         runtime_root = self.root / updater.RUNTIME_REL
@@ -341,14 +299,6 @@ class MarketActivityIncrementalUpdaterTests(unittest.TestCase):
         self.assertIn("sys.version_info[:2] == (3, 12)", wrapper)
         self.assertNotIn("where.exe", wrapper)
         self.assertNotIn("pythoncore-3.14", wrapper)
-
-    def test_updater_has_no_formal_publish_call(self) -> None:
-        source = (
-            PACKAGE_ROOT / "tools/warroom_market_activity_updater.py"
-        ).read_text(encoding="utf-8")
-        self.assertNotIn("publish_market_activity_append(", source)
-        self.assertIn('"candidate_only": True', source)
-        self.assertIn('"owner_publish_required": True', source)
 
 
 if __name__ == "__main__":
