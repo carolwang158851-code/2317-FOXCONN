@@ -27,6 +27,7 @@ from typing import Any
 
 import owner_publish_csv_v2 as owner_publish
 import warroom_report_governance as report_governance
+import warroom_report_trigger_runtime as report_trigger_runtime
 import warroom_rolling_brief as rolling_brief
 
 
@@ -59,7 +60,7 @@ DAILY_PRICE_STATUS_REL = "runtime/daily_price_incremental/latest_status.json"
 MARKET_ACTIVITY_STATUS_REL = "runtime/market_activity_incremental/latest_status.json"
 FRESHNESS_STATUS_REL = "runtime/authority_freshness/latest_status.json"
 SOURCE_MANIFEST_REL = "data/NEWS_SCAN_SOURCE_MANIFEST.json"
-SERVER_VERSION = "P1008_APP_SERVER_20260802_PHASEB1_OPS_V1"
+SERVER_VERSION = "P1008_APP_SERVER_20260812_G1_TRIGGER_RUNTIME_V1"
 
 WEEKDAY_ZH = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"]
 FIELD_LABEL_ZH = {
@@ -372,6 +373,7 @@ class P1008JobManager:
             self.package_root / MARKET_ACTIVITY_STATUS_REL, default={}
         ) or {}
         state["latestReport"] = self.latest_report_status()
+        state["reportTrigger"] = report_trigger_runtime.launcher_status(self.package_root)
         state["reviewPackage"] = self.review_package()
         state["launcherGate"] = self.launcher_gate_status(state["reviewPackage"], state)
         return state
@@ -930,47 +932,37 @@ class P1008JobManager:
             )
             self._set_component_status("news", news_status, exitCode=news_step.get("exitCode"))
 
+        if job_type in {"default", "news-scan"} and not component_failures:
+            self._evaluate_report_trigger_step()
+
         if job_type == "default" and not component_failures:
             rolling_error = self._refresh_rolling_brief_step()
             if rolling_error:
                 component_failures.append(rolling_error)
 
         if job_type == "report":
-            report_date = date.today().isoformat()
-            decision = report_governance.evaluate_report_trigger(
-                report_key=f"P1008_DAILY_{report_date.replace('-', '')}",
-                revision=1,
-                event_evidence=[],
-                evaluated_at_utc=now_iso(),
-            )
-            self._set_step(
-                "report-governance",
-                "Evaluate deterministic report trigger",
-                "SUCCEEDED",
-                decision=decision["decision"],
-                decisionId=decision["decision_id"],
-                actionable=False,
-            )
-            self._set_component_status(
-                "reportGovernance",
-                decision["decision"],
-                reportKey=decision["report_key"],
-                revision=decision["revision"],
-                reportTriggerValid=decision["report_trigger_valid"],
-                archiveEligible=False,
-                libraryAppended=False,
-                actionable=False,
-            )
-            self._set_step(
-                "report",
-                "Generate daily archive report",
-                "BLOCKED",
-                code="REPORT_TRIGGER_RECEIPT_REQUIRED",
-                message="NO_MATERIAL_CHANGE: a validated material-event trigger receipt is required.",
-                actionable=False,
-            )
+            self._evaluate_report_trigger_step()
         if job_type in {"analysis-candidate", "report-candidate"}:
             is_analysis = job_type == "analysis-candidate"
+            try:
+                trigger = report_trigger_runtime.require_valid_trigger(self.package_root)
+                if not is_analysis:
+                    report_trigger_runtime.require_analysis_candidate(self.package_root, trigger)
+            except report_trigger_runtime.RuntimeTriggerError as exc:
+                code = "REPORT_TRIGGER_REQUIRED" if is_analysis else "ANALYSIS_CANDIDATE_REQUIRED"
+                self._set_step(
+                    job_type,
+                    "Build Phase B1 Analysis candidate" if is_analysis else "Build Phase B1 Report candidate",
+                    "BLOCKED",
+                    code=code,
+                    message=str(exc),
+                    actionable=False,
+                )
+                self._set_component_status(
+                    "phaseB1", "FAIL_CLOSED", code=code, actionable=False
+                )
+                self._refresh(before)
+                return
             bat_name = "P1008_BUILD_ANALYSIS.bat" if is_analysis else "P1008_BUILD_REPORT.bat"
             label = "Build Phase B1 Analysis candidate" if is_analysis else "Build Phase B1 Report candidate"
             exit_code = self._run_bat_step(
@@ -1011,6 +1003,40 @@ class P1008JobManager:
         self._refresh(
             before,
             allow_authority_change=job_type in {"default", "update-data"},
+        )
+
+    def _evaluate_report_trigger_step(self) -> None:
+        """Evaluate and persist G1 state; never start candidate production."""
+        self._set_step(
+            "report-governance", "Reconcile validated evidence and evaluate report trigger", "RUNNING"
+        )
+        try:
+            receipt = report_trigger_runtime.evaluate_and_persist(
+                self.package_root, evaluated_at_utc=now_iso()
+            )
+        except (report_trigger_runtime.RuntimeTriggerError, report_governance.GovernanceValidationError) as exc:
+            self._set_step(
+                "report-governance", "Reconcile validated evidence and evaluate report trigger",
+                "FAIL_CLOSED", message=str(exc), actionable=False,
+            )
+            self._set_component_status(
+                "reportGovernance", "FAIL_CLOSED", reportTriggerValid=False,
+                archiveEligible=False, libraryAppended=False, error=str(exc), actionable=False,
+            )
+            return
+        self._set_step(
+            "report-governance", "Reconcile validated evidence and evaluate report trigger",
+            "SUCCEEDED", decision=receipt["decision"], decisionId=receipt["decision_id"],
+            actionable=False,
+        )
+        self._set_component_status(
+            "reportGovernance", receipt["decision"], reportKey=receipt["report_key"],
+            revision=receipt["revision"], eventType=receipt["event_type"],
+            validationState=receipt["cross_validation"]["validation_status"],
+            reportTriggerValid=receipt["report_trigger_valid"],
+            materialEventConfirmed=receipt["material_event_confirmed"],
+            archiveEligible=False, libraryAppended=False, reportGenerated=False,
+            actionable=False,
         )
 
     def _set_component_status(self, component: str, status: str, **extra: Any) -> None:

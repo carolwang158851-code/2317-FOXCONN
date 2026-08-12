@@ -1,5 +1,17 @@
 ﻿# P1008 Launcher 自動化工作流
 
+## G1 戰報觸發與候選產製
+
+一般交易日執行「一鍵更新資料與資訊」時，News／Research 後會以最新、已驗證且
+hash-bound 的研究整合結果評估 G1 Trigger。`NO_MATERIAL_CHANGE` 只更新 Launcher
+狀態，不產生 Analysis、Report，也不追加研究庫。
+
+季報或法說事件只有在正式公司／監管證據或既有 G1 合格交叉驗證成立時，才會成為
+`TRIGGERED_INTERNAL_REPORT`。Owner 此後仍須手動依序啟動 Analysis Candidate 與
+Report Candidate；兩者在伺服器端都會重驗相同 `report_key`、revision、decision 與
+evidence lineage。Trigger 不等於 Publish；對外產製與發布仍須另一個 Owner approval，
+且所有 runtime receipt 維持 `actionable=false`。
+
 ## 入口
 
 決策者入口是根目錄的 `P1008_APP.bat`。它會呼叫 `P1008_2_OPEN_WARROOM.bat`，由 `tools/p1008_open_warroom.py` 啟動或重用本機 App server，預設開啟 `launcher.html`。日常使用會優先重用健康的 Launcher，避免多次雙擊後累積一堆 Python server；若維護者剛更新 server 程式碼，才手動加 `--fresh` 強制開新 session。
