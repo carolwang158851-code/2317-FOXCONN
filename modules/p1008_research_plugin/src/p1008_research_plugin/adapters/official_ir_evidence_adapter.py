@@ -128,6 +128,18 @@ def _identity(period: tuple[int, int]) -> tuple[str, str]:
     return f"HON_HAI_FY{year}_Q{quarter}_EARNINGS", f"P1008_FY{year}_Q{quarter}_EARNINGS"
 
 
+def _source_failure_status(error: str) -> str:
+    if "TIMEOUT" in error:
+        return "TIMEOUT"
+    if error.startswith("HTTP_") or error in {"OFFICIAL_ENDPOINT_ERROR", "NETWORK_FETCH_FAILED:HTTPError"}:
+        return "HTTP_ERROR"
+    if error in {"OFF_DOMAIN_URL_REJECTED", "PRIVATE_NETWORK_REJECTED", "URL_POLICY_REJECTED"}:
+        return "SECURITY_REJECTED"
+    if error in {"PDF_CONTENT_MISMATCH", "HTML_CONTENT_TYPE_REQUIRED", "TRANSPORT_RESPONSE_INVALID", "RESPONSE_TOO_LARGE"}:
+        return "VALIDATION_FAILED"
+    return "HTTP_ERROR"
+
+
 class OfficialIREvidenceAdapter:
     def __init__(self, package_root: Path | str, *, transport: Transport | None = None) -> None:
         self.package_root = Path(package_root).resolve()
@@ -281,9 +293,12 @@ class OfficialIREvidenceAdapter:
         evidence: list[dict[str, Any]] = []
         receipts: list[dict[str, Any]] = []
         failures: list[dict[str, str]] = []
+        source_statuses: list[dict[str, Any]] = []
         schedule: dict[str, Any] | None = None
         seen_documents: set[tuple[str, str]] = set()
         for source in self.authorization["sources"][: int(self.authorization["maxPages"])]:
+            source_evidence: list[dict[str, Any]] = []
+            receipt_count_before = len(receipts)
             try:
                 page = self._fetch(source["url"], fixed_page=True)
                 text, links = self._links(page)
@@ -294,6 +309,7 @@ class OfficialIREvidenceAdapter:
                     selected = next(((period, title) for period, title in periods if target_period is None or period == target_period), None)
                     if selected:
                         canonical_id, report_key = _identity(selected[0]); schedule = {"state": "EVENT_SCHEDULE_CONFIRMED", "event": canonical_id, "report_key": report_key, "fiscal_period": f"FY{selected[0][0]} Q{selected[0][1]}", "title": selected[1], "source_id": source["sourceId"], "receipt_id": page_receipt["receipt_id"], "actionable": False}
+                    source_statuses.append({"source_id": source["sourceId"], "status": "SUCCESS" if selected else "NO_CHANGE", "evidence_count": 0, "receipt_count": len(receipts) - receipt_count_before})
                     continue
                 candidates = list(links)
                 if source["role"] == "MOPS_OFFICIAL_DISCLOSURE":
@@ -313,18 +329,40 @@ class OfficialIREvidenceAdapter:
                             raise OfficialIREvidenceError("PDF_CONTENT_MISMATCH")
                     receipt = self._receipt(source=source, response=response, document_type=document_type, period=period, run_dir=run_dir)
                     receipts.append(receipt)
-                    evidence.append(self._evidence(receipt, period, document_type))
+                    source_evidence.append(self._evidence(receipt, period, document_type))
+                evidence.extend(source_evidence)
+                source_statuses.append({"source_id": source["sourceId"], "status": "SUCCESS" if source_evidence else "NOT_YET_AVAILABLE", "evidence_count": len(source_evidence), "receipt_count": len(receipts) - receipt_count_before})
             except OfficialIREvidenceError as exc:
-                failures.append({"source_id": source["sourceId"], "error": str(exc)})
+                error = str(exc)
+                failure_status = _source_failure_status(error)
+                failure = {"source_id": source["sourceId"], "status": failure_status, "error": error}
+                failures.append(failure)
+                source_statuses.append({**failure, "evidence_count": 0, "receipt_count": len(receipts) - receipt_count_before})
         deduped = {(item["canonical_event_id"], item["source_id"], item["source_hash"]): item for item in evidence}
         evidence = list(deduped.values())
         selected_period = target_period or (_period(schedule["fiscal_period"]) if schedule else None)
         if evidence:
             selected_period = (int(evidence[0]["canonical_event_id"].split("FY", 1)[1][:4]), int(evidence[0]["canonical_event_id"].rsplit("Q", 1)[1].split("_", 1)[0]))
         canonical_id, report_key = _identity(selected_period) if selected_period else ("", f"P1008_DAILY_{self.retrieved_at[:10].replace('-', '')}")
-        complete = not failures
-        status = "PARTIAL_FAILURE" if failures else ("AUTHORITY_EVIDENCE_READY" if evidence else ("SCHEDULE_CONFIRMED" if schedule else "NO_CHANGE"))
-        result = {"record_type": "P1008_OFFICIAL_IR_EVIDENCE_SCAN_V1", "run_id": run_id, "status": status, "authorization_identity": AUTHORIZATION_ID, "evaluated_at_utc": self.retrieved_at, "canonical_event_id": canonical_id, "report_key": report_key, "revision": 1, "schedule": schedule, "validated_event_evidence": evidence if complete else [], "detected_evidence": evidence, "receipt_paths": [item["receipt_path"] for item in receipts], "failures": failures, "source_scan_complete": complete, "analysis_generated": False, "report_generated": False, "publication_count": 0, "actionable": False}
+        coverage_complete = not failures
+        successful_sources = [item["source_id"] for item in source_statuses if item["status"] in {"SUCCESS", "NO_CHANGE", "NOT_YET_AVAILABLE"}]
+        if failures:
+            status = "PARTIAL_FAILURE_WITH_AUTHORITY" if evidence else ("PARTIAL_FAILURE_NO_AUTHORITY" if successful_sources else "FAIL_CLOSED")
+            scan_status = "PARTIAL_FAILURE" if successful_sources else "FAIL_CLOSED"
+        else:
+            status = "AUTHORITY_EVIDENCE_READY" if evidence else ("SCHEDULE_CONFIRMED" if schedule else "NO_CHANGE")
+            scan_status = "COMPLETE"
+        result = {
+            "record_type": "P1008_OFFICIAL_IR_EVIDENCE_SCAN_V1", "run_id": run_id,
+            "status": status, "scan_status": scan_status, "scan_integrity_valid": True,
+            "coverage_complete": coverage_complete, "source_scan_complete": coverage_complete,
+            "successful_sources": successful_sources, "failed_sources": failures, "source_statuses": source_statuses,
+            "authorization_identity": AUTHORIZATION_ID, "evaluated_at_utc": self.retrieved_at,
+            "canonical_event_id": canonical_id, "report_key": report_key, "revision": 1,
+            "schedule": schedule, "validated_event_evidence": evidence, "detected_evidence": evidence,
+            "receipt_paths": [item["receipt_path"] for item in receipts], "failures": failures,
+            "analysis_generated": False, "report_generated": False, "publication_count": 0, "actionable": False,
+        }
         run_dir.mkdir(parents=True, exist_ok=True)
         (run_dir / "scan_result.json").write_bytes(_canonical(result))
         latest = self.package_root / RUNTIME_REL / "latest_status.json"; latest.parent.mkdir(parents=True, exist_ok=True); latest.write_bytes(_canonical(result))

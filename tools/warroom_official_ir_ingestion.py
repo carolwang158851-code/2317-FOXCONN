@@ -39,12 +39,17 @@ def main() -> int:
             return 20
     try:
         scan = OfficialIREvidenceAdapter(root).scan(target_period=period)
-        if not scan["source_scan_complete"]:
+        if scan.get("scan_integrity_valid") is not True or scan.get("status") == "FAIL_CLOSED":
             print(json.dumps(scan, ensure_ascii=False, sort_keys=True))
             return 20
         integration = ResearchContentOrchestrator(root).integrate_official_ir(scan)
         sealed = trigger_runtime.persist_integration_result(root, integration)
-        output = {**scan, "integration_receipt_sha256": sealed["canonical_sha256"]}
+        output = {
+            **scan,
+            "integration_receipt_sha256": sealed["canonical_sha256"],
+            "g1_validation": integration["evidence"]["cross_validation"]["validation_status"],
+            "g1_decision": integration["report_trigger_decision"]["decision"],
+        }
         print(json.dumps(output, ensure_ascii=False, sort_keys=True))
         return 0
     except (OfficialIREvidenceError, ResearchContentIntegrationError, trigger_runtime.RuntimeTriggerError, OSError) as exc:

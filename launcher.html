@@ -219,6 +219,8 @@
           <div class="stat"><div class="label">Official source</div><div id="official-ir-source" class="small">N/A</div></div>
           <div class="stat"><div class="label">Document type</div><div id="official-ir-document" class="small">NOT_YET_AVAILABLE</div></div>
           <div class="stat"><div class="label">Retrieved</div><div id="official-ir-retrieved" class="small">N/A</div></div>
+          <div class="stat"><div class="label">Coverage</div><div id="official-ir-coverage" class="small">N/A</div></div>
+          <div class="stat"><div class="label">Failed sources</div><div id="official-ir-failures" class="small">NONE</div></div>
         </div>
       </div>
       <div class="notice blue" id="report-trigger-panel" style="margin-top:12px">
@@ -367,7 +369,7 @@
 
   <script>
     const state = { app: null, review: null, log: '', autoRedirected: false };
-    const EXPECTED_SERVER_VERSION = 'P1008_APP_SERVER_20260812_OFFICIAL_IR_EVIDENCE_V1';
+    const EXPECTED_SERVER_VERSION = 'P1008_APP_SERVER_20260812_OFFICIAL_IR_PARTIAL_COVERAGE_V1_1';
     const $ = (id) => document.getElementById(id);
     const P1008_IMMERSIVE_KEY = 'p1008_immersive_mode';
     function readImmersivePref() {
@@ -672,6 +674,8 @@
       $('official-ir-source').textContent = officialIR.officialSource || 'N/A';
       $('official-ir-document').textContent = officialIR.documentType || 'NOT_YET_AVAILABLE';
       $('official-ir-retrieved').textContent = officialIR.retrievedAt || officialIR.evaluated_at_utc || 'N/A';
+      $('official-ir-coverage').textContent = officialIR.coverageComplete === true ? 'COMPLETE' : officialIR.coverageComplete === false ? 'INCOMPLETE' : 'N/A';
+      $('official-ir-failures').textContent = (officialIR.failedSources || officialIR.failed_sources || []).map((item) => `${item.source_id}: ${item.error || item.status}`).join(' / ') || 'NONE';
       $('overall-component-status').textContent = app.overallStatus || app.status || 'IDLE';
       $('phaseb1-run-id').textContent = phaseB1.runId || 'N/A';
       $('phaseb1-output').textContent = phaseB1.outputPath || 'N/A';

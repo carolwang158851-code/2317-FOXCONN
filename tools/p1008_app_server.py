@@ -61,7 +61,7 @@ MARKET_ACTIVITY_STATUS_REL = "runtime/market_activity_incremental/latest_status.
 FRESHNESS_STATUS_REL = "runtime/authority_freshness/latest_status.json"
 SOURCE_MANIFEST_REL = "data/NEWS_SCAN_SOURCE_MANIFEST.json"
 OFFICIAL_IR_STATUS_REL = "runtime/official_ir_evidence/latest_status.json"
-SERVER_VERSION = "P1008_APP_SERVER_20260812_OFFICIAL_IR_EVIDENCE_V1"
+SERVER_VERSION = "P1008_APP_SERVER_20260812_OFFICIAL_IR_PARTIAL_COVERAGE_V1_1"
 
 WEEKDAY_ZH = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"]
 FIELD_LABEL_ZH = {
@@ -957,6 +957,10 @@ class P1008JobManager:
                 documentType=(first.get("quality_metadata") or {}).get("document_type", ""),
                 retrievedAt=official.get("evaluated_at_utc", ""),
                 sourceScanComplete=official.get("source_scan_complete") is True,
+                scanIntegrityValid=official.get("scan_integrity_valid") is True,
+                coverageComplete=official.get("coverage_complete") is True,
+                successfulSources=official.get("successful_sources") or [],
+                failedSources=official.get("failed_sources") or [],
                 actionable=False,
             )
 

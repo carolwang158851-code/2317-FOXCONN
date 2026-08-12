@@ -307,14 +307,15 @@ class ResearchContentOrchestrator:
         """Validate hash-bound Official IR receipts and reuse the existing G1 path.
 
         This is deliberately not a collector.  The dedicated adapter supplies
-        a completed scan; the orchestrator independently proves authorization,
+        an integrity-valid scan; the orchestrator independently proves authorization,
         raw-byte lineage, evidence schema, deduplication and fail-closed state.
         """
 
         if (
             scan_result.get("record_type") != "P1008_OFFICIAL_IR_EVIDENCE_SCAN_V1"
             or scan_result.get("authorization_identity") != OFFICIAL_IR_AUTHORIZATION_ID
-            or scan_result.get("source_scan_complete") is not True
+            or scan_result.get("scan_integrity_valid") is not True
+            or scan_result.get("status") == "FAIL_CLOSED"
             or scan_result.get("actionable") is not False
             or scan_result.get("analysis_generated") is not False
             or scan_result.get("report_generated") is not False
@@ -325,38 +326,49 @@ class ResearchContentOrchestrator:
         supplied = scan_result.get("validated_event_evidence")
         if not isinstance(supplied, list):
             raise ResearchContentIntegrationError("OFFICIAL_IR_EVIDENCE_INVALID")
+        if not isinstance(scan_result.get("coverage_complete"), bool):
+            raise ResearchContentIntegrationError("OFFICIAL_IR_COVERAGE_INVALID")
+        if not isinstance(scan_result.get("successful_sources"), list) or not isinstance(scan_result.get("failed_sources"), list):
+            raise ResearchContentIntegrationError("OFFICIAL_IR_SOURCE_STATUS_INVALID")
+        if scan_result["coverage_complete"] != (len(scan_result["failed_sources"]) == 0):
+            raise ResearchContentIntegrationError("OFFICIAL_IR_COVERAGE_INCONSISTENT")
         governed: list[dict[str, Any]] = []
+        evidence_validation_failures: list[dict[str, str]] = []
         receipt_root = (self.package_root / OFFICIAL_IR_RUNTIME_REL).resolve()
         for raw in supplied:
-            item = self.report_governance.validate_event_evidence(dict(raw))
-            if item["source_class"] != "AUTHORITY" or item["source_tier"] != "OFFICIAL":
-                raise ResearchContentIntegrationError("OFFICIAL_IR_AUTHORITY_CLASS_INVALID")
-            receipt_path = (self.package_root / item["source_locator"]).resolve()
-            if not receipt_path.is_relative_to(receipt_root) or not receipt_path.is_file():
-                raise ResearchContentIntegrationError("OFFICIAL_IR_RECEIPT_NOT_BOUND")
             try:
+                item = self.report_governance.validate_event_evidence(dict(raw))
+                if item["source_class"] != "AUTHORITY" or item["source_tier"] != "OFFICIAL":
+                    raise ResearchContentIntegrationError("OFFICIAL_IR_AUTHORITY_CLASS_INVALID")
+                receipt_path = (self.package_root / item["source_locator"]).resolve()
+                if not receipt_path.is_relative_to(receipt_root) or not receipt_path.is_file():
+                    raise ResearchContentIntegrationError("OFFICIAL_IR_RECEIPT_NOT_BOUND")
                 receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError) as exc:
-                raise ResearchContentIntegrationError("OFFICIAL_IR_RECEIPT_INVALID") from exc
-            provenance = item.get("provenance") or {}
-            raw_relative = provenance.get("raw_artifact_path")
-            if not isinstance(raw_relative, str):
-                raise ResearchContentIntegrationError("OFFICIAL_IR_RAW_RECEIPT_REQUIRED")
-            raw_path = (self.package_root / raw_relative).resolve()
-            if not raw_path.is_relative_to(receipt_root) or not raw_path.is_file():
-                raise ResearchContentIntegrationError("OFFICIAL_IR_RAW_RECEIPT_REQUIRED")
-            raw_hash = sha256_file(raw_path)
-            if not (
-                receipt.get("authorizationIdentity") == OFFICIAL_IR_AUTHORIZATION_ID
-                and receipt.get("actionable") is False
-                and receipt.get("source_class") == "AUTHORITY"
-                and receipt.get("source_hash") == raw_hash == item["source_hash"]
-                and receipt.get("raw_sha256") == raw_hash
-                and provenance.get("raw_sha256") == raw_hash
-                and provenance.get("receipt_id") == receipt.get("receipt_id")
-            ):
-                raise ResearchContentIntegrationError("OFFICIAL_IR_PROVENANCE_HASH_MISMATCH")
-            governed.append(item)
+                provenance = item.get("provenance") or {}
+                raw_relative = provenance.get("raw_artifact_path")
+                if not isinstance(raw_relative, str):
+                    raise ResearchContentIntegrationError("OFFICIAL_IR_RAW_RECEIPT_REQUIRED")
+                raw_path = (self.package_root / raw_relative).resolve()
+                if not raw_path.is_relative_to(receipt_root) or not raw_path.is_file():
+                    raise ResearchContentIntegrationError("OFFICIAL_IR_RAW_RECEIPT_REQUIRED")
+                raw_hash = sha256_file(raw_path)
+                if not (
+                    receipt.get("authorizationIdentity") == OFFICIAL_IR_AUTHORIZATION_ID
+                    and receipt.get("actionable") is False
+                    and receipt.get("source_class") == "AUTHORITY"
+                    and receipt.get("source_hash") == raw_hash == item["source_hash"]
+                    and receipt.get("raw_sha256") == raw_hash
+                    and provenance.get("raw_sha256") == raw_hash
+                    and provenance.get("receipt_id") == receipt.get("receipt_id")
+                ):
+                    raise ResearchContentIntegrationError("OFFICIAL_IR_PROVENANCE_HASH_MISMATCH")
+                governed.append(item)
+            except (ResearchContentIntegrationError, ValueError, TypeError, KeyError, OSError, json.JSONDecodeError) as exc:
+                source_id = raw.get("source_id", "UNKNOWN") if isinstance(raw, Mapping) else "UNKNOWN"
+                evidence_validation_failures.append({"source_id": str(source_id), "error": str(exc) or type(exc).__name__})
+        if supplied and not governed:
+            first_error = evidence_validation_failures[0]["error"] if evidence_validation_failures else "UNKNOWN"
+            raise ResearchContentIntegrationError(f"OFFICIAL_IR_EVIDENCE_VALIDATION_FAILED:{first_error}")
         evidence, duplicate_count = self._deduplicate(governed)
         report_key = scan_result.get("report_key")
         revision = scan_result.get("revision")
@@ -401,9 +413,14 @@ class ResearchContentOrchestrator:
             },
             "official_ir": {
                 "status": scan_result.get("status"),
+                "scan_status": scan_result.get("scan_status"),
                 "schedule": scan_result.get("schedule"),
                 "receipt_paths": list(scan_result.get("receipt_paths") or []),
-                "source_scan_complete": True,
+                "scan_integrity_valid": True,
+                "coverage_complete": scan_result["coverage_complete"],
+                "successful_sources": list(scan_result["successful_sources"]),
+                "failed_sources": list(scan_result["failed_sources"]),
+                "evidence_validation_failures": evidence_validation_failures,
             },
             "evidence": {
                 "input_count": len(governed),

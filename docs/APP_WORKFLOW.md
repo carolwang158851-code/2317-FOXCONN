@@ -141,6 +141,7 @@ Launcher 的 crawler 成功率只計算 `requiresNetwork=true` 的網路來源�
 - Scheduled earnings date: Event Calendar → `EVENT_SCHEDULE_CONFIRMED` / `WATCH`; schedule alone never proves results and never triggers a report.
 - Results PDF, quarterly report, results-specific official release, or matching 2317 MOPS filing: raw official bytes are receipt/hash-bound, validated by `ResearchContentOrchestrator`, then evaluated by the existing G1 runtime.
 - A later transcript is supplemental evidence for the same fiscal-period report identity; an unchanged deterministic claim does not create a duplicate report or revision.
+- Scan integrity and source coverage are separate: a temporary failure at one official endpoint remains visible as incomplete coverage, while independently receipt/hash-validated evidence from another official source continues into the existing G1 evaluation. Security, schema, receipt, or provenance failures remain fail closed for the affected evidence.
 - Trigger != Analysis; Analysis != Report; Report != Publish. All candidate creation remains an explicit Owner action and publication remains separately gated.
 
 ## 跳轉規則

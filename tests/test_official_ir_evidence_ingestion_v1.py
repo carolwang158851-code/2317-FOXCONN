@@ -144,20 +144,86 @@ class OfficialIREvidenceIngestionTests(unittest.TestCase):
         changed = self.scan(self.mapping(conference=page, documents={RESULTS: b"v2"}))
         self.assertNotEqual(first["validated_event_evidence"][0]["source_hash"], changed["validated_event_evidence"][0]["source_hash"])
 
-    def test_off_domain_redirect_malformed_pdf_and_network_failure_fail_closed(self) -> None:
+    def test_off_domain_redirect_and_malformed_pdf_fail_closed_per_source(self) -> None:
         off_domain = self.mapping(conference='<a href="https://evil.example/2Q26_Results.pdf">2Q26 Results</a>')
-        self.assertEqual(self.scan(off_domain)["status"], "PARTIAL_FAILURE")
+        blocked = self.scan(off_domain)
+        self.assertEqual(blocked["status"], "PARTIAL_FAILURE_NO_AUTHORITY")
+        self.assertEqual(blocked["validated_event_evidence"], [])
+        self.assertEqual(next(item for item in blocked["failed_sources"] if item["source_id"] == "HON_HAI_INVESTOR_CONFERENCE")["status"], "SECURITY_REJECTED")
         redirect = self.mapping(conference=f'<a href="{RESULTS}">2Q26 Results</a>', documents={RESULTS: b"x"})
         redirect[RESULTS] = FetchResponse(b"%PDF-x", "https://evil.example/result.pdf", 200, "application/pdf")
-        self.assertEqual(self.scan(redirect)["status"], "PARTIAL_FAILURE")
+        self.assertEqual(self.scan(redirect)["status"], "PARTIAL_FAILURE_NO_AUTHORITY")
         malformed = self.mapping(conference=f'<a href="{RESULTS}">2Q26 Results</a>')
         malformed[RESULTS] = FetchResponse(b"not-pdf", RESULTS, 200, "text/html")
-        self.assertEqual(self.scan(malformed)["status"], "PARTIAL_FAILURE")
-        timeout = self.mapping(); timeout[MOPS] = OfficialIREvidenceError("NETWORK_TIMEOUT")
-        blocked = self.scan(timeout)
-        self.assertFalse(blocked["source_scan_complete"])
+        self.assertEqual(self.scan(malformed)["status"], "PARTIAL_FAILURE_NO_AUTHORITY")
+
+    def test_results_survive_mops_timeout_and_reach_g1(self) -> None:
+        values = self.mapping(conference=f'<a href="{RESULTS}">2Q26 Results</a>', documents={RESULTS: b"results"})
+        values[MOPS] = OfficialIREvidenceError("NETWORK_TIMEOUT")
+        result = self.scan(values)
+        self.assertEqual(result["scan_status"], "PARTIAL_FAILURE")
+        self.assertEqual(result["status"], "PARTIAL_FAILURE_WITH_AUTHORITY")
+        self.assertFalse(result["coverage_complete"])
+        self.assertTrue(result["scan_integrity_valid"])
+        self.assertEqual(len(result["validated_event_evidence"]), 1)
+        self.assertEqual(result["failed_sources"][0]["status"], "TIMEOUT")
+        integration = ResearchContentOrchestrator(self.root).integrate_official_ir(result)
+        self.assertEqual(len(integration["validated_event_evidence"]), 1)
+        self.assertEqual(integration["report_trigger_decision"]["decision"], "TRIGGERED_INTERNAL_REPORT")
+
+    def test_results_survive_mops_http_error_and_reach_g1(self) -> None:
+        values = self.mapping(conference=f'<a href="{RESULTS}">2Q26 Results</a>', documents={RESULTS: b"results"})
+        values[MOPS] = FetchResponse(b"error", MOPS, 500, "text/html")
+        result = self.scan(values)
+        self.assertEqual(result["status"], "PARTIAL_FAILURE_WITH_AUTHORITY")
+        self.assertEqual(len(result["validated_event_evidence"]), 1)
+        self.assertEqual(result["failed_sources"][0]["status"], "HTTP_ERROR")
+        integration = ResearchContentOrchestrator(self.root).integrate_official_ir(result)
+        self.assertEqual(len(integration["validated_event_evidence"]), 1)
+
+    def test_invalid_results_hash_does_not_block_independent_mops_evidence(self) -> None:
+        values = self.mapping(
+            conference=f'<a href="{RESULTS}">2Q26 Results</a>',
+            mops="2317 2026 Q2",
+            documents={RESULTS: b"genuine"},
+        )
+        result = self.scan(values)
+        results = next(item for item in result["validated_event_evidence"] if item["source_id"] == "HON_HAI_INVESTOR_CONFERENCE")
+        (self.root / results["provenance"]["raw_artifact_path"]).write_bytes(b"tampered")
+        integration = ResearchContentOrchestrator(self.root).integrate_official_ir(result)
+        self.assertEqual([item["source_id"] for item in integration["validated_event_evidence"]], ["MOPS_OFFICIAL_DISCLOSURE"])
+        self.assertEqual(integration["official_ir"]["evidence_validation_failures"][0]["source_id"], "HON_HAI_INVESTOR_CONFERENCE")
+
+    def test_all_official_sources_fail_without_evidence_or_trigger(self) -> None:
+        values = self.mapping()
+        for url in (CALENDAR, CONFERENCE, QUARTERLY, PRESS, MOPS):
+            values[url] = OfficialIREvidenceError("NETWORK_TIMEOUT")
+        result = self.scan(values)
+        self.assertEqual(result["status"], "FAIL_CLOSED")
+        self.assertEqual(result["validated_event_evidence"], [])
+        self.assertEqual(len(result["failed_sources"]), 5)
         with self.assertRaisesRegex(ResearchContentIntegrationError, "FAIL_CLOSED"):
-            ResearchContentOrchestrator(self.root).integrate_official_ir(blocked)
+            ResearchContentOrchestrator(self.root).integrate_official_ir(result)
+
+    def test_off_domain_results_and_mops_outage_never_promote_evidence(self) -> None:
+        values = self.mapping(conference='<a href="https://evil.example/2Q26_Results.pdf">2Q26 Results</a>')
+        values[MOPS] = OfficialIREvidenceError("OFFICIAL_ENDPOINT_ERROR")
+        result = self.scan(values)
+        self.assertEqual(result["status"], "PARTIAL_FAILURE_NO_AUTHORITY")
+        self.assertEqual(result["validated_event_evidence"], [])
+        integration = ResearchContentOrchestrator(self.root).integrate_official_ir(result)
+        self.assertFalse(integration["report_trigger_decision"]["report_trigger_valid"])
+
+    def test_schedule_survives_mops_outage_without_trigger(self) -> None:
+        values = self.mapping()
+        values[MOPS] = OfficialIREvidenceError("OFFICIAL_ENDPOINT_ERROR")
+        result = self.scan(values)
+        self.assertEqual(result["status"], "PARTIAL_FAILURE_NO_AUTHORITY")
+        self.assertEqual(result["schedule"]["state"], "EVENT_SCHEDULE_CONFIRMED")
+        self.assertEqual(result["validated_event_evidence"], [])
+        integration = ResearchContentOrchestrator(self.root).integrate_official_ir(result)
+        self.assertEqual(integration["display_state"], "WATCH")
+        self.assertFalse(integration["report_trigger_decision"]["report_trigger_valid"])
 
     def test_wrong_mops_issuer_generic_press_old_period_and_url_injection_do_not_promote(self) -> None:
         values = self.mapping(
@@ -189,6 +255,8 @@ class OfficialIREvidenceIngestionTests(unittest.TestCase):
         self.assertLess(server.index("self._run_news_scan_step()"), server.index("self._run_official_ir_step()"))
         self.assertLess(server.index("self._run_official_ir_step()"), server.index("self._evaluate_report_trigger_step()"))
         self.assertIn('id="official-ir-status"', launcher)
+        self.assertIn('id="official-ir-coverage"', launcher)
+        self.assertIn('id="official-ir-failures"', launcher)
         self.assertIn("Schedule awareness is not results authority.", launcher)
         adapter = (ROOT / "modules/p1008_research_plugin/src/p1008_research_plugin/adapters/official_ir_evidence_adapter.py").read_text(encoding="utf-8")
         self.assertNotIn("openai", adapter.lower())
