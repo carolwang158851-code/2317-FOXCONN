@@ -128,11 +128,21 @@ Launcher 的 crawler 成功率只計算 `requiresNetwork=true` 的網路來源�
 | `POST /api/p1008/run/default` | 執行完整一鍵資料流程 | 不 publish |
 | `POST /api/p1008/run/update-data` | 只補跑資料更新 | 不 publish |
 | `POST /api/p1008/run/news-scan` | 只補跑新聞掃描 v2，更新 source health | 未核准來源不連網 |
+| `POST /api/p1008/run/official-ir-scan` | 只掃描固定核准的鴻海 IR／MOPS 官方來源並重評 G1 | 不更新 TWSE CSV、不產生 Analysis/Report、不發布 |
 | `POST /api/p1008/run/report` | 只產生日報 | 不改正式 CSV |
 | `POST /api/p1008/run/analysis-candidate` | 手動產生 Phase B1 MONTHLY_REVENUE Analysis 候選 | 不連網、不呼叫模型、runtime-only |
 | `POST /api/p1008/run/report-candidate` | 從已驗證 Analysis 產生 Report 與腳本候選 | 不可繞過 Analysis gate、不發布 |
 | `POST /api/p1008/publish/formal` | Owner 強確認後 append 正式 CSV | 只能呼叫既有 publish gate |
 | `GET /api/p1008/log?jobId=...` | 讀取任務 log | 只讀 |
+
+## Official IR evidence lifecycle
+
+- Normal day: Official IR scan → `NO_CHANGE` → no report.
+- Scheduled earnings date: Event Calendar → `EVENT_SCHEDULE_CONFIRMED` / `WATCH`; schedule alone never proves results and never triggers a report.
+- Results PDF, quarterly report, results-specific official release, or matching 2317 MOPS filing: raw official bytes are receipt/hash-bound, validated by `ResearchContentOrchestrator`, then evaluated by the existing G1 runtime.
+- A later transcript is supplemental evidence for the same fiscal-period report identity; an unchanged deterministic claim does not create a duplicate report or revision.
+- Scan integrity and source coverage are separate: a temporary failure at one official endpoint remains visible as incomplete coverage, while independently receipt/hash-validated evidence from another official source continues into the existing G1 evaluation. Security, schema, receipt, or provenance failures remain fail closed for the affected evidence.
+- Trigger != Analysis; Analysis != Report; Report != Publish. All candidate creation remains an explicit Owner action and publication remains separately gated.
 
 ## 跳轉規則
 

@@ -96,6 +96,7 @@ contracts/p1008_report_governance/v1.0/REPORT_GOVERNANCE_CONTRACT.md text eol=lf
 contracts/p1008_report_governance/v1.0/contract.manifest.json text eol=lf
 contracts/p1008_report_governance/v1.0/EXTERNAL_DISCOVERY_PROVIDER_CONTRACT.md text eol=lf
 contracts/p1008_report_governance/v1.0/authorizations/P1008_ANYSEARCH_DISCOVERY_SCAN_AUTHORIZATION_V1.json text eol=lf
+contracts/p1008_report_governance/v1.0/authorizations/P1008_OFFICIAL_IR_EVIDENCE_INGESTION_AUTHORIZATION_V1.json text eol=lf
 contracts/p1008_report_governance/v1.0/policies/external_discovery_provider_policy.json text eol=lf
 contracts/p1008_report_governance/v1.0/repins/ANYSEARCH_V3_0_1_GOVERNED_REPIN.json text eol=lf
 contracts/p1008_report_governance/v1.0/schemas/event_evidence.schema.json text eol=lf

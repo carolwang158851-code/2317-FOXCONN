@@ -268,6 +268,7 @@ G1_REPORT_GOVERNANCE_HASH_GOVERNED_PATHS = {
     "contracts/p1008_report_governance/v1.0/contract.manifest.json",
     "contracts/p1008_report_governance/v1.0/EXTERNAL_DISCOVERY_PROVIDER_CONTRACT.md",
     "contracts/p1008_report_governance/v1.0/authorizations/P1008_ANYSEARCH_DISCOVERY_SCAN_AUTHORIZATION_V1.json",
+    "contracts/p1008_report_governance/v1.0/authorizations/P1008_OFFICIAL_IR_EVIDENCE_INGESTION_AUTHORIZATION_V1.json",
     "contracts/p1008_report_governance/v1.0/policies/external_discovery_provider_policy.json",
     "contracts/p1008_report_governance/v1.0/repins/ANYSEARCH_V3_0_1_GOVERNED_REPIN.json",
     "contracts/p1008_report_governance/v1.0/schemas/event_evidence.schema.json",
@@ -285,6 +286,9 @@ G1_REPORT_GOVERNANCE_HASH_GOVERNED_PATHS = {
 
 GOVERNED_ANYSEARCH_RUNTIME_PATH = (
     "src/p1008_research_plugin/adapters/anysearch_runtime.py"
+)
+GOVERNED_OFFICIAL_IR_RUNTIME_PATH = (
+    "src/p1008_research_plugin/adapters/official_ir_evidence_adapter.py"
 )
 
 
@@ -388,7 +392,7 @@ class Phase2ABoundaryTests(unittest.TestCase):
             entries.append(path)
         self.assertEqual(len(entries), len(set(entries)))
         self.assertEqual(set(entries), expected_hash_governed_paths())
-        self.assertEqual(len(entries), 174)
+        self.assertEqual(len(entries), 175)
 
     def test_crlf_and_mixed_manifest_bytes_are_rejected(self) -> None:
         for rejected in (MANIFEST_CRLF_SHA256, MANIFEST_MIXED_SHA256):
@@ -486,12 +490,33 @@ class Phase2ABoundaryTests(unittest.TestCase):
         for path in SRC_ROOT.rglob("*.py"):
             text = path.read_text(encoding="utf-8")
             relative = path.relative_to(MODULE_ROOT).as_posix()
-            if pattern.search(text) and relative != GOVERNED_ANYSEARCH_RUNTIME_PATH:
+            if pattern.search(text) and relative not in {
+                GOVERNED_ANYSEARCH_RUNTIME_PATH,
+                GOVERNED_OFFICIAL_IR_RUNTIME_PATH,
+            }:
                 violations.append(relative)
             if ("OPENAI_API_KEY" in text or "os.environ" in text) and relative != GOVERNED_ANYSEARCH_RUNTIME_PATH:
                 secret_reads.append(relative)
         self.assertEqual(violations, [])
         self.assertEqual(secret_reads, [])
+
+    def test_governed_official_ir_network_exception_is_exact(self) -> None:
+        runtime_path = MODULE_ROOT / GOVERNED_OFFICIAL_IR_RUNTIME_PATH
+        text = runtime_path.read_text(encoding="utf-8")
+        network_imports = re.findall(
+            r"^\s*(?:from|import)\s+(?:openai|agents|requests|httpx|socket|urllib\.request|http\.client)\b[^\n]*",
+            text,
+            re.MULTILINE,
+        )
+        self.assertEqual(
+            network_imports,
+            ["import socket", "from urllib.request import Request, build_opener, HTTPRedirectHandler"],
+        )
+        self.assertIn("P1008_OFFICIAL_IR_EVIDENCE_INGESTION_AUTHORIZATION_V1", text)
+        self.assertIn("OFF_DOMAIN_URL_REJECTED", text)
+        self.assertIn("PRIVATE_NETWORK_REJECTED", text)
+        self.assertNotIn("OPENAI_API_KEY", text)
+        self.assertNotIn("os.environ", text)
 
     def test_governed_anysearch_network_and_secret_exception_is_exact(self) -> None:
         runtime_path = MODULE_ROOT / GOVERNED_ANYSEARCH_RUNTIME_PATH

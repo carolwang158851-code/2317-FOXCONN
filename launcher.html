@@ -212,6 +212,17 @@
         <button id="run-report">產生日報</button>
         <button id="refresh">刷新狀態</button>
       </div>
+      <div class="notice blue" style="margin-top:12px">
+        <div class="between"><div><strong>Official IR Evidence</strong><div class="small">Schedule awareness is not results authority.</div></div><span id="official-ir-status" class="badge blue">NO_CHANGE</span></div>
+        <div class="grid four" style="margin-top:10px">
+          <div class="stat"><div class="label">Event / Period</div><div id="official-ir-event" class="small">N/A</div></div>
+          <div class="stat"><div class="label">Official source</div><div id="official-ir-source" class="small">N/A</div></div>
+          <div class="stat"><div class="label">Document type</div><div id="official-ir-document" class="small">NOT_YET_AVAILABLE</div></div>
+          <div class="stat"><div class="label">Retrieved</div><div id="official-ir-retrieved" class="small">N/A</div></div>
+          <div class="stat"><div class="label">Coverage</div><div id="official-ir-coverage" class="small">N/A</div></div>
+          <div class="stat"><div class="label">Failed sources</div><div id="official-ir-failures" class="small">NONE</div></div>
+        </div>
+      </div>
       <div class="notice blue" id="report-trigger-panel" style="margin-top:12px">
         <div class="between">
           <div><strong>戰報觸發 Trigger</strong><div id="trigger-next-action" class="small">等待治理狀態</div></div>
@@ -358,7 +369,7 @@
 
   <script>
     const state = { app: null, review: null, log: '', autoRedirected: false };
-    const EXPECTED_SERVER_VERSION = 'P1008_APP_SERVER_20260812_G1_TRIGGER_RUNTIME_V1';
+    const EXPECTED_SERVER_VERSION = 'P1008_APP_SERVER_20260812_OFFICIAL_IR_PARTIAL_COVERAGE_V1_1';
     const $ = (id) => document.getElementById(id);
     const P1008_IMMERSIVE_KEY = 'p1008_immersive_mode';
     function readImmersivePref() {
@@ -630,6 +641,7 @@
       const dailyComponent = components.dailyPrice || {};
       const marketComponent = components.marketActivity || app.marketActivity || {};
       const newsComponent = components.news || {};
+      const officialIR = components.officialIR || app.officialIR || {};
       const phaseB1 = components.phaseB1 || {};
       const trigger = app.reportTrigger || {};
       const busy = app.status === 'RUNNING';
@@ -656,6 +668,14 @@
       $('market-activity-status').textContent = marketComponent.status || marketComponent.launcher_status || 'N/A';
       $('market-activity-date').textContent = `最後成功日期：${marketComponent.lastSuccessDate || marketComponent.last_success_date || 'N/A'}`;
       $('news-component-status').textContent = newsComponent.status || 'NO_CHANGE';
+      $('official-ir-status').className = badgeClass(officialIR.status || 'NO_CHANGE');
+      $('official-ir-status').textContent = officialIR.status || 'NO_CHANGE';
+      $('official-ir-event').textContent = [officialIR.event || officialIR.canonical_event_id, officialIR.fiscalPeriod].filter(Boolean).join(' / ') || 'N/A';
+      $('official-ir-source').textContent = officialIR.officialSource || 'N/A';
+      $('official-ir-document').textContent = officialIR.documentType || 'NOT_YET_AVAILABLE';
+      $('official-ir-retrieved').textContent = officialIR.retrievedAt || officialIR.evaluated_at_utc || 'N/A';
+      $('official-ir-coverage').textContent = officialIR.coverageComplete === true ? 'COMPLETE' : officialIR.coverageComplete === false ? 'INCOMPLETE' : 'N/A';
+      $('official-ir-failures').textContent = (officialIR.failedSources || officialIR.failed_sources || []).map((item) => `${item.source_id}: ${item.error || item.status}`).join(' / ') || 'NONE';
       $('overall-component-status').textContent = app.overallStatus || app.status || 'IDLE';
       $('phaseb1-run-id').textContent = phaseB1.runId || 'N/A';
       $('phaseb1-output').textContent = phaseB1.outputPath || 'N/A';

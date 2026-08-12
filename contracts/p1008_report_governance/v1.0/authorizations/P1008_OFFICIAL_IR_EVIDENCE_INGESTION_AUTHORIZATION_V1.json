@@ -1,0 +1,31 @@
+{
+  "authorizationIdentity": "P1008_OFFICIAL_IR_EVIDENCE_INGESTION_AUTHORIZATION_V1",
+  "authorizationVersion": "1.0",
+  "ownerDecision": "APPROVED",
+  "scope": "OFFICIAL_IR_EVIDENCE_INGESTION",
+  "sourceClass": "AUTHORITY",
+  "sourceTier": "OFFICIAL",
+  "issuer": {"stockId": "2317", "name": "Hon Hai Precision Industry Co., Ltd."},
+  "sources": [
+    {"sourceId": "HON_HAI_EVENT_CALENDAR", "role": "HON_HAI_EVENT_CALENDAR", "url": "https://www.honhai.com/zh-tw/investor-relations/investor-relations-activities/event-calendar", "authorityScope": "SCHEDULE_ONLY"},
+    {"sourceId": "HON_HAI_INVESTOR_CONFERENCE", "role": "HON_HAI_INVESTOR_CONFERENCE", "url": "https://www.honhai.com/zh-tw/investor-relations/investor-relations-activities/investor-conference", "authorityScope": "OFFICIAL_DOCUMENT_DISCOVERY"},
+    {"sourceId": "HON_HAI_QUARTERLY_REPORTS", "role": "HON_HAI_QUARTERLY_REPORTS", "url": "https://www.honhai.com/zh-tw/investor-relations/financial-information/reports?section=quarterly", "authorityScope": "OFFICIAL_DOCUMENT_DISCOVERY"},
+    {"sourceId": "HON_HAI_PRESS_RELEASES", "role": "HON_HAI_PRESS_RELEASES", "url": "https://www.honhai.com/zh-tw/press-center/press-releases/latest-news", "authorityScope": "RESULTS_RELEASE_ONLY"},
+    {"sourceId": "MOPS_OFFICIAL_DISCLOSURE", "role": "MOPS_OFFICIAL_DISCLOSURE", "url": "https://mops.twse.com.tw/mops/web/t05st02", "authorityScope": "MATCHING_2317_PERIOD_DISCLOSURE_ONLY"}
+  ],
+  "allowedOrigins": [
+    {"scheme": "https", "host": "www.honhai.com", "pathPrefixes": ["/zh-tw/investor-relations/", "/zh-tw/press-center/"]},
+    {"scheme": "https", "host": "image.honhai.com", "pathPrefixes": ["/"]},
+    {"scheme": "https", "host": "mops.twse.com.tw", "pathPrefixes": ["/mops/web/", "/mops/error/"]}
+  ],
+  "redirectPolicy": "EVERY_HOP_AND_FINAL_URL_MUST_MATCH_ALLOWED_ORIGIN",
+  "maxPages": 5,
+  "maxDocuments": 6,
+  "maxResponseBytes": 33554432,
+  "timeoutSeconds": 12,
+  "formalAuthorityWrites": 0,
+  "analysisGenerated": false,
+  "reportGenerated": false,
+  "publicationActions": 0,
+  "actionable": false
+}
