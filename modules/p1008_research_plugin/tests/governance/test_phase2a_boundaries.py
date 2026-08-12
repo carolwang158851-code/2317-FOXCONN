@@ -286,6 +286,9 @@ G1_REPORT_GOVERNANCE_HASH_GOVERNED_PATHS = {
 GOVERNED_ANYSEARCH_RUNTIME_PATH = (
     "src/p1008_research_plugin/adapters/anysearch_runtime.py"
 )
+GOVERNED_OFFICIAL_IR_RUNTIME_PATH = (
+    "src/p1008_research_plugin/adapters/official_ir_evidence_adapter.py"
+)
 
 
 def sha256(path: Path) -> str:
@@ -486,12 +489,33 @@ class Phase2ABoundaryTests(unittest.TestCase):
         for path in SRC_ROOT.rglob("*.py"):
             text = path.read_text(encoding="utf-8")
             relative = path.relative_to(MODULE_ROOT).as_posix()
-            if pattern.search(text) and relative != GOVERNED_ANYSEARCH_RUNTIME_PATH:
+            if pattern.search(text) and relative not in {
+                GOVERNED_ANYSEARCH_RUNTIME_PATH,
+                GOVERNED_OFFICIAL_IR_RUNTIME_PATH,
+            }:
                 violations.append(relative)
             if ("OPENAI_API_KEY" in text or "os.environ" in text) and relative != GOVERNED_ANYSEARCH_RUNTIME_PATH:
                 secret_reads.append(relative)
         self.assertEqual(violations, [])
         self.assertEqual(secret_reads, [])
+
+    def test_governed_official_ir_network_exception_is_exact(self) -> None:
+        runtime_path = MODULE_ROOT / GOVERNED_OFFICIAL_IR_RUNTIME_PATH
+        text = runtime_path.read_text(encoding="utf-8")
+        network_imports = re.findall(
+            r"^\s*(?:from|import)\s+(?:openai|agents|requests|httpx|socket|urllib\.request|http\.client)\b[^\n]*",
+            text,
+            re.MULTILINE,
+        )
+        self.assertEqual(
+            network_imports,
+            ["import socket", "from urllib.request import Request, build_opener, HTTPRedirectHandler"],
+        )
+        self.assertIn("P1008_OFFICIAL_IR_EVIDENCE_INGESTION_AUTHORIZATION_V1", text)
+        self.assertIn("OFF_DOMAIN_URL_REJECTED", text)
+        self.assertIn("PRIVATE_NETWORK_REJECTED", text)
+        self.assertNotIn("OPENAI_API_KEY", text)
+        self.assertNotIn("os.environ", text)
 
     def test_governed_anysearch_network_and_secret_exception_is_exact(self) -> None:
         runtime_path = MODULE_ROOT / GOVERNED_ANYSEARCH_RUNTIME_PATH

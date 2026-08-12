@@ -86,6 +86,18 @@ class FakeManager(app_server.P1008JobManager):
     def _run_python_step(self, step_id, label, args, timeout_seconds, *, allow_after_errors=False):
         self.calls.append(step_id)
         self._set_step(step_id, label, "SUCCEEDED", exitCode=0)
+        if step_id == "official-ir-scan":
+            path = self.package_root / app_server.OFFICIAL_IR_STATUS_REL
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({
+                "status": "SCHEDULE_CONFIRMED",
+                "canonical_event_id": "HON_HAI_FY2026_Q2_EARNINGS",
+                "schedule": {"fiscal_period": "FY2026 Q2", "source_id": "HON_HAI_EVENT_CALENDAR"},
+                "detected_evidence": [],
+                "evaluated_at_utc": "2026-08-12T12:00:00Z",
+                "source_scan_complete": True,
+                "actionable": False,
+            }), encoding="utf-8")
 
     def _refresh(self, before, *, allow_authority_change=False):
         self.calls.append("refresh")
@@ -110,7 +122,7 @@ class LauncherMarketActivityPipelineTests(unittest.TestCase):
         manager = FakeManager(self.root)
         with mock.patch.object(app_server, "formal_csv_hashes", return_value=dict(BASE_HASHES)):
             manager._run_job_inner("default")
-        self.assertEqual(manager.calls, ["preflight", "daily-price-authority", "market-activity", "authority-freshness", "update-data", "news-scan", "rolling-brief", "refresh"])
+        self.assertEqual(manager.calls, ["preflight", "daily-price-authority", "market-activity", "authority-freshness", "update-data", "news-scan", "official-ir-scan", "rolling-brief", "refresh"])
         self.assertEqual(manager.state["componentStatus"]["dailyPrice"]["status"], "NO_NEW_DATA")
         self.assertEqual(manager.state["componentStatus"]["marketActivity"]["status"], "NO_NEW_DATA")
         self.assertEqual(manager.state["overallStatus"], "SUCCEEDED")

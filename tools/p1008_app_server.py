@@ -60,7 +60,8 @@ DAILY_PRICE_STATUS_REL = "runtime/daily_price_incremental/latest_status.json"
 MARKET_ACTIVITY_STATUS_REL = "runtime/market_activity_incremental/latest_status.json"
 FRESHNESS_STATUS_REL = "runtime/authority_freshness/latest_status.json"
 SOURCE_MANIFEST_REL = "data/NEWS_SCAN_SOURCE_MANIFEST.json"
-SERVER_VERSION = "P1008_APP_SERVER_20260812_G1_TRIGGER_RUNTIME_V1"
+OFFICIAL_IR_STATUS_REL = "runtime/official_ir_evidence/latest_status.json"
+SERVER_VERSION = "P1008_APP_SERVER_20260812_OFFICIAL_IR_EVIDENCE_V1"
 
 WEEKDAY_ZH = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"]
 FIELD_LABEL_ZH = {
@@ -374,6 +375,9 @@ class P1008JobManager:
         ) or {}
         state["latestReport"] = self.latest_report_status()
         state["reportTrigger"] = report_trigger_runtime.launcher_status(self.package_root)
+        state["officialIR"] = read_json(
+            self.package_root / OFFICIAL_IR_STATUS_REL, default={}
+        ) or {}
         state["reviewPackage"] = self.review_package()
         state["launcherGate"] = self.launcher_gate_status(state["reviewPackage"], state)
         return state
@@ -932,7 +936,31 @@ class P1008JobManager:
             )
             self._set_component_status("news", news_status, exitCode=news_step.get("exitCode"))
 
-        if job_type in {"default", "news-scan"} and not component_failures:
+        if job_type in {"default", "news-scan", "official-ir-scan"} and not component_failures:
+            self._run_official_ir_step()
+            official_step = next(
+                (step for step in self.state.get("steps", []) if step.get("id") == "official-ir-scan"),
+                {},
+            )
+            official = read_json(self.package_root / OFFICIAL_IR_STATUS_REL, default={}) or {}
+            official_status = str(official.get("status") or "FAIL_CLOSED")
+            if official_step.get("status") != "SUCCEEDED":
+                official_status = "FAIL_CLOSED"
+                component_failures.append("REPORT_TRIGGER_EVIDENCE_INCOMPLETE")
+            detected = official.get("detected_evidence") or []
+            first = detected[0] if detected else {}
+            self._set_component_status(
+                "officialIR", official_status,
+                event=official.get("canonical_event_id", ""),
+                fiscalPeriod=(official.get("schedule") or {}).get("fiscal_period", ""),
+                officialSource=first.get("source_id", "") or (official.get("schedule") or {}).get("source_id", ""),
+                documentType=(first.get("quality_metadata") or {}).get("document_type", ""),
+                retrievedAt=official.get("evaluated_at_utc", ""),
+                sourceScanComplete=official.get("source_scan_complete") is True,
+                actionable=False,
+            )
+
+        if job_type in {"default", "news-scan", "official-ir-scan"} and not component_failures:
             self._evaluate_report_trigger_step()
 
         if job_type == "default" and not component_failures:
@@ -987,7 +1015,7 @@ class P1008JobManager:
                 outputPath=latest.get("outputPath", ""),
                 actionable=False,
             )
-        if job_type in {"default", "update-data"}:
+        if job_type in {"default", "update-data", "official-ir-scan"}:
             if component_failures:
                 for failure in component_failures:
                     self._add_error(failure)
@@ -995,7 +1023,7 @@ class P1008JobManager:
             partial = any(
                 str((components.get(name) or {}).get("status", ""))
                 in {"FAILED", "STALE", "BLOCKED", "FAIL_CLOSED"}
-                for name in ("dailyPrice", "marketActivity", "news", "rollingBrief", "reportLibrary")
+                for name in ("dailyPrice", "marketActivity", "news", "officialIR", "rollingBrief", "reportLibrary")
             )
             with self.lock:
                 self.state["overallStatus"] = "PARTIAL_FAILURE" if partial else "SUCCEEDED"
@@ -1298,6 +1326,18 @@ class P1008JobManager:
             self._add_warning("No approved network news connector; news scan ran no-network.")
         self._run_python_step("news-scan", "Observation-only news scan v2", args, timeout_seconds=240)
 
+    def _run_official_ir_step(self) -> None:
+        """Scan fixed authorized Official IR sources; never generate content."""
+        args = [
+            str(self.package_root / "tools" / "warroom_official_ir_ingestion.py"),
+            "--package-root",
+            str(self.package_root),
+        ]
+        self._run_python_step(
+            "official-ir-scan", "Governed Official IR evidence scan", args,
+            timeout_seconds=90,
+        )
+
     def _run_bat_step(
         self,
         step_id: str,
@@ -1514,6 +1554,7 @@ class P1008AppHandler(http.server.SimpleHTTPRequestHandler):
             "/api/p1008/run/default": "default",
             "/api/p1008/run/update-data": "update-data",
             "/api/p1008/run/news-scan": "news-scan",
+            "/api/p1008/run/official-ir-scan": "official-ir-scan",
             "/api/p1008/run/report": "report",
             "/api/p1008/run/analysis-candidate": "analysis-candidate",
             "/api/p1008/run/report-candidate": "report-candidate",
