@@ -133,14 +133,18 @@ def canonical_git_blob_bytes(relative: str, revision: str = "HEAD") -> bytes:
     return result.stdout
 
 
-def verify_portability_boundary(relative: str, entry: dict[str, object]) -> None:
+def verify_portability_boundary(
+    relative: str, entry: dict[str, object], revision: str = "HEAD"
+) -> None:
     expected = entry.get("canonicalGitBlobSha256")
     blob_id = entry.get("canonicalGitBlobId")
     if not isinstance(expected, str) or not re.fullmatch(r"[A-F0-9]{64}", expected):
         raise ValueError(f"missing or invalid canonical SHA for {relative}")
     if not isinstance(blob_id, str) or not re.fullmatch(r"[0-9a-f]{40}", blob_id):
         raise ValueError(f"missing or invalid canonical blob ID for {relative}")
-    actual = hashlib.sha256(canonical_git_blob_bytes(relative)).hexdigest().upper()
+    actual = hashlib.sha256(
+        canonical_git_blob_bytes(relative, revision)
+    ).hexdigest().upper()
     if actual != expected:
         raise ValueError(
             f"canonical Git blob SHA mismatch for {relative}: {actual} != {expected}"
@@ -338,8 +342,8 @@ class GovernanceBoundaryTests(unittest.TestCase):
                         "phaseB1OpsR2Sha256"
                     ],
                 )
-                verify_portability_boundary(relative, entry)
-                canonical = canonical_git_blob_bytes(relative)
+                verify_portability_boundary(relative, entry, R2_ORIGINAL_HEAD)
+                canonical = canonical_git_blob_bytes(relative, R2_ORIGINAL_HEAD)
                 self.assertEqual(
                     canonical_git_blob_bytes(relative, R2_PARENT_HEAD).replace(
                         R2_LINK_FROM.encode("utf-8"), R2_LINK_TO.encode("utf-8")
