@@ -6,9 +6,9 @@ import re
 import unittest
 
 try:
-    from .helpers import PACKAGE_ROOT, scratch
+    from .helpers import PACKAGE_ROOT, fixture_pipeline, scratch
 except ImportError:
-    from helpers import PACKAGE_ROOT, scratch
+    from helpers import PACKAGE_ROOT, fixture_pipeline, scratch
 
 from p1008_research_plugin.phaseb1_pipeline import PhaseB1Pipeline
 from p1008_research_plugin.reporting.report_validator import ReportValidator
@@ -33,7 +33,7 @@ class PhaseB1ShortsSentenceIntegrityR2Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         with scratch("r2-valid-") as output:
-            result = PhaseB1Pipeline(PACKAGE_ROOT).run_all(output_base=output)
+            result = fixture_pipeline(output).run_all(output_base=output)
             cls.analysis = result["analysis"]
             cls.report = result["report"]
         cls.builder = ScriptBuilder()

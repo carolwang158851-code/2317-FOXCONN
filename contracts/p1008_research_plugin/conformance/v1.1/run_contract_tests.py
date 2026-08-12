@@ -36,6 +36,13 @@ ACCEPTANCE_PATH = (
 V1_RUNNER_PATH = SCRIPT_ROOT.parent / "v1.0" / "run_contract_tests.py"
 V1_CONTRACT_ROOT = PACKAGE_ROOT / "contracts" / "p1008_research_plugin" / "v1.0"
 MODULE_RELATIVE_PATH = Path("modules/p1008_research_plugin")
+CURRENT_AUTHORITY_AMENDMENT_PATH = (
+    "contracts/p1008_research_plugin/acceptance/v1.1/"
+    "P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT.json"
+)
+CURRENT_AUTHORITY_AMENDMENT_SHA256 = (
+    "9A0DDC6A85BE96123A7EC378DAC7BDD368D671DB8BFBFDD07DC40EFE438FD187"
+)
 
 
 @dataclass
@@ -253,6 +260,9 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
         receipt_ref = record.get("authorityBaselineReceipts", {}).get(classification, {})
         receipt_path = receipt_ref.get("path", "")
         receipt_hash = receipt_ref.get("sha256", "")
+        if classification == "INTEGRATED_SEVEN":
+            receipt_path = CURRENT_AUTHORITY_AMENDMENT_PATH
+            receipt_hash = CURRENT_AUTHORITY_AMENDMENT_SHA256
         require(receipt_path and receipt_hash, "Phase A authority receipt metadata is missing")
         receipt_file = root / receipt_path
         require(receipt_file.is_file(), "Phase A authority receipt is missing")
@@ -276,6 +286,7 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                 "OWNER_APPROVED_MARKET_ACTIVITY_STAGE2A_PUBLISH",
                 "PHASE_A_AUTHORITY_DATA_CLOSURE_COMPLETE",
                 "PHASE_A_FINAL_INTEGRATION_RECONCILED",
+                "P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT",
             },
             "Phase A authority receipt is not accepted",
         )
@@ -555,7 +566,7 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                 and stage2b.get("actionable") is False,
                 "Stage 2B Macro transaction evidence is invalid",
             )
-        else:
+        elif acceptance_status == "PHASE_A_FINAL_INTEGRATION_RECONCILED":
             require(
                 classification == "INTEGRATED_SEVEN"
                 and receipt.get("baselineId") == "INTEGRATED_SEVEN",
@@ -667,6 +678,115 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                 and receipt.get("webSearchCalls") == 0
                 and receipt.get("canvaCalls") == 0,
                 "Final integration recorded an unauthorized state change or call",
+            )
+        else:
+            require(
+                classification == "INTEGRATED_SEVEN"
+                and receipt.get("baselineId") == "INTEGRATED_SEVEN",
+                "TWSE remediation amendment is bound to the wrong baseline",
+            )
+            previous = receipt.get("previousReceipt", {})
+            previous_path = previous.get("path", "")
+            require(
+                previous_path
+                == "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_FINAL_INTEGRATION_AMENDMENT_RECEIPT.json"
+                and previous.get("sha256")
+                == "112373EA26100384F93B85A87415C5625DA34A1634B1C83E557C45BCC7829AAE",
+                "TWSE remediation amendment predecessor identity mismatch",
+            )
+            previous_committed = git_blob_bytes(root, previous_path)
+            require(
+                sha256_bytes(previous_committed) == previous.get("sha256"),
+                "Historical final-integration receipt hash changed",
+            )
+            require(
+                normalize_checkout_eol((root / previous_path).read_bytes())
+                == normalize_checkout_eol(previous_committed),
+                "Historical final-integration receipt worktree changed",
+            )
+            previous_document = json.loads(previous_committed.decode("utf-8-sig"))
+            require(
+                previous_document.get("acceptanceStatus")
+                == "PHASE_A_FINAL_INTEGRATION_RECONCILED"
+                and previous_document.get("authorityFiles", {}).get(
+                    "data/2317_daily_price.csv"
+                )
+                == "2581AF868AA0D8C4BFCEA913B156DBB515AF3929FAAE7D0FDC947EA4A8256304"
+                and previous_document.get("authorityFiles", {}).get(
+                    "data/2317_daily_market_activity.csv"
+                )
+                == "FE7B33B649012E7D8143838793FE5ED6244BB2183B966C0DAD2C9775FB0E4807",
+                "Historical final-integration receipt content drifted",
+            )
+            previous_authority = receipt.get("previousGovernedAuthority", {})
+            require(
+                previous_authority
+                == {
+                    "dailyPriceSha256": "2581AF868AA0D8C4BFCEA913B156DBB515AF3929FAAE7D0FDC947EA4A8256304",
+                    "dailyPriceRows": 116,
+                    "dailyPriceCutoff": "2026-07-27",
+                    "marketActivitySha256": "FE7B33B649012E7D8143838793FE5ED6244BB2183B966C0DAD2C9775FB0E4807",
+                    "marketActivityRows": 66,
+                    "marketActivityCutoff": "2026-07-27",
+                },
+                "TWSE remediation prior authority state drifted",
+            )
+            manifest_reference = receipt.get("authorityManifest", {})
+            require(
+                manifest_reference.get("path") == "data/CSV_AUTHORITY_MANIFEST.json"
+                and manifest_reference.get("sha256")
+                == sha256_bytes(
+                    git_blob_bytes(root, "data/CSV_AUTHORITY_MANIFEST.json")
+                ),
+                "TWSE remediation current authority manifest mismatch",
+            )
+            require(
+                receipt.get("authoritySummary")
+                == {
+                    "verifiedFileCount": 7,
+                    "dailyPriceRows": 127,
+                    "dailyPriceCutoff": "2026-08-11",
+                    "marketActivityRows": 77,
+                    "marketActivityCutoff": "2026-08-11",
+                },
+                "TWSE remediation current authority summary drifted",
+            )
+            lineage = receipt.get("remediationLineage", {})
+            base_commit = lineage.get("baseCommit", "")
+            remediation_commit = lineage.get("remediationCommit", "")
+            require(
+                base_commit == "ac53c1dd151e2e2645cdd3128a7dd70cfad7c582"
+                and remediation_commit
+                == "28537440c9bfd1cfbe89cbbe7cae51803c6aa9dc"
+                and lineage.get("commitCount") == 1,
+                "TWSE remediation commit lineage metadata drifted",
+            )
+            require(
+                subprocess.run(
+                    ["git", "-C", str(root), "merge-base", "--is-ancestor", base_commit, remediation_commit],
+                    check=False,
+                ).returncode
+                == 0
+                and git_output(root, "rev-list", "--count", f"{base_commit}..{remediation_commit}")
+                == "1",
+                "TWSE remediation commit lineage is invalid",
+            )
+            require(
+                receipt.get("sourceAuthority")
+                == "TWSE_OFFICIAL_STOCK_DAY_MONTHLY_CSV"
+                and receipt.get("formalAuthorityPublication")
+                == "ALREADY_COMPLETED_BY_REMEDIATION"
+                and receipt.get("formalPublishExecutedByThisReceipt") is False
+                and receipt.get("newAuthorityWriteDuringCiClosure") is False
+                and receipt.get("governanceAcknowledgementOnly") is True
+                and receipt.get("ownerGateRequired") is True
+                and receipt.get("automaticReportGeneration") is False
+                and receipt.get("ruleHoldMidrModified") is False
+                and receipt.get("runtimeSqliteModified") is False
+                and receipt.get("openAiCalls") == 0
+                and receipt.get("webSearchCalls") == 0
+                and receipt.get("canvaCalls") == 0,
+                "TWSE remediation governance boundary drifted",
             )
         macro_decision = receipt.get("macroAuthorityDecision", {})
         require(
