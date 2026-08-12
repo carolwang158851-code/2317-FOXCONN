@@ -36,6 +36,9 @@ MOPS = "https://mops.twse.com.tw/mops/web/t05st02"
 RESULTS = "https://image.honhai.com/lawtalk/Hon_Hai_2Q26_Results_Chinese.pdf"
 TRANSCRIPT = "https://image.honhai.com/lawtalk/Hon_Hai_2Q26_Results_Transcript_Chinese.pdf"
 REPORT = "https://image.honhai.com/financial/Hon_Hai_2026_Q2_Financial_Report.pdf"
+Q1_RESULTS = "https://image.honhai.com/lawtalk/Hon_Hai_1Q26_Results_Chinese.pdf"
+Q4_RESULTS = "https://image.honhai.com/lawtalk/Hon_Hai_4Q25_Results_Chinese.pdf"
+Q3_RESULTS = "https://image.honhai.com/lawtalk/Hon_Hai_3Q25_Results_Chinese.pdf"
 
 
 def html(body: str, url: str) -> FetchResponse:
@@ -61,9 +64,7 @@ class FixtureTransport:
 
 class OfficialIREvidenceIngestionTests(unittest.TestCase):
     def setUp(self) -> None:
-        scratch = ROOT / "runtime" / "official_ir_test_scratch"
-        scratch.mkdir(parents=True, exist_ok=True)
-        self.temp = tempfile.TemporaryDirectory(dir=scratch)
+        self.temp = tempfile.TemporaryDirectory(prefix="p1008-official-ir-")
         self.root = Path(self.temp.name)
         shutil.copytree(ROOT / "contracts", self.root / "contracts")
         shutil.copytree(ROOT / "data", self.root / "data")
@@ -88,6 +89,25 @@ class OfficialIREvidenceIngestionTests(unittest.TestCase):
 
     def scan(self, values: dict[str, FetchResponse | Exception]):
         return OfficialIREvidenceAdapter(self.root, transport=FixtureTransport(values)).scan(target_period=(2026, 2), evaluated_at_utc=NOW)
+
+    def scan_period(self, values: dict[str, FetchResponse | Exception], target_period: tuple[int, int] | None):
+        return OfficialIREvidenceAdapter(self.root, transport=FixtureTransport(values)).scan(target_period=target_period, evaluated_at_utc=NOW)
+
+    @staticmethod
+    def mixed_history_page(order: tuple[str, ...] = (RESULTS, Q1_RESULTS, Q4_RESULTS, Q3_RESULTS)) -> str:
+        labels = {
+            RESULTS: "Hon Hai 2Q26 Results",
+            Q1_RESULTS: "Hon Hai 1Q26 Results",
+            Q4_RESULTS: "Hon Hai 4Q25 Results",
+            Q3_RESULTS: "Hon Hai 3Q25 Results",
+        }
+        return "".join(f'<a href="{url}">{labels[url]}</a>' for url in order)
+
+    def mixed_history_mapping(self, order: tuple[str, ...] = (RESULTS, Q1_RESULTS, Q4_RESULTS, Q3_RESULTS)):
+        return self.mapping(
+            conference=self.mixed_history_page(order),
+            documents={url: url.encode("ascii") for url in order},
+        )
 
     def test_schedule_only_is_watch_and_never_triggers(self) -> None:
         result = self.scan(self.mapping())
@@ -134,6 +154,77 @@ class OfficialIREvidenceIngestionTests(unittest.TestCase):
         self.assertEqual(result["report_key"], "P1008_FY2026_Q2_EARNINGS")
         types = {item["quality_metadata"]["document_type"] for item in result["validated_event_evidence"]}
         self.assertTrue({"RESULTS_DOCUMENT_CONFIRMED", "CALL_TRANSCRIPT_CONFIRMED", "QUARTERLY_REPORT_CONFIRMED", "RESULTS_PRESS_RELEASE_CONFIRMED", "MOPS_RESULTS_DISCLOSURE_CONFIRMED"}.issubset(types), types)
+
+    def test_mixed_history_selects_newest_active_event_and_runtime_accepts_it(self) -> None:
+        result = self.scan_period(self.mixed_history_mapping(), None)
+        self.assertEqual(result["detected_evidence_count"], 4)
+        self.assertEqual(result["active_event_evidence_count"], 1)
+        self.assertEqual(result["historical_evidence_count"], 3)
+        self.assertEqual(result["active_fiscal_period"], "FY2026 Q2")
+        self.assertEqual(result["canonical_event_id"], "HON_HAI_FY2026_Q2_EARNINGS")
+        self.assertEqual(result["report_key"], "P1008_FY2026_Q2_EARNINGS")
+        self.assertEqual(
+            {item["canonical_event_id"] for item in result["validated_event_evidence"]},
+            {"HON_HAI_FY2026_Q2_EARNINGS"},
+        )
+        self.assertEqual(
+            {item["canonical_event_id"] for item in result["historical_evidence"]},
+            {
+                "HON_HAI_FY2026_Q1_EARNINGS",
+                "HON_HAI_FY2025_Q4_EARNINGS",
+                "HON_HAI_FY2025_Q3_EARNINGS",
+            },
+        )
+        integration = ResearchContentOrchestrator(self.root).integrate_official_ir(result)
+        self.assertEqual(integration["evidence"]["cross_validation"]["validation_status"], "AUTHORITY_CONFIRMED")
+        self.assertEqual(integration["report_trigger_decision"]["decision"], "TRIGGERED_INTERNAL_REPORT")
+        trigger_runtime.persist_integration_result(self.root, integration)
+        receipt = trigger_runtime.evaluate_and_persist(self.root, evaluated_at_utc=NOW)
+        self.assertEqual(receipt["canonical_event_id"], "HON_HAI_FY2026_Q2_EARNINGS")
+        self.assertEqual(receipt["decision"], "TRIGGERED_INTERNAL_REPORT")
+
+    def test_explicit_target_scopes_trigger_but_preserves_detected_history(self) -> None:
+        result = self.scan_period(self.mixed_history_mapping(), (2026, 1))
+        self.assertEqual(result["detected_evidence_count"], 4)
+        self.assertEqual(result["canonical_event_id"], "HON_HAI_FY2026_Q1_EARNINGS")
+        self.assertEqual(result["report_key"], "P1008_FY2026_Q1_EARNINGS")
+        self.assertEqual(
+            {item["canonical_event_id"] for item in result["validated_event_evidence"]},
+            {"HON_HAI_FY2026_Q1_EARNINGS"},
+        )
+        self.assertEqual(result["historical_evidence_count"], 3)
+
+    def test_active_event_selection_is_independent_of_link_order(self) -> None:
+        forward = self.scan_period(self.mixed_history_mapping(), None)
+        reverse = self.scan_period(
+            self.mixed_history_mapping((Q3_RESULTS, Q4_RESULTS, Q1_RESULTS, RESULTS)),
+            None,
+        )
+        self.assertEqual(forward["canonical_event_id"], reverse["canonical_event_id"])
+        self.assertEqual(forward["report_key"], reverse["report_key"])
+        self.assertEqual(forward["active_fiscal_period"], reverse["active_fiscal_period"])
+
+    def test_future_schedule_does_not_steal_current_published_results(self) -> None:
+        values = self.mixed_history_mapping()
+        values[CALENDAR] = html("2026 Q3 earnings conference", CALENDAR)
+        result = self.scan_period(values, None)
+        self.assertEqual(result["schedule"]["fiscal_period"], "FY2026 Q3")
+        self.assertEqual(result["canonical_event_id"], "HON_HAI_FY2026_Q2_EARNINGS")
+        self.assertEqual(result["active_fiscal_period"], "FY2026 Q2")
+
+    def test_orchestrator_rejects_mixed_scope_and_report_identity_mismatch(self) -> None:
+        result = self.scan_period(self.mixed_history_mapping(), None)
+        mixed = dict(result)
+        mixed["validated_event_evidence"] = [
+            result["validated_event_evidence"][0],
+            result["historical_evidence"][0],
+        ]
+        with self.assertRaisesRegex(ResearchContentIntegrationError, "CANONICAL_EVENT_SCOPE_MISMATCH"):
+            ResearchContentOrchestrator(self.root).integrate_official_ir(mixed)
+        mismatched = dict(result)
+        mismatched["report_key"] = "P1008_FY2026_Q1_EARNINGS"
+        with self.assertRaisesRegex(ResearchContentIntegrationError, "CANONICAL_EVENT_SCOPE_MISMATCH"):
+            ResearchContentOrchestrator(self.root).integrate_official_ir(mismatched)
 
     def test_duplicate_document_is_idempotent_and_changed_bytes_change_identity(self) -> None:
         page = f'<a href="{RESULTS}">Hon Hai 2Q26 Results</a><a href="{RESULTS}">Hon Hai 2Q26 Results</a>'
@@ -231,6 +322,8 @@ class OfficialIREvidenceIngestionTests(unittest.TestCase):
             press='<a href="/zh-tw/press-center/press-releases/latest-news/ai">鴻海 AI 伺服器活動</a>',
             mops="2330 台積電 2026年第二季 財務報告",
         )
+        old_results = "https://image.honhai.com/lawtalk/Hon_Hai_2Q25_Results.pdf"
+        values[old_results] = pdf(b"historical-results", old_results)
         result = self.scan(values)
         self.assertEqual(result["validated_event_evidence"], [])
         adapter = OfficialIREvidenceAdapter(self.root, transport=FixtureTransport(values))

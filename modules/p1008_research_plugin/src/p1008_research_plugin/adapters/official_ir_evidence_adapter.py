@@ -128,6 +128,11 @@ def _identity(period: tuple[int, int]) -> tuple[str, str]:
     return f"HON_HAI_FY{year}_Q{quarter}_EARNINGS", f"P1008_FY{year}_Q{quarter}_EARNINGS"
 
 
+def _event_period(canonical_event_id: str) -> tuple[int, int] | None:
+    match = re.fullmatch(r"HON_HAI_FY(20\d{2})_Q([1-4])_EARNINGS", canonical_event_id)
+    return (int(match.group(1)), int(match.group(2))) if match else None
+
+
 def _source_failure_status(error: str) -> str:
     if "TIMEOUT" in error:
         return "TIMEOUT"
@@ -306,7 +311,8 @@ class OfficialIREvidenceAdapter:
                 receipts.append(page_receipt)
                 if source["role"] == "HON_HAI_EVENT_CALENDAR":
                     periods = [(value, match.group(0)) for match in re.finditer(r"20\d{2}[^\n<]{0,30}?(?:第[一二三四1-4]季|[1-4]Q|Q[1-4])[^\n<]{0,20}?(?:法人說明會|earnings|conference)", text, re.I) if (value := _period(match.group(0)))]
-                    selected = next(((period, title) for period, title in periods if target_period is None or period == target_period), None)
+                    eligible_periods = [item for item in periods if target_period is None or item[0] == target_period]
+                    selected = max(eligible_periods, key=lambda item: item[0], default=None)
                     if selected:
                         canonical_id, report_key = _identity(selected[0]); schedule = {"state": "EVENT_SCHEDULE_CONFIRMED", "event": canonical_id, "report_key": report_key, "fiscal_period": f"FY{selected[0][0]} Q{selected[0][1]}", "title": selected[1], "source_id": source["sourceId"], "receipt_id": page_receipt["receipt_id"], "actionable": False}
                     source_statuses.append({"source_id": source["sourceId"], "status": "SUCCESS" if selected else "NO_CHANGE", "evidence_count": 0, "receipt_count": len(receipts) - receipt_count_before})
@@ -316,7 +322,7 @@ class OfficialIREvidenceAdapter:
                     candidates.append((page.final_url, text))
                 for document_url, label in candidates:
                     classified = self._document_type(source["role"], label, document_url, text)
-                    if not classified or (target_period and classified[1] != target_period):
+                    if not classified:
                         continue
                     document_type, period = classified
                     key = (document_url, document_type)
@@ -339,18 +345,41 @@ class OfficialIREvidenceAdapter:
                 failures.append(failure)
                 source_statuses.append({**failure, "evidence_count": 0, "receipt_count": len(receipts) - receipt_count_before})
         deduped = {(item["canonical_event_id"], item["source_id"], item["source_hash"]): item for item in evidence}
-        evidence = list(deduped.values())
-        selected_period = target_period or (_period(schedule["fiscal_period"]) if schedule else None)
-        if evidence:
-            selected_period = (int(evidence[0]["canonical_event_id"].split("FY", 1)[1][:4]), int(evidence[0]["canonical_event_id"].rsplit("Q", 1)[1].split("_", 1)[0]))
+        detected_evidence = sorted(
+            deduped.values(),
+            key=lambda item: (item["canonical_event_id"], item["source_id"], item["source_hash"]),
+        )
+        detected_periods = {
+            period
+            for item in detected_evidence
+            if (period := _event_period(item["canonical_event_id"])) is not None
+        }
+        schedule_period = _period(schedule["fiscal_period"]) if schedule else None
+        if target_period is not None:
+            selected_period = target_period
+        elif detected_periods:
+            selected_period = schedule_period if schedule_period in detected_periods else max(detected_periods)
+        else:
+            selected_period = schedule_period
         canonical_id, report_key = _identity(selected_period) if selected_period else ("", f"P1008_DAILY_{self.retrieved_at[:10].replace('-', '')}")
+        active_event_evidence = [
+            item for item in detected_evidence if item["canonical_event_id"] == canonical_id
+        ]
+        historical_evidence = [
+            item for item in detected_evidence if item["canonical_event_id"] != canonical_id
+        ]
+        active_ids = {item["canonical_event_id"] for item in active_event_evidence}
+        if active_ids and active_ids != {canonical_id}:
+            raise OfficialIREvidenceError("OFFICIAL_IR_CANONICAL_EVENT_SCOPE_MISMATCH")
+        if selected_period and report_key != _identity(selected_period)[1]:
+            raise OfficialIREvidenceError("OFFICIAL_IR_CANONICAL_EVENT_SCOPE_MISMATCH")
         coverage_complete = not failures
         successful_sources = [item["source_id"] for item in source_statuses if item["status"] in {"SUCCESS", "NO_CHANGE", "NOT_YET_AVAILABLE"}]
         if failures:
-            status = "PARTIAL_FAILURE_WITH_AUTHORITY" if evidence else ("PARTIAL_FAILURE_NO_AUTHORITY" if successful_sources else "FAIL_CLOSED")
+            status = "PARTIAL_FAILURE_WITH_AUTHORITY" if active_event_evidence else ("PARTIAL_FAILURE_NO_AUTHORITY" if successful_sources else "FAIL_CLOSED")
             scan_status = "PARTIAL_FAILURE" if successful_sources else "FAIL_CLOSED"
         else:
-            status = "AUTHORITY_EVIDENCE_READY" if evidence else ("SCHEDULE_CONFIRMED" if schedule else "NO_CHANGE")
+            status = "AUTHORITY_EVIDENCE_READY" if active_event_evidence else ("SCHEDULE_CONFIRMED" if schedule else "NO_CHANGE")
             scan_status = "COMPLETE"
         result = {
             "record_type": "P1008_OFFICIAL_IR_EVIDENCE_SCAN_V1", "run_id": run_id,
@@ -359,7 +388,15 @@ class OfficialIREvidenceAdapter:
             "successful_sources": successful_sources, "failed_sources": failures, "source_statuses": source_statuses,
             "authorization_identity": AUTHORIZATION_ID, "evaluated_at_utc": self.retrieved_at,
             "canonical_event_id": canonical_id, "report_key": report_key, "revision": 1,
-            "schedule": schedule, "validated_event_evidence": evidence, "detected_evidence": evidence,
+            "active_fiscal_period": f"FY{selected_period[0]} Q{selected_period[1]}" if selected_period else "",
+            "schedule": schedule,
+            "detected_evidence": detected_evidence,
+            "active_event_evidence": active_event_evidence,
+            "historical_evidence": historical_evidence,
+            "validated_event_evidence": active_event_evidence,
+            "detected_evidence_count": len(detected_evidence),
+            "active_event_evidence_count": len(active_event_evidence),
+            "historical_evidence_count": len(historical_evidence),
             "receipt_paths": [item["receipt_path"] for item in receipts], "failures": failures,
             "analysis_generated": False, "report_generated": False, "publication_count": 0, "actionable": False,
         }

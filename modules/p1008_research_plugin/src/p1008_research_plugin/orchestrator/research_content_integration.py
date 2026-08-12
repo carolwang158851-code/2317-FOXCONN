@@ -326,6 +326,27 @@ class ResearchContentOrchestrator:
         supplied = scan_result.get("validated_event_evidence")
         if not isinstance(supplied, list):
             raise ResearchContentIntegrationError("OFFICIAL_IR_EVIDENCE_INVALID")
+        canonical_event_id = scan_result.get("canonical_event_id")
+        report_key = scan_result.get("report_key")
+        supplied_ids = {
+            item.get("canonical_event_id")
+            for item in supplied
+            if isinstance(item, Mapping)
+        }
+        identity = re.fullmatch(
+            r"HON_HAI_FY(20\d{2})_Q([1-4])_EARNINGS",
+            canonical_event_id if isinstance(canonical_event_id, str) else "",
+        )
+        expected_report_key = (
+            f"P1008_FY{identity.group(1)}_Q{identity.group(2)}_EARNINGS"
+            if identity else None
+        )
+        if supplied and (
+            supplied_ids != {canonical_event_id}
+            or expected_report_key is None
+            or report_key != expected_report_key
+        ):
+            raise ResearchContentIntegrationError("OFFICIAL_IR_CANONICAL_EVENT_SCOPE_MISMATCH")
         if not isinstance(scan_result.get("coverage_complete"), bool):
             raise ResearchContentIntegrationError("OFFICIAL_IR_COVERAGE_INVALID")
         if not isinstance(scan_result.get("successful_sources"), list) or not isinstance(scan_result.get("failed_sources"), list):
@@ -370,7 +391,6 @@ class ResearchContentOrchestrator:
             first_error = evidence_validation_failures[0]["error"] if evidence_validation_failures else "UNKNOWN"
             raise ResearchContentIntegrationError(f"OFFICIAL_IR_EVIDENCE_VALIDATION_FAILED:{first_error}")
         evidence, duplicate_count = self._deduplicate(governed)
-        report_key = scan_result.get("report_key")
         revision = scan_result.get("revision")
         evaluated_at = scan_result.get("evaluated_at_utc")
         if not isinstance(report_key, str) or not isinstance(revision, int) or not isinstance(evaluated_at, str):
@@ -420,6 +440,12 @@ class ResearchContentOrchestrator:
                 "coverage_complete": scan_result["coverage_complete"],
                 "successful_sources": list(scan_result["successful_sources"]),
                 "failed_sources": list(scan_result["failed_sources"]),
+                "active_fiscal_period": scan_result.get("active_fiscal_period", ""),
+                "active_canonical_event_id": canonical_event_id,
+                "active_report_key": report_key,
+                "detected_evidence_count": scan_result.get("detected_evidence_count", len(supplied)),
+                "active_event_evidence_count": scan_result.get("active_event_evidence_count", len(supplied)),
+                "historical_evidence_count": scan_result.get("historical_evidence_count", 0),
                 "evidence_validation_failures": evidence_validation_failures,
             },
             "evidence": {
