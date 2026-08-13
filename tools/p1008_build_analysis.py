@@ -19,18 +19,16 @@ def main() -> int:
     import warroom_report_trigger_runtime as trigger_runtime
 
     try:
+        evidence_root, _evidence_context = trigger_runtime.governed_evidence_root(package_root)
         trigger = trigger_runtime.require_valid_trigger(package_root)
-        # Routing is owned by the existing PluginRouter.  The deterministic
-        # monthly vertical slice remains fail-closed for event modes whose
-        # official Phase B1 packet fixture has not been supplied.
+        # Routing is owned by the existing PluginRouter. Phase B1 accepts only
+        # event modes with a governed input path.
         from p1008_research_plugin.plugin_module.contracts import RunType
         from p1008_research_plugin.plugin_module.router import PluginRouter, RouteSignals
         PluginRouter().route(RunType(trigger["event_type"]), RouteSignals(earnings_event=True))
-        pipeline = PhaseB1Pipeline(package_root)
-        if trigger["event_type"] != pipeline.SUPPORTED_EVENT:
-            raise RuntimeError(
-                f"PHASE_B1_OFFICIAL_PACKET_REQUIRED: {trigger['event_type']}"
-            )
+        pipeline = PhaseB1Pipeline(package_root, governed_evidence_root=evidence_root)
+        if trigger["event_type"] not in pipeline.SUPPORTED_EVENTS:
+            raise RuntimeError(f"PHASE_B1_EVENT_UNSUPPORTED: {trigger['event_type']}")
         result = pipeline.build_analysis(
             trigger_lineage=trigger_runtime.trigger_lineage(trigger)
         )

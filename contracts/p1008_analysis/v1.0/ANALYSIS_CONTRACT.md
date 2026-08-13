@@ -1,7 +1,8 @@
 # P1008 Analysis Contract v1.0
 
-This additive contract governs the deterministic Phase B1 `MONTHLY_REVENUE`
-vertical slice. It does not modify any frozen Research Plugin contract.
+This additive contract governs deterministic Phase B1 `MONTHLY_REVENUE` and
+`QUARTERLY_EARNINGS` vertical slices. It does not modify any frozen Research
+Plugin contract.
 
 ## Responsibility
 
@@ -10,6 +11,13 @@ read-only Authority Adapter and consumes Evidence Packets only after the
 existing Packet Gateway passes schema, freshness, source, route, and Evidence
 ID gates. It produces one `analysis_packet.json`; it does not call a model,
 search the web, publish formal data, write Runtime SQLite, or change rules.
+
+`QUARTERLY_EARNINGS` reads the current valid report-trigger lineage and the
+existing Official IR integration, receipt, and raw artifact. The source bytes,
+receipt, evidence ID, canonical event ID, report key, and a governed extraction
+packet must all match. It never uses the monthly fixture. Undisclosed
+Apple/iPhone, FX, tariff, and policy fields remain `REVIEW_REQUIRED` rather
+than being inferred.
 
 ## Status vocabularies
 

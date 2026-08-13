@@ -32,6 +32,38 @@ class ChartDataBuilder:
         return [label for label, _pattern in patterns], values
 
     def build(self, analysis: AnalysisPacket) -> list[ChartData]:
+        if analysis.event_type == "QUARTERLY_EARNINGS":
+            q = analysis.quarterly_earnings
+            if q is None:
+                raise ValueError("quarterly chart data requires quarterly analysis")
+            official_ids = [item for item in analysis.source_evidence_ids if not item.startswith("AUTH-")]
+            return [
+                ChartData(
+                    chart_id="quarterly_financial_summary",
+                    title_zh=f"{q.fiscal_period}財務摘要",
+                    decision_question="營收成長是否同時轉成營業利益率與EPS改善？",
+                    period=q.fiscal_period,
+                    source_evidence_ids=official_ids,
+                    labels=["營收YoY", "營收QoQ", "EPS YoY", "EPS QoQ"],
+                    series=[ChartSeries(label_zh="成長率", unit="%", values=[q.revenue.yoy.rstrip("%"), q.revenue.qoq.rstrip("%"), q.eps.yoy.rstrip("%"), q.eps.qoq.rstrip("%")])],
+                    commentary_zh=["營收與EPS均呈現年增及季增。", "毛利率仍較前季及去年同期下滑，不能只用營收成長代表全面改善。"],
+                    actionable=False,
+                ),
+                ChartData(
+                    chart_id="quarterly_margin_and_fcf",
+                    title_zh="利潤率與現金轉化",
+                    decision_question="獲利改善是否已轉成累計自由現金流？",
+                    period=f"{q.fiscal_period}／{q.cash_flow_period}",
+                    source_evidence_ids=official_ids,
+                    labels=["毛利率", "營益率", "淨利率", "H1 FCF"],
+                    series=[
+                        ChartSeries(label_zh="利潤率", unit="%", values=[q.gross_margin.value, q.operating_margin.value, q.net_margin.value]),
+                        ChartSeries(label_zh="自由現金流", unit="新台幣百萬元", values=[analysis.financial_trend.free_cash_flow.value or "INSUFFICIENT_DATA"]),
+                    ],
+                    commentary_zh=["營業利益率改善，但毛利率仍需觀察。", "H1自由現金流為負且不是Q2單季數字，維持WATCH。"],
+                    actionable=False,
+                ),
+            ]
         revenue = analysis.financial_trend.revenue
         fcf = analysis.financial_trend.free_cash_flow
         valuation = analysis.valuation_analysis

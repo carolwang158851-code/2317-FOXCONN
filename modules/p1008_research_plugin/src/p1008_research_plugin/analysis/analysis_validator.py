@@ -64,11 +64,19 @@ class AnalysisValidator:
             condition.condition_id: condition.result
             for condition in parsed.market_regime.evaluated_conditions
         }
-        expected_conditions = {
-            "OFFICIAL_REVENUE_DELTA",
-            "PROFIT_CONVERSION_UNVERIFIED",
-            "EVENT_WINDOW_AVAILABLE",
-        }
+        expected_conditions = (
+            {
+                "OFFICIAL_QUARTERLY_RESULTS",
+                "PROFIT_CONVERSION_VERIFIED",
+                "EVENT_WINDOW_AVAILABLE",
+            }
+            if parsed.event_type == "QUARTERLY_EARNINGS"
+            else {
+                "OFFICIAL_REVENUE_DELTA",
+                "PROFIT_CONVERSION_UNVERIFIED",
+                "EVENT_WINDOW_AVAILABLE",
+            }
+        )
         if set(condition_results) != expected_conditions:
             raise AnalysisValidationError("Market regime conditions are missing or fixed")
         all_pass = all(result == "PASS" for result in condition_results.values())
@@ -86,6 +94,15 @@ class AnalysisValidator:
             is not EventWindowStatus.INSUFFICIENT_DATA
         ):
             raise AnalysisValidationError("Missing event date must fail event-window calculation")
+
+        if parsed.event_type == "QUARTERLY_EARNINGS":
+            quarterly = parsed.quarterly_earnings
+            if quarterly is None or quarterly.source_hash not in payload:
+                raise AnalysisValidationError("Quarterly Official IR source identity is missing")
+            if quarterly.apple_iphone_exposure_status != "REVIEW_REQUIRED":
+                raise AnalysisValidationError("Undisclosed Apple/iPhone exposure must remain REVIEW_REQUIRED")
+            if quarterly.fx_tariff_policy_risk_status != "REVIEW_REQUIRED":
+                raise AnalysisValidationError("Undisclosed FX/tariff/policy risk must remain REVIEW_REQUIRED")
 
         validated_ids = set(evidence.evidence_ids)
         packet_ids = set(parsed.source_evidence_ids)

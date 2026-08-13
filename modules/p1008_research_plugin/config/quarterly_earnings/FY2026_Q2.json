@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "1.0",
+  "eventType": "QUARTERLY_EARNINGS",
+  "canonicalEventId": "HON_HAI_FY2026_Q2_EARNINGS",
+  "reportKey": "P1008_FY2026_Q2_EARNINGS",
+  "fiscalPeriod": "FY2026 Q2",
+  "publicationDate": "2026-08-12",
+  "expectedSourceSha256": "F014BE750095543B35ED2D482C0CF7A40B4A448167796F8AC4560AB928E609C5",
+  "expectedDocumentType": "RESULTS_DOCUMENT_CONFIRMED",
+  "sourcePages": {
+    "incomeStatement": "6",
+    "cashFlow": "9",
+    "financialOutlook": "4,12-13",
+    "aiCloudNetworking": "20-22,39"
+  },
+  "financials": {
+    "revenueMillionTwd": "2525894",
+    "revenueQoqPct": "19",
+    "revenueYoyPct": "41",
+    "grossProfitMillionTwd": "154533",
+    "grossMarginPct": "6.12",
+    "grossMarginQoqBps": "-6",
+    "grossMarginYoyBps": "-21",
+    "operatingIncomeMillionTwd": "94803",
+    "operatingMarginPct": "3.75",
+    "operatingMarginQoqBps": "18",
+    "operatingMarginYoyBps": "60",
+    "attributableProfitMillionTwd": "59974",
+    "netMarginPct": "2.37",
+    "netMarginQoqBps": "2",
+    "netMarginYoyBps": "-10",
+    "epsTwd": "4.27",
+    "epsQoqPct": "20",
+    "epsYoyPct": "34"
+  },
+  "cashFlow": {
+    "period": "2026H1",
+    "operatingCashFlowMillionTwd": "-69122",
+    "capexMillionTwd": "80886",
+    "freeCashFlowMillionTwd": "-150009",
+    "definition": "Operating cash flow minus capital expenditure",
+    "status": "OFFICIAL_RESULTS_H1_NOT_STANDALONE_Q2"
+  },
+  "businessDisclosures": [
+    "AI infrastructure demand is strong and the company continues expanding global AI capacity.",
+    "The company describes capability from customer development and co-design through scaled manufacturing.",
+    "AI supply-chain integration spans components, liquid cooling, modular data centers and data-center systems."
+  ],
+  "aiCloudNetworking": [
+    "3Q26 AI rack shipments are expected to grow high-double-digits QoQ.",
+    "3Q26 AI server revenue is expected to grow by more than a multiple.",
+    "2026 AI rack shipment market share is expected to increase."
+  ],
+  "officialOutlook": [
+    "3Q26: significant QoQ growth and strong YoY growth.",
+    "FY2026: strong growth outlook.",
+    "Management describes next-year outlook as positive."
+  ],
+  "notDisclosedInResults": [
+    "Apple/iPhone customer-specific exposure",
+    "quantified FX sensitivity",
+    "quantified tariff impact",
+    "policy-risk scenario values"
+  ],
+  "actionable": false
+}

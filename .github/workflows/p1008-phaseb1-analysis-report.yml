@@ -43,16 +43,28 @@ jobs:
       - name: Install declared module dependencies
         run: python -m pip install --disable-pip-version-check -e modules/p1008_research_plugin
       - name: Run Phase B1 focused tests
+        env:
+          P1008_TEST_TEMP_ROOT: ${{ runner.temp }}/P1008/pytest-temp
         run: python -m unittest discover -s modules/p1008_research_plugin/tests/phaseb1 -p "test_*.py" -v
       - name: Build fail-closed Final Owner Review package
+        env:
+          P1008_TEST_TEMP_ROOT: ${{ runner.temp }}/P1008/pytest-temp
         run: python tools/p1008_build_phaseb1_final_review.py --package-root . --stamp CI-${{ runner.os }}
       - name: Run Launcher Phase B1 tests
+        env:
+          P1008_TEST_TEMP_ROOT: ${{ runner.temp }}/P1008/pytest-temp
         run: python -m unittest tests.test_phaseb1_launcher -v
       - name: Run Plugin Shadow regression
+        env:
+          P1008_TEST_TEMP_ROOT: ${{ runner.temp }}/P1008/pytest-temp
         run: python -m unittest discover -s modules/p1008_research_plugin/tests -p "test_*.py" -v
       - name: Run Phase A regression
+        env:
+          P1008_TEST_TEMP_ROOT: ${{ runner.temp }}/P1008/pytest-temp
         run: python -m unittest discover -s tests -p "test_*.py" -v
       - name: Run phase-aware legacy and current conformance
+        env:
+          P1008_TEST_TEMP_ROOT: ${{ runner.temp }}/P1008/pytest-temp
         run: python contracts/p1008_research_plugin/conformance/run_phase_conformance.py --all --no-write-report
       - name: Verify clean diff formatting
         run: git diff --check HEAD~1 HEAD

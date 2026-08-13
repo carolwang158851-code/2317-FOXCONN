@@ -16,6 +16,7 @@ from .report_contracts import (
     REQUIRED_SECTION_IDS,
     ReportCandidate,
     ShortsDurationValidation,
+    required_section_ids,
 )
 from .script_builder import ShortsDurationValidator
 
@@ -85,7 +86,7 @@ class ReportValidator:
         errors: list[str] = []
         actual_ids = tuple(section.section_id for section in report.sections)
         required_sections_present = (
-            actual_ids == REQUIRED_SECTION_IDS
+            actual_ids == required_section_ids(report.event_type)
             and all(section.body_zh.strip() for section in report.sections)
         )
         if not required_sections_present:

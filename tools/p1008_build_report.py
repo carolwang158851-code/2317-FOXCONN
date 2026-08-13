@@ -39,10 +39,11 @@ def main() -> int:
     import warroom_report_trigger_runtime as trigger_runtime
 
     try:
+        evidence_root, _evidence_context = trigger_runtime.governed_evidence_root(package_root)
         trigger = trigger_runtime.require_valid_trigger(package_root)
         lineage = trigger_runtime.trigger_lineage(trigger)
         run_id = args.run_id or _analysis_run_id(package_root, lineage)
-        result = PhaseB1Pipeline(package_root).build_report(
+        result = PhaseB1Pipeline(package_root, governed_evidence_root=evidence_root).build_report(
             run_id=run_id, trigger_lineage=lineage
         )
     except Exception as exc:  # noqa: BLE001 - CLI must return a precise fail-closed reason.
