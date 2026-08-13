@@ -33,6 +33,22 @@ class _Response:
 
 
 class OpenWarroomTests(unittest.TestCase):
+    def test_cmd_uses_only_bundled_python_312_with_dependency_preflight(self) -> None:
+        source = (TOOLS / "p1008_open_warroom.cmd").read_text(encoding="utf-8")
+        lowered = source.lower()
+        self.assertIn(
+            r"%userprofile%\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe",
+            lowered,
+        )
+        self.assertIn("sys.version_info[:2] == (3, 12)", source)
+        self.assertIn("import pydantic", source)
+        self.assertIn("p1008_app_server.py", source)
+        self.assertNotIn("where.exe", lowered)
+        self.assertNotIn("py -3", lowered)
+        self.assertNotIn("pythoncore-3.14", lowered)
+        self.assertNotIn("set \"python_exe=\"", lowered)
+        self.assertNotIn("if not defined python_exe", lowered)
+
     def test_launcher_expected_version_matches_app_server(self) -> None:
         self.assertEqual(
             p1008_open_warroom.EXPECTED_SERVER_VERSION,
