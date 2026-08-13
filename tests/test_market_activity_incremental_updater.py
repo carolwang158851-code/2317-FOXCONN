@@ -111,6 +111,7 @@ class MarketActivityIncrementalUpdaterTests(unittest.TestCase):
         raw_path.write_bytes(content)
         receipt = {
             "status": "SUCCESS",
+            "month": month,
             "request_url": updater.source_url(month),
             "http_status": 200,
             "tls_version": "TLSv1.3",
@@ -120,6 +121,45 @@ class MarketActivityIncrementalUpdaterTests(unittest.TestCase):
         (receipt_dir / f"{month}.receipt.json").write_text(
             json.dumps(receipt, indent=2) + "\n", encoding="utf-8"
         )
+
+    def write_valid_daily_price_staging(
+        self,
+        *,
+        rows: list[tuple[str, str]],
+        anchor_date: str,
+        receipts: Path,
+        run_id: str = "P1008-DAILY-PRICE-TEST-RUN",
+    ) -> tuple[Path, str]:
+        run_dir = self.root / "runtime" / "daily_price_incremental" / run_id
+        receipts_dir = run_dir / "receipts"
+        receipts_dir.mkdir(parents=True)
+        for path in receipts.glob("*"):
+            shutil.copy2(path, receipts_dir / path.name)
+        candidate = run_dir / "2317_daily_price.incremental.candidate.csv"
+        with candidate.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=updater.PRICE_CANDIDATE_FIELDS, lineterminator="\n")
+            writer.writeheader()
+            for day, close in rows:
+                writer.writerow({
+                    "Date": day, "Close": close, "QuarterKey": "2026Q1",
+                    "BVPS_ref": "127.12", "PB_daily": "1.978",
+                    "DataSupportLevel": "OFFICIAL_TWSE_A1", "Status": "OK",
+                })
+        receipt_paths = [str(path.resolve()) for path in sorted(receipts_dir.glob("*.receipt.json"))]
+        result = {
+            "run_id": run_id,
+            "status": "DRY_RUN_READY",
+            "launcher_status": "UPDATED",
+            "anchor_date": anchor_date,
+            "candidate_path": str(candidate.resolve()),
+            "candidate_sha256": hash_file(candidate),
+            "receipt_paths": receipt_paths,
+            "dry_run": True,
+            "exit_code": 0,
+            "actionable": False,
+        }
+        (run_dir / "RESULT.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        return run_dir, run_id
 
     def test_no_new_date_is_success_and_does_not_change_authority(self) -> None:
         row = self.activity("2026-07-17")
@@ -212,6 +252,79 @@ class MarketActivityIncrementalUpdaterTests(unittest.TestCase):
             )
         self.assertEqual(raised.exception.exit_code, updater.EXIT_BLOCKED)
         self.assertEqual(hash_file(self.root / updater.FORMAL_REL), before)
+
+    def test_valid_same_run_staging_allows_missing_formal_price_date(self) -> None:
+        self.write_authority([self.activity("2026-07-21")], [("2026-07-21", "246")])
+        receipts = self.root / "fixtures"
+        self.write_month(receipts, "2026-07", [
+            ("2026-07-21", 1000, 200000, "246", 100),
+            ("2026-07-22", 1200, 250000, "251.5", 120),
+        ])
+        run_dir, run_id = self.write_valid_daily_price_staging(
+            rows=[("2026-07-21", "246"), ("2026-07-22", "251.5")],
+            anchor_date="2026-07-21", receipts=receipts,
+        )
+        result = updater.run_update(
+            self.root, as_of_date=dt.date(2026, 7, 22), dry_run=True,
+            offline_receipt_dir=receipts, daily_price_run_dir=run_dir,
+            daily_price_run_id=run_id,
+        )
+        self.assertEqual(result["status"], "DRY_RUN_READY")
+        self.assertEqual(result["candidate_rows"], 1)
+        self.assertEqual(result["price_validation_provenance"]["source"], "SAME_RUN_DAILY_PRICE_STAGING")
+
+    def test_same_run_staging_close_mismatch_fails_closed(self) -> None:
+        self.write_authority([self.activity("2026-07-21")], [("2026-07-21", "246")])
+        receipts = self.root / "fixtures"
+        self.write_month(receipts, "2026-07", [
+            ("2026-07-21", 1000, 200000, "246", 100),
+            ("2026-07-22", 1200, 250000, "251.5", 120),
+        ])
+        run_dir, run_id = self.write_valid_daily_price_staging(
+            rows=[("2026-07-21", "246"), ("2026-07-22", "252")],
+            anchor_date="2026-07-21", receipts=receipts,
+        )
+        with self.assertRaisesRegex(updater.UpdateFailure, "Close does not match") as raised:
+            updater.run_update(
+                self.root, as_of_date=dt.date(2026, 7, 22), dry_run=True,
+                offline_receipt_dir=receipts, daily_price_run_dir=run_dir,
+                daily_price_run_id=run_id,
+            )
+        self.assertEqual(raised.exception.exit_code, updater.EXIT_BLOCKED)
+
+    def test_same_run_staging_hash_or_lineage_failure_fails_closed(self) -> None:
+        self.write_authority([self.activity("2026-07-21")], [("2026-07-21", "246")])
+        receipts = self.root / "fixtures"
+        self.write_month(receipts, "2026-07", [
+            ("2026-07-21", 1000, 200000, "246", 100),
+            ("2026-07-22", 1200, 250000, "251.5", 120),
+        ])
+        run_dir, run_id = self.write_valid_daily_price_staging(
+            rows=[("2026-07-21", "246"), ("2026-07-22", "251.5")],
+            anchor_date="2026-07-21", receipts=receipts,
+        )
+        result_path = run_dir / "RESULT.json"
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+        result["candidate_sha256"] = "0" * 64
+        result_path.write_text(json.dumps(result), encoding="utf-8")
+        with self.assertRaisesRegex(updater.UpdateFailure, "SHA") as raised:
+            updater.run_update(
+                self.root, as_of_date=dt.date(2026, 7, 22), dry_run=True,
+                offline_receipt_dir=receipts, daily_price_run_dir=run_dir,
+                daily_price_run_id=run_id,
+            )
+        self.assertEqual(raised.exception.exit_code, updater.EXIT_BLOCKED)
+
+    def test_formal_price_remains_valid_without_same_run_staging(self) -> None:
+        self.write_authority([self.activity("2026-07-21")], [("2026-07-21", "246"), ("2026-07-22", "251.5")])
+        receipts = self.root / "fixtures"
+        self.write_month(receipts, "2026-07", [
+            ("2026-07-21", 1000, 200000, "246", 100),
+            ("2026-07-22", 1200, 250000, "251.5", 120),
+        ])
+        result = updater.run_update(self.root, as_of_date=dt.date(2026, 7, 22), dry_run=True, offline_receipt_dir=receipts)
+        self.assertEqual(result["status"], "DRY_RUN_READY")
+        self.assertIsNone(result["price_validation_provenance"])
 
     def test_https_failure_has_no_fallback(self) -> None:
         with mock.patch.object(updater.http.client, "HTTPSConnection", side_effect=OSError("TLS failed")):

@@ -210,7 +210,7 @@ def run_update(
         result = {
             "run_id": run_id,
             "status": status,
-            "launcher_status": "UPDATED" if status == "UPDATED" else "NO_NEW_DATA",
+            "launcher_status": "UPDATED" if status in {"UPDATED", "DRY_RUN_READY"} else "NO_NEW_DATA",
             "anchor_date": anchor,
             "last_success_date": last_date,
             "twse_latest_validated_trading_date": target_dates[-1],

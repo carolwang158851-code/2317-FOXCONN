@@ -797,7 +797,7 @@ class P1008JobManager:
                 "daily-price-authority",
                 "TWSE Daily Price incremental authority update",
                 self.package_root / "P1008_1A_UPDATE_DAILY_PRICE.bat",
-                [],
+                ["--dry-run"],
                 timeout_seconds=180,
             )
             daily_after = formal_csv_hashes(self.package_root)
@@ -806,7 +806,7 @@ class P1008JobManager:
             ) or {}
             daily_status = str(daily_result.get("launcher_status") or "BLOCKED")
             daily_boundary = self._daily_price_boundary_error(
-                daily_before, daily_after, daily_status
+                daily_before, daily_after, daily_status, candidate_only=bool(daily_result.get("dry_run"))
             )
             if daily_exit != 0 or daily_boundary:
                 daily_status = "FAILED"
@@ -836,38 +836,58 @@ class P1008JobManager:
                 component_failures.append("Market Activity blocked by failed Daily Price step")
             else:
                 market_before = formal_csv_hashes(self.package_root)
-                market_exit = self._run_bat_step(
-                    "market-activity",
-                    "TWSE market activity incremental update",
-                    self.package_root / "P1008_1B_UPDATE_MARKET_ACTIVITY.bat",
-                    [],
-                    timeout_seconds=180,
-                )
-                market_after = formal_csv_hashes(self.package_root)
-                market_result = read_json(
-                    self.package_root / MARKET_ACTIVITY_STATUS_REL, default={}
-                ) or {}
-                market_status = str(market_result.get("launcher_status") or "STALE")
-                boundary_error = self._market_activity_boundary_error(
-                    market_before, market_after, market_status
-                )
-                if market_exit != 0 or boundary_error:
-                    market_status = (
-                        "BLOCKED"
-                        if market_result.get("status") == "MARKET_ACTIVITY_BLOCKED_BY_DAILY_PRICE"
-                        else "STALE"
-                    )
-                    failure = boundary_error or f"Market Activity BAT exit={market_exit}"
-                    component_failures.append(failure)
+                daily_run_dir = daily_result.get("run_dir")
+                daily_run_id = daily_result.get("run_id")
+                if daily_status == "UPDATED" and (
+                    not isinstance(daily_run_dir, str) or not isinstance(daily_run_id, str)
+                ):
+                    component_failures.append("Daily Price staging lineage is incomplete")
+                    market_status = "BLOCKED"
                     market_result = self._write_launcher_market_status(
-                        (
-                            "MARKET_ACTIVITY_BLOCKED_BY_DAILY_PRICE"
-                            if market_status == "BLOCKED"
-                            else "MARKET_ACTIVITY_STALE"
-                        ),
+                        "MARKET_ACTIVITY_BLOCKED_BY_DAILY_PRICE",
                         market_status,
-                        failure,
+                        "Daily Price staging lineage is incomplete",
                     )
+                    market_exit = 20
+                else:
+                    market_args = ["--dry-run"]
+                    if daily_status == "UPDATED":
+                        market_args.extend([
+                            "--daily-price-run-dir", daily_run_dir,
+                            "--daily-price-run-id", daily_run_id,
+                        ])
+                    market_exit = self._run_bat_step(
+                        "market-activity",
+                        "TWSE market activity incremental update",
+                        self.package_root / "P1008_1B_UPDATE_MARKET_ACTIVITY.bat",
+                        market_args,
+                        timeout_seconds=180,
+                    )
+                    market_after = formal_csv_hashes(self.package_root)
+                    market_result = read_json(
+                        self.package_root / MARKET_ACTIVITY_STATUS_REL, default={}
+                    ) or {}
+                    market_status = str(market_result.get("launcher_status") or "STALE")
+                    boundary_error = self._market_activity_boundary_error(
+                        market_before, market_after, market_status, candidate_only=bool(market_result.get("dry_run"))
+                    )
+                    if market_exit != 0 or boundary_error:
+                        market_status = (
+                            "BLOCKED"
+                            if market_result.get("status") == "MARKET_ACTIVITY_BLOCKED_BY_DAILY_PRICE"
+                            else "STALE"
+                        )
+                        failure = boundary_error or f"Market Activity BAT exit={market_exit}"
+                        component_failures.append(failure)
+                        market_result = self._write_launcher_market_status(
+                            (
+                                "MARKET_ACTIVITY_BLOCKED_BY_DAILY_PRICE"
+                                if market_status == "BLOCKED"
+                                else "MARKET_ACTIVITY_STALE"
+                            ),
+                            market_status,
+                            failure,
+                        )
                 if not component_failures:
                     receipt_paths = market_result.get("receipt_paths", []) or []
                     receipt_dir = (
@@ -1244,7 +1264,7 @@ class P1008JobManager:
 
     @staticmethod
     def _daily_price_boundary_error(
-        before: dict[str, str], after: dict[str, str], launcher_status: str
+        before: dict[str, str], after: dict[str, str], launcher_status: str, *, candidate_only: bool = False
     ) -> str:
         allowed = {"data/2317_daily_price.csv", "data/CSV_AUTHORITY_MANIFEST.json"}
         changed = {key for key in before if before.get(key) != after.get(key)}
@@ -1253,7 +1273,9 @@ class P1008JobManager:
             return "Daily Price changed unauthorized formal files: " + ", ".join(
                 sorted(unexpected)
             )
-        if launcher_status == "UPDATED" and changed != allowed:
+        if candidate_only and changed:
+            return "Daily Price candidate-only run changed formal CSV or manifest"
+        if not candidate_only and launcher_status == "UPDATED" and changed != allowed:
             return "Daily Price UPDATED did not atomically change CSV and manifest only"
         if launcher_status != "UPDATED" and changed:
             return "Daily Price non-update status changed formal CSV or manifest"
@@ -1261,7 +1283,7 @@ class P1008JobManager:
 
     @staticmethod
     def _market_activity_boundary_error(
-        before: dict[str, str], after: dict[str, str], launcher_status: str
+        before: dict[str, str], after: dict[str, str], launcher_status: str, *, candidate_only: bool = False
     ) -> str:
         allowed = {
             "data/2317_daily_market_activity.csv",
@@ -1273,7 +1295,9 @@ class P1008JobManager:
             return "Market Activity changed unauthorized formal files: " + ", ".join(
                 sorted(unexpected)
             )
-        if launcher_status == "UPDATED" and changed != allowed:
+        if candidate_only and changed:
+            return "Market Activity candidate-only run changed formal CSV or manifest"
+        if not candidate_only and launcher_status == "UPDATED" and changed != allowed:
             return "Market Activity UPDATED did not atomically change CSV and manifest only"
         if launcher_status != "UPDATED" and changed:
             return "Market Activity non-update status changed formal CSV or manifest"
