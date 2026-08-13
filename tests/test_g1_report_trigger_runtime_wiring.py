@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 import unittest
 import uuid
+from unittest.mock import patch
 from pathlib import Path
 
 
@@ -79,6 +81,8 @@ def integration(items, *, report_key="P1008_FY2026_Q2_EARNINGS", revision=1):
 
 class RuntimeRootMixin:
     def setUp(self):
+        self._governed_evidence_env = patch.dict(os.environ, {"P1008_GOVERNED_EVIDENCE_ROOT": ""})
+        self._governed_evidence_env.start()
         scratch = ROOT / "runtime" / "g1_trigger_test_scratch"
         scratch.mkdir(parents=True, exist_ok=True)
         self.root = scratch / uuid.uuid4().hex
@@ -86,6 +90,7 @@ class RuntimeRootMixin:
 
     def tearDown(self):
         shutil.rmtree(self.root, ignore_errors=True)
+        self._governed_evidence_env.stop()
 
     def write_integration(self, items, **kwargs):
         payload = integration(items, **kwargs)

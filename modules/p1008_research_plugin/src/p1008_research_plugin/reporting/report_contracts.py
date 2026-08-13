@@ -29,7 +29,7 @@ class StrictModel(BaseModel):
     )
 
 
-REQUIRED_SECTION_IDS = (
+MONTHLY_REVENUE_SECTION_IDS = (
     "REPORT_IDENTITY_AND_CUTOFF",
     "EXECUTIVE_JUDGMENT",
     "WHAT_CHANGED",
@@ -52,6 +52,37 @@ REQUIRED_SECTION_IDS = (
     "ACTIONABLE_FALSE_DISCLAIMER",
 )
 
+QUARTERLY_EARNINGS_SECTION_IDS = (
+    "REPORT_IDENTITY_AND_CUTOFF",
+    "EXECUTIVE_SUMMARY",
+    "Q2_FINANCIAL_SUMMARY",
+    "QOQ_YOY",
+    "MARGINS_AND_EPS",
+    "AI_SERVER_CLOUD_NETWORKING",
+    "SECOND_HALF_AND_FULL_YEAR_OUTLOOK",
+    "APPLE_IPHONE_EXPOSURE",
+    "FX_TARIFF_POLICY_RISKS",
+    "PS_PE_VALUATION_CONTEXT",
+    "FCF_AND_REVENUE_CONVERSION",
+    "PRICE_VOLUME_REACTION",
+    "THESIS_CHANGE_STATUS",
+    "WATCH_OBSERVE_REVIEW_REQUIRED",
+    "SUPPORTING_EVIDENCE",
+    "ALTERNATIVE_AND_COUNTEREVIDENCE",
+    "INVALIDATION_CONDITIONS",
+    "NEXT_VALIDATION_DATE_AND_EVENT",
+    "DATA_LIMITATIONS",
+    "ACTIONABLE_FALSE_DISCLAIMER",
+)
+
+REQUIRED_SECTION_IDS = MONTHLY_REVENUE_SECTION_IDS
+
+
+def required_section_ids(event_type: str) -> tuple[str, ...]:
+    if event_type == "QUARTERLY_EARNINGS":
+        return QUARTERLY_EARNINGS_SECTION_IDS
+    return MONTHLY_REVENUE_SECTION_IDS
+
 
 class EvidenceReference(StrictModel):
     evidence_id: NonEmpty
@@ -72,7 +103,7 @@ class ReportSection(StrictModel):
 class ReportCandidate(StrictModel):
     record_type: Literal["P1008_REPORT_CANDIDATE"] = "P1008_REPORT_CANDIDATE"
     run_id: NonEmpty
-    event_type: Literal["MONTHLY_REVENUE"]
+    event_type: Literal["MONTHLY_REVENUE", "QUARTERLY_EARNINGS"]
     generated_at_utc: datetime
     report_contract_version: Literal["1.0"] = "1.0"
     analysis_packet_sha256: Sha256
@@ -87,7 +118,7 @@ class ReportCandidate(StrictModel):
     @model_validator(mode="after")
     def sections_are_complete_and_ordered(self) -> "ReportCandidate":
         actual = tuple(section.section_id for section in self.sections)
-        if actual != REQUIRED_SECTION_IDS:
+        if actual != required_section_ids(self.event_type):
             raise ValueError("report sections do not match the approved Phase B1 order")
         known = {reference.evidence_id for reference in self.evidence_references}
         for section in self.sections:

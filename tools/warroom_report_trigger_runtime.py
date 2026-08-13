@@ -27,10 +27,41 @@ RECEIPTS_REL = Path("runtime/report_trigger/decision_receipts")
 INTEGRATION_RECORD_TYPE = "P1008_RESEARCH_CONTENT_INTEGRATION_V1"
 RECEIPT_RECORD_TYPE = "P1008_G1_RUNTIME_TRIGGER_DECISION"
 PRODUCER_ID = "P1008_G1_REPORT_TRIGGER_RUNTIME_WIRING_V1"
+GOVERNED_EVIDENCE_ROOT_ENV = "P1008_GOVERNED_EVIDENCE_ROOT"
 
 
 class RuntimeTriggerError(RuntimeError):
     """A runtime trigger or its lineage could not be proven."""
+
+
+def governed_evidence_root(package_root: Path) -> tuple[Path, dict[str, Any]]:
+    """Resolve read-only evidence location; default remains this worktree runtime."""
+    root = package_root.resolve()
+    configured = os.environ.get(GOVERNED_EVIDENCE_ROOT_ENV, "").strip()
+    if not configured:
+        return root / "runtime", {"mode": "LOCAL_RUNTIME", "root": str(root / "runtime"), "actionable": False}
+    evidence_root = Path(configured).expanduser().resolve()
+    if not evidence_root.is_dir():
+        raise RuntimeTriggerError("GOVERNED_EVIDENCE_ROOT_MISSING")
+    if evidence_root == (root / "runtime").resolve():
+        raise RuntimeTriggerError("GOVERNED_EVIDENCE_ROOT_MUST_BE_EXTERNAL_OR_UNSET")
+    required = (evidence_root / "report_trigger" / "latest_decision.json", evidence_root / "research_plugin" / "latest_content_integration.json")
+    if not all(path.is_file() for path in required):
+        raise RuntimeTriggerError("GOVERNED_EVIDENCE_ROOT_INCOMPLETE")
+    return evidence_root, {"mode": "EXTERNAL_GOVERNED_READ_ONLY", "root": str(evidence_root),
+                           "triggerReceiptSha256": _sha256_path(required[0]),
+                           "integrationSha256": _sha256_path(required[1]), "actionable": False}
+
+
+def _sha256_path(path: Path) -> str:
+    return governance.sha256_bytes(path.read_bytes())
+
+
+def _evidence_path(package_root: Path, relative: Path) -> Path:
+    evidence_root, _context = governed_evidence_root(package_root)
+    if relative.parts[:1] != ("runtime",):
+        raise RuntimeTriggerError("UNSAFE_EVIDENCE_RELATIVE_PATH")
+    return evidence_root.joinpath(*relative.parts[1:])
 
 
 def _canonical_hash(payload: dict[str, Any]) -> str:
@@ -94,7 +125,7 @@ def _read_json(path: Path, label: str) -> dict[str, Any]:
 
 
 def _load_integration(package_root: Path) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
-    path = package_root / INTEGRATION_REL
+    path = _evidence_path(package_root, INTEGRATION_REL)
     if not path.is_file():
         return None, []
     payload = _read_json(path, "RESEARCH_INTEGRATION")
@@ -134,7 +165,7 @@ def _unique_evidence(evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _previous(package_root: Path) -> dict[str, Any] | None:
-    path = package_root / LATEST_REL
+    path = _evidence_path(package_root, LATEST_REL)
     if not path.is_file():
         return None
     payload = _read_json(path, "TRIGGER_RECEIPT")
@@ -249,7 +280,7 @@ def evaluate_and_persist(package_root: Path, *, evaluated_at_utc: str | None = N
 
 def require_valid_trigger(package_root: Path) -> dict[str, Any]:
     root = package_root.resolve()
-    persisted = _read_json(root / LATEST_REL, "TRIGGER_RECEIPT")
+    persisted = _read_json(_evidence_path(root, LATEST_REL), "TRIGGER_RECEIPT")
     validate_receipt(persisted)
     integration, evidence = _load_integration(root)
     if integration is None or not evidence:
@@ -329,10 +360,11 @@ def require_analysis_candidate(package_root: Path, trigger: dict[str, Any] | Non
 
 
 def launcher_status(package_root: Path) -> dict[str, Any]:
-    path = package_root.resolve() / LATEST_REL
-    if not path.is_file():
-        return {"status": "NO_MATERIAL_CHANGE", "reportTriggerValid": False, "analysisEligible": False, "reportEligible": False, "templateGovernance": template_governance_status(None), "actionable": False}
     try:
+        evidence_root, evidence_context = governed_evidence_root(package_root)
+        path = evidence_root / "report_trigger" / "latest_decision.json"
+        if not path.is_file():
+            return {"status": "NO_MATERIAL_CHANGE", "reportTriggerValid": False, "analysisEligible": False, "reportEligible": False, "templateGovernance": template_governance_status(None), "governedEvidence": evidence_context, "actionable": False}
         receipt = validate_receipt(_read_json(path, "TRIGGER_RECEIPT"))
         valid = False
         try:
@@ -361,6 +393,7 @@ def launcher_status(package_root: Path) -> dict[str, Any]:
             "reportGenerated": False,
             "publication": receipt["publication"],
             "templateGovernance": template_governance_status(receipt),
+            "governedEvidence": evidence_context,
             "actionable": False,
         }
     except (RuntimeTriggerError, KeyError, TypeError) as exc:

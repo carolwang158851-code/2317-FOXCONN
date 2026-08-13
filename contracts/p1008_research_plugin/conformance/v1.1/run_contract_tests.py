@@ -175,7 +175,9 @@ def protected_write_violations(module_root: Path) -> list[str]:
     )
     write_pattern = re.compile(
         r"write_text\s*\(|write_bytes\s*\(|\.open\s*\([^\n]*(?:['\"](?:w|a|x)[bt+]?['\"])|"
-        r"csv\.writer\s*\(|(?:INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|REPLACE)\s+",
+        r"csv\.writer\s*\(|\bINSERT\s+INTO\b|\bUPDATE\s+\S+\s+SET\b|"
+        r"\bDELETE\s+FROM\b|\b(?:CREATE|DROP|ALTER)\s+(?:TABLE|DATABASE|INDEX|VIEW)\b|"
+        r"\bREPLACE\s+INTO\b",
         re.IGNORECASE,
     )
     violations: list[str] = []

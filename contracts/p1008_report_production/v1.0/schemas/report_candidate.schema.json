@@ -5,7 +5,7 @@
   "required": ["recordType", "runId", "eventType", "generatedAtUtc", "reportContractVersion", "analysisPacketSha256", "authorityManifestSha256", "primaryInvestorQuestion", "thesisState", "evidenceBoundFacts", "evidenceReferences", "sections", "actionable"],
   "properties": {
     "recordType": {"const": "P1008_REPORT_CANDIDATE"}, "runId": {"type": "string", "minLength": 1},
-    "eventType": {"const": "MONTHLY_REVENUE"}, "generatedAtUtc": {"type": "string", "format": "date-time"},
+    "eventType": {"enum": ["MONTHLY_REVENUE", "QUARTERLY_EARNINGS"]}, "generatedAtUtc": {"type": "string", "format": "date-time"},
     "reportContractVersion": {"const": "1.0"}, "analysisPacketSha256": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
     "authorityManifestSha256": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
     "primaryInvestorQuestion": {"type": "string", "minLength": 1},

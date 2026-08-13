@@ -6,8 +6,12 @@ approved report template embodied by the typed builder. It cannot read raw CSV
 or raw news, search the web, recalculate undocumented metrics, replace Evidence
 IDs, change evidence-bound conclusions, change the thesis state, or publish.
 
-The report candidate contains twenty ordered sections and prioritizes one
-investor question. Script candidates are downstream of the validated report;
+The report candidate contains twenty event-specific ordered sections and
+prioritizes one investor question. `QUARTERLY_EARNINGS` includes the Q2
+financial summary, comparisons, margins and EPS, AI/cloud disclosures,
+outlook, customer and policy evidence status, valuation, cash conversion,
+market reaction, thesis state, and next validation events. Script candidates
+are downstream of the validated report;
 they have no Authority, CSV, Evidence Packet, web, model, or database access.
 
 Editorial validation is calculated, never defaulted. It fails closed on
@@ -33,10 +37,12 @@ override malformed prose. Technical event windows are narrated as complete
 one- and five-trading-day price reactions while preserving sign and decimal
 identity.
 
-All artifacts are deterministic UTF-8/LF files under
+All artifacts are deterministic files under
 `runtime/report_production/<run_id>/`. They remain Owner-review candidates,
 `actionable=false`, and never enter formal authority or Runtime SQLite.
 
+The Owner-review preview adds deterministic HTML and PDF artifacts. Both are
+hash-listed in the run manifest and do not authorize publication.
+
 Canva, video rendering, automatic publishing, scheduling, live synthesis, and
-other event types are Phase B2 or separately authorized work and are outside
-this contract.
+event types other than the two listed in this contract are outside this slice.

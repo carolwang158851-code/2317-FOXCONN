@@ -31,6 +31,9 @@ from .reporting import (
 )
 from .reporting.chart_data_builder import ChartDataBuilder
 from .reporting.report_renderer_markdown import MarkdownRenderer
+from .reporting.report_renderer_formal import FormalPreviewRenderer
+from .reporting import template_governance
+from .quarterly_earnings import QuarterlyEarningsPacket
 
 
 class PhaseB1PipelineError(RuntimeError):
@@ -39,9 +42,17 @@ class PhaseB1PipelineError(RuntimeError):
 
 class PhaseB1Pipeline:
     SUPPORTED_EVENT = "MONTHLY_REVENUE"
+    SUPPORTED_EVENTS = frozenset({"MONTHLY_REVENUE", "QUARTERLY_EARNINGS"})
 
-    def __init__(self, package_root: Path, fixture_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        package_root: Path,
+        fixture_path: Path | None = None,
+        *,
+        governed_evidence_root: Path | None = None,
+    ) -> None:
         self.package_root = package_root.resolve()
+        self.governed_evidence_root = governed_evidence_root.resolve() if governed_evidence_root else None
         self.fixture_path = fixture_path or (
             self.package_root
             / "modules"
@@ -53,7 +64,22 @@ class PhaseB1Pipeline:
         )
         self.loader = ContractLoader(self.package_root)
 
-    def load_inputs(self) -> tuple[dict[str, Any], Any]:
+    def load_inputs(
+        self,
+        event_type: str = "MONTHLY_REVENUE",
+        trigger_lineage: dict[str, Any] | None = None,
+    ) -> tuple[Any, Any]:
+        if event_type == "QUARTERLY_EARNINGS":
+            if trigger_lineage is None:
+                raise PhaseB1PipelineError("QUARTERLY_EARNINGS requires trigger lineage")
+            packet = QuarterlyEarningsPacket(
+                self.package_root,
+                trigger_lineage,
+                governed_evidence_root=self.governed_evidence_root,
+            )
+            return packet, packet.validated_evidence()
+        if event_type != "MONTHLY_REVENUE":
+            raise PhaseB1PipelineError(f"Unsupported Phase B1 event: {event_type}")
         fixture = json.loads(self.fixture_path.read_text(encoding="utf-8"))
         if fixture.get("eventType") != self.SUPPORTED_EVENT:
             raise PhaseB1PipelineError("Phase B1 supports MONTHLY_REVENUE only")
@@ -86,7 +112,17 @@ class PhaseB1Pipeline:
                     )
         return fixture, validated
 
-    def deterministic_run_id(self, fixture: dict[str, Any]) -> str:
+    def deterministic_run_id(self, fixture: Any) -> str:
+        if isinstance(fixture, QuarterlyEarningsPacket):
+            identity = {
+                **fixture.deterministic_identity(),
+                "authorityManifestSha256": sha256_file(
+                    self.package_root / "data" / "CSV_AUTHORITY_MANIFEST.json"
+                ),
+            }
+            suffix = sha256_bytes(canonical_json_bytes(identity))[:12]
+            generated = self._utc(fixture.generated_at_utc)
+            return f"P1008-B1-QUARTERLY-EARNINGS-{generated:%Y%m%d}-DET-{suffix}"
         identity = {
             "eventType": fixture["eventType"],
             "asOfDate": fixture["asOfDate"],
@@ -104,12 +140,16 @@ class PhaseB1Pipeline:
         self, *, output_base: Path | None = None,
         trigger_lineage: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        fixture, evidence = self.load_inputs()
+        event_type = str((trigger_lineage or {}).get("eventType") or "MONTHLY_REVENUE")
+        if event_type not in self.SUPPORTED_EVENTS:
+            raise PhaseB1PipelineError(f"Unsupported Phase B1 event: {event_type}")
+        fixture, evidence = self.load_inputs(event_type, trigger_lineage)
         run_id = self.deterministic_run_id(fixture)
         run_root = self._run_root(run_id, output_base)
         if run_root.exists():
             raise PhaseB1BoundaryError(f"Run ID already exists: {run_id}")
-        generated = self._utc(fixture["generatedAtUtc"])
+        generated_at = fixture.generated_at_utc if isinstance(fixture, QuarterlyEarningsPacket) else fixture["generatedAtUtc"]
+        generated = self._utc(generated_at)
         before = protected_state_hashes(self.package_root)
         run_root.mkdir(parents=True, exist_ok=False)
         atomic_write_json(run_root / "protected_state_hashes_before.json", before)
@@ -119,10 +159,12 @@ class PhaseB1Pipeline:
             run_id=run_id,
             generated_at_utc=generated,
             validated_evidence=evidence,
+            event_type=event_type,
+            quarterly_packet=(fixture if isinstance(fixture, QuarterlyEarningsPacket) else None),
         )
         analysis = AnalysisValidator().validate(analysis, evidence)
         gate = AnalysisValidator.result(analysis, checked_at=generated)
-        evidence_manifest = self._evidence_manifest(evidence)
+        evidence_manifest = fixture.evidence_manifest() if isinstance(fixture, QuarterlyEarningsPacket) else self._evidence_manifest(evidence)
 
         analysis_sha = atomic_write_json(
             run_root / "analysis_packet.json",
@@ -141,9 +183,9 @@ class PhaseB1Pipeline:
             raise PhaseB1PipelineError("Protected state changed during analysis build")
         manifest = {
             "runId": run_id,
-            "eventType": self.SUPPORTED_EVENT,
+            "eventType": event_type,
             "state": "ANALYSIS_CANDIDATE_READY",
-            "generatedAtUtc": fixture["generatedAtUtc"],
+            "generatedAtUtc": generated_at,
             "deterministicMode": True,
             "artifacts": {
                 "analysis_packet.json": analysis_sha,
@@ -159,6 +201,13 @@ class PhaseB1Pipeline:
                 ),
             },
             "externalCalls": self._zero_calls(),
+            "templateGovernance": self._template_governance_metadata(
+                run_id=run_id, event_type=event_type, fixture=fixture,
+                authority_cutoff=self._authority_cutoff(analysis),
+            ),
+            "governedEvidence": (
+                fixture.evidence_context if isinstance(fixture, QuarterlyEarningsPacket) else None
+            ),
             "actionable": False,
         }
         if trigger_lineage is not None:
@@ -176,7 +225,10 @@ class PhaseB1Pipeline:
         self, *, run_id: str, output_base: Path | None = None,
         trigger_lineage: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        fixture, evidence = self.load_inputs()
+        event_type = str((trigger_lineage or {}).get("eventType") or "MONTHLY_REVENUE")
+        if event_type not in self.SUPPORTED_EVENTS:
+            raise PhaseB1PipelineError(f"Unsupported Phase B1 event: {event_type}")
+        fixture, evidence = self.load_inputs(event_type, trigger_lineage)
         expected_run_id = self.deterministic_run_id(fixture)
         if run_id != expected_run_id:
             raise PhaseB1PipelineError("Run ID does not match governed deterministic inputs")
@@ -220,12 +272,14 @@ class PhaseB1Pipeline:
         stored_evidence_manifest = json.loads(
             evidence_manifest_path.read_text(encoding="utf-8")
         )
-        if stored_evidence_manifest != self._evidence_manifest(evidence):
+        expected_evidence_manifest = fixture.evidence_manifest() if isinstance(fixture, QuarterlyEarningsPacket) else self._evidence_manifest(evidence)
+        if stored_evidence_manifest != expected_evidence_manifest:
             raise PhaseB1PipelineError("Validated Evidence manifest drifted")
         analysis = AnalysisPacket.model_validate_json(analysis_path.read_text(encoding="utf-8"))
         AnalysisValidator().validate(analysis, evidence)
         before = protected_state_hashes(self.package_root)
-        generated = self._utc(fixture["generatedAtUtc"])
+        generated_at = fixture.generated_at_utc if isinstance(fixture, QuarterlyEarningsPacket) else fixture["generatedAtUtc"]
+        generated = self._utc(generated_at)
         report = ReportBuilder().build(
             analysis=analysis,
             evidence=evidence,
@@ -245,12 +299,17 @@ class PhaseB1Pipeline:
             raise PhaseB1PipelineError(
                 "Editorial validation failed closed: " + "; ".join(editorial.errors)
             )
+        formal = FormalPreviewRenderer()
+        html_preview = formal.html(report)
+        pdf_preview = formal.pdf(report)
 
         report_sha = atomic_write_json(
             run_root / "report_candidate.json",
             report.model_dump(mode="json", by_alias=True),
         )
         atomic_write(run_root / "report_candidate.md", markdown.encode("utf-8"))
+        atomic_write(run_root / "report_candidate.html", html_preview)
+        atomic_write(run_root / "report_candidate.pdf", pdf_preview)
         atomic_write_json(
             run_root / "chart_data.json",
             [item.model_dump(mode="json", by_alias=True) for item in charts],
@@ -287,6 +346,8 @@ class PhaseB1Pipeline:
             "evidence_manifest.json",
             "report_candidate.json",
             "report_candidate.md",
+            "report_candidate.html",
+            "report_candidate.pdf",
             "chart_data.json",
             "longform_script_candidate.md",
             "shorts_75s_candidate.md",
@@ -298,14 +359,21 @@ class PhaseB1Pipeline:
         ]
         manifest = {
             "runId": run_id,
-            "eventType": self.SUPPORTED_EVENT,
+            "eventType": event_type,
             "state": "REPORT_CANDIDATE_READY",
-            "generatedAtUtc": fixture["generatedAtUtc"],
+            "generatedAtUtc": generated_at,
             "deterministicMode": True,
             "artifacts": {
                 name: sha256_file(run_root / name) for name in artifact_names
             },
             "externalCalls": self._zero_calls(),
+            "templateGovernance": self._template_governance_metadata(
+                run_id=run_id, event_type=event_type, fixture=fixture,
+                authority_cutoff=self._authority_cutoff(analysis),
+            ),
+            "governedEvidence": (
+                fixture.evidence_context if isinstance(fixture, QuarterlyEarningsPacket) else None
+            ),
             "actionable": False,
         }
         if trigger_lineage is not None:
@@ -319,6 +387,8 @@ class PhaseB1Pipeline:
             "analysis_sha256": sha256_file(analysis_path),
             "report_json_sha256": report_sha,
             "report_markdown_sha256": sha256_file(run_root / "report_candidate.md"),
+            "report_html_sha256": sha256_file(run_root / "report_candidate.html"),
+            "report_pdf_sha256": sha256_file(run_root / "report_candidate.pdf"),
             "shorts_sha256": sha256_file(run_root / "shorts_75s_candidate.md"),
             "protected_state_unchanged": before == after,
         }
@@ -372,4 +442,42 @@ class PhaseB1Pipeline:
             "canva": 0,
             "gemini": 0,
             "youtube": 0,
+        }
+
+    @staticmethod
+    def _authority_cutoff(analysis: AnalysisPacket) -> str:
+        values = [value for value in analysis.authority_data_cutoffs.values() if value]
+        return max(values) if values else "UNDECLARED"
+
+    @staticmethod
+    def _template_governance_metadata(*, run_id: str, event_type: str, fixture: Any,
+                                      authority_cutoff: str) -> dict[str, Any] | None:
+        if event_type != "QUARTERLY_EARNINGS" or not isinstance(fixture, QuarterlyEarningsPacket):
+            return None
+        envelope = template_governance.build_task_envelope(
+            run_id=run_id,
+            task_id="FY2026_Q2_ENTERPRISE_VALUE_REVIEW",
+            event=event_type,
+            period=fixture.values["fiscalPeriod"],
+            authority_cutoff=authority_cutoff,
+            research_question="Assess earnings quality, cash conversion, durability and enterprise-value implications.",
+            required_inputs=["OFFICIAL_IR_RESULTS", "GOVERNED_AUTHORITY", "GOVERNED_MARKET_DATA"],
+            required_analysis=["FINANCIAL_TRANSMISSION", "DURABILITY", "NON_GREEN_DEEP_REVIEW", "VALUATION", "CHARTS"],
+            required_output=["ANALYSIS_CANDIDATE", "REPORT_CANDIDATE", "OWNER_REVIEW"],
+            prohibited_actions=["PUBLISH", "TRADE_INSTRUCTION", "AUTHORITY_WRITE", "MODEL_CALL"],
+        )
+        return {
+            "templateId": template_governance.TEMPLATE_ID,
+            "templateVersion": template_governance.TEMPLATE_VERSION,
+            "templateHash": template_governance.template_hash(),
+            "missionContext": template_governance.MISSION_CONTEXT,
+            "taskEnvelope": envelope,
+            "tasksDispatched": 1,
+            "tasksCompleted": 1,
+            "skillsUsed": ["OFFICIAL_IR_EVIDENCE_INGESTION"],
+            "skillModes": {"DATA_ANALYTICS": "SKILL_GUIDED_ONLY", "INVESTMENT_BANKING": "UNAVAILABLE"},
+            "skillReceipts": [fixture.event["provenance"]["receipt_path"]],
+            "skillsUnavailable": ["INVESTMENT_BANKING_RUNTIME"],
+            "validationStatus": "OWNER_REVIEW_REQUIRED",
+            "actionable": False,
         }

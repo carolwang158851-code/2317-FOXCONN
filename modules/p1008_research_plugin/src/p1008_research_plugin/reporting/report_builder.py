@@ -28,6 +28,12 @@ class ReportBuilder:
         evidence: ValidatedEvidence,
         generated_at_utc: datetime,
     ) -> ReportCandidate:
+        if analysis.event_type == "QUARTERLY_EARNINGS":
+            return self._build_quarterly(
+                analysis=analysis,
+                evidence=evidence,
+                generated_at_utc=generated_at_utc,
+            )
         analysis_sha = sha256_bytes(
             canonical_json_bytes(analysis.model_dump(mode="json", by_alias=True))
         )
@@ -91,6 +97,66 @@ class ReportBuilder:
             analysis_packet_sha256=analysis_sha,
             authority_manifest_sha256=analysis.authority_manifest_sha256,
             primary_investor_question=f"{revenue.period}營收動能能否在下一個正式財務驗證點轉成獲利與現金流？",
+            thesis_state=analysis.thesis_scorecard.overall_thesis,
+            evidence_bound_facts=[item.statement for item in analysis.material_conclusions],
+            evidence_references=references,
+            sections=sections,
+            actionable=False,
+        )
+
+    def _build_quarterly(
+        self,
+        *,
+        analysis: AnalysisPacket,
+        evidence: ValidatedEvidence,
+        generated_at_utc: datetime,
+    ) -> ReportCandidate:
+        q = analysis.quarterly_earnings
+        if q is None:
+            raise ValueError("QUARTERLY_EARNINGS report requires quarterly analysis")
+        analysis_sha = sha256_bytes(
+            canonical_json_bytes(analysis.model_dump(mode="json", by_alias=True))
+        )
+        references = self._references(analysis, evidence)
+        official_ids = sorted(evidence.evidence_ids)
+        authority_ids = self._authority_ids(analysis)
+        master_id = authority_ids["AUTH-MASTER-"]
+        price_id = authority_ids["AUTH-PRICE-"]
+        activity_id = authority_ids["AUTH-MARKET-ACTIVITY-"]
+        cash_id = authority_ids["AUTH-CASHFLOW-"]
+        returns = analysis.price_and_market_activity.recent_price_context.return_windows
+        price_cutoff = analysis.valuation_analysis.data_window.split("..")[-1]
+        invalidations = "；".join(item.invalidation_condition for item in analysis.material_conclusions)
+        next_events = "；".join(dict.fromkeys(item.next_validation_event for item in analysis.material_conclusions))
+        sections = [
+            self._section("REPORT_IDENTITY_AND_CUTOFF", "報告識別與資料截止", f"本報告為{q.fiscal_period} QUARTERLY_EARNINGS候選。Official IR發布日2026-08-12；市場authority截止{price_cutoff}。", "FACT", official_ids + [price_id, activity_id]),
+            self._section("EXECUTIVE_SUMMARY", "Executive Summary", f"Q2營收、營業利益與EPS均顯著成長，營業利益率改善，但毛利率小幅下滑；AI Server與Cloud & Networking展望正向。H1自由現金流為負，且結果文件未量化Apple/iPhone、FX、關稅或政策影響，因此投資假設維持、狀態為WATCH／OBSERVE／REVIEW_REQUIRED。", "MIXED", official_ids + [price_id, cash_id]),
+            self._section("Q2_FINANCIAL_SUMMARY", "Q2財務摘要", f"營收{q.revenue.value}百萬元；歸屬母公司淨利{q.attributable_profit.value}百萬元；EPS {q.eps.value}元。", "FACT", official_ids),
+            self._section("QOQ_YOY", "QoQ／YoY", f"營收QoQ {q.revenue.qoq}、YoY {q.revenue.yoy}；歸屬母公司淨利QoQ {q.attributable_profit.qoq}、YoY {q.attributable_profit.yoy}；EPS QoQ {q.eps.qoq}、YoY {q.eps.yoy}。", "FACT", official_ids),
+            self._section("MARGINS_AND_EPS", "毛利率、營益率、淨利率與EPS", f"毛利率{q.gross_margin.value}%（QoQ {q.gross_margin.qoq}；YoY {q.gross_margin.yoy}）；營益率{q.operating_margin.value}%（QoQ {q.operating_margin.qoq}；YoY {q.operating_margin.yoy}）；淨利率{q.net_margin.value}%（QoQ {q.net_margin.qoq}；YoY {q.net_margin.yoy}）；EPS {q.eps.value}元。", "FACT", official_ids),
+            self._section("AI_SERVER_CLOUD_NETWORKING", "AI Server／Cloud & Networking", "；".join(q.ai_server_cloud_networking + q.business_disclosures), "FACT", official_ids),
+            self._section("SECOND_HALF_AND_FULL_YEAR_OUTLOOK", "下半年與全年展望", "；".join(q.official_outlook) + "。這些是公司前瞻性展望，需由後續實績驗證。", "MIXED", official_ids),
+            self._section("APPLE_IPHONE_EXPOSURE", "Apple／iPhone供應鏈影響", f"{q.apple_iphone_exposure_status}：本次Results文件沒有量化Apple或iPhone客戶別曝險、訂單或產品組合影響，不以消費智能產品展望替代客戶特定證據。", "FACT", official_ids),
+            self._section("FX_TARIFF_POLICY_RISKS", "匯率、關稅與政策風險", f"{q.fx_tariff_policy_risk_status}：本次Results文件沒有量化FX敏感度、關稅成本或政策情境；後續只接受正式財報或公司指引補證。", "FACT", official_ids),
+            self._section("PS_PE_VALUATION_CONTEXT", "P/S、P/E與估值背景", f"截至{price_cutoff}收盤價{analysis.valuation_analysis.current_price}元、P/B {analysis.valuation_analysis.current_pb}倍。P/E仍依賴未換入Q2的TTM authority基線，P/S缺少Q2更新的受治理分母，因此均不輸出評價結論；估值狀態為{analysis.valuation_analysis.valuation_status.value}。", "MIXED", [master_id, price_id]),
+            self._section("FCF_AND_REVENUE_CONVERSION", "FCF與營收轉化", f"{q.cash_flow_period}營業現金流{analysis.financial_trend.operating_cash_flow.value}百萬元、FCF {analysis.financial_trend.free_cash_flow.value}百萬元；狀態為{q.cash_flow_status}／{q.free_cash_flow_status}。這是H1累計、不是Q2單季；營收與EPS成長尚未形成正向累計現金轉化。", "MIXED", official_ids),
+            self._section("PRICE_VOLUME_REACTION", "目前股價與量價背景", f"authority截至{price_cutoff}，1／5／20日報酬為{returns.get('1D')}、{returns.get('5D')}、{returns.get('20D')}；成交量分位{analysis.price_and_market_activity.volume_percentile}。資料截止早於Results發布，正式事件反應為INSUFFICIENT_DATA，不推論法人或主力意圖。", "MIXED", [price_id, activity_id, *official_ids]),
+            self._section("THESIS_CHANGE_STATUS", "投資假設是否改變", f"整體論點為{analysis.thesis_scorecard.overall_thesis.value}：Q2獲利與AI展望提供支持，但H1負FCF、估值分母待更新及事件後量價不足，尚不足以調升為全面改善。", "INFERENCE", official_ids + [master_id, price_id, cash_id]),
+            self._section("WATCH_OBSERVE_REVIEW_REQUIRED", "WATCH／OBSERVE／REVIEW_REQUIRED", "WATCH：毛利率與H1 FCF；OBSERVE：AI出貨、營收轉化及事件後量價；REVIEW_REQUIRED：Apple/iPhone、FX、關稅、政策風險及Q2更新後P/S、P/E。", "INFERENCE", official_ids + [master_id, price_id, activity_id, cash_id]),
+            self._section("SUPPORTING_EVIDENCE", "支持證據", f"Official IR Results由receipt {q.source_receipt}與source hash {q.source_hash}綁定；損益表頁{q.source_pages['incomeStatement']}、現金流頁{q.source_pages['cashFlow']}、展望頁{q.source_pages['financialOutlook']}、AI與Cloud & Networking頁{q.source_pages['aiCloudNetworking']}。", "FACT", official_ids),
+            self._section("ALTERNATIVE_AND_COUNTEREVIDENCE", "替代解釋與反方證據", "營收與營益率改善可能受規模及產品組合推動，但毛利率QoQ與YoY下滑、H1 FCF為負；前瞻性AI指引仍可能受出貨時點、客戶資本支出與外部政策影響。", "MIXED", official_ids),
+            self._section("INVALIDATION_CONDITIONS", "推翻條件", invalidations, "INFERENCE", official_ids + [master_id, price_id, cash_id]),
+            self._section("NEXT_VALIDATION_DATE_AND_EVENT", "關鍵風險與後續追蹤項目", f"下一個關鍵驗證點為{next_events}；核對正式Q2報告、Q3 AI出貨與營收、完整事件窗口、更新P/S／P/E、Apple/iPhone、FX、關稅與政策揭露。", "FACT", official_ids + [master_id, price_id, activity_id, cash_id]),
+            self._section("DATA_LIMITATIONS", "資料限制", "Results簡報明示財務資訊未完全經會計師查核或核閱；H1現金流不是Q2單季；市場authority早於發布日；未披露項目保持REVIEW_REQUIRED；全程沒有外部模型、網搜或假資料。", "FACT", official_ids + [price_id, activity_id]),
+            self._section("ACTIONABLE_FALSE_DISCLAIMER", "研究安全邊界", "本候選只提供公開、非個人化研究分類，不產生買賣、部位、目標價或急迫性指令；actionable=false，publication=false，停在Owner Review。", "COMPLIANCE", []),
+        ]
+        return ReportCandidate(
+            run_id=analysis.run_id,
+            event_type="QUARTERLY_EARNINGS",
+            generated_at_utc=generated_at_utc,
+            analysis_packet_sha256=analysis_sha,
+            authority_manifest_sha256=analysis.authority_manifest_sha256,
+            primary_investor_question="FY2026 Q2獲利與AI成長，是否已轉成可持續的利潤率、現金流與估值支持？",
             thesis_state=analysis.thesis_scorecard.overall_thesis,
             evidence_bound_facts=[item.statement for item in analysis.material_conclusions],
             evidence_references=references,

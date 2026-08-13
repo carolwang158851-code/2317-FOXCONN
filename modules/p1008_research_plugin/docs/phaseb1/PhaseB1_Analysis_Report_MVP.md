@@ -2,8 +2,8 @@
 
 ## Scope
 
-Phase B1 supports one deterministic event: `MONTHLY_REVENUE`. Its vertical
-slice is:
+Phase B1 supports two deterministic events: `MONTHLY_REVENUE` and
+`QUARTERLY_EARNINGS`. Its vertical slice is:
 
 ```text
 seven-file Authority baseline
@@ -11,6 +11,7 @@ seven-file Authority baseline
 → Analysis v1.0
 → Report Production v1.0
 → long-form and 75-second script candidates
+→ Owner-review HTML/PDF preview
 ```
 
 No model, network, search, Canva, Gemini, YouTube, scheduler, publisher, or
@@ -22,7 +23,9 @@ formal-data writer participates in this slice.
   seven-file set, bytes, and declared schema. It remains read-only.
 - Evidence: the existing `PacketGateway` verifies typed packets, route limits,
   staleness, Evidence IDs, HTTPS locators, and Hon Hai/MOPS official monthly
-  revenue sources.
+  revenue sources. Quarterly earnings instead require the current valid G1
+  trigger lineage plus hash-matching Official IR integration, receipt, raw PDF,
+  and governed extraction packet; the monthly fixture is not used.
 - Analysis: calculates documented comparisons from governed Authority values,
   labels fact versus inference, represents missing data as
   `INSUFFICIENT_DATA`, keeps valuation `DESCRIPTIVE_ONLY` without an approved
@@ -84,13 +87,14 @@ overwrite, and output outside the runtime root all stop the run.
 
 ## Known limitations and Phase B2 boundary
 
-This MVP supports only governed `MONTHLY_REVENUE` inputs. Event dates,
+This MVP supports governed `MONTHLY_REVENUE` and `QUARTERLY_EARNINGS` inputs. Event dates,
 Evidence IDs, authority identities, periods, and next validation periods are
 derived from validated evidence and current manifests; a second offline case
 guards against date leakage. PB percentile covers only the current Authority
 window, no Owner-approved valuation threshold policy exists, and
 benchmark-adjusted return remains unavailable. Market psychology is explicit
-inference. Live synthesis, additional event types, video rendering,
+inference. Undisclosed quarterly fields remain `REVIEW_REQUIRED`; H1 cash flow
+is never relabeled as standalone Q2. Live synthesis, additional event types, video rendering,
 Canva/Gemini, scheduling, and publishing require separate Owner authorization
 and are not started.
 
