@@ -15,6 +15,11 @@ from typing import Any
 
 import warroom_report_governance as governance
 
+MODULE_SRC = Path(__file__).resolve().parents[1] / "modules" / "p1008_research_plugin" / "src"
+if str(MODULE_SRC) not in os.sys.path:
+    os.sys.path.insert(0, str(MODULE_SRC))
+from p1008_research_plugin.reporting import template_governance
+
 
 INTEGRATION_REL = Path("runtime/research_plugin/latest_content_integration.json")
 LATEST_REL = Path("runtime/report_trigger/latest_decision.json")
@@ -289,6 +294,21 @@ def trigger_lineage(receipt: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def template_governance_status(receipt: dict[str, Any] | None) -> dict[str, Any]:
+    """Expose template identity to the existing Launcher without dispatching work."""
+    if receipt is None:
+        return {"status": "NO_TRIGGER", "templateId": template_governance.TEMPLATE_ID,
+                "templateVersion": template_governance.TEMPLATE_VERSION,
+                "templateHash": template_governance.template_hash(), "actionable": False}
+    valid = validate_receipt(receipt)
+    return {"status": "OWNER_REVIEW_REQUIRED" if valid.get("report_trigger_valid") else "TRIGGER_REQUIRED",
+            "templateId": template_governance.TEMPLATE_ID,
+            "templateVersion": template_governance.TEMPLATE_VERSION,
+            "templateHash": template_governance.template_hash(),
+            "event": valid.get("event_type"), "reportKey": valid.get("report_key"),
+            "actionable": False}
+
+
 def require_analysis_candidate(package_root: Path, trigger: dict[str, Any] | None = None) -> dict[str, Any]:
     root = package_root.resolve()
     receipt = trigger or require_valid_trigger(root)
@@ -311,7 +331,7 @@ def require_analysis_candidate(package_root: Path, trigger: dict[str, Any] | Non
 def launcher_status(package_root: Path) -> dict[str, Any]:
     path = package_root.resolve() / LATEST_REL
     if not path.is_file():
-        return {"status": "NO_MATERIAL_CHANGE", "reportTriggerValid": False, "analysisEligible": False, "reportEligible": False, "actionable": False}
+        return {"status": "NO_MATERIAL_CHANGE", "reportTriggerValid": False, "analysisEligible": False, "reportEligible": False, "templateGovernance": template_governance_status(None), "actionable": False}
     try:
         receipt = validate_receipt(_read_json(path, "TRIGGER_RECEIPT"))
         valid = False
@@ -340,6 +360,7 @@ def launcher_status(package_root: Path) -> dict[str, Any]:
             "reportEligible": valid and analysis_valid,
             "reportGenerated": False,
             "publication": receipt["publication"],
+            "templateGovernance": template_governance_status(receipt),
             "actionable": False,
         }
     except (RuntimeTriggerError, KeyError, TypeError) as exc:
