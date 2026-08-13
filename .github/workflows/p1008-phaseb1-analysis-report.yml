@@ -25,6 +25,8 @@ permissions:
 
 jobs:
   deterministic-phaseb1:
+    env:
+      P1008_TEST_TEMP_ROOT: ${{ runner.temp }}/P1008/pytest-temp
     strategy:
       fail-fast: false
       matrix:
