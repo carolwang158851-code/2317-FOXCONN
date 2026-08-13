@@ -38,6 +38,11 @@ class FakeManager(app_server.P1008JobManager):
         self.market_exit = market_exit
         self.calls: list[str] = []
         self.timeouts: dict[str, int] = {}
+        self.step_args: dict[str, list[str]] = {}
+        self.daily_payload: dict[str, object] = {
+            "status": "NO_NEW_DAILY_PRICE", "launcher_status": "NO_NEW_DATA",
+            "last_success_date": "2026-07-17", "receipt_paths": ["receipt.json"],
+        }
         self.state = self._initial_state()
         self.state.update({"status": "RUNNING", "steps": [], "errors": [], "warnings": [], "componentStatus": {}, "logPath": "logs/test.log"})
 
@@ -57,6 +62,7 @@ class FakeManager(app_server.P1008JobManager):
     def _run_bat_step(self, step_id, label, bat_path, args, timeout_seconds):
         self.calls.append(step_id)
         self.timeouts[step_id] = timeout_seconds
+        self.step_args[step_id] = list(args)
         exit_code = (
             self.daily_exit
             if step_id == "daily-price-authority"
@@ -68,7 +74,7 @@ class FakeManager(app_server.P1008JobManager):
         if step_id == "daily-price-authority":
             path = self.package_root / app_server.DAILY_PRICE_STATUS_REL
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps({"status": "NO_NEW_DAILY_PRICE", "launcher_status": "NO_NEW_DATA", "last_success_date": "2026-07-17", "receipt_paths": ["receipt.json"]}), encoding="utf-8")
+            path.write_text(json.dumps(self.daily_payload), encoding="utf-8")
         if step_id == "market-activity" and exit_code == 0:
             path = self.package_root / app_server.MARKET_ACTIVITY_STATUS_REL
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -127,6 +133,23 @@ class LauncherMarketActivityPipelineTests(unittest.TestCase):
         self.assertEqual(manager.state["componentStatus"]["marketActivity"]["status"], "NO_NEW_DATA")
         self.assertEqual(manager.state["overallStatus"], "SUCCEEDED")
         self.assertEqual(manager.timeouts, {"daily-price-authority": 180, "market-activity": 180, "authority-freshness": 60, "update-data": 420})
+        self.assertEqual(manager.step_args["daily-price-authority"], ["--dry-run"])
+        self.assertEqual(manager.step_args["market-activity"], ["--dry-run"])
+
+    def test_launcher_binds_market_activity_to_same_run_daily_price_staging(self) -> None:
+        manager = FakeManager(self.root)
+        manager.daily_payload = {
+            "status": "DRY_RUN_READY", "launcher_status": "UPDATED",
+            "run_id": "P1008-DAILY-PRICE-TEST", "run_dir": "C:/runtime/P1008-DAILY-PRICE-TEST",
+            "last_success_date": "2026-07-17", "receipt_paths": ["receipt.json"], "dry_run": True,
+        }
+        with mock.patch.object(app_server, "formal_csv_hashes", return_value=dict(BASE_HASHES)):
+            manager._run_job_inner("default")
+        self.assertEqual(manager.step_args["daily-price-authority"], ["--dry-run"])
+        self.assertEqual(
+            manager.step_args["market-activity"],
+            ["--dry-run", "--daily-price-run-dir", "C:/runtime/P1008-DAILY-PRICE-TEST", "--daily-price-run-id", "P1008-DAILY-PRICE-TEST"],
+        )
 
     def test_default_job_never_runs_report(self) -> None:
         manager = FakeManager(self.root)

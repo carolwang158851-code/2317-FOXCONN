@@ -31,6 +31,9 @@ PRICE_REL = Path("data/2317_daily_price.csv")
 STATUS_REL = Path("runtime/market_activity_incremental/latest_status.json")
 RUNTIME_REL = Path("runtime/market_activity_incremental")
 FORMAL_FIELDS = publisher.MARKET_ACTIVITY_FIELDS
+PRICE_CANDIDATE_FIELDS = (
+    "Date", "Close", "QuarterKey", "BVPS_ref", "PB_daily", "DataSupportLevel", "Status"
+)
 
 STATUS_UPDATED = "UPDATED"
 STATUS_NO_NEW = "NO_NEW_MARKET_ACTIVITY"
@@ -248,6 +251,107 @@ def read_price(path: Path) -> dict[str, Decimal]:
     return output
 
 
+def _resolved_within(path: Path, parent: Path) -> bool:
+    try:
+        path.resolve().relative_to(parent.resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def load_same_run_price_staging(
+    package_root: Path,
+    *,
+    daily_price_run_dir: Path,
+    daily_price_run_id: str,
+    as_of_date: dt.date,
+    activity_anchor_date: str,
+) -> tuple[dict[str, Decimal], dict[str, Any]]:
+    """Load only the validated Daily Price candidate from this Launcher run."""
+
+    allowed_root = package_root / "runtime" / "daily_price_incremental"
+    run_dir = daily_price_run_dir.resolve()
+    if not _resolved_within(run_dir, allowed_root) or run_dir.parent != allowed_root.resolve():
+        raise UpdateFailure("Daily Price staging lineage is outside the governed runtime root", status=STATUS_BLOCKED, exit_code=EXIT_BLOCKED)
+    result_path = run_dir / "RESULT.json"
+    if not result_path.is_file():
+        raise UpdateFailure("Daily Price staging RESULT.json is missing", status=STATUS_BLOCKED, exit_code=EXIT_BLOCKED)
+    try:
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise UpdateFailure("Daily Price staging RESULT.json is invalid", status=STATUS_BLOCKED, exit_code=EXIT_BLOCKED) from exc
+    if (
+        result.get("run_id") != daily_price_run_id
+        or run_dir.name != daily_price_run_id
+        or result.get("status") != "DRY_RUN_READY"
+        or result.get("dry_run") is not True
+        or result.get("exit_code") != EXIT_OK
+        or result.get("actionable") is not False
+        or result.get("anchor_date") != activity_anchor_date
+    ):
+        raise UpdateFailure("Daily Price staging lineage or validation status is not trusted", status=STATUS_BLOCKED, exit_code=EXIT_BLOCKED)
+    candidate_value = result.get("candidate_path")
+    candidate_sha = result.get("candidate_sha256")
+    if not isinstance(candidate_value, str) or not isinstance(candidate_sha, str):
+        raise UpdateFailure("Daily Price staging candidate provenance is incomplete", status=STATUS_BLOCKED, exit_code=EXIT_BLOCKED)
+    candidate_path = Path(candidate_value)
+    if not candidate_path.is_file() or not _resolved_within(candidate_path, run_dir):
+        raise UpdateFailure("Daily Price staging candidate is missing or outside its run", status=STATUS_BLOCKED, exit_code=EXIT_BLOCKED)
+    if candidate_path.name != "2317_daily_price.incremental.candidate.csv" or sha256_file(candidate_path) != candidate_sha:
+        raise UpdateFailure("Daily Price staging candidate SHA does not match its receipt", status=STATUS_BLOCKED, exit_code=EXIT_BLOCKED)
+    with candidate_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if tuple(reader.fieldnames or ()) != PRICE_CANDIDATE_FIELDS:
+            raise UpdateFailure("Daily Price staging candidate schema is invalid", status=STATUS_BLOCKED, exit_code=EXIT_BLOCKED)
+        candidate_rows = [dict(row) for row in reader]
+    candidate_dates = [row["Date"] for row in candidate_rows]
+    if not candidate_rows or candidate_dates != sorted(set(candidate_dates)):
+        raise UpdateFailure("Daily Price staging candidate dates are not unique and increasing", status=STATUS_BLOCKED, exit_code=EXIT_BLOCKED)
+    try:
+        candidate_price = {row["Date"]: Decimal(row["Close"]) for row in candidate_rows}
+    except (InvalidOperation, KeyError) as exc:
+        raise UpdateFailure("Daily Price staging candidate has an invalid Close", status=STATUS_BLOCKED, exit_code=EXIT_BLOCKED) from exc
+    receipt_paths = result.get("receipt_paths")
+    if not isinstance(receipt_paths, list) or not receipt_paths:
+        raise UpdateFailure("Daily Price staging has no verified TWSE receipts", status=STATUS_BLOCKED, exit_code=EXIT_BLOCKED)
+    staged_twse: dict[str, Decimal] = {}
+    for receipt_value in receipt_paths:
+        receipt_path = Path(receipt_value)
+        if not receipt_path.is_file() or not _resolved_within(receipt_path, run_dir / "receipts"):
+            raise UpdateFailure("Daily Price staging receipt path is invalid", status=STATUS_BLOCKED, exit_code=EXIT_BLOCKED)
+        try:
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            month = str(receipt["month"])
+        except (OSError, KeyError, json.JSONDecodeError) as exc:
+            raise UpdateFailure("Daily Price staging receipt is invalid", status=STATUS_BLOCKED, exit_code=EXIT_BLOCKED) from exc
+        raw_path = run_dir / "receipts" / f"{month}.twse.raw.csv"
+        if (
+            receipt.get("status") != "SUCCESS"
+            or receipt.get("http_status") != 200
+            or receipt.get("request_url") != source_url(month)
+            or not raw_path.is_file()
+            or receipt.get("raw_artifact_sha256") != sha256_file(raw_path)
+        ):
+            raise UpdateFailure("Daily Price staging TWSE receipt provenance is invalid", status=STATUS_BLOCKED, exit_code=EXIT_BLOCKED)
+        for row_date, row in parse_twse_month(raw_path.read_bytes(), month).items():
+            if row_date in staged_twse:
+                raise UpdateFailure("Daily Price staging contains duplicate TWSE dates", status=STATUS_BLOCKED, exit_code=EXIT_BLOCKED)
+            staged_twse[row_date] = row["close"]
+    target_dates = [day for day in candidate_price if activity_anchor_date < day <= as_of_date.isoformat()]
+    if not target_dates:
+        raise UpdateFailure("Daily Price staging is stale for the current Launcher run", status=STATUS_BLOCKED, exit_code=EXIT_BLOCKED)
+    for day in target_dates:
+        if day not in staged_twse or candidate_price[day] != staged_twse[day]:
+            raise UpdateFailure("Daily Price staging Close does not match its verified TWSE receipt", status=STATUS_BLOCKED, exit_code=EXIT_BLOCKED)
+    return candidate_price, {
+        "source": "SAME_RUN_DAILY_PRICE_STAGING",
+        "daily_price_run_id": daily_price_run_id,
+        "daily_price_run_dir": str(run_dir),
+        "daily_price_candidate_sha256": candidate_sha,
+        "daily_price_receipt_paths": receipt_paths,
+    }
+
+
 def write_candidate(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp")
@@ -287,6 +391,8 @@ def run_update(
     as_of_date: dt.date,
     dry_run: bool = False,
     offline_receipt_dir: Path | None = None,
+    daily_price_run_dir: Path | None = None,
+    daily_price_run_id: str | None = None,
 ) -> dict[str, Any]:
     package_root = package_root.resolve()
     formal_path = package_root / FORMAL_REL
@@ -299,6 +405,18 @@ def run_update(
     formal_rows = read_formal_activity(formal_path)
     price = read_price(price_path)
     last_formal_date = formal_rows[-1]["date"]
+    if (daily_price_run_dir is None) != (daily_price_run_id is None):
+        raise UpdateFailure("Daily Price staging requires both run directory and run id", status=STATUS_BLOCKED, exit_code=EXIT_BLOCKED)
+    staging_price: dict[str, Decimal] = {}
+    staging_provenance: dict[str, Any] | None = None
+    if daily_price_run_dir is not None and daily_price_run_id is not None:
+        staging_price, staging_provenance = load_same_run_price_staging(
+            package_root,
+            daily_price_run_dir=daily_price_run_dir,
+            daily_price_run_id=daily_price_run_id,
+            as_of_date=as_of_date,
+            activity_anchor_date=last_formal_date,
+        )
     months = month_sequence(last_formal_date[:7], as_of_date.strftime("%Y-%m"))
     run_id = f"P1008-MARKET-ACTIVITY-{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')}"
     runtime_root = package_root / RUNTIME_REL
@@ -361,19 +479,26 @@ def run_update(
                     continue
                 if row_date <= last_formal_date:
                     raise UpdateFailure(f"Historical gap requires separate backfill approval: {row_date}")
-                if row_date not in price:
+                comparison_price = staging_price.get(row_date, price.get(row_date))
+                if comparison_price is None:
                     raise UpdateFailure(
                         f"Price authority does not contain TWSE date {row_date}",
                         status=STATUS_BLOCKED,
                         exit_code=EXIT_BLOCKED,
                     )
-                if price[row_date] != twse_rows[row_date]["close"]:
+                if comparison_price != twse_rows[row_date]["close"]:
                     raise UpdateFailure(
                         f"TWSE Close does not match price authority for {row_date}",
                         status=STATUS_BLOCKED,
                         exit_code=EXIT_BLOCKED,
                     )
-                new_rows.append(twse_rows[row_date])
+                row = dict(twse_rows[row_date])
+                row["price_validation_source"] = (
+                    "SAME_RUN_DAILY_PRICE_STAGING"
+                    if row_date in staging_price
+                    else "FORMAL_DAILY_PRICE_AUTHORITY"
+                )
+                new_rows.append(row)
 
             if not new_rows:
                 result = {
@@ -390,6 +515,7 @@ def run_update(
                     "dry_run": dry_run,
                     "exit_code": EXIT_OK,
                     "actionable": False,
+                    "price_validation_provenance": staging_provenance,
                 }
             else:
                 candidate_path = run_dir / "2317_daily_market_activity.incremental.candidate.csv"
@@ -413,6 +539,7 @@ def run_update(
                         "dry_run": True,
                         "exit_code": EXIT_OK,
                         "actionable": False,
+                        "price_validation_provenance": staging_provenance,
                     }
                 else:
                     publish_result = publisher.publish_market_activity_append(
@@ -442,6 +569,7 @@ def run_update(
                         "dry_run": False,
                         "exit_code": EXIT_OK,
                         "actionable": False,
+                        "price_validation_provenance": staging_provenance,
                     }
             if dry_run and (
                 sha256_file(formal_path) != formal_hash_before
@@ -467,6 +595,7 @@ def run_update(
                 "exit_code": exc.exit_code,
                 "error": str(exc),
                 "actionable": False,
+                "price_validation_provenance": staging_provenance,
             }
             atomic_json(run_dir / "RESULT.json", result)
             atomic_json(status_path, result)
@@ -479,6 +608,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--as-of-date", type=dt.date.fromisoformat, default=dt.date.today())
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--offline-receipt-dir", type=Path)
+    parser.add_argument("--daily-price-run-dir", type=Path)
+    parser.add_argument("--daily-price-run-id")
     args = parser.parse_args(argv)
     try:
         result = run_update(
@@ -486,6 +617,8 @@ def main(argv: list[str] | None = None) -> int:
             as_of_date=args.as_of_date,
             dry_run=args.dry_run,
             offline_receipt_dir=args.offline_receipt_dir,
+            daily_price_run_dir=args.daily_price_run_dir,
+            daily_price_run_id=args.daily_price_run_id,
         )
     except UpdateFailure as exc:
         print(json.dumps({"status": exc.status, "error": str(exc), "exit_code": exc.exit_code}, ensure_ascii=False))
