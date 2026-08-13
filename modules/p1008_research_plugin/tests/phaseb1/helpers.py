@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import shutil
 import subprocess
 import sys
@@ -59,7 +60,6 @@ def frozen_authority_package(root: Path) -> Path:
     """Materialize the Phase B1 golden authority, independent of production data."""
 
     package = root / "frozen-package"
-    shutil.copytree(PACKAGE_ROOT / "data", package / "data")
     shutil.copytree(
         PACKAGE_ROOT / "contracts" / "p1008_research_plugin" / "v1.0",
         package / "contracts" / "p1008_research_plugin" / "v1.0",
@@ -73,7 +73,8 @@ def frozen_authority_package(root: Path) -> Path:
         "phaseB1Frozen"
     ]
     revision = str(baseline["gitRevision"])
-    for relative in baseline["paths"]:
+
+    def frozen_blob(relative: str) -> bytes:
         result = subprocess.run(
             ["git", "-C", str(PACKAGE_ROOT), "show", f"{revision}:{relative}"],
             check=False,
@@ -84,20 +85,53 @@ def frozen_authority_package(root: Path) -> Path:
             raise RuntimeError(
                 f"Frozen Phase B1 authority is unavailable: {revision}:{relative}"
             )
-        target = package / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(result.stdout)
-    expected = {
-        "data/CSV_AUTHORITY_MANIFEST.json": baseline["manifestSha256"],
-        "data/2317_daily_price.csv": baseline["dailyPriceSha256"],
-        "data/2317_daily_market_activity.csv": baseline["marketActivitySha256"],
-    }
-    import hashlib
+        return result.stdout
+
+    manifest_relative = "data/CSV_AUTHORITY_MANIFEST.json"
+    manifest_bytes = frozen_blob(manifest_relative)
+    manifest_digest = hashlib.sha256(manifest_bytes).hexdigest().upper()
+    if manifest_digest != str(baseline["manifestSha256"]).upper():
+        raise RuntimeError("Frozen Phase B1 authority hash mismatch: manifest")
+
+    try:
+        manifest = json.loads(manifest_bytes.decode("utf-8-sig"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Frozen Phase B1 authority manifest is invalid") from exc
+
+    declared_files = [
+        *manifest.get("authoritativeFiles", []),
+        *manifest.get("nonAuthoritativeFiles", []),
+    ]
+    if not declared_files:
+        raise RuntimeError("Frozen Phase B1 authority manifest declares no files")
+
+    expected: dict[str, str] = {}
+    for entry in declared_files:
+        if not isinstance(entry, dict):
+            raise RuntimeError("Frozen Phase B1 authority manifest entry is invalid")
+        relative = entry.get("path")
+        digest = entry.get("sha256")
+        if not isinstance(relative, str) or not relative.startswith("data/"):
+            raise RuntimeError("Frozen Phase B1 authority path is invalid")
+        if relative == manifest_relative or relative in expected:
+            raise RuntimeError(f"Frozen Phase B1 authority path is duplicated: {relative}")
+        if not isinstance(digest, str) or len(digest) != 64:
+            raise RuntimeError(f"Frozen Phase B1 authority digest is invalid: {relative}")
+        expected[relative] = digest.upper()
+
+    manifest_target = package / manifest_relative
+    manifest_target.parent.mkdir(parents=True, exist_ok=False)
+    manifest_target.write_bytes(manifest_bytes)
 
     for relative, digest in expected.items():
-        actual = hashlib.sha256((package / relative).read_bytes()).hexdigest().upper()
+        content = frozen_blob(relative)
+        actual = hashlib.sha256(content).hexdigest().upper()
         if actual != digest:
             raise RuntimeError(f"Frozen Phase B1 authority hash mismatch: {relative}")
+        target = package / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+
     return package
 
 
