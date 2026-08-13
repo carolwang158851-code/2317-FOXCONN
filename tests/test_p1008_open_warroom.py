@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
-import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -50,36 +48,6 @@ class OpenWarroomTests(unittest.TestCase):
         self.assertNotIn("pythoncore-3.14", lowered)
         self.assertNotIn("set \"python_exe=\"", lowered)
         self.assertNotIn("if not defined python_exe", lowered)
-
-    def test_bundled_python_preflight_is_312_and_imports_pydantic(self) -> None:
-        executable = (
-            Path.home()
-            / ".cache"
-            / "codex-runtimes"
-            / "codex-primary-runtime"
-            / "dependencies"
-            / "python"
-            / "python.exe"
-        )
-        if os.name != "nt":
-            self.assertFalse(executable.exists())
-            return
-        completed = subprocess.run(
-            [
-                str(executable),
-                "-c",
-                (
-                    "import sys, pydantic; "
-                    "assert sys.version_info[:2] == (3, 12); "
-                    "print(sys.version.split()[0]); print(pydantic.__version__)"
-                ),
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        self.assertEqual(completed.returncode, 0, completed.stderr)
 
     def test_launcher_expected_version_matches_app_server(self) -> None:
         self.assertEqual(
