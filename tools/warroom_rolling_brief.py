@@ -25,11 +25,18 @@ RUNTIME_MANIFEST_REL = "runtime/warroom_report_manifest.json"
 REPORT_MANIFEST_REL = "reports/P1008_REPORT_MANIFEST.json"
 AUTHORITY_MANIFEST_REL = "data/CSV_AUTHORITY_MANIFEST.json"
 BRIEF_CONTENT_HASH_FIELD = "briefContentSha256"
-EMPTY_MANIFEST_SCHEMA_VERSION = "1.0"
+EMPTY_RUNTIME_MANIFEST_SCHEMA_VERSION = "2.0"
+EMPTY_RUNTIME_MANIFEST_TOOL_VERSION = "P1008_REPORT_LIFECYCLE_v1"
+EMPTY_LIBRARY_MANIFEST_SCHEMA_VERSION = "1.0"
 EMPTY_MANIFEST_TOOL_VERSION = "P1008_REPORT_LIBRARY_BOOTSTRAP_v1"
 RECOVERY_INSTRUCTION = (
     "請從套件根目錄執行 P1008_APP.bat；若研報 manifest 仍缺少或不一致，"
     "請在 Launcher 明確執行『產生日報』建立或修復歸檔索引。"
+)
+RECOVERY_INSTRUCTION = (
+    "OWNER_FORENSIC_REVIEW_REQUIRED: report-library manifest loss, corruption, "
+    "or ownership mismatch must be reconciled by Owner review. Generating a "
+    "report is not a manifest-repair mechanism."
 )
 
 
@@ -96,10 +103,22 @@ def _canonical_json_text(payload: dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
-def empty_report_library_manifest(*, now: datetime | None = None) -> dict[str, Any]:
-    """Return the only permitted first-run report-library manifest payload."""
+def empty_runtime_lifecycle_manifest(*, now: datetime | None = None) -> dict[str, Any]:
+    """Return the first-run lifecycle ledger without invented period slots."""
     return {
-        "schemaVersion": EMPTY_MANIFEST_SCHEMA_VERSION,
+        "schemaVersion": EMPTY_RUNTIME_MANIFEST_SCHEMA_VERSION,
+        "initializedAtUtc": _utc_timestamp(now),
+        "toolVersion": EMPTY_RUNTIME_MANIFEST_TOOL_VERSION,
+        "reports": [],
+        "latest": {},
+        "actionable": False,
+    }
+
+
+def empty_report_library_manifest(*, now: datetime | None = None) -> dict[str, Any]:
+    """Return the first-run private research-library index."""
+    return {
+        "schemaVersion": EMPTY_LIBRARY_MANIFEST_SCHEMA_VERSION,
         "initializedAtUtc": _utc_timestamp(now),
         "toolVersion": EMPTY_MANIFEST_TOOL_VERSION,
         "reports": [],
@@ -109,17 +128,141 @@ def empty_report_library_manifest(*, now: datetime | None = None) -> dict[str, A
     }
 
 
-def _validate_report_manifest(manifest: dict[str, Any]) -> None:
-    """Reject a malformed archive index without attempting a repair."""
+def _report_identity(report: dict[str, Any]) -> tuple[str, int | None]:
+    key = str(
+        report.get("report_key")
+        or report.get("reportKey")
+        or report.get("id")
+        or ""
+    )
+    if not key:
+        raise RollingBriefError("Report manifest entry has no governed identity")
+    raw_revision = report.get("revision")
+    if raw_revision is None:
+        return key, None
+    if isinstance(raw_revision, bool):
+        raise RollingBriefError("Report manifest revision must be a positive integer")
+    try:
+        revision = int(raw_revision)
+    except (TypeError, ValueError) as exc:
+        raise RollingBriefError("Report manifest revision must be a positive integer") from exc
+    if revision < 1:
+        raise RollingBriefError("Report manifest revision must be a positive integer")
+    return key, revision
+
+
+def _artifact_path(package_root: Path, locator: str) -> Path:
+    base = package_root / "reports" if locator.startswith("generated/") else package_root
+    path = (base / locator).resolve()
+    if not path.is_relative_to(package_root.resolve()):
+        raise RollingBriefError(f"Report artifact escapes package root: {locator}")
+    return path
+
+
+def _validate_report_artifacts(package_root: Path, report: dict[str, Any]) -> None:
+    artifacts: list[tuple[str, str | None]] = []
+    for field in ("md", "html", "pluginBundle", "pluginShadowCandidate"):
+        value = report.get(field)
+        if value:
+            artifacts.append((str(value), None))
+    for value in report.get("charts", []) or []:
+        if value:
+            artifacts.append((str(value), None))
+    for item in report.get("pluginArtifacts", []) or []:
+        if not isinstance(item, dict) or not item.get("path"):
+            raise RollingBriefError("Governed plugin artifact entry is invalid")
+        artifacts.append((str(item["path"]), str(item.get("sha256") or "") or None))
+    for locator, declared_sha in artifacts:
+        path = _artifact_path(package_root, locator)
+        if not path.is_file():
+            raise RollingBriefError(f"Referenced report artifact is missing: {locator}")
+        if declared_sha and sha256_file(path) != declared_sha.upper():
+            raise RollingBriefError(f"Referenced report artifact hash mismatch: {locator}")
+
+
+def _validate_report_entries(
+    manifest: dict[str, Any], *, package_root: Path | None = None
+) -> dict[tuple[str, int | None], dict[str, Any]]:
     if not isinstance(manifest.get("reports"), list):
-        raise RollingBriefError("Report library manifest reports must be an array")
-    latest = manifest.get("latest")
-    if not isinstance(latest, dict) or any(
+        raise RollingBriefError("Report manifest reports must be an array")
+    identities: dict[tuple[str, int | None], dict[str, Any]] = {}
+    for report in manifest["reports"]:
+        if not isinstance(report, dict):
+            raise RollingBriefError("Report manifest entries must be objects")
+        identity = _report_identity(report)
+        if identity in identities:
+            raise RollingBriefError(
+                f"Report manifest identity/revision is duplicated: {identity[0]}"
+            )
+        identities[identity] = report
+        if package_root is not None:
+            _validate_report_artifacts(package_root, report)
+    return identities
+
+
+def _validate_latest(
+    latest: Any,
+    identities: dict[tuple[str, int | None], dict[str, Any]],
+    *,
+    require_period_slots: bool,
+) -> None:
+    if not isinstance(latest, dict):
+        raise RollingBriefError("Report manifest latest must be an object")
+    if require_period_slots and any(
         key not in latest for key in ("daily", "weekly", "monthly")
     ):
         raise RollingBriefError("Report library manifest latest section is invalid")
+    for period, value in latest.items():
+        if value is None:
+            continue
+        if not isinstance(value, dict):
+            raise RollingBriefError(f"Report manifest latest.{period} must be object or null")
+        if _report_identity(value) not in identities:
+            raise RollingBriefError(
+                f"Report manifest latest.{period} does not reference reports[]"
+            )
+
+
+def _validate_runtime_manifest(
+    manifest: dict[str, Any], *, package_root: Path | None = None
+) -> dict[tuple[str, int | None], dict[str, Any]]:
+    """Validate the lifecycle ledger without inventing unused period slots."""
+    identities = _validate_report_entries(manifest, package_root=package_root)
+    _validate_latest(manifest.get("latest"), identities, require_period_slots=False)
+    if manifest.get("actionable") is not False:
+        raise RollingBriefError("Runtime lifecycle manifest actionable must be false")
+    return identities
+
+
+def _validate_report_manifest(
+    manifest: dict[str, Any], *, package_root: Path | None = None
+) -> dict[tuple[str, int | None], dict[str, Any]]:
+    """Validate the private research-library index."""
+    identities = _validate_report_entries(manifest, package_root=package_root)
+    _validate_latest(manifest.get("latest"), identities, require_period_slots=True)
     if manifest.get("actionable") is not False:
         raise RollingBriefError("Report library manifest actionable must be false")
+    return identities
+
+
+def _validate_manifest_relationship(
+    runtime_manifest: dict[str, Any],
+    report_manifest: dict[str, Any],
+    *,
+    package_root: Path | None = None,
+) -> tuple[int, int, int]:
+    runtime = _validate_runtime_manifest(runtime_manifest, package_root=package_root)
+    library = _validate_report_manifest(report_manifest, package_root=package_root)
+    missing = sorted(identity for identity in library if identity not in runtime)
+    if missing:
+        labels = ", ".join(
+            f"{key}@{revision if revision is not None else 'legacy'}"
+            for key, revision in missing
+        )
+        raise RollingBriefError(
+            "Research-library report is absent from runtime lifecycle ledger: " + labels
+        )
+    return len(runtime), len(library), len(runtime) - len(library)
 
 
 def bootstrap_report_library(
@@ -144,14 +287,16 @@ def bootstrap_report_library(
         "actionable": False,
     }
     if not runtime_exists and not report_exists:
-        payload = empty_report_library_manifest(now=now)
-        body = _canonical_json_bytes(payload)
+        runtime_payload = empty_runtime_lifecycle_manifest(now=now)
+        report_payload = empty_report_library_manifest(now=now)
+        runtime_body = _canonical_json_bytes(runtime_payload)
+        report_body = _canonical_json_bytes(report_payload)
         created_runtime = False
         created_report = False
         try:
-            _atomic_write_bytes(runtime_path, body)
+            _atomic_write_bytes(runtime_path, runtime_body)
             created_runtime = True
-            _atomic_write_bytes(report_path, body)
+            _atomic_write_bytes(report_path, report_body)
             created_report = True
         except OSError as exc:
             # The files did not exist at entry.  Remove only artifacts created
@@ -159,16 +304,15 @@ def bootstrap_report_library(
             if created_runtime and not created_report and runtime_path.exists():
                 runtime_path.unlink()
             raise RollingBriefError("First-run manifest bootstrap could not finalize") from exc
-        if runtime_path.read_bytes() != report_path.read_bytes():
-            raise RollingBriefError("First-run manifest bootstrap byte identity failed")
         result.update(
             status="REPORT_LIBRARY_BOOTSTRAPPED_EMPTY",
             classification="FIRST_RUN_UNINITIALIZED",
-            manifestSha256=sha256_file(runtime_path),
             runtimeManifestSha256=sha256_file(runtime_path),
             reportManifestSha256=sha256_file(report_path),
-            manifestByteIdentity=True,
-            manifestCanonicalIdentity=True,
+            runtimeLifecycleCount=0,
+            researchLibraryCount=0,
+            runtimeOnlyCount=0,
+            librarySubsetOfRuntime=True,
         )
         return result
     if runtime_exists != report_exists:
@@ -182,8 +326,9 @@ def bootstrap_report_library(
     try:
         runtime_manifest = _read_json(runtime_path)
         report_manifest = _read_json(report_path)
-        _validate_report_manifest(runtime_manifest)
-        _validate_report_manifest(report_manifest)
+        runtime_count, library_count, runtime_only_count = _validate_manifest_relationship(
+            runtime_manifest, report_manifest, package_root=root
+        )
     except RollingBriefError as exc:
         result.update(
             status="FAIL_CLOSED",
@@ -192,24 +337,16 @@ def bootstrap_report_library(
             message=str(exc),
         )
         return result
-    runtime_canonical = _canonical_json_text(runtime_manifest)
-    report_canonical = _canonical_json_text(report_manifest)
-    if runtime_canonical != report_canonical:
-        result.update(
-            status="FAIL_CLOSED",
-            classification="MANIFEST_MISMATCH",
-            code="REPORT_LIBRARY_MANIFEST_MISMATCH",
-            message="Archive manifests disagree; automatic repair is prohibited.",
-        )
-        return result
     result.update(
         status="REPORT_LIBRARY_EXISTING_HEALTHY",
         classification="EXISTING_HEALTHY",
         runtimeManifestSha256=sha256_file(runtime_path),
         reportManifestSha256=sha256_file(report_path),
-        manifestByteIdentity=runtime_path.read_bytes() == report_path.read_bytes(),
-        manifestCanonicalIdentity=True,
-        archiveReportCount=len(runtime_manifest["reports"]),
+        runtimeLifecycleCount=runtime_count,
+        researchLibraryCount=library_count,
+        runtimeOnlyCount=runtime_only_count,
+        librarySubsetOfRuntime=True,
+        archiveReportCount=library_count,
     )
     return result
 
@@ -430,7 +567,7 @@ def _latest_archive_date(manifest: dict[str, Any]) -> str:
 
 
 def report_library_health(package_root: Path) -> dict[str, Any]:
-    """Verify archive-manifest identity and current brief/HTML identity."""
+    """Verify lifecycle/library ownership and current brief/HTML identity."""
     root = package_root.resolve()
     runtime_path = root / RUNTIME_MANIFEST_REL
     report_path = root / REPORT_MANIFEST_REL
@@ -445,6 +582,7 @@ def report_library_health(package_root: Path) -> dict[str, Any]:
     result: dict[str, Any] = {
         "status": "PASS",
         "archiveManifestAgreement": False,
+        "librarySubsetOfRuntime": False,
         "runtimeManifestPath": RUNTIME_MANIFEST_REL,
         "reportManifestPath": REPORT_MANIFEST_REL,
         "latestRollingBriefDate": "",
@@ -458,7 +596,7 @@ def report_library_health(package_root: Path) -> dict[str, Any]:
             code="REPORT_LIBRARY_FIRST_RUN_UNINITIALIZED",
             missing=missing,
             message="Both archive manifests are absent; first-run empty bootstrap is permitted.",
-            recoveryInstruction="Run P1008_APP.bat once to create the empty paired archive manifests; do not create a Daily Report merely to initialize the library.",
+            recoveryInstruction="Run P1008_APP.bat once to initialize empty governed manifests; report generation is not a repair mechanism.",
         )
         return result
     if len(missing) == 1:
@@ -467,20 +605,19 @@ def report_library_health(package_root: Path) -> dict[str, Any]:
             code="REPORT_LIBRARY_PARTIAL_MANIFEST_LOSS",
             missing=missing,
             message="Exactly one archive manifest is missing; automatic reconstruction is prohibited.",
-            recoveryInstruction="Owner review required: archive manifest loss must be reconciled before the Launcher can open the New UI or Research Library.",
+            recoveryInstruction=RECOVERY_INSTRUCTION,
         )
         return result
     try:
         runtime_manifest = _read_json(runtime_path)
         report_manifest = _read_json(report_path)
-        _validate_report_manifest(runtime_manifest)
-        _validate_report_manifest(report_manifest)
+        runtime_count, library_count, runtime_only_count = _validate_manifest_relationship(
+            runtime_manifest, report_manifest, package_root=root
+        )
     except RollingBriefError as exc:
         result.update(status="FAIL_CLOSED", code="REPORT_LIBRARY_MANIFEST_INVALID", message=str(exc))
         return result
-    runtime_canonical = json.dumps(runtime_manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    report_canonical = json.dumps(report_manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    if runtime_canonical != report_canonical:
+    if False:  # Pair identity is not part of the lifecycle/library contract.
         result.update(
             status="FAIL_CLOSED",
             code="REPORT_LIBRARY_MANIFEST_MISMATCH",
@@ -490,6 +627,10 @@ def report_library_health(package_root: Path) -> dict[str, Any]:
         )
         return result
     result["archiveManifestAgreement"] = True
+    result["librarySubsetOfRuntime"] = True
+    result["runtimeLifecycleCount"] = runtime_count
+    result["researchLibraryCount"] = library_count
+    result["runtimeOnlyCount"] = runtime_only_count
     result["runtimeManifestSha256"] = sha256_file(runtime_path)
     result["reportManifestSha256"] = sha256_file(report_path)
     result["latestArchivedReportDate"] = _latest_archive_date(report_manifest)
