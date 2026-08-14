@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -41,13 +43,60 @@ class OpenWarroomTests(unittest.TestCase):
             lowered,
         )
         self.assertIn("sys.version_info[:2] == (3, 12)", source)
-        self.assertIn("import pydantic", source)
-        self.assertIn("p1008_app_server.py", source)
+        self.assertIn("pydantic", source)
+        self.assertIn(r"sys.path.insert(0, r'%ROOT%\tools')", source)
+        self.assertIn("import p1008_app_server", source)
+        self.assertNotIn("runpy.run_path", source)
         self.assertNotIn("where.exe", lowered)
         self.assertNotIn("py -3", lowered)
         self.assertNotIn("pythoncore-3.14", lowered)
         self.assertNotIn("set \"python_exe=\"", lowered)
         self.assertNotIn("if not defined python_exe", lowered)
+
+    def test_dependency_preflight_uses_supported_tools_import_context(self) -> None:
+        environment = os.environ.copy()
+        environment.pop("PYTHONPATH", None)
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import sys, pydantic; "
+                    f"sys.path.insert(0, {str(TOOLS)!r}); "
+                    "import p1008_app_server"
+                ),
+            ],
+            cwd=ROOT,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+
+    def test_previous_runpy_root_context_is_not_the_supported_import_context(self) -> None:
+        environment = os.environ.copy()
+        environment.pop("PYTHONPATH", None)
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import runpy; "
+                    f"runpy.run_path({str(TOOLS / 'p1008_app_server.py')!r}, "
+                    "run_name='p1008_launcher_preflight')"
+                ),
+            ],
+            cwd=ROOT,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("owner_publish_csv_v2", completed.stderr)
 
     def test_launcher_expected_version_matches_app_server(self) -> None:
         self.assertEqual(

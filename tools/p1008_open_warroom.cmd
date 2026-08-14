@@ -29,7 +29,7 @@ if errorlevel 1 (
   goto Finish
 )
 
-"%PYTHON_EXE%" -c "import pydantic; import runpy; runpy.run_path(r'%ROOT%\tools\p1008_app_server.py', run_name='p1008_launcher_preflight')"
+"%PYTHON_EXE%" -c "import sys, pydantic; sys.path.insert(0, r'%ROOT%\tools'); import p1008_app_server"
 if errorlevel 1 (
   echo [ERROR] Bundled Python launcher dependency preflight failed.
   echo [ERROR] Required imports include pydantic and the P1008 App server entry dependencies.
