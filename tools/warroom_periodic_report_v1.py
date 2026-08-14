@@ -1651,30 +1651,94 @@ def write_report_html(path: Path, report_id: str, title: str, markdown: str) -> 
 
 
 def update_report_manifest(package_root: Path, report: dict[str, Any], generated_at: str) -> dict[str, Any]:
-    manifest_path = package_root / REPORT_MANIFEST
-    manifest = read_json(manifest_path, default={}) or {}
-    reports = [item for item in manifest.get("reports", []) if item.get("id") != report["id"]]
-    reports.append(report)
-    reports.sort(key=lambda item: (item.get("date", ""), item.get("period", ""), item.get("id", "")), reverse=True)
+    def identity(item: dict[str, Any]) -> tuple[str, int | None]:
+        key = str(
+            item.get("report_key")
+            or item.get("reportKey")
+            or item.get("id")
+            or ""
+        )
+        raw_revision = item.get("revision")
+        revision = int(raw_revision) if raw_revision is not None else None
+        return key, revision
 
-    latest_by_period: dict[str, Any] = {"daily": None, "weekly": None, "monthly": None}
-    for item in reports:
-        period = item.get("period")
-        if period in latest_by_period and latest_by_period[period] is None:
-            latest_by_period[period] = item
+    def upsert(
+        existing: list[dict[str, Any]], item: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        governed_identity = identity(item)
+        output = [row for row in existing if identity(row) != governed_identity]
+        output.append(item)
+        return sorted(
+            output,
+            key=lambda row: (
+                str(row.get("date") or ""),
+                str(row.get("period") or ""),
+                int(row.get("revision") or 0),
+                str(row.get("id") or ""),
+            ),
+            reverse=True,
+        )
 
-    manifest = {
+    def latest(
+        reports: list[dict[str, Any]], *, include_empty_slots: bool
+    ) -> dict[str, Any]:
+        latest_by_period: dict[str, Any] = (
+            {"daily": None, "weekly": None, "monthly": None}
+            if include_empty_slots
+            else {}
+        )
+        for item in reports:
+            period = str(item.get("period") or "").lower()
+            if period and (period not in latest_by_period or latest_by_period[period] is None):
+                latest_by_period[period] = item
+        return latest_by_period
+
+    runtime_path = package_root / RUNTIME_REPORT_MANIFEST
+    library_path = package_root / REPORT_MANIFEST
+    runtime_manifest = read_json(runtime_path, default={}) or {}
+    library_manifest = read_json(library_path, default={}) or {}
+    runtime_reports = upsert(list(runtime_manifest.get("reports", []) or []), report)
+    runtime_payload = {
+        "schemaVersion": "2.0",
+        "generatedAt": generated_at,
+        "toolVersion": "P1008_REPORT_LIFECYCLE_v1",
+        "latest": latest(runtime_reports, include_empty_slots=False),
+        "reports": runtime_reports,
+        "actionable": False,
+    }
+    write_json(runtime_path, runtime_payload)
+
+    library_eligible = (
+        report.get("libraryEligible") is True
+        and report.get("privateLibraryEligible") is True
+        and report.get("archiveEligibility") is True
+        and report.get("actionable") is False
+        and str(report.get("status") or "").upper()
+        not in {"BASE_ONLY", "PARTIAL_PLUGIN_REPORT"}
+    )
+    if not library_eligible:
+        return runtime_payload
+
+    library_reports = upsert(list(library_manifest.get("reports", []) or []), report)
+    library_payload = {
         "schemaVersion": "1.0",
         "generatedAt": generated_at,
         "toolVersion": TOOL_VERSION,
         "productionCsvModified": False,
         "actionable": False,
-        "latest": latest_by_period,
-        "reports": reports,
+        "latest": latest(library_reports, include_empty_slots=True),
+        "reports": library_reports,
     }
-    write_json(manifest_path, manifest)
-    write_json(package_root / RUNTIME_REPORT_MANIFEST, manifest)
-    return manifest
+    write_json(library_path, library_payload)
+    return library_payload
+
+
+def _apply_governed_manifest_fields(report: dict[str, Any], args: argparse.Namespace) -> None:
+    fields = getattr(args, "_governed_manifest_fields", None)
+    if fields is not None:
+        if not isinstance(fields, dict):
+            raise ReportTriggerReceiptError("REPORT_TRIGGER_MANIFEST_FIELDS_INVALID")
+        report.update(fields)
 
 
 def write_report_html(path: Path, report_id: str, title: str, markdown: str) -> None:
@@ -1880,6 +1944,7 @@ def build_report(args: argparse.Namespace) -> int:
     }
     report["tags"] = [period_zh, "戰報", "新聞去噪", "圖表", "actionable:false"]
     report["charts"] = [f"generated/charts/{chart['path']}" for chart in charts]
+    _apply_governed_manifest_fields(report, args)
     manifest = update_report_manifest(package_root, report, generated_at)
 
     log(f"Report markdown: {md_path}")
@@ -2884,6 +2949,7 @@ def build_report(args: argparse.Namespace) -> int:
         "issues": issues,
         "eventReviewState": EVENT_REVIEW_STATE,
     }
+    _apply_governed_manifest_fields(report, args)
     manifest = update_report_manifest(package_root, report, generated_at)
 
     log(f"Report markdown: {md_path}")
@@ -3087,6 +3153,7 @@ def build_report(args: argparse.Namespace) -> int:
             PLUGIN_SHADOW_CANDIDATE if shadow_candidate is not None else ""
         ),
     }
+    _apply_governed_manifest_fields(report, args)
     manifest = update_report_manifest(package_root, report, generated_at)
 
     log(f"Report markdown: {md_path}")
@@ -3571,25 +3638,33 @@ def build_report(args: argparse.Namespace) -> int:
     trigger_handoff = load_validated_report_trigger_handoff(
         Path(handoff_arg).resolve(), report_date
     )
-    result = _build_report_legacy(args)
-    package_root = Path(args.package_root).resolve()
-    report_id = f"P1008_{args.period.upper()}_REPORT_{report_date.replace('-', '')}"
     governed_fields = {
         "reportKey": trigger_handoff["report_key"],
         "revision": trigger_handoff["revision"],
         "eventType": trigger_handoff["event_type"],
         "reportDecisionReceiptId": trigger_handoff["report_decision_receipt"]["receipt_id"],
+        "archiveEligibility": True,
+        "privateLibraryEligible": True,
+        "libraryEligible": True,
     }
-    manifest = read_json(package_root / REPORT_MANIFEST, default={}) or {}
-    reports = manifest.get("reports")
-    if not isinstance(reports, list):
-        raise ReportTriggerReceiptError("REPORT_TRIGGER_MANIFEST_INVALID")
-    matching = [item for item in reports if isinstance(item, dict) and item.get("id") == report_id]
-    if len(matching) != 1:
-        raise ReportTriggerReceiptError("REPORT_TRIGGER_ARCHIVE_IDENTITY_MISMATCH")
-    matching[0].update(governed_fields)
-    write_json(package_root / REPORT_MANIFEST, manifest)
-    write_json(package_root / RUNTIME_REPORT_MANIFEST, manifest)
+    setattr(args, "_governed_manifest_fields", governed_fields)
+    result = _build_report_legacy(args)
+    package_root = Path(args.package_root).resolve()
+    report_id = f"P1008_{args.period.upper()}_REPORT_{report_date.replace('-', '')}"
+    for manifest_path in (REPORT_MANIFEST, RUNTIME_REPORT_MANIFEST):
+        manifest = read_json(package_root / manifest_path, default={}) or {}
+        reports = manifest.get("reports")
+        if not isinstance(reports, list):
+            raise ReportTriggerReceiptError("REPORT_TRIGGER_MANIFEST_INVALID")
+        matching = [
+            item
+            for item in reports
+            if isinstance(item, dict) and item.get("id") == report_id
+        ]
+        if len(matching) != 1 or any(
+            matching[0].get(key) != value for key, value in governed_fields.items()
+        ):
+            raise ReportTriggerReceiptError("REPORT_TRIGGER_ARCHIVE_IDENTITY_MISMATCH")
     return result
 
 

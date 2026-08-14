@@ -139,19 +139,26 @@ class PhaseB1OpsLauncherReportRecoveryTests(unittest.TestCase):
         )
 
     def _write_matching_manifests(self, reports=None) -> tuple[bytes, bytes]:
-        payload = {
-            "schemaVersion": "1.0",
-            "latest": {"daily": None, "weekly": None, "monthly": None},
-            "reports": reports or [],
+        records = reports or []
+        runtime_payload = {
+            "schemaVersion": "2.0",
+            "toolVersion": "P1008_REPORT_LIFECYCLE_v1",
+            "latest": {},
+            "reports": records,
             "actionable": False,
         }
-        body = (json.dumps(payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+        report_payload = {
+            "schemaVersion": "1.0",
+            "latest": {"daily": None, "weekly": None, "monthly": None},
+            "reports": records,
+            "actionable": False,
+        }
         runtime = self.root / rolling_brief.RUNTIME_MANIFEST_REL
         report = self.root / rolling_brief.REPORT_MANIFEST_REL
         runtime.parent.mkdir(parents=True, exist_ok=True)
         report.parent.mkdir(parents=True, exist_ok=True)
-        runtime.write_bytes(body)
-        report.write_bytes(body)
+        runtime.write_text(json.dumps(runtime_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        report.write_text(json.dumps(report_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return runtime.read_bytes(), report.read_bytes()
 
     def _valid_trigger_handoff(self, *, report_date: str = "2026-07-27") -> dict:
@@ -285,26 +292,34 @@ class PhaseB1OpsLauncherReportRecoveryTests(unittest.TestCase):
             server.shutdown()
             thread.join(timeout=5)
 
-    def test_first_run_bootstrap_is_paired_empty_and_idempotent(self) -> None:
+    def test_first_run_bootstrap_is_split_empty_and_idempotent(self) -> None:
         first = rolling_brief.bootstrap_report_library(
             self.root, now=datetime(2026, 8, 3, tzinfo=timezone.utc)
         )
         runtime = self.root / rolling_brief.RUNTIME_MANIFEST_REL
         report = self.root / rolling_brief.REPORT_MANIFEST_REL
         self.assertEqual(first["status"], "REPORT_LIBRARY_BOOTSTRAPPED_EMPTY")
-        self.assertTrue(first["manifestByteIdentity"])
-        self.assertEqual(runtime.read_bytes(), report.read_bytes())
-        payload = json.loads(runtime.read_text(encoding="utf-8"))
-        self.assertEqual(payload["reports"], [])
-        self.assertFalse(payload["productionCsvModified"])
-        self.assertFalse(payload["actionable"])
-        before = runtime.read_bytes()
+        self.assertTrue(first["librarySubsetOfRuntime"])
+        self.assertEqual(first["runtimeLifecycleCount"], 0)
+        self.assertEqual(first["researchLibraryCount"], 0)
+        self.assertEqual(first["runtimeOnlyCount"], 0)
+        runtime_payload = json.loads(runtime.read_text(encoding="utf-8"))
+        report_payload = json.loads(report.read_text(encoding="utf-8"))
+        self.assertEqual(runtime_payload["schemaVersion"], "2.0")
+        self.assertEqual(report_payload["schemaVersion"], "1.0")
+        self.assertEqual(runtime_payload["reports"], [])
+        self.assertEqual(report_payload["reports"], [])
+        self.assertFalse(report_payload["productionCsvModified"])
+        self.assertFalse(runtime_payload["actionable"])
+        self.assertFalse(report_payload["actionable"])
+        runtime_before = runtime.read_bytes()
+        report_before = report.read_bytes()
         second = rolling_brief.bootstrap_report_library(
             self.root, now=datetime(2026, 8, 4, tzinfo=timezone.utc)
         )
         self.assertEqual(second["status"], "REPORT_LIBRARY_EXISTING_HEALTHY")
-        self.assertEqual(runtime.read_bytes(), before)
-        self.assertEqual(report.read_bytes(), before)
+        self.assertEqual(runtime.read_bytes(), runtime_before)
+        self.assertEqual(report.read_bytes(), report_before)
         self.assertEqual(second["archiveReportCount"], 0)
 
     def test_one_missing_manifest_fails_closed_without_recreation(self) -> None:
@@ -398,9 +413,16 @@ class PhaseB1OpsLauncherReportRecoveryTests(unittest.TestCase):
         runtime = self.root / rolling_brief.RUNTIME_MANIFEST_REL
         report = self.root / rolling_brief.REPORT_MANIFEST_REL
         self.assertTrue(runtime.is_file())
-        self.assertEqual(runtime.read_bytes(), report.read_bytes())
-        manifest = json.loads(runtime.read_text(encoding="utf-8"))
-        self.assertEqual(manifest["reports"], [])
+        runtime_manifest = json.loads(runtime.read_text(encoding="utf-8"))
+        report_manifest = json.loads(report.read_text(encoding="utf-8"))
+        self.assertEqual(runtime_manifest["schemaVersion"], "2.0")
+        self.assertEqual(runtime_manifest["latest"], {})
+        self.assertEqual(report_manifest["schemaVersion"], "1.0")
+        self.assertEqual(
+            report_manifest["latest"],
+            {"daily": None, "weekly": None, "monthly": None},
+        )
+        self.assertNotEqual(runtime.read_bytes(), report.read_bytes())
         self.assertTrue((self.root / rolling_brief.CURRENT_BRIEF_REL).is_file())
         self.assertTrue((self.root / rolling_brief.LATEST_REPORT_REL).is_file())
         self.assertEqual(manager.state["componentStatus"]["reportLibrary"]["status"], "PASS")
@@ -498,18 +520,19 @@ class PhaseB1OpsLauncherReportRecoveryTests(unittest.TestCase):
         )
         self.assertEqual(self._launcher_gate(health)["code"], "READY_TO_ENTER_NEW_UI")
 
-    def test_manifest_mismatch_fails_closed(self) -> None:
+    def test_library_report_absent_from_runtime_fails_closed(self) -> None:
         self._write_matching_manifests()
         rolling_brief.refresh_current_brief(self.root)
-        runtime_path = self.root / rolling_brief.RUNTIME_MANIFEST_REL
-        divergent = json.loads(runtime_path.read_text(encoding="utf-8"))
-        divergent["reports"] = [{"id": "unexpected", "date": "2026-07-27"}]
-        runtime_path.write_text(
+        report_path = self.root / rolling_brief.REPORT_MANIFEST_REL
+        divergent = json.loads(report_path.read_text(encoding="utf-8"))
+        divergent["reports"] = [{"id": "missing-from-runtime", "date": "2026-07-27"}]
+        divergent["latest"]["daily"] = divergent["reports"][0]
+        report_path.write_text(
             json.dumps(divergent, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
         health = rolling_brief.report_library_health(self.root)
         self.assertEqual(health["status"], "FAIL_CLOSED")
-        self.assertEqual(health["code"], "REPORT_LIBRARY_MANIFEST_MISMATCH")
+        self.assertEqual(health["code"], "REPORT_LIBRARY_MANIFEST_INVALID")
         gate = self._launcher_gate(health)
         self.assertEqual(gate["code"], "REPORT_LIBRARY_FAIL_CLOSED")
         self.assertFalse(gate["canEnterNewUi"])
