@@ -75,6 +75,19 @@ class _PipelineManager(app_server.P1008JobManager):
     def _run_bat_step(self, step_id, label, bat_path, args, timeout_seconds):
         self.calls.append(step_id)
         self._set_step(step_id, label, "SUCCEEDED", exitCode=0)
+        if step_id == "daily-price-authority":
+            path = self.package_root / app_server.DAILY_PRICE_STATUS_REL
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps(
+                    {
+                        "status": "NO_NEW_DAILY_PRICE",
+                        "launcher_status": "NO_NEW_DATA",
+                        "last_success_date": "2026-07-27",
+                    }
+                ),
+                encoding="utf-8",
+            )
         if step_id == "market-activity":
             path = self.package_root / app_server.MARKET_ACTIVITY_STATUS_REL
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -84,6 +97,22 @@ class _PipelineManager(app_server.P1008JobManager):
                         "status": "NO_NEW_MARKET_ACTIVITY",
                         "launcher_status": "NO_NEW_DATA",
                         "last_success_date": "2026-07-27",
+                        "receipt_paths": [str(self.package_root / "runtime/test/2026-07.receipt.json")],
+                    }
+                ),
+                encoding="utf-8",
+            )
+        if step_id == "authority-freshness":
+            path = self.package_root / app_server.FRESHNESS_STATUS_REL
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps(
+                    {
+                        "status": "PASS",
+                        "freshness_scope": "FORMAL_AUTHORITY",
+                        "formal_authority_current": True,
+                        "owner_publish_required": False,
+                        "twse_latest_validated_trading_date": "2026-07-27",
                     }
                 ),
                 encoding="utf-8",

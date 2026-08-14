@@ -43,6 +43,10 @@ class FakeManager(app_server.P1008JobManager):
             "status": "NO_NEW_DAILY_PRICE", "launcher_status": "NO_NEW_DATA",
             "last_success_date": "2026-07-17", "receipt_paths": ["receipt.json"],
         }
+        self.market_payload: dict[str, object] = {
+            "status": "NO_NEW_MARKET_ACTIVITY", "launcher_status": "NO_NEW_DATA",
+            "last_success_date": "2026-07-17", "receipt_paths": ["receipt.json"],
+        }
         self.state = self._initial_state()
         self.state.update({"status": "RUNNING", "steps": [], "errors": [], "warnings": [], "componentStatus": {}, "logPath": "logs/test.log"})
 
@@ -78,11 +82,18 @@ class FakeManager(app_server.P1008JobManager):
         if step_id == "market-activity" and exit_code == 0:
             path = self.package_root / app_server.MARKET_ACTIVITY_STATUS_REL
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps({"status": "NO_NEW_MARKET_ACTIVITY", "launcher_status": "NO_NEW_DATA", "last_success_date": "2026-07-17", "receipt_paths": ["receipt.json"]}), encoding="utf-8")
+            path.write_text(json.dumps(self.market_payload), encoding="utf-8")
         if step_id == "authority-freshness":
             path = self.package_root / app_server.FRESHNESS_STATUS_REL
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps({"status": "PASS", "twse_latest_validated_trading_date": "2026-07-17"}), encoding="utf-8")
+            overlay = "--daily-price-run-dir" in args
+            path.write_text(json.dumps({
+                "status": "PASS_CANDIDATE_OVERLAY" if overlay else "PASS",
+                "freshness_scope": "CANDIDATE_OVERLAY" if overlay else "FORMAL_AUTHORITY",
+                "formal_authority_current": not overlay,
+                "owner_publish_required": overlay,
+                "twse_latest_validated_trading_date": "2026-07-22" if overlay else "2026-07-17",
+            }), encoding="utf-8")
         return exit_code
 
     def _run_news_scan_step(self) -> None:
@@ -143,6 +154,13 @@ class LauncherMarketActivityPipelineTests(unittest.TestCase):
             "run_id": "P1008-DAILY-PRICE-TEST", "run_dir": "C:/runtime/P1008-DAILY-PRICE-TEST",
             "last_success_date": "2026-07-17", "receipt_paths": ["receipt.json"], "dry_run": True,
         }
+        manager.market_payload = {
+            "status": "DRY_RUN_READY", "launcher_status": "UPDATED",
+            "run_id": "P1008-MARKET-ACTIVITY-TEST",
+            "run_dir": "C:/runtime/P1008-MARKET-ACTIVITY-TEST",
+            "last_success_date": "2026-07-17", "receipt_paths": ["receipt.json"],
+            "dry_run": True,
+        }
         with mock.patch.object(app_server, "formal_csv_hashes", return_value=dict(BASE_HASHES)):
             manager._run_job_inner("default")
         self.assertEqual(manager.step_args["daily-price-authority"], ["--dry-run"])
@@ -150,6 +168,20 @@ class LauncherMarketActivityPipelineTests(unittest.TestCase):
             manager.step_args["market-activity"],
             ["--dry-run", "--daily-price-run-dir", "C:/runtime/P1008-DAILY-PRICE-TEST", "--daily-price-run-id", "P1008-DAILY-PRICE-TEST"],
         )
+        self.assertEqual(
+            manager.step_args["authority-freshness"],
+            [
+                "--daily-price-run-dir", "C:/runtime/P1008-DAILY-PRICE-TEST",
+                "--daily-price-run-id", "P1008-DAILY-PRICE-TEST",
+                "--market-activity-run-dir", "C:/runtime/P1008-MARKET-ACTIVITY-TEST",
+                "--market-activity-run-id", "P1008-MARKET-ACTIVITY-TEST",
+            ],
+        )
+        self.assertIn("news-scan", manager.calls)
+        self.assertIn("rolling-brief", manager.calls)
+        freshness_state = manager.state["componentStatus"]["freshness"]
+        self.assertEqual(freshness_state["status"], "PASS_CANDIDATE_OVERLAY")
+        self.assertTrue(freshness_state["ownerPublishRequired"])
 
     def test_default_job_never_runs_report(self) -> None:
         manager = FakeManager(self.root)

@@ -893,11 +893,38 @@ class P1008JobManager:
                     receipt_dir = (
                         str(Path(receipt_paths[0]).parent) if receipt_paths else ""
                     )
+                    freshness_args: list[str]
+                    if daily_status == "NO_NEW_DATA" and market_status == "NO_NEW_DATA":
+                        freshness_args = ["--receipt-dir", receipt_dir]
+                    elif daily_status == "UPDATED" and market_status == "UPDATED":
+                        market_run_dir = market_result.get("run_dir")
+                        market_run_id = market_result.get("run_id")
+                        if not all(
+                            isinstance(value, str) and value
+                            for value in (daily_run_dir, daily_run_id, market_run_dir, market_run_id)
+                        ):
+                            component_failures.append(
+                                "Candidate-overlay freshness lineage is incomplete"
+                            )
+                            freshness_args = []
+                        else:
+                            freshness_args = [
+                                "--daily-price-run-dir", daily_run_dir,
+                                "--daily-price-run-id", daily_run_id,
+                                "--market-activity-run-dir", market_run_dir,
+                                "--market-activity-run-id", market_run_id,
+                            ]
+                    else:
+                        component_failures.append(
+                            "Daily Price and Market Activity freshness states disagree"
+                        )
+                        freshness_args = []
+                if not component_failures:
                     freshness_exit = self._run_bat_step(
                         "authority-freshness",
                         "TWSE authority freshness and continuity gate",
                         self.package_root / "tools/p1008_validate_authority_freshness.cmd",
-                        ["--receipt-dir", receipt_dir],
+                        freshness_args,
                         timeout_seconds=60,
                     )
                     freshness_result = read_json(
@@ -912,6 +939,13 @@ class P1008JobManager:
                         exitCode=freshness_exit,
                         twseLatestDate=freshness_result.get(
                             "twse_latest_validated_trading_date", ""
+                        ),
+                        freshnessScope=freshness_result.get("freshness_scope", ""),
+                        formalAuthorityCurrent=freshness_result.get(
+                            "formal_authority_current", False
+                        ),
+                        ownerPublishRequired=freshness_result.get(
+                            "owner_publish_required", False
                         ),
                     )
                     if freshness_exit != 0:
