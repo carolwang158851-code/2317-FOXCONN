@@ -35,6 +35,34 @@ class _Response:
 
 
 class OpenWarroomTests(unittest.TestCase):
+    @staticmethod
+    def _page_ok_responses(
+        *,
+        server_version: str = p1008_app_server.SERVER_VERSION,
+        git_head: str = "A" * 40,
+        package_root: Path = ROOT,
+        sandboxed: bool = False,
+        source_manifest_version: str = "P1008_NEWS_SCAN_SOURCE_MANIFEST_v2",
+    ) -> list[_Response]:
+        return [
+            _Response("text/html; charset=utf-8"),
+            _Response("text/markdown; charset=utf-8"),
+            _Response(
+                "application/json; charset=utf-8",
+                {
+                    "serverVersion": server_version,
+                    "gitHead": git_head,
+                    "resolvedPackageRoot": str(package_root),
+                    "serverContext": {"codexNetworkSandbox": sandboxed},
+                    "sourceManifest": {
+                        "version": source_manifest_version,
+                        "networkSummary": {},
+                    },
+                },
+            ),
+            _Response("application/json; charset=utf-8"),
+        ]
+
     def test_cmd_uses_only_bundled_python_312_with_dependency_preflight(self) -> None:
         source = (TOOLS / "p1008_open_warroom.cmd").read_text(encoding="utf-8")
         lowered = source.lower()
@@ -105,25 +133,92 @@ class OpenWarroomTests(unittest.TestCase):
         )
 
     def test_page_ok_accepts_current_server_contract(self) -> None:
-        responses = [
-            _Response("text/html; charset=utf-8"),
-            _Response("text/markdown; charset=utf-8"),
-            _Response(
-                "application/json; charset=utf-8",
-                {
-                    "serverVersion": p1008_app_server.SERVER_VERSION,
-                    "serverContext": {"codexNetworkSandbox": False},
-                    "sourceManifest": {
-                        "version": "P1008_NEWS_SCAN_SOURCE_MANIFEST_v2",
-                        "networkSummary": {},
-                    },
-                },
-            ),
-            _Response("application/json; charset=utf-8"),
-        ]
+        responses = self._page_ok_responses()
         with patch("p1008_open_warroom.urllib.request.urlopen", side_effect=responses) as mocked:
             self.assertTrue(p1008_open_warroom.page_ok(8768))
         self.assertEqual(mocked.call_count, 4)
+
+    def test_page_ok_default_timeout_covers_measured_healthy_local_api_latency(self) -> None:
+        responses = iter(self._page_ok_responses())
+        required_latency = {
+            "/api/p1008/status": 0.86,
+            "/api/p1008/review-package": 0.79,
+        }
+        observed_timeouts: list[float] = []
+
+        def latency_aware_urlopen(url: str, *, timeout: float) -> _Response:
+            observed_timeouts.append(timeout)
+            required = next(
+                (latency for suffix, latency in required_latency.items() if url.endswith(suffix)),
+                0.0,
+            )
+            if timeout < required:
+                raise TimeoutError(f"probe budget {timeout} is below required latency {required}")
+            return next(responses)
+
+        with patch(
+            "p1008_open_warroom.urllib.request.urlopen",
+            side_effect=latency_aware_urlopen,
+        ):
+            self.assertTrue(p1008_open_warroom.page_ok(8768))
+        self.assertEqual(p1008_open_warroom.DEFAULT_PAGE_PROBE_TIMEOUT, 2.0)
+        self.assertEqual(observed_timeouts, [2.0, 2.0, 2.0, 2.0])
+
+    def test_page_ok_preserves_strict_server_contract_rejections(self) -> None:
+        valid_head = "A" * 40
+        cases = {
+            "wrong_server_version": {
+                "responses": self._page_ok_responses(server_version="WRONG"),
+                "kwargs": {},
+            },
+            "wrong_git_head": {
+                "responses": self._page_ok_responses(git_head="B" * 40),
+                "kwargs": {"expected_git_head": valid_head},
+            },
+            "wrong_package_root": {
+                "responses": self._page_ok_responses(package_root=ROOT / "wrong"),
+                "kwargs": {"expected_package_root": ROOT},
+            },
+            "wrong_source_manifest": {
+                "responses": self._page_ok_responses(source_manifest_version="WRONG"),
+                "kwargs": {},
+            },
+            "codex_sandbox": {
+                "responses": self._page_ok_responses(sandboxed=True),
+                "kwargs": {"reject_codex_network_sandbox": True},
+            },
+        }
+        for name, case in cases.items():
+            with self.subTest(name=name):
+                with patch(
+                    "p1008_open_warroom.urllib.request.urlopen",
+                    side_effect=case["responses"],
+                ):
+                    self.assertFalse(p1008_open_warroom.page_ok(8768, **case["kwargs"]))
+
+        missing_review = [
+            *self._page_ok_responses()[:3],
+            TimeoutError("review package unavailable"),
+        ]
+        with patch(
+            "p1008_open_warroom.urllib.request.urlopen",
+            side_effect=missing_review,
+        ):
+            self.assertFalse(p1008_open_warroom.page_ok(8768))
+
+    def test_page_ok_still_fails_closed_beyond_governed_timeout(self) -> None:
+        observed_timeout: list[float] = []
+
+        def unresponsive_urlopen(_url: str, *, timeout: float) -> _Response:
+            observed_timeout.append(timeout)
+            raise TimeoutError("endpoint exceeded governed timeout")
+
+        with patch(
+            "p1008_open_warroom.urllib.request.urlopen",
+            side_effect=unresponsive_urlopen,
+        ):
+            self.assertFalse(p1008_open_warroom.page_ok(8768))
+        self.assertEqual(observed_timeout, [2.0])
 
 
 if __name__ == "__main__":

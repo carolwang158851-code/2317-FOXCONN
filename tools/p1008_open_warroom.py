@@ -24,6 +24,7 @@ from pathlib import Path
 
 DEFAULT_PORT_START = 8767
 DEFAULT_PORT_END = 8899
+DEFAULT_PAGE_PROBE_TIMEOUT = 2.0
 EXPECTED_SERVER_VERSION = "P1008_APP_SERVER_20260812_OFFICIAL_IR_PARTIAL_COVERAGE_V1_1"
 
 
@@ -125,7 +126,7 @@ def news_health_is_blocked(payload: dict) -> bool:
 
 def page_ok(
     port: int,
-    timeout: float = 0.6,
+    timeout: float = DEFAULT_PAGE_PROBE_TIMEOUT,
     reject_blocked_news: bool = False,
     reject_codex_network_sandbox: bool = False,
     expected_package_root: Path | None = None,
