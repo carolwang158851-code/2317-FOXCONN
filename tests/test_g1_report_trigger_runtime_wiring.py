@@ -280,6 +280,23 @@ class ServerGateTests(RuntimeRootMixin, unittest.TestCase):
         manager._run_job_inner("report-candidate")
         self.assertEqual(calls, ["report-candidate"])
 
+    def test_latest_candidate_status_includes_quarterly_enterprise_value_output(self):
+        run = self.root / "runtime/report_production/Q2-RUN"
+        candidate = run / "enterprise_value_war_report/war_report_candidate.html"
+        candidate.parent.mkdir(parents=True)
+        (run / "run_manifest.json").write_text(json.dumps({
+            "runId": "Q2-RUN",
+            "eventType": "QUARTERLY_EARNINGS",
+            "state": "REPORT_CANDIDATE_READY",
+            "generatedAtUtc": NOW,
+            "reportRuntime": "ENTERPRISE_VALUE_WAR_REPORT_V1",
+            "reportCandidateOutputPath": str(candidate),
+            "actionable": False,
+        }), encoding="utf-8")
+        latest = app_server.P1008JobManager(self.root)._latest_phaseb1_status()
+        self.assertEqual(latest["runId"], "Q2-RUN")
+        self.assertEqual(latest["outputPath"], str(candidate))
+
 
 class LauncherWiringTests(unittest.TestCase):
     def test_ui_uses_server_trigger_state_for_both_candidate_buttons(self):

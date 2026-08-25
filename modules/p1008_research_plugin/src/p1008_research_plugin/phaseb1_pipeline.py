@@ -238,6 +238,7 @@ class PhaseB1Pipeline:
     def build_report(
         self, *, run_id: str, output_base: Path | None = None,
         trigger_lineage: dict[str, Any] | None = None,
+        report_runtime: str = "PHASE_B1_LEGACY",
     ) -> dict[str, Any]:
         event_type = str((trigger_lineage or {}).get("eventType") or "MONTHLY_REVENUE")
         if event_type not in self.SUPPORTED_EVENTS:
@@ -291,6 +292,21 @@ class PhaseB1Pipeline:
             raise PhaseB1PipelineError("Validated Evidence manifest drifted")
         analysis = AnalysisPacket.model_validate_json(analysis_path.read_text(encoding="utf-8"))
         AnalysisValidator().validate(analysis, evidence)
+        if report_runtime == "ENTERPRISE_VALUE_WAR_REPORT_V1":
+            if event_type != "QUARTERLY_EARNINGS":
+                raise PhaseB1PipelineError(
+                    "Enterprise Value report runtime currently requires QUARTERLY_EARNINGS"
+                )
+            return self._build_enterprise_value_report(
+                run_id=run_id,
+                run_root=run_root,
+                evidence=evidence,
+                analysis=analysis,
+                trigger_lineage=trigger_lineage,
+                stored_run_manifest=stored_run_manifest,
+            )
+        if report_runtime != "PHASE_B1_LEGACY":
+            raise PhaseB1PipelineError(f"Unsupported report runtime: {report_runtime}")
         before = protected_state_hashes(self.package_root)
         generated_at = fixture.generated_at_utc if isinstance(fixture, QuarterlyEarningsPacket) else fixture["generatedAtUtc"]
         generated = self._utc(generated_at)
@@ -483,6 +499,83 @@ class PhaseB1Pipeline:
             "shorts_sha256": sha256_file(run_root / "shorts_75s_candidate.md"),
             "protected_state_unchanged": before == after,
             "editorial_result_envelope": editorial_envelope,
+        }
+
+    def _build_enterprise_value_report(
+        self,
+        *,
+        run_id: str,
+        run_root: Path,
+        evidence: Any,
+        analysis: AnalysisPacket,
+        trigger_lineage: dict[str, Any] | None,
+        stored_run_manifest: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Materialize the governed 11-chapter candidate for Launcher use."""
+        if trigger_lineage is None:
+            raise PhaseB1PipelineError("Enterprise Value report requires trigger lineage")
+        from .reporting.war_report_production_runtime import (
+            compile_existing_phaseb1_result,
+        )
+
+        before = protected_state_hashes(self.package_root)
+        output_root = run_root / "enterprise_value_war_report"
+        result = compile_existing_phaseb1_result(
+            package_root=self.package_root,
+            analysis=analysis,
+            evidence=evidence,
+            trigger_context=trigger_lineage,
+            output_root=output_root,
+        )
+        if result.get("state") != "REPORT_CANDIDATE_READY":
+            raise PhaseB1PipelineError("Enterprise Value report runtime did not produce a candidate")
+        after = protected_state_hashes(self.package_root)
+        recorded_after = json.loads(
+            (run_root / "protected_state_hashes_after.json").read_text(encoding="utf-8")
+        )
+        if before != after or recorded_after != after:
+            raise PhaseB1PipelineError(
+                "Protected state changed during Enterprise Value report build"
+            )
+
+        artifacts = {
+            name: sha256_file(run_root / name)
+            for name in (
+                "analysis_packet.json",
+                "analysis_validation.json",
+                "evidence_manifest.json",
+                "protected_state_hashes_before.json",
+                "protected_state_hashes_after.json",
+            )
+        }
+        for path in sorted(output_root.iterdir()):
+            if path.is_file():
+                artifacts[str(path.relative_to(run_root)).replace("\\", "/")] = sha256_file(path)
+
+        manifest = {
+            **stored_run_manifest,
+            "state": "REPORT_CANDIDATE_READY",
+            "reportRuntime": "ENTERPRISE_VALUE_WAR_REPORT_V1",
+            "reportChapterCount": 11,
+            "reportCandidateOutputPath": result["output_html"],
+            "artifacts": artifacts,
+            "externalCalls": self._zero_calls(),
+            "actionable": False,
+        }
+        atomic_write_json(run_root / "run_manifest.json", manifest, overwrite=True)
+        receipt_path = output_root / "war_report_runtime_receipt.json"
+        html_path = Path(result["output_html"])
+        return {
+            "run_id": run_id,
+            "run_root": str(run_root),
+            "candidate_output_root": str(output_root),
+            "analysis": analysis,
+            "report": result["report"],
+            "analysis_sha256": sha256_file(run_root / "analysis_packet.json"),
+            "report_json_sha256": sha256_file(receipt_path),
+            "report_html_sha256": sha256_file(html_path),
+            "protected_state_unchanged": before == after,
+            "report_runtime": "ENTERPRISE_VALUE_WAR_REPORT_V1",
         }
 
     def _execute_editorial(

@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import re
+import sys
 import unittest
 from pathlib import Path
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+TOOLS = PACKAGE_ROOT / "tools"
+if str(TOOLS) not in sys.path:
+    sys.path.insert(0, str(TOOLS))
+
+import p1008_build_report  # noqa: E402
 
 
 class PhaseB1LauncherTests(unittest.TestCase):
@@ -49,6 +55,26 @@ class PhaseB1LauncherTests(unittest.TestCase):
         self.assertIn('id="phaseb1-run-id"', self.launcher)
         self.assertIn('id="phaseb1-output"', self.launcher)
         self.assertIn("不會自動產生日報", self.launcher)
+
+    def test_quarterly_report_candidate_routes_to_enterprise_value_runtime(self) -> None:
+        self.assertEqual(
+            p1008_build_report._report_runtime("QUARTERLY_EARNINGS"),
+            "ENTERPRISE_VALUE_WAR_REPORT_V1",
+        )
+        self.assertEqual(
+            p1008_build_report._report_runtime("MONTHLY_REVENUE"),
+            "PHASE_B1_LEGACY",
+        )
+        pipeline = (
+            PACKAGE_ROOT
+            / "modules"
+            / "p1008_research_plugin"
+            / "src"
+            / "p1008_research_plugin"
+            / "phaseb1_pipeline.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("compile_existing_phaseb1_result", pipeline)
+        self.assertIn('"reportChapterCount": 11', pipeline)
 
 
 if __name__ == "__main__":

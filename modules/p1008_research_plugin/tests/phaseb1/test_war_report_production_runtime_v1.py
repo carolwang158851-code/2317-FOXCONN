@@ -14,6 +14,7 @@ except ImportError:
     from helpers import PACKAGE_ROOT, SRC_ROOT
 
 from p1008_research_plugin.phaseb1_common import protected_state_hashes
+from p1008_research_plugin.phaseb1_pipeline import PhaseB1Pipeline
 from p1008_research_plugin.reporting.war_report_production_contract import (
     WarReportContractError,
     append_full_history,
@@ -83,6 +84,28 @@ class WarReportProductionRuntimeV1Tests(unittest.TestCase):
     def test_r3_quarterly_renders_exactly_eleven_chapters(self) -> None:
         self.assertEqual([item[0] for item in chapter_identity()], [f"s{i}" for i in range(1, 12)])
         self.assertEqual(sum(self.html.count(f'<section id="s{i}"') for i in range(1, 12)), 11)
+
+    def test_r3a_launcher_pipeline_mode_materializes_enterprise_value_candidate(self) -> None:
+        parent = PACKAGE_ROOT / "runtime" / "phaseb1_test_scratch"
+        output = parent / f"launcher-enterprise-value-{uuid4().hex}"
+        output.mkdir(parents=False, exist_ok=False)
+        pipeline = PhaseB1Pipeline(PACKAGE_ROOT, governed_evidence_root=EVIDENCE_ROOT)
+        analysis = pipeline.build_analysis(output_base=output, trigger_lineage=self.lineage)
+        result = pipeline.build_report(
+            run_id=analysis["run_id"],
+            output_base=output,
+            trigger_lineage=self.lineage,
+            report_runtime="ENTERPRISE_VALUE_WAR_REPORT_V1",
+        )
+        report_root = Path(result["candidate_output_root"])
+        rendered = (report_root / "war_report_candidate.html").read_text(encoding="utf-8")
+        manifest = json.loads((Path(result["run_root"]) / "run_manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(result["report_runtime"], "ENTERPRISE_VALUE_WAR_REPORT_V1")
+        self.assertEqual(manifest["reportRuntime"], "ENTERPRISE_VALUE_WAR_REPORT_V1")
+        self.assertEqual(manifest["reportChapterCount"], 11)
+        self.assertEqual(sum(rendered.count(f'<section id="s{i}"') for i in range(1, 12)), 11)
+        self.assertIn("Q2 單季同口徑 ROIC 待補", rendered)
+        self.assertTrue(result["protected_state_unchanged"])
 
     def test_r4_quarterly_requires_fcf_conversion(self) -> None:
         self.assertIn("FCF 轉化", self.html)

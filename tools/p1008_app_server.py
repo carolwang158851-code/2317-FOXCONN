@@ -1268,14 +1268,15 @@ class P1008JobManager:
         if root.is_dir():
             for path in root.glob("*/run_manifest.json"):
                 payload = read_json(path, default={}) or {}
-                if payload.get("eventType") == "MONTHLY_REVENUE":
+                if payload.get("eventType") in {"MONTHLY_REVENUE", "QUARTERLY_EARNINGS"}:
                     candidates.append((str(payload.get("generatedAtUtc") or ""), payload, path.parent))
         if not candidates:
             return {"runId": "", "outputPath": ""}
         _timestamp, payload, output_path = sorted(candidates, key=lambda item: (item[0], str(item[2])))[-1]
+        candidate_output = payload.get("reportCandidateOutputPath")
         return {
             "runId": str(payload.get("runId") or ""),
-            "outputPath": str(output_path),
+            "outputPath": str(candidate_output or output_path),
         }
 
     def _write_launcher_market_status(
