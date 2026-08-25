@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.1.0",
+  "contract_id": "P1008_DECISION_RULES_V1",
+  "actionable": false,
+  "rule_engine_id": "ENTERPRISE_VALUE_RULE_ENGINE_V1",
+  "rule_dimensions": [
+    "OPERATING_PROFIT_STATE",
+    "FCF_CONVERSION_STATE",
+    "ROIC_STATE",
+    "CAPITAL_LIGHT_STATE",
+    "PER_SHARE_VALUE_STATE",
+    "CURRENT_BALANCE_SHEET_STATE",
+    "STRESS_RESILIENCE_STATE",
+    "VALUATION_STATE"
+  ],
+  "state_semantics": {
+    "EVIDENCE_STATE": ["SUPPORTED", "PARTIAL", "UNAVAILABLE"],
+    "RISK_STATE": ["NORMAL", "WATCH", "TRIGGERED"],
+    "POLICY_STATE": ["PENDING_POLICY_CALIBRATION", "OWNER_APPROVED", "NOT_APPLICABLE"]
+  },
+  "decision_dimensions": {
+    "CORE_HOLDING_THESIS": ["維持", "REVIEW", "降級"],
+    "ADD_ON_CAPITAL_GATE": ["通過", "PARTIAL", "尚未通過"],
+    "THESIS_DOWNGRADE_GATE": ["尚未觸發", "WATCH", "TRIGGERED"]
+  },
+  "rule_principles": {
+    "negative_fcf_alone_triggers_downgrade": false,
+    "estimated_roic_alone_triggers_downgrade": false,
+    "strong_fundamentals_alone_pass_add_on_without_valuation": false,
+    "aggregate_numeric_score_allowed": false,
+    "threshold_logic_separate_from_owner_policy_values": true,
+    "unapproved_threshold_behavior": "PROVISIONAL_ANALYTICAL_STATE_WITH_OWNER_POLICY_PENDING"
+  },
+  "threshold_configuration": {
+    "owner_approved_policy_id": null,
+    "commercial_threshold_values": null,
+    "analytical_scenario_defaults_are_governance_thresholds": false
+  },
+  "smart": {
+    "allowed_states": ["SUPPORTED", "ON_TRACK", "PARTIAL", "WATCH", "NOT_PROVEN", "TRIGGERED", "UNAVAILABLE"],
+    "required_fields": [
+      "metric_or_thesis",
+      "evaluation_type",
+      "rule_id",
+      "inputs",
+      "thresholds",
+      "evidence_tiers",
+      "automated_state",
+      "final_state",
+      "override",
+      "override_reason",
+      "previous_state",
+      "current_state",
+      "changed",
+      "next_verification",
+      "time_horizon"
+    ],
+    "override_requires_reason": true
+  },
+  "publication": false,
+  "trading_execution": false
+}

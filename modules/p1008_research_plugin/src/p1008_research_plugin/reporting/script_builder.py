@@ -115,21 +115,21 @@ class ScriptBuilder:
 ## Q2財務與AI展望
 {section['Q2_FINANCIAL_SUMMARY']}
 
-{section['MARGINS_AND_EPS']}
+{section['GROWTH_QUALITY']}
+
+{section['MARGIN_QUALITY']}
 
 {section['AI_SERVER_CLOUD_NETWORKING']}
 
-{section['SECOND_HALF_AND_FULL_YEAR_OUTLOOK']}
+## 現金流、資本效率與估值
+{section['EARNINGS_TO_CASH_QUALITY']}
 
-## 現金流、估值與市場
-{section['FCF_AND_REVENUE_CONVERSION']}
+{section['CAPITAL_EFFICIENCY']}
 
-{section['PS_PE_VALUATION_CONTEXT']}
-
-{section['PRICE_VOLUME_REACTION']}
+{section['VALUATION']}
 
 ## 風險與下一個驗證點
-{section['WATCH_OBSERVE_REVIEW_REQUIRED']}
+{section['NON_GREEN_DEEP_REVIEW']}
 
 {section['NEXT_VALIDATION_DATE_AND_EVENT']}
 
@@ -179,13 +179,16 @@ class ScriptBuilder:
         report = self._require_report(report)
         section = {item.section_id: item.body_zh for item in report.sections}
         if report.event_type == "QUARTERLY_EARNINGS":
+            quarterly_summary = section["Q2_FINANCIAL_SUMMARY"].replace(
+                "FY2026 Q2", "本季"
+            )
             return f"""# 75秒 Shorts 候選稿
 
 ## 0–5秒
 今天看鴻海二零二六年第二季：獲利成長，但現金轉化仍要驗證。
 
 ## 5–15秒
-{section['Q2_FINANCIAL_SUMMARY']}
+{quarterly_summary}
 
 ## 15–35秒
 毛利率6.12%、營益率3.75%、淨利率2.37%，每股盈餘4.27元；營益率改善，但毛利率仍需觀察。

@@ -1,0 +1,139 @@
+{
+  "schema_version": "P1008_HISTORICAL_RESEARCH_SOURCE_CATALOG_V1",
+  "purpose": "Versioned research observations extracted from primary documents; not production authority.",
+  "source_receipts": [
+    {
+      "source_id": "HONHAI_2025Q1_CONSOLIDATED",
+      "source_type": "OFFICIAL_FINANCIAL_STATEMENT",
+      "source_tier": "T0_DIRECT_OFFICIAL",
+      "publisher": "Hon Hai Precision Industry Co., Ltd.",
+      "title": "2025 Q1 Consolidated Financial Statements",
+      "publication_date": "2025-05-14",
+      "retrieval_date": "2026-08-25",
+      "source_locator": "https://image.honhai.com/upload/financy_by_quarterly/202506/2025Q1_consolidared_report%28e%29_20250618_2805.pdf",
+      "content_hash": "1CA2D9CE0F1ACB5B1DEB3EBE23FA06AEA0E9525B0B62336503D27088E4FAEF49",
+      "periods_supported": ["2025Q1"],
+      "metrics_supported": ["CFO", "CAPEX", "AR", "INVENTORY", "AP", "PARENT_NET_INCOME", "WA_SHARES_BASIC"],
+      "notes": "Consolidated statement and EPS note; values below use NTD millions and million shares."
+    },
+    {
+      "source_id": "HONHAI_2025Q2_RESULTS",
+      "source_type": "OFFICIAL_IR_RESULTS",
+      "source_tier": "T0_DIRECT_OFFICIAL",
+      "publisher": "Hon Hai Precision Industry Co., Ltd.",
+      "title": "2025 Q2 Financial Results",
+      "publication_date": "2025-08-14",
+      "retrieval_date": "2026-08-25",
+      "source_locator": "https://image.honhai.com/upload/202508/law_talk/Hon_Hai_2Q25_Results_English_20250814_2276.pdf#page=7",
+      "content_hash": "FDABB17DA7A03FDFC86E300B9D5B6D2F7E0490E023A15EF9BECB3CF518E4A486",
+      "periods_supported": ["2025H1"],
+      "metrics_supported": ["CFO", "CAPEX", "FCF", "AR", "INVENTORY", "AP", "CCC"],
+      "notes": "Official IR cumulative cash-flow table; rounded to NTD millions."
+    },
+    {
+      "source_id": "HONHAI_2025Q2_CONSOLIDATED",
+      "source_type": "OFFICIAL_FINANCIAL_STATEMENT",
+      "source_tier": "T0_DIRECT_OFFICIAL",
+      "publisher": "Hon Hai Precision Industry Co., Ltd.",
+      "title": "2025 Q2 Consolidated Financial Statements",
+      "publication_date": "2025-08-14",
+      "retrieval_date": "2026-08-25",
+      "source_locator": "https://image.honhai.com/upload/202509/financy_by_quarterly/2025Q2_consolidared_report%28e%29_20250922_8168.pdf",
+      "content_hash": "7B04B283E4CE3EB40957E5C82CE1A508DEB5A332DBB809FCD9BD5ADBB628BAF5",
+      "periods_supported": ["2025H1", "2025Q2"],
+      "metrics_supported": ["CFO", "CAPEX", "PARENT_NET_INCOME", "BASIC_EPS", "WA_SHARES_BASIC"],
+      "notes": "Cash-flow statement and EPS note; source values retain statement precision."
+    },
+    {
+      "source_id": "HONHAI_2025Q3_RESULTS",
+      "source_type": "OFFICIAL_IR_RESULTS",
+      "source_tier": "T0_DIRECT_OFFICIAL",
+      "publisher": "Hon Hai Precision Industry Co., Ltd.",
+      "title": "2025 Q3 Financial Results",
+      "publication_date": "2025-11-12",
+      "retrieval_date": "2026-08-25",
+      "source_locator": "https://image.honhai.com/upload/202511/law_talk/Hon_Hai_3Q25_Results_English_20251112_3636.pdf#page=7",
+      "content_hash": "3B6373E201A58EDF7E3FA1677D323F83ECE23C1DD6A720779350A854B599DAAD",
+      "periods_supported": ["2025M9", "2025Q3"],
+      "metrics_supported": ["CFO", "CAPEX", "FCF", "AR", "INVENTORY", "AP", "CCC"],
+      "notes": "Official IR cumulative cash flow and quarter-end balance/working-capital days."
+    },
+    {
+      "source_id": "HONHAI_2025Q3_CONSOLIDATED",
+      "source_type": "OFFICIAL_FINANCIAL_STATEMENT",
+      "source_tier": "T0_DIRECT_OFFICIAL",
+      "publisher": "Hon Hai Precision Industry Co., Ltd.",
+      "title": "2025 Q3 Consolidated Financial Statements",
+      "publication_date": "2025-11-12",
+      "retrieval_date": "2026-08-25",
+      "source_locator": "https://image.honhai.com/upload/202512/financy_by_quarterly/2025Q3_consolidared_report%28e%29_20251218_4720.pdf",
+      "content_hash": "CAB20FB320B0CD0EEA49D5FB84DAC69C293A332507C6DA12FB6ED6E7846F5FD0",
+      "periods_supported": ["2025M9", "2025Q3"],
+      "metrics_supported": ["CFO", "CAPEX", "PARENT_NET_INCOME", "BASIC_EPS", "WA_SHARES_BASIC"],
+      "notes": "Cash-flow statement and EPS note; source values retain statement precision."
+    },
+    {
+      "source_id": "HONHAI_2025FY_RESULTS",
+      "source_type": "OFFICIAL_IR_RESULTS",
+      "source_tier": "T0_DIRECT_OFFICIAL",
+      "publisher": "Hon Hai Precision Industry Co., Ltd.",
+      "title": "2025 Q4 Financial Results",
+      "publication_date": "2026-03-16",
+      "retrieval_date": "2026-08-25",
+      "source_locator": "https://image.honhai.com/upload/202603/law_talk/Hon_Hai_4Q25_Results_English_20260316_0435.pdf#page=8",
+      "content_hash": "B54C7E794180B837D209C5A9A49EE9D7EDB26C751E7908E9B0E0135C60E3066D",
+      "periods_supported": ["2024FY", "2025FY", "2025Q4"],
+      "metrics_supported": ["CFO", "CAPEX", "FCF", "AR", "INVENTORY", "AP", "CCC"],
+      "notes": "Official IR annual cash flow and year-end balance/working-capital days; rounded to NTD millions."
+    },
+    {
+      "source_id": "COMPANIESMARKETCAP_2317_SHARES_2025",
+      "source_type": "EXTERNAL_FINANCIAL_PROVIDER",
+      "source_tier": "T3_EXTERNAL_CROSSCHECK",
+      "publisher": "CompaniesMarketCap",
+      "title": "Foxconn shares outstanding history",
+      "publication_date": null,
+      "retrieval_date": "2026-08-25",
+      "source_locator": "https://companiesmarketcap.com/foxconn/shares-outstanding/",
+      "content_hash": "253CD3669CD3F8906B2ED8E9FF6D7D3D7C99CE86AF1313352CC1D159FAEA71EA",
+      "periods_supported": ["2025FY"],
+      "metrics_supported": ["PERIOD_END_SHARES"],
+      "notes": "Cross-check only; provider basis differs from weighted-average shares and cannot overwrite official values."
+    }
+  ],
+  "official_observations": {
+    "cash_flow_cumulative_million_twd": [
+      {"period": "2024FY", "basis": "IR_RESULTS_ROUNDED_MILLIONS", "CFO": "166029", "CAPEX": "136339", "FCF": "29690", "source_id": "HONHAI_2025FY_RESULTS"},
+      {"period": "2025H1", "basis": "CONSOLIDATED_STATEMENT_PRECISE", "CFO": "21875.585", "CAPEX": "77150.396", "FCF": "-55274.811", "source_id": "HONHAI_2025Q2_CONSOLIDATED"},
+      {"period": "2025M9", "basis": "CONSOLIDATED_STATEMENT_PRECISE", "CFO": "-49535.724", "CAPEX": "112799.116", "FCF": "-162334.840", "source_id": "HONHAI_2025Q3_CONSOLIDATED"},
+      {"period": "2025FY", "basis": "IR_RESULTS_ROUNDED_MILLIONS", "CFO": "226852", "CAPEX": "173763", "FCF": "53089", "source_id": "HONHAI_2025FY_RESULTS"}
+    ],
+    "cash_flow_derivation_inputs_rounded_ir_million_twd": [
+      {"period": "2025M9", "basis": "IR_RESULTS_ROUNDED_MILLIONS", "CFO": "-49536", "CAPEX": "112799", "FCF": "-162335", "source_id": "HONHAI_2025Q3_RESULTS", "purpose": "Same-disclosure-precision input for FY-minus-9M 2025Q4 derivation."}
+    ],
+    "working_capital_million_twd": [
+      {"period": "2025Q1", "AR": "1062375", "INVENTORY": "1047613", "AP": "1130993", "source_id": "HONHAI_2025Q1_CONSOLIDATED"},
+      {"period": "2025Q3", "AR": "1252497", "INVENTORY": "1185675", "AP": "1380883", "source_id": "HONHAI_2025Q3_RESULTS"},
+      {"period": "2025Q4", "AR": "1181307", "INVENTORY": "1095574", "AP": "1331933", "source_id": "HONHAI_2025FY_RESULTS"}
+    ],
+    "weighted_average_shares_million": [
+      {"period": "2025Q1", "value": "13890.219", "parent_net_income_million_twd": "42108.054", "basic_eps_twd": "3.03", "source_id": "HONHAI_2025Q1_CONSOLIDATED"},
+      {"period": "2025Q2", "value": "13890.231", "parent_net_income_million_twd": "44360.558", "basic_eps_twd": "3.19", "source_id": "HONHAI_2025Q2_CONSOLIDATED"},
+      {"period": "2025H1", "value": "13890.225", "parent_net_income_million_twd": "86468.612", "basic_eps_twd": "6.23", "source_id": "HONHAI_2025Q2_CONSOLIDATED"},
+      {"period": "2025Q3", "value": "13894.985", "parent_net_income_million_twd": "57672.785", "basic_eps_twd": "4.15", "source_id": "HONHAI_2025Q3_CONSOLIDATED"},
+      {"period": "2025M9", "value": "13891.829", "parent_net_income_million_twd": "144141.397", "basic_eps_twd": "10.38", "source_id": "HONHAI_2025Q3_CONSOLIDATED"}
+    ]
+  },
+  "external_crosschecks": [
+    {
+      "metric_id": "PERIOD_END_SHARES",
+      "period": "2025FY",
+      "value": "13897.056627",
+      "unit": "百萬股",
+      "basis": "PROVIDER_PERIOD_END_OUTSTANDING_SHARES",
+      "source_id": "COMPANIESMARKETCAP_2317_SHARES_2025",
+      "confidence": "MEDIUM"
+    }
+  ],
+  "actionable": false
+}

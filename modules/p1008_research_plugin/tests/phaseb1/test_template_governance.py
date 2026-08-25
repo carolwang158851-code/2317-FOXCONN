@@ -11,6 +11,7 @@ def envelope():
 
 def item(signal="GREEN", **changes):
     payload = {"signal": signal, "actionable": False, "skill_mode": "SKILL_GUIDED_ONLY",
+               "advantage": "Scale and integration", "history": "Eight-quarter governed context",
                "source_of_advantage": "Official Q2 demand evidence", "durability": "EVIDENCE_BUILDING",
                "capital_requirement": "Capex remains material", "competitor_replicability": "Not proven",
                "cash_conversion": "H1 FCF is negative", "invalidation_condition": "Guidance reduction",
@@ -18,7 +19,11 @@ def item(signal="GREEN", **changes):
                "counterevidence": "Gross margin declined", "enterprise_value_impact": "Needs verification",
                "retirement_mission_impact": "Cash conversion remains key", "clear_condition": "FCF improves",
                "deterioration_condition": "FCF weakens", "missing_data": "Q2 ROIC", "why_it_matters": "Capital efficiency",
-               "acquisition_path": "Official filing", "next_calculation": "Calculate ROIC"}
+               "acquisition_path": "Official filing", "next_calculation": "Calculate ROIC",
+               "what_happened": "Margin divergence", "trend": "Operating margin improved",
+               "divergence": "Gross margin fell while operating margin rose",
+               "management_explanation": "Scale and AI demand", "supporting_evidence": "Official Q2 results",
+               "temporary_vs_structural": "UNCERTAIN", "confidence": "MEDIUM"}
     payload.update(changes)
     return payload
 
@@ -45,8 +50,19 @@ class TemplateGovernanceTests(unittest.TestCase):
 
     def test_packet_is_partial_and_actionable_false(self):
         result = tg.validate_packet(envelope=envelope(), result_items=[item("GREEN"), item("YELLOW")], validation_status="PARTIAL_RESEARCH_CANDIDATE")
+        self.assertEqual(result["templateVersion"], "1.4.1")
         self.assertEqual(result["validationStatus"], "PARTIAL_RESEARCH_CANDIDATE")
         self.assertFalse(result["actionable"])
+
+    def test_skill_capability_modes_are_truthful_and_do_not_claim_receipts(self):
+        self.assertEqual(tg.skill_capability_map(), {
+            "OFFICIAL_IR": "CALLABLE_RUNTIME",
+            "DATA_ANALYTICS": "SKILL_GUIDED_ONLY",
+            "INVESTMENT_BANKING": "UNAVAILABLE",
+            "ANYSEARCH": "CALLABLE_RUNTIME",
+            "OPENAI_EDITORIAL": "CALLABLE_RUNTIME",
+            "CANVA": "CALLABLE_RUNTIME",
+        })
 
 
 if __name__ == "__main__":

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-Hant-TW"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>{{REPORT_TITLE}}</title>
+<style>
+:root{
+ --ink:#172331;--sub:#3f4f63;--muted:#748090;--line:#dce3e9;--wash:#f6f8fa;
+ --warm:#fbf7ef;--accent:#263d55;--good:#315a49;--watch:#86651e;--risk:#7a3f3f
+}
+*{box-sizing:border-box} html{scroll-behavior:smooth}
+body{margin:0;background:#edf1f4;color:var(--ink);font-family:"Segoe UI","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;font-size:17px;line-height:1.9}
+.report{width:min(1220px,calc(100% - 36px));margin:28px auto 80px;background:#fff;border:1px solid #e1e6eb;box-shadow:0 14px 42px rgba(28,39,54,.08)}
+header{padding:70px 94px 48px;border-bottom:1px solid var(--line)}
+.eyebrow{font-size:12px;letter-spacing:.14em;font-weight:800;color:#687487}
+h1{font-size:43px;line-height:1.25;letter-spacing:-.02em;margin:10px 0 16px}
+.deck{font-size:21px;line-height:1.7;color:#3b4a5d;max-width:1060px}
+.status{display:inline-block;margin-top:15px;padding:5px 10px;border:1px solid #decfae;border-radius:999px;background:#fffaf1;color:#7c5d20;font-size:12px;font-weight:800}
+.meta{margin-top:15px;color:var(--muted);font-size:13px}
+nav{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:14px;padding:14px 94px;border-bottom:1px solid var(--line);background:rgba(251,252,253,.97);font-size:13px}
+nav a{color:#5e6979;text-decoration:none} nav a:hover{color:var(--accent);text-decoration:underline}
+main{padding:50px 94px 94px} section{margin:0 0 82px}
+h2{font-size:31px;line-height:1.42;margin:0 0 24px;padding-top:19px;border-top:3px solid var(--ink)}
+h3{font-size:21px;line-height:1.58;color:#2b4058;margin:34px 0 12px} p{margin:0 0 20px}
+.lead{font-size:20px;line-height:1.8;color:#34445a}
+.thesis{margin:31px 0;padding:23px 25px;border-left:4px solid #52677d;background:#f7f9fb;font-size:20px;line-height:1.75;font-weight:730;color:#27394e}
+.warning{padding:21px 24px;background:var(--warm);border:1px solid #e7dcc3;margin:25px 0}
+.analysis-box{padding:22px 24px;border:1px solid var(--line);background:#f8fafb;margin:25px 0}
+.analysis-box p:last-child{margin-bottom:0}
+figure{margin:31px 0 35px;padding:19px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+figure img{display:block;width:100%;height:auto} figcaption{margin-top:11px;color:var(--muted);font-size:13px;line-height:1.65} figcaption strong{color:#344156}
+table{width:100%;border-collapse:collapse;margin:25px 0;font-size:14px} th,td{padding:11px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top} th{background:#f4f6f8;color:#425068}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:24px 0}
+.kpi{padding:17px 15px;border-top:2px solid #62778e;background:#f7f9fb}.kpi .l{font-size:12px;color:#748090;font-weight:700}.kpi b{display:block;font-size:23px;color:#263d55;margin:5px 0}.kpi small{font-size:12px;color:#647183;line-height:1.45}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:27px 0}.card{border:1px solid var(--line);padding:21px;background:#fbfcfd}.card h3{margin:0 0 11px}
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:27px 0}.three article{padding:20px;border:1px solid var(--line);background:#fbfcfd}.three h3{margin:0 0 10px;font-size:18px}.three p{font-size:14px;line-height:1.68;color:#556477}
+.formula{margin:19px 0;padding:16px 19px;border-left:3px solid #8396aa;background:#fafbfd;font-size:14px;color:#46566a}.formula code{font-family:Consolas,monospace;color:#263d55;font-weight:700}
+.badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800;border:1px solid}.ok{color:var(--good);border-color:#aac4b7;background:#f2f8f5}.watch{color:var(--watch);border-color:#dac99c;background:#fffaf0}.bad{color:var(--risk);border-color:#d6b4b4;background:#fbf3f3}
+.source{font-size:12px;color:#738090}.appendix{margin-top:82px}.appendix h2{border-top:4px double #7e8997}
+.formula-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0}.fcard{border:1px solid var(--line);background:#fbfcfd;padding:18px}.fcard strong{display:block;color:#283f57;margin-bottom:7px}.fcard code{display:block;background:#f4f6f8;padding:8px 10px;margin:8px 0;font-family:Consolas,monospace;font-size:13px}.fcard p{font-size:13px;line-height:1.64;color:#596779;margin:6px 0}
+.evidence{padding:16px 18px;border:1px solid var(--line);background:#f7f8fa;font-size:12px;line-height:1.72}.evidence a{color:#425e78}
+.footer{padding:22px 94px;border-top:1px solid var(--line);background:#fbfcfd;color:#7b8593;font-size:12px}
+@media(max-width:900px){body{font-size:16px}.report{width:100%;margin:0;border:0}header,main,.footer{padding-left:24px;padding-right:24px}nav{position:relative;padding-left:24px;padding-right:24px}h1{font-size:31px}h2{font-size:25px}.lead,.thesis{font-size:18px}.kpis{grid-template-columns:1fr 1fr}.two,.three,.formula-grid{grid-template-columns:1fr}table{display:block;overflow-x:auto}}
+@media print{body{background:#fff}.report{width:100%;margin:0;border:0;box-shadow:none}nav{display:none}figure{break-inside:avoid}}
+</style></head><body>
+<article class="report" data-mother-template="HON_HAI_WAR_REPORT_MOTHER_V1">
+<header><div class="eyebrow">{{EYEBROW}}</div><h1>{{HEADLINE}}</h1><div class="deck">{{DECK}}</div><div class="status">審閱版｜尚未正式發布｜不構成交易指令</div><div class="meta">{{REPORT_META}}</div></header>
+<nav><a href="#s1">1 核心判斷</a><a href="#s2">2 鑑往</a><a href="#s3">3 本季獲利</a><a href="#s4">4 三大財報</a><a href="#s5">5 商業模式</a><a href="#s6">6 外部戰情</a><a href="#s7">7 3+3+3</a><a href="#s8">8 估值</a><a href="#s9">9 情境</a><a href="#s10">10 SMART</a><a href="#s11">11 附錄</a></nav>
+<main>
+<section id="s1"><h2>1｜投資主題與核心判斷</h2>{{CHAPTER_01}}</section>
+<section id="s2"><h2>2｜鑑往：經營與財務趨勢</h2>{{CHAPTER_02}}</section>
+<section id="s3"><h2>3｜本季企業獲利分析</h2>{{CHAPTER_03}}</section>
+<section id="s4"><h2>4｜三大財報與股東價值</h2>{{CHAPTER_04}}</section>
+<section id="s5"><h2>5｜商業模式與競爭力</h2>{{CHAPTER_05}}</section>
+<section id="s6"><h2>6｜外部戰情與未來獲利傳導</h2>{{CHAPTER_06}}</section>
+<section id="s7"><h2>7｜3+3+3 與資本配置</h2>{{CHAPTER_07}}</section>
+<section id="s8"><h2>8｜估值</h2>{{CHAPTER_08}}</section>
+<section id="s9"><h2>9｜前瞻情境與投資判斷</h2>{{CHAPTER_09}}</section>
+<section id="s10"><h2>10｜最後 SMART 總結</h2>{{CHAPTER_10}}</section>
+<section id="s11" class="appendix"><h2>11｜正式附錄</h2>{{CHAPTER_11}}</section>
+</main><div class="footer">{{FOOTER}}</div></article></body></html>

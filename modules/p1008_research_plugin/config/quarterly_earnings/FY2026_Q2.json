@@ -22,6 +22,9 @@
     "grossMarginQoqBps": "-6",
     "grossMarginYoyBps": "-21",
     "operatingIncomeMillionTwd": "94803",
+    "nonOperatingIncomeExpenseMillionTwd": "63",
+    "pretaxProfitMillionTwd": "94866",
+    "incomeTaxExpenseMillionTwd": "24810",
     "operatingMarginPct": "3.75",
     "operatingMarginQoqBps": "18",
     "operatingMarginYoyBps": "60",
@@ -33,6 +36,15 @@
     "epsQoqPct": "20",
     "epsYoyPct": "34"
   },
+  "priorYearQuarterFinancials": {
+    "period": "FY2025 Q2",
+    "revenueMillionTwd": "1793468",
+    "grossProfitMillionTwd": "113529",
+    "operatingIncomeMillionTwd": "56596",
+    "pretaxProfitMillionTwd": "65149",
+    "incomeTaxExpenseMillionTwd": "15613",
+    "attributableProfitMillionTwd": "44361"
+  },
   "cashFlow": {
     "period": "2026H1",
     "operatingCashFlowMillionTwd": "-69122",
@@ -40,6 +52,70 @@
     "freeCashFlowMillionTwd": "-150009",
     "definition": "Operating cash flow minus capital expenditure",
     "status": "OFFICIAL_RESULTS_H1_NOT_STANDALONE_Q2"
+  },
+  "balanceSheet": {
+    "periodEnd": "2026-06-30",
+    "cashAndCashEquivalentsMillionTwd": "963002",
+    "accountsReceivableNetMillionTwd": "1385237",
+    "inventoryMillionTwd": "1370073",
+    "accountsPayableMillionTwd": "1527523",
+    "totalAssetsMillionTwd": "5622576",
+    "totalEquityMillionTwd": "2119588",
+    "netCashMillionTwd": "219809",
+    "propertyPlantEquipmentMillionTwd": "576855",
+    "q1": {
+      "accountsReceivableNetMillionTwd": "1166008",
+      "inventoryMillionTwd": "1209878",
+      "accountsPayableMillionTwd": "1322837",
+      "propertyPlantEquipmentMillionTwd": "562220"
+    },
+    "priorYear": {
+      "periodEnd": "2025-06-30",
+      "accountsReceivableNetMillionTwd": "940523",
+      "inventoryMillionTwd": "935827",
+      "accountsPayableMillionTwd": "1003773"
+    }
+  },
+  "historicalEpsCorrections": {
+    "2025Q4": {
+      "basicEpsTwd": "3.23",
+      "sourceId": "HON_HAI_FY2025_Q4_RESULTS_OFFICIAL",
+      "sourceType": "OFFICIAL_COMPANY_RESULTS_PDF",
+      "sourceLocator": "https://image.honhai.com/upload/202603/law_talk/Hon_Hai_4Q25_Results_Chinese_20260316_2632.pdf#page=5",
+      "sourceDocumentSha256": "91E4994341856DF0E1985DD87704DBE17E1E35CA66FF730CE8CA833CA7766EC0",
+      "localReceiptId": "IR-RECEIPT-9C30ABA406FFA1325E24",
+      "authorityMutation": false,
+      "normalizationReason": "正式Q4結果簡報第5頁揭露基本EPS 3.23元；master中的3.25為USER_CURATED_WEB_DATA，不作本分析線的canonical EPS。"
+    }
+  },
+  "workingCapitalDays": {
+    "periods": ["2025Q2", "2026Q1", "2026Q2"],
+    "accountsReceivableDays": ["51", "51", "46"],
+    "inventoryDays": ["54", "53", "50"],
+    "accountsPayableDays": ["57", "60", "54"],
+    "cashConversionCycleDays": ["48", "44", "42"]
+  },
+  "productMix": {
+    "period": "FY2026 Q2",
+    "cloudAndNetworkingRevenueSharePct": "51",
+    "aiSpecificRevenueSharePct": null,
+    "aiSpecificShareStatus": "NOT_DISCLOSED"
+  },
+  "strategyFramework": {
+    "officialTerminology": "3+3",
+    "verifiedPillars": [
+      "電動車",
+      "數位健康",
+      "機器人",
+      "人工智慧",
+      "半導體",
+      "新世代通訊技術"
+    ],
+    "thirdThreeStatus": "NOT_VERIFIED_IN_GOVERNED_OFFICIAL_SOURCE",
+    "sourceId": "HON_HAI_OFFICIAL_3_PLUS_3",
+    "sourceLocator": "https://www.honhai.com/zh-tw/press-center/press-releases/latest-news",
+    "sourceClass": "AUTHORITY",
+    "sourceTier": "OFFICIAL"
   },
   "businessDisclosures": [
     "AI infrastructure demand is strong and the company continues expanding global AI capacity.",

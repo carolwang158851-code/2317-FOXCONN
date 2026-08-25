@@ -309,6 +309,10 @@ class QuarterlyEarningsAnalysis(StrictModel):
     source_hash: Sha256
     source_pages: dict[NonEmpty, NonEmpty]
     limitations: list[NonEmpty]
+    enterprise_value_analytics: dict[NonEmpty, Any]
+    valuation_scenarios: dict[NonEmpty, Any]
+    quarterly_history: dict[NonEmpty, Any]
+    governance_signals: list[dict[NonEmpty, Any]] = Field(min_length=3)
 
 
 class AnalysisPacket(StrictModel):

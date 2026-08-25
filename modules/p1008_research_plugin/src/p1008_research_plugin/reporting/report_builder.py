@@ -128,27 +128,49 @@ class ReportBuilder:
         price_cutoff = analysis.valuation_analysis.data_window.split("..")[-1]
         invalidations = "；".join(item.invalidation_condition for item in analysis.material_conclusions)
         next_events = "；".join(dict.fromkeys(item.next_validation_event for item in analysis.material_conclusions))
+        analytics = q.enterprise_value_analytics
+        valuation = q.valuation_scenarios
+        forward = "；".join(
+            f"研究敏感度 H2年增{item['h2Yoy']}：FY26 EPS {item['fy26Eps']}元、以財報公布前收盤價計算P/E {item['peAtCurrentPrice']}倍"
+            for item in valuation["forwardPeScenarios"]
+        )
+        pe_matrix = "；".join(
+            f"SCENARIO EPS {item['eps']}元×{item['multiple']}倍={item['referenceValue']}元"
+            for item in valuation["peMatrix"]
+        )
+        pb_scenarios = "；".join(
+            f"SCENARIO {item['multiple']}倍={item['referenceValue']}元"
+            for item in valuation["pbScenarios"]
+        )
+        yield_scenarios = "；".join(
+            f"SCENARIO 殖利率{item['yield']}={item['referenceValue']}元"
+            for item in valuation["dividendYieldScenarios"]
+        )
         sections = [
-            self._section("REPORT_IDENTITY_AND_CUTOFF", "報告識別與資料截止", f"本報告為{q.fiscal_period} QUARTERLY_EARNINGS候選。Official IR發布日2026-08-12；市場authority截止{price_cutoff}。", "FACT", official_ids + [price_id, activity_id]),
-            self._section("EXECUTIVE_SUMMARY", "Executive Summary", f"Q2營收、營業利益與EPS均顯著成長，營業利益率改善，但毛利率小幅下滑；AI Server與Cloud & Networking展望正向。H1自由現金流為負，且結果文件未量化Apple/iPhone、FX、關稅或政策影響，因此投資假設維持、狀態為WATCH／OBSERVE／REVIEW_REQUIRED。", "MIXED", official_ids + [price_id, cash_id]),
-            self._section("Q2_FINANCIAL_SUMMARY", "Q2財務摘要", f"營收{q.revenue.value}百萬元；歸屬母公司淨利{q.attributable_profit.value}百萬元；EPS {q.eps.value}元。", "FACT", official_ids),
-            self._section("QOQ_YOY", "QoQ／YoY", f"營收QoQ {q.revenue.qoq}、YoY {q.revenue.yoy}；歸屬母公司淨利QoQ {q.attributable_profit.qoq}、YoY {q.attributable_profit.yoy}；EPS QoQ {q.eps.qoq}、YoY {q.eps.yoy}。", "FACT", official_ids),
-            self._section("MARGINS_AND_EPS", "毛利率、營益率、淨利率與EPS", f"毛利率{q.gross_margin.value}%（QoQ {q.gross_margin.qoq}；YoY {q.gross_margin.yoy}）；營益率{q.operating_margin.value}%（QoQ {q.operating_margin.qoq}；YoY {q.operating_margin.yoy}）；淨利率{q.net_margin.value}%（QoQ {q.net_margin.qoq}；YoY {q.net_margin.yoy}）；EPS {q.eps.value}元。", "FACT", official_ids),
-            self._section("AI_SERVER_CLOUD_NETWORKING", "AI Server／Cloud & Networking", "；".join(q.ai_server_cloud_networking + q.business_disclosures), "FACT", official_ids),
-            self._section("SECOND_HALF_AND_FULL_YEAR_OUTLOOK", "下半年與全年展望", "；".join(q.official_outlook) + "。這些是公司前瞻性展望，需由後續實績驗證。", "MIXED", official_ids),
-            self._section("APPLE_IPHONE_EXPOSURE", "Apple／iPhone供應鏈影響", f"{q.apple_iphone_exposure_status}：本次Results文件沒有量化Apple或iPhone客戶別曝險、訂單或產品組合影響，不以消費智能產品展望替代客戶特定證據。", "FACT", official_ids),
-            self._section("FX_TARIFF_POLICY_RISKS", "匯率、關稅與政策風險", f"{q.fx_tariff_policy_risk_status}：本次Results文件沒有量化FX敏感度、關稅成本或政策情境；後續只接受正式財報或公司指引補證。", "FACT", official_ids),
-            self._section("PS_PE_VALUATION_CONTEXT", "P/S、P/E與估值背景", f"截至{price_cutoff}收盤價{analysis.valuation_analysis.current_price}元、P/B {analysis.valuation_analysis.current_pb}倍。P/E仍依賴未換入Q2的TTM authority基線，P/S缺少Q2更新的受治理分母，因此均不輸出評價結論；估值狀態為{analysis.valuation_analysis.valuation_status.value}。", "MIXED", [master_id, price_id]),
-            self._section("FCF_AND_REVENUE_CONVERSION", "FCF與營收轉化", f"{q.cash_flow_period}營業現金流{analysis.financial_trend.operating_cash_flow.value}百萬元、FCF {analysis.financial_trend.free_cash_flow.value}百萬元；狀態為{q.cash_flow_status}／{q.free_cash_flow_status}。這是H1累計、不是Q2單季；營收與EPS成長尚未形成正向累計現金轉化。", "MIXED", official_ids),
-            self._section("PRICE_VOLUME_REACTION", "目前股價與量價背景", f"authority截至{price_cutoff}，1／5／20日報酬為{returns.get('1D')}、{returns.get('5D')}、{returns.get('20D')}；成交量分位{analysis.price_and_market_activity.volume_percentile}。資料截止早於Results發布，正式事件反應為INSUFFICIENT_DATA，不推論法人或主力意圖。", "MIXED", [price_id, activity_id, *official_ids]),
-            self._section("THESIS_CHANGE_STATUS", "投資假設是否改變", f"整體論點為{analysis.thesis_scorecard.overall_thesis.value}：Q2獲利與AI展望提供支持，但H1負FCF、估值分母待更新及事件後量價不足，尚不足以調升為全面改善。", "INFERENCE", official_ids + [master_id, price_id, cash_id]),
-            self._section("WATCH_OBSERVE_REVIEW_REQUIRED", "WATCH／OBSERVE／REVIEW_REQUIRED", "WATCH：毛利率與H1 FCF；OBSERVE：AI出貨、營收轉化及事件後量價；REVIEW_REQUIRED：Apple/iPhone、FX、關稅、政策風險及Q2更新後P/S、P/E。", "INFERENCE", official_ids + [master_id, price_id, activity_id, cash_id]),
-            self._section("SUPPORTING_EVIDENCE", "支持證據", f"Official IR Results由receipt {q.source_receipt}與source hash {q.source_hash}綁定；損益表頁{q.source_pages['incomeStatement']}、現金流頁{q.source_pages['cashFlow']}、展望頁{q.source_pages['financialOutlook']}、AI與Cloud & Networking頁{q.source_pages['aiCloudNetworking']}。", "FACT", official_ids),
-            self._section("ALTERNATIVE_AND_COUNTEREVIDENCE", "替代解釋與反方證據", "營收與營益率改善可能受規模及產品組合推動，但毛利率QoQ與YoY下滑、H1 FCF為負；前瞻性AI指引仍可能受出貨時點、客戶資本支出與外部政策影響。", "MIXED", official_ids),
-            self._section("INVALIDATION_CONDITIONS", "推翻條件", invalidations, "INFERENCE", official_ids + [master_id, price_id, cash_id]),
-            self._section("NEXT_VALIDATION_DATE_AND_EVENT", "關鍵風險與後續追蹤項目", f"下一個關鍵驗證點為{next_events}；核對正式Q2報告、Q3 AI出貨與營收、完整事件窗口、更新P/S／P/E、Apple/iPhone、FX、關稅與政策揭露。", "FACT", official_ids + [master_id, price_id, activity_id, cash_id]),
-            self._section("DATA_LIMITATIONS", "資料限制", "Results簡報明示財務資訊未完全經會計師查核或核閱；H1現金流不是Q2單季；市場authority早於發布日；未披露項目保持REVIEW_REQUIRED；全程沒有外部模型、網搜或假資料。", "FACT", official_ids + [price_id, activity_id]),
-            self._section("ACTIONABLE_FALSE_DISCLAIMER", "研究安全邊界", "本候選只提供公開、非個人化研究分類，不產生買賣、部位、目標價或急迫性指令；actionable=false，publication=false，停在Owner Review。", "COMPLIANCE", []),
+            self._section("REPORT_IDENTITY_AND_CUTOFF", "報告識別與權威截止", f"本報告以鴻海官方FY2026 Q2結果與既有受治理authority為證據；市場資料截止{price_cutoff}。Q2現金流採同口徑2026H1減2026Q1推導，與官方累計FCF路徑僅差{analytics['q2StandaloneFcfRoundingDifferenceMillionTwd']}百萬元，位於揭露整數四捨五入容許值內。", "FACT", official_ids + [master_id, price_id, activity_id, cash_id]),
+            self._section("EXECUTIVE_SUMMARY", "營運槓桿轉強，現金轉化仍是企業價值斷點", f"本季真正證明的是規模成長開始轉為更快的營業利益增長：營收年增{q.revenue.yoy}，營業利益年增{analytics['operatingProfitYoyPct']}%。尚未證明的是AI專屬資本效率與正常化FCF；推導Q2 CFO為{analytics['q2StandaloneCfoMillionTwd']}百萬元、FCF為{analytics['q2StandaloneFcfMillionTwd']}百萬元。核心論點存續，但估值安全性沒有改善，後續關鍵是現金回收與資本效率。", "MIXED", official_ids + [master_id, price_id, cash_id]),
+            self._section("GOVERNANCE_COMMITMENT_EXECUTION", "3+3治理承諾與價值傳導", "官方受治理來源確認3+3涵蓋電動車、數位健康、機器人及人工智慧、半導體、次世代通訊；第三個3或智慧平台目前未在本次受治理官方來源中確認。人工智慧已連到營收與成長指引，但六個支柱尚無任何一項完整連到ROIC與FCF，因此策略存在不等於企業價值創造完成。", "MIXED", official_ids + [master_id, cash_id]),
+            self._section("Q2_FINANCIAL_SUMMARY", "本季真正改變了什麼", f"官方直接揭露Q2營收{q.revenue.value}百萬元、毛利{analytics['grossProfitMillionTwd']}百萬元、營業利益{analytics['operatingProfitMillionTwd']}百萬元、稅前利益{analytics['pretaxProfitMillionTwd']}百萬元、所得稅費用{analytics['incomeTaxExpenseMillionTwd']}百萬元、歸屬母公司淨利{q.attributable_profit.value}百萬元及EPS {q.eps.value}元。營業利益增幅高於營收，現金卻轉負，形成本季核心矛盾。", "FACT", official_ids),
+            self._section("GROWTH_QUALITY", "成長品質與產品組合", f"官方毛利年增{analytics['grossProfitYoyPct']}%，落後營收成長{analytics['grossProfitLagPct']}個百分點；官方營業利益年增{analytics['operatingProfitYoyPct']}%。Cloud & Networking占營收{analytics['cloudNetworkingRevenueSharePct']}%，但AI特定營收占比未揭露。這支持需求規模與公司整體獲利改善，不支持把全部改善歸因於AI。", "MIXED", official_ids),
+            self._section("OPERATING_LEVERAGE", "營運槓桿與費用吸收", f"營業利益年增{analytics['operatingProfitYoyPct']}%，比營收快{analytics['operatingLeverageSpreadPct']}個百分點。毛利以下營業費用淨額代理值由毛利減營業利益推導，本季為{analytics['operatingExpenseProxyMillionTwd']}百萬元（597.30億元）、年增{analytics['operatingExpenseProxyYoyPct']}%；占營收比重八季由約3.2%降至2.365%。這與規模吸收及費用紀律一致，但代理值不是公司直接揭露的營業費用科目，更不是營業成本，也不能證明永久結構效率。", "MIXED", official_ids),
+            self._section("MARGIN_QUALITY", "利潤率與八季脈絡", f"毛利率{q.gross_margin.value}%、營益率{q.operating_margin.value}%、淨利率{q.net_margin.value}%。自2024Q2至2026Q2，毛利率下降30個基點、營益率提高87個基點；八季背離顯示改善主要發生在毛利以下，支持成本吸收，不支持毛利護城河擴張。", "MIXED", official_ids + [master_id]),
+            self._section("EARNINGS_TO_CASH_QUALITY", "Q2獲利轉現金品質", f"Q2 CFO由2026H1減2026Q1推導為{analytics['q2StandaloneCfoMillionTwd']}百萬元，Capex為{analytics['q2StandaloneCapexMillionTwd']}百萬元，FCF為{analytics['q2StandaloneFcfMillionTwd']}百萬元；兩條FCF路徑差{analytics['q2StandaloneFcfRoundingDifferenceMillionTwd']}百萬元。CFO／歸母淨利警示代理值為{analytics['cashConversion']}，只顯示嚴重獲利—現金背離；因合併CFO與歸屬母公司淨利範圍不同，不是同口徑標準現金轉化率。", "MIXED", official_ids + [cash_id]),
+            self._section("WORKING_CAPITAL_CAPITAL_REQUIREMENT", "營運資金與現金循環", "Q2應收帳款1,385,237百萬元、存貨1,370,073百萬元、應付帳款1,527,523百萬元，皆高於Q1；金額增加吸收現金。另一方面，現金循環週期由2025Q2的48天、2026Q1的44天降至42天，較符合成長帶動的營運資金吸收而非週轉效率惡化。這是方向性歸因，不等於現金回收已完成。", "MIXED", official_ids),
+            self._section("CAPITAL_EFFICIENCY", "資本效率與ROIC", f"Q2推導Capex占營收{analytics['capexIntensityRevenuePct']}%、占營業利益{analytics['capexToOperatingProfitPct']}%，只有Q1與Q2兩期可比，維持歷史有限，不稱長期趨勢。受治理ROIC自2024Q3至2026Q1依序為10.51%、13.16%、7.91%、10.66%、11.77%、14.41%、12.57%；FY2026 Q2不是0或下降，而是缺標準化NOPAT與可比平均投入資本的待驗證缺口。", "FACT", official_ids + [master_id]),
+            self._section("ROE_DUPONT_INTERPRETATION", "ROE、股東權益與每股淨值複利", f"官方可比H1 ROE由2025H1的5.48%升至2026H1的6.21%，增加0.73個百分點；2025全年受治理ROE基線11.3%僅作全年脈絡，H1不年化。受治理BVPS由2024Q3的115.16元至2026Q1的{valuation['governedBvps']['value']}元中期淨增加，但2025Q2曾降至105.14元，之後回升至117.18元、126.96元及127.12元；下降原因待驗證。這支持股東資本累積與使用效率方向正面，但完整股東複利仍須同時考慮BVPS變化與已分配股利。ROE約等於淨利率乘以資產周轉再乘以財務槓桿，目前只能做部分杜邦分析。", "MIXED", official_ids + [master_id]),
+            self._section("PROFIT_PASS_THROUGH", "營業利益至淨利傳導", f"公式怎麼看？官方營業利益{analytics['operatingProfitMillionTwd']}百萬元，加上非營業淨收入63百萬元，形成稅前利益{analytics['pretaxProfitMillionTwd']}百萬元；扣除所得稅費用{analytics['incomeTaxExpenseMillionTwd']}百萬元後，再經非控制權益歸屬形成母公司淨利{q.attributable_profit.value}百萬元。稅前與稅額已補齊，非控制權益細節仍有限。", "MIXED", official_ids),
+            self._section("AI_SERVER_CLOUD_NETWORKING", "AI成長品質", "AI是營收驅動且3Q26前瞻成長獲官方管理層指引支持。AI與公司整體營業利益改善方向一致，可列為部分證實／高信心推論；但AI特定營業利益金額與AI特定利潤率仍未揭露，AI的ROIC、現金轉化與FCF貢獻均未證實。", "MIXED", official_ids),
+            self._section("GOVERNANCE_TARGET_VS_ACTUAL", "治理承諾與執行力", "管理承諾經策略與執行傳到營收、毛利與營業利益後，必須由三條互相驗證但不互為單一路徑的分支檢查。企業資本效率分支以營業利益、NOPAT與ROIC回答投入營運資本是否有效創造報酬；股東資本效率分支以稅前利益、淨利、ROE與BVPS回答股東資本是否有效使用；現金生成分支以淨利、非現金項目、營運資金、CFO、Capex與FCF回答帳面獲利是否變成自由現金。三者共同支持股利能力、股東回報與退休現金流安全，但Q2 ROIC及現金回收仍待驗。", "MIXED", official_ids + [master_id, cash_id]),
+            self._section("VALUATION", "估值", f"財報公布前收盤價為{valuation['price']['value']}元（{valuation['price']['date']}），以最新直接揭露BVPS {valuation['governedBvps']['value']}元（{valuation['governedBvps']['period']}）計算的P/B為{valuation['pb']['value']}倍。過去十二個月EPS由2025Q3 4.15元、鴻海官方2025Q4 basic EPS 3.23元、2026Q1 3.56元及官方2026Q2 4.27元組成，合計{valuation['ttmEps']['value']}元，財報前P/E約{valuation['ttmPe']['value']}倍。2025H2 EPS為{valuation['priorH2Eps']['value']}元；FY2026研究情境EPS為{', '.join(item['fy26Eps'] for item in valuation['forwardPeScenarios'])}元。以估算相容加權平均股數及TTM營收推導的財報前P/S為{valuation['ps']['value']}倍。以上均屬財報前估值脈絡，沒有Owner核准估值門檻，不形成交易規則。", "MIXED", [master_id, price_id, *official_ids]),
+            self._section("HOLDING_THESIS", "核心持有論點", "既有持有研究分類維持：營收、毛利、公司整體營業利益與EPS支持營運能力，但Q2推導CFO與FCF為負，資本效率仍待驗。論點存續只表示尚未被推翻，不等於估值安全性改善，也不等於退休現金流安全性已證實。", "INFERENCE", official_ids + [master_id, cash_id]),
+            self._section("NEW_MONEY_VALUATION_CONTEXT", "新資金估值脈絡", f"財報公布前收盤價對推導TTM EPS的P/E為{valuation['ttmPe']['value']}倍，財報前P/S為{valuation['ps']['value']}倍；FY2026情境只作敏感度。P/B的基本面支持取決於ROE、BVPS複利、ROIC與FCF能否共同改善，不形成便宜、昂貴或買賣判定。", "INFERENCE", official_ids + [master_id, price_id]),
+            self._section("GREEN_SIGNALS", "3+3戰略落地訊號", "正式治理來源支持3+3六項支柱；AI基礎設施需求、共同開發及量產整合支持人工智慧支柱已進入營收階段。其餘支柱的客戶／訂單、營收、營業利益、ROIC與FCF多未有本期可量化證據，第三個3亦未確認。", "MIXED", official_ids + [master_id]),
+            self._section("NON_GREEN_DEEP_REVIEW", "治理執行與未通過項目", "毛利率下降、營益率上升與營業費用代理值占比下降，支持規模吸收但仍非唯一因果結論。Q2 CFO與FCF雙負；同時CCC由48天降至42天，現有證據較支持高速擴張造成的營運資金占用加上資本支出，而非已證實的週轉效率惡化。現金回收、Q2 ROIC與完整杜邦分析仍待驗。", "MIXED", official_ids + [master_id, cash_id]),
+            self._section("COUNTEREVIDENCE_LIMITATIONS", "反方證據與限制", f"毛利率季變動{q.gross_margin.qoq}、年變動{q.gross_margin.yoy}，上半年自由現金流為負；Q2結果簡報的財務資訊未完全經會計師查核或核閱；Apple／iPhone、匯率、關稅與政策影響未量化；市場權威資料截至{price_cutoff}，早於結果發布。", "FACT", official_ids + [price_id, activity_id, cash_id]),
+            self._section("INVALIDATION_CONDITIONS", "推翻條件", "若公司更正Q2結果、後續AI出貨未依指引轉化、營益率改善無法維持，或自由現金流持續惡化，必須重新檢查既有持有論點。完整事件窗口若顯示相反市場反應，也需更新估值脈絡。", "INFERENCE", official_ids + [master_id, price_id, cash_id]),
+            self._section("NEXT_VALIDATION_DATE_AND_EVENT", "未來1至4季驗證重點", "優先順序一：FY2026 Q3毛利率、營益率與營業費用代理值，確認營運槓桿耐久度。二：應收、存貨、應付與CCC，確認營運資金回收。三：TTM NOPAT、平均投入資本、ROIC與增量ROIC。四：可比ROE、直接BVPS與完整杜邦分析，確認股東資本複利品質。五：全年CFO、Capex、FCF與股利政策。另需補足完整事件後價格與成交量窗口。", "FACT", official_ids + [master_id, price_id, activity_id, cash_id]),
+            self._section("RETIREMENT_CASHFLOW_IMPLICATION", "治理、企業價值與退休任務總結", "Q2證明的不是只有營收成長，而是營業利益增速更快、費用代理占比下降，管理層規模與整合策略在營運端已有可信財務證據。企業價值創造目前只完成營收至營業利益的前半段，尚未完成資本效率與現金回收驗證。Q2沒有證明AI專屬利潤率、Q2 ROIC、正向FCF或股利能力升級；3+3六支柱已核對，AI走到營收與公司整體獲利方向，其專屬ROIC與現金仍未知。官方H1 ROE由5.48%升至6.21%；治理BVPS由2024Q3至2026Q1中期淨增加，但2025Q2曾明顯下降且原因待驗證。兩項證據支持股東資本累積與使用效率方向正面；完整股東複利仍須納入分配股利，完整杜邦分析與Q2 BVPS也尚未齊備。Q2 CFO與FCF為負，CCC反而改善，較符合成長驅動的營運資金占用加上Capex；現金回收仍是主問題。若AI出貨成長卻伴隨毛利率與營益率同步惡化、營運資金長期快於營收、ROE或增量ROIC下降，或FCF持續未跟上獲利，現有解讀即失效。未來一至四季須驗證營益率耐久度、營運資金回收、ROIC、ROE／BVPS與全年FCF。最終分項判斷：核心論點存續；估值安全性未上修；退休現金流安全尚未證實；股利能力不因負FCF而上修；股東資本累積與效率方向正面但仍待Q2資料。", "INFERENCE", official_ids + [master_id, cash_id]),
+            self._section("ACTIONABLE_FALSE_DISCLAIMER", "研究安全邊界", "本候選只提供公開、非個人化研究分類，不產生買賣、部位、價格參考指令或急迫性指令；actionable=false，publication=false，停在Owner Review。", "COMPLIANCE", []),
         ]
         return ReportCandidate(
             run_id=analysis.run_id,
@@ -156,7 +178,7 @@ class ReportBuilder:
             generated_at_utc=generated_at_utc,
             analysis_packet_sha256=analysis_sha,
             authority_manifest_sha256=analysis.authority_manifest_sha256,
-            primary_investor_question="FY2026 Q2獲利與AI成長，是否已轉成可持續的利潤率、現金流與估值支持？",
+            primary_investor_question="這次事件，是否改變鴻海作為退休現金流＋長期複利核心資產的安全性？",
             thesis_state=analysis.thesis_scorecard.overall_thesis,
             evidence_bound_facts=[item.statement for item in analysis.material_conclusions],
             evidence_references=references,

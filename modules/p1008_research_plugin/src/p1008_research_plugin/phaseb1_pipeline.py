@@ -23,12 +23,18 @@ from .phaseb1_common import (
 from .plugin_module.packet_gateway import PacketGateway, PacketValidationError
 from .plugin_module.router import PluginRouter
 from .reporting import (
+    EditorialExecutionAuthorization,
+    EditorialGovernance,
+    ModelProvenance,
+    EditorialResultEnvelope,
     ReportBuilder,
     ReportCandidate,
     ReportValidator,
     ScriptBuilder,
     ShortsDurationValidator,
 )
+from .runtime.runtime_config import RuntimeConfig
+from .runtime.runtime_manager import RuntimeManager
 from .reporting.chart_data_builder import ChartDataBuilder
 from .reporting.report_renderer_markdown import MarkdownRenderer
 from .reporting.report_renderer_formal import FormalPreviewRenderer
@@ -50,6 +56,10 @@ class PhaseB1Pipeline:
         fixture_path: Path | None = None,
         *,
         governed_evidence_root: Path | None = None,
+        editorial_required: bool = False,
+        editorial_authorization: dict[str, Any] | None = None,
+        editorial_client: Any | None = None,
+        editorial_runtime_config: RuntimeConfig | None = None,
     ) -> None:
         self.package_root = package_root.resolve()
         self.governed_evidence_root = governed_evidence_root.resolve() if governed_evidence_root else None
@@ -63,6 +73,10 @@ class PhaseB1Pipeline:
             / "monthly_revenue_fixture.json"
         )
         self.loader = ContractLoader(self.package_root)
+        self.editorial_required = editorial_required
+        self.editorial_authorization = editorial_authorization
+        self.editorial_client = editorial_client
+        self.editorial_runtime_config = editorial_runtime_config
 
     def load_inputs(
         self,
@@ -287,7 +301,22 @@ class PhaseB1Pipeline:
         )
         report = ReportValidator().validate(report, analysis)
         charts = ChartDataBuilder().build(analysis)
-        markdown = MarkdownRenderer().render(report).replace("\r\n", "\n")
+        editorial_envelope = None
+        if self.editorial_required:
+            editorial_envelope = self._execute_editorial(
+                run_id=run_id,
+                analysis=analysis,
+                analysis_sha256=sha256_file(analysis_path),
+                structured_draft=report,
+                charts=charts,
+            )
+            report = ReportValidator().validate(
+                editorial_envelope.report_candidate, analysis
+            )
+        formula_cards = []
+        if analysis.event_type == "QUARTERLY_EARNINGS" and analysis.quarterly_earnings is not None:
+            formula_cards = analysis.quarterly_earnings.enterprise_value_analytics["formulaCards"]
+        markdown = MarkdownRenderer().render(report, charts, formula_cards).replace("\r\n", "\n")
         scripts = ScriptBuilder()
         longform = scripts.longform(report).replace("\r\n", "\n")
         shorts = scripts.shorts_75s(report).replace("\r\n", "\n")
@@ -300,8 +329,8 @@ class PhaseB1Pipeline:
                 "Editorial validation failed closed: " + "; ".join(editorial.errors)
             )
         formal = FormalPreviewRenderer()
-        html_preview = formal.html(report)
-        pdf_preview = formal.pdf(report)
+        html_preview = formal.html(report, charts, formula_cards)
+        pdf_preview = formal.pdf(report, charts, formula_cards)
 
         report_sha = atomic_write_json(
             run_root / "report_candidate.json",
@@ -314,6 +343,27 @@ class PhaseB1Pipeline:
             run_root / "chart_data.json",
             [item.model_dump(mode="json", by_alias=True) for item in charts],
         )
+        if analysis.event_type == "QUARTERLY_EARNINGS":
+            quarterly = analysis.quarterly_earnings
+            if quarterly is None:
+                raise PhaseB1PipelineError("quarterly analysis disappeared before artifact materialization")
+            analytics = quarterly.enterprise_value_analytics
+            atomic_write_json(
+                run_root / "validated_research_pack.json",
+                {
+                    "recordType": "P1008_VALIDATED_RESEARCH_PACK",
+                    "templateVersion": template_governance.TEMPLATE_VERSION,
+                    "analysisPacketSha256": sha256_file(analysis_path),
+                    "sourceEvidenceIds": analysis.source_evidence_ids,
+                    "enterpriseValueAnalytics": analytics,
+                    "quarterlyHistory": quarterly.quarterly_history,
+                    "valuationScenarios": quarterly.valuation_scenarios,
+                    "limitations": quarterly.limitations,
+                    "actionable": False,
+                },
+            )
+            atomic_write_json(run_root / "formula_cards.json", analytics["formulaCards"])
+            atomic_write_json(run_root / "strategy_scorecard.json", analytics["strategyScorecard"])
         atomic_write(run_root / "longform_script_candidate.md", longform.encode("utf-8"))
         atomic_write(run_root / "shorts_75s_candidate.md", shorts.encode("utf-8"))
         atomic_write_json(
@@ -324,16 +374,45 @@ class PhaseB1Pipeline:
             run_root / "editorial_validation.json",
             editorial.model_dump(mode="json", by_alias=True),
         )
+        if editorial_envelope is not None:
+            atomic_write_json(
+                run_root / "editorial_result_envelope.json",
+                editorial_envelope.model_dump(mode="json", by_alias=True),
+            )
         owner_review = {
             "runId": run_id,
             "status": "OWNER_REVIEW_REQUIRED",
+            "ownerReviewRequired": True,
+            "templateVersion": template_governance.TEMPLATE_VERSION,
             "reportCandidateSha256": report_sha,
             "publishAuthorized": False,
-            "liveSynthesisAuthorized": False,
+            "publication": False,
+            "liveSynthesisAuthorized": bool(
+                editorial_envelope
+                and editorial_envelope.execution_status == "EXECUTED_LIVE"
+            ),
+            "openaiEditorialExecuted": bool(editorial_envelope),
             "phaseB2Started": False,
             "actionable": False,
         }
         atomic_write_json(run_root / "owner_review.json", owner_review)
+        governance_metadata = self._template_governance_metadata(
+            run_id=run_id,
+            event_type=event_type,
+            fixture=fixture,
+            authority_cutoff=self._authority_cutoff(analysis),
+        )
+        skill_execution_summary = self._skill_execution_summary(
+            fixture=fixture,
+            governance_metadata=governance_metadata,
+            analysis_sha256=sha256_file(analysis_path),
+            report_sha256=report_sha,
+            editorial_envelope=editorial_envelope,
+            run_root=run_root,
+        )
+        atomic_write_json(
+            run_root / "skill_execution_summary.json", skill_execution_summary
+        )
         after = protected_state_hashes(self.package_root)
         atomic_write_json(
             run_root / "protected_state_hashes_after.json", after, overwrite=True
@@ -354,9 +433,24 @@ class PhaseB1Pipeline:
             "shorts_duration_validation.json",
             "editorial_validation.json",
             "owner_review.json",
+            "skill_execution_summary.json",
             "protected_state_hashes_before.json",
             "protected_state_hashes_after.json",
         ]
+        if editorial_envelope is not None:
+            artifact_names.append("editorial_result_envelope.json")
+        if analysis.event_type == "QUARTERLY_EARNINGS":
+            artifact_names.extend([
+                "validated_research_pack.json",
+                "formula_cards.json",
+                "strategy_scorecard.json",
+            ])
+        external_calls = self._zero_calls()
+        if (
+            editorial_envelope is not None
+            and editorial_envelope.execution_status == "EXECUTED_LIVE"
+        ):
+            external_calls["openaiApi"] = 1
         manifest = {
             "runId": run_id,
             "eventType": event_type,
@@ -366,11 +460,8 @@ class PhaseB1Pipeline:
             "artifacts": {
                 name: sha256_file(run_root / name) for name in artifact_names
             },
-            "externalCalls": self._zero_calls(),
-            "templateGovernance": self._template_governance_metadata(
-                run_id=run_id, event_type=event_type, fixture=fixture,
-                authority_cutoff=self._authority_cutoff(analysis),
-            ),
+            "externalCalls": external_calls,
+            "templateGovernance": governance_metadata,
             "governedEvidence": (
                 fixture.evidence_context if isinstance(fixture, QuarterlyEarningsPacket) else None
             ),
@@ -391,7 +482,116 @@ class PhaseB1Pipeline:
             "report_pdf_sha256": sha256_file(run_root / "report_candidate.pdf"),
             "shorts_sha256": sha256_file(run_root / "shorts_75s_candidate.md"),
             "protected_state_unchanged": before == after,
+            "editorial_result_envelope": editorial_envelope,
         }
+
+    def _execute_editorial(
+        self, *, run_id: str, analysis: AnalysisPacket, analysis_sha256: str,
+        structured_draft: ReportCandidate, charts: list[Any],
+    ) -> EditorialResultEnvelope:
+        """Dispatch one authorized editorial task and validate its exact receipt."""
+        if self.editorial_authorization is None:
+            raise PhaseB1PipelineError("Editorial execution requires explicit Owner authorization")
+        try:
+            authorization = EditorialExecutionAuthorization.model_validate(
+                self.editorial_authorization
+            )
+        except Exception as exc:
+            raise PhaseB1PipelineError("Editorial Owner authorization is invalid") from exc
+        if (
+            authorization.run_id != run_id
+            or authorization.template_id != template_governance.TEMPLATE_ID
+            or authorization.template_version != template_governance.TEMPLATE_VERSION
+        ):
+            raise PhaseB1PipelineError("Editorial Owner authorization scope mismatch")
+
+        client = self.editorial_client
+        if client is None:
+            if self.editorial_runtime_config is None:
+                raise PhaseB1PipelineError("Editorial live runtime is not configured")
+            try:
+                client = RuntimeManager(
+                    self.package_root, config=self.editorial_runtime_config
+                ).resolve_editorial_client(
+                    authorization.model_dump(mode="json", by_alias=True)
+                )
+            except Exception as exc:
+                raise PhaseB1PipelineError("Editorial live runtime failed closed") from exc
+        if getattr(client, "model_id", authorization.model) != authorization.model:
+            raise PhaseB1PipelineError("Editorial client model mismatch")
+
+        payload = template_governance.build_editorial_payload(
+            run_id=run_id,
+            input_research_pack_sha256=analysis_sha256,
+            validated_research_pack=analysis.model_dump(mode="json", by_alias=True),
+            structured_draft=structured_draft.model_dump(mode="json", by_alias=True),
+            chart_conclusions=[
+                {
+                    "chartId": item.chart_id,
+                    "decisionQuestion": item.decision_question,
+                    "sourceEvidenceIds": item.source_evidence_ids,
+                    "commentaryZh": item.commentary_zh,
+                    "observationZh": item.observation_zh,
+                    "interpretationZh": item.interpretation_zh,
+                    "p1008ImplicationZh": item.p1008_implication_zh,
+                }
+                for item in charts
+            ],
+        )
+        started = datetime.now(timezone.utc)
+        try:
+            candidate, usage = client.synthesize_editorial(
+                payload=payload,
+                instructions=template_governance.editorial_instructions(),
+            )
+        except Exception as exc:
+            raise PhaseB1PipelineError("Editorial provider execution failed closed") from exc
+        completed = datetime.now(timezone.utc)
+        candidate = ReportCandidate.model_validate(candidate)
+        output_sha = sha256_bytes(
+            canonical_json_bytes(candidate.model_dump(mode="json", by_alias=True))
+        )
+        editorial_text = "\n\n".join(
+            f"{section.title_zh}\n{section.body_zh}" for section in candidate.sections
+        )
+        live = getattr(client, "mode", "") == "AGENTS_SDK"
+        provider_response_id = getattr(client, "provider_response_id", None)
+        try:
+            return EditorialResultEnvelope(
+                run_id=run_id,
+                template_id=template_governance.TEMPLATE_ID,
+                template_version=template_governance.TEMPLATE_VERSION,
+                input_research_pack_sha256=analysis_sha256,
+                editorial_text=editorial_text,
+                editorial_output_sha256=output_sha,
+                report_candidate=candidate,
+                model_provenance=ModelProvenance(
+                    model_provenance_id=(
+                        f"{run_id}:{template_governance.EDITORIAL_TASK_TYPE}:"
+                        f"{output_sha[:12]}"
+                    ),
+                    model_surface=(
+                        "OPENAI_AGENTS_SDK" if live else "DETERMINISTIC_TEST_DOUBLE"
+                    ),
+                    model_identifier=authorization.model,
+                    input_receipt_ids=[analysis_sha256],
+                    output_artifact_hash=output_sha,
+                    started_at_utc=started,
+                    completed_at_utc=completed,
+                    status=("EXECUTED_LIVE" if live else "EXECUTED_TEST_DOUBLE"),
+                    usage_metadata=(
+                        usage.model_dump(mode="json", by_alias=True)
+                        if hasattr(usage, "model_dump") else dict(usage or {})
+                    ),
+                    billing_metadata=None,
+                ),
+                provider_response_id=provider_response_id,
+                governance=EditorialGovernance(),
+                execution_status=("EXECUTED_LIVE" if live else "EXECUTED_TEST_DOUBLE"),
+                validation_status="PASS",
+            )
+        except Exception as exc:
+            raise PhaseB1PipelineError("Editorial receipt validation failed closed") from exc
 
     def run_all(self, *, output_base: Path | None = None) -> dict[str, Any]:
         analysis = self.build_analysis(output_base=output_base)
@@ -454,30 +654,178 @@ class PhaseB1Pipeline:
                                       authority_cutoff: str) -> dict[str, Any] | None:
         if event_type != "QUARTERLY_EARNINGS" or not isinstance(fixture, QuarterlyEarningsPacket):
             return None
-        envelope = template_governance.build_task_envelope(
-            run_id=run_id,
-            task_id="FY2026_Q2_ENTERPRISE_VALUE_REVIEW",
-            event=event_type,
-            period=fixture.values["fiscalPeriod"],
-            authority_cutoff=authority_cutoff,
-            research_question="Assess earnings quality, cash conversion, durability and enterprise-value implications.",
-            required_inputs=["OFFICIAL_IR_RESULTS", "GOVERNED_AUTHORITY", "GOVERNED_MARKET_DATA"],
-            required_analysis=["FINANCIAL_TRANSMISSION", "DURABILITY", "NON_GREEN_DEEP_REVIEW", "VALUATION", "CHARTS"],
-            required_output=["ANALYSIS_CANDIDATE", "REPORT_CANDIDATE", "OWNER_REVIEW"],
-            prohibited_actions=["PUBLISH", "TRADE_INSTRUCTION", "AUTHORITY_WRITE", "MODEL_CALL"],
-        )
+        common = {
+            "run_id": run_id,
+            "event": event_type,
+            "period": fixture.values["fiscalPeriod"],
+            "authority_cutoff": authority_cutoff,
+            "required_inputs": [
+                "OFFICIAL_IR_RESULTS",
+                "GOVERNED_AUTHORITY",
+                "GOVERNED_MARKET_DATA",
+            ],
+            "prohibited_actions": [
+                "PUBLISH",
+                "TRADE_INSTRUCTION",
+                "AUTHORITY_WRITE",
+                "UNVALIDATED_FACT",
+            ],
+        }
+        task_specs = [
+            (
+                "TASK_A_FINANCIAL_TRANSMISSION",
+                "How did Q2 revenue growth transmit through gross profit, operating profit, net income and cash?",
+                ["EIGHT_QUARTER_INDEX", "MARGIN_DIVERGENCE", "TURNING_POINTS"],
+                ["VALIDATED_FINANCIAL_TRANSMISSION"],
+            ),
+            (
+                "TASK_B_CAPITAL_EFFICIENCY",
+                "Is current growth creating economic value and can ROIC, incremental ROIC and DuPont quality be verified?",
+                ["CAPITAL_INTENSITY", "ROIC_INPUT_GATE", "DUPONT_INPUT_GATE"],
+                ["CAPITAL_EFFICIENCY_RESULT_OR_WHITE_GAP"],
+            ),
+            (
+                "TASK_C_AI_GROWTH_QUALITY",
+                "Which AI revenue, profit, capital and cash-conversion claims are actually proven?",
+                ["AI_VALUE_CHAIN", "COUNTEREVIDENCE", "SOURCE_QUALITY"],
+                ["AI_GROWTH_QUALITY_MATRIX"],
+            ),
+            (
+                "TASK_D_GOVERNANCE_EXECUTION",
+                "Is management's enterprise-value policy transmitting into financial results?",
+                ["TEN_LINK_VALUE_CHAIN", "EVIDENCE_GRADE", "RETIREMENT_MISSION"],
+                ["GOVERNANCE_EVIDENCE_MATRIX"],
+            ),
+            (
+                "TASK_E_VALUATION_NEW_MONEY",
+                "At price 263, where does valuation sit across earnings, book-value and dividend-yield scenarios?",
+                ["TTM_PE", "FORWARD_PE", "PB", "DIVIDEND_YIELD"],
+                ["THREE_SEPARATE_SCENARIO_MATRICES"],
+            ),
+        ]
+        envelopes = [
+            template_governance.build_task_envelope(
+                task_id=task_id,
+                research_question=question,
+                required_analysis=analysis,
+                required_output=outputs,
+                **common,
+            )
+            for task_id, question, analysis, outputs in task_specs
+        ]
         return {
             "templateId": template_governance.TEMPLATE_ID,
             "templateVersion": template_governance.TEMPLATE_VERSION,
             "templateHash": template_governance.template_hash(),
             "missionContext": template_governance.MISSION_CONTEXT,
-            "taskEnvelope": envelope,
-            "tasksDispatched": 1,
-            "tasksCompleted": 1,
+            "taskEnvelope": envelopes[0],
+            "taskEnvelopes": envelopes,
+            "tasksDispatched": len(envelopes),
+            "tasksCompleted": len(envelopes),
             "skillsUsed": ["OFFICIAL_IR_EVIDENCE_INGESTION"],
-            "skillModes": {"DATA_ANALYTICS": "SKILL_GUIDED_ONLY", "INVESTMENT_BANKING": "UNAVAILABLE"},
+            "skillModes": template_governance.skill_capability_map(),
             "skillReceipts": [fixture.event["provenance"]["receipt_path"]],
             "skillsUnavailable": ["INVESTMENT_BANKING_RUNTIME"],
+            "callableRuntimeNotExecuted": [
+                "ANYSEARCH_RUNTIME",
+                "OPENAI_EDITORIAL_RUNTIME",
+            ],
             "validationStatus": "OWNER_REVIEW_REQUIRED",
+            "actionable": False,
+        }
+
+    @staticmethod
+    def _skill_execution_summary(
+        *, fixture: Any, governance_metadata: dict[str, Any] | None,
+        analysis_sha256: str, report_sha256: str,
+        editorial_envelope: EditorialResultEnvelope | None,
+        run_root: Path,
+    ) -> dict[str, Any]:
+        if not isinstance(fixture, QuarterlyEarningsPacket) or governance_metadata is None:
+            return {
+                "skillCapabilityMap": template_governance.skill_capability_map(),
+                "taskEnvelopesDispatched": 0,
+                "realSkillReceipts": [],
+                "skillGuidedOnlyTasks": {"DATA_ANALYTICS": []},
+                "callableRuntimeNotExecuted": ["ANYSEARCH", "OPENAI_EDITORIAL"],
+                "unavailableSkills": ["INVESTMENT_BANKING"],
+                "openaiEditorialExecuted": False,
+                "openaiModel": "NOT_EXECUTED",
+                "openaiFallbackUsed": False,
+                "explicitBlockers": [
+                    "OPENAI_EDITORIAL_NOT_AUTHORIZED_NOT_EXECUTED"
+                ],
+                "actionable": False,
+            }
+        provenance = fixture.event["provenance"]
+        real_receipts = [
+            {
+                "skill": "OFFICIAL_IR",
+                "receiptId": provenance["receipt_id"],
+                "receiptPath": provenance["receipt_path"],
+                "rawArtifactSha256": provenance["raw_sha256"],
+                "status": "VALIDATED",
+            }
+        ]
+        if editorial_envelope is not None:
+            real_receipts.append(
+                {
+                    "skill": "OPENAI_EDITORIAL",
+                    "receiptId": (
+                        f"{editorial_envelope.run_id}:"
+                        f"{editorial_envelope.task_id}:"
+                        f"{editorial_envelope.editorial_output_sha256[:12]}"
+                    ),
+                    "receiptPath": str(run_root / "editorial_result_envelope.json"),
+                    "inputResearchPackSha256": (
+                        editorial_envelope.input_research_pack_sha256
+                    ),
+                    "outputSha256": editorial_envelope.editorial_output_sha256,
+                    "status": editorial_envelope.validation_status,
+                }
+            )
+        return {
+            "recordType": "P1008_SKILL_EXECUTION_SUMMARY",
+            "templateVersion": template_governance.TEMPLATE_VERSION,
+            "skillCapabilityMap": template_governance.skill_capability_map(),
+            "taskEnvelopesDispatched": governance_metadata["tasksDispatched"],
+            "taskEnvelopeIds": [
+                item["task_id"] for item in governance_metadata["taskEnvelopes"]
+            ],
+            "realSkillReceipts": real_receipts,
+            "skillGuidedOnlyTasks": {
+                "DATA_ANALYTICS": [
+                    "TASK_A_FINANCIAL_TRANSMISSION",
+                    "TASK_B_CAPITAL_EFFICIENCY",
+                    "TASK_C_AI_GROWTH_QUALITY",
+                    "TASK_E_VALUATION_NEW_MONEY",
+                ],
+            },
+            "callableRuntimeNotExecuted": (
+                ["ANYSEARCH"]
+                if editorial_envelope is not None
+                else ["ANYSEARCH", "OPENAI_EDITORIAL"]
+            ),
+            "unavailableSkills": ["INVESTMENT_BANKING"],
+            "externalEvidenceCount": 0,
+            "externalEvidenceSources": [],
+            "openaiEditorialExecuted": editorial_envelope is not None,
+            "openaiModel": (
+                editorial_envelope.model_provenance.model_identifier
+                if editorial_envelope is not None else "NOT_EXECUTED"
+            ),
+            "openaiFallbackUsed": False,
+            "explicitBlockers": (
+                [] if editorial_envelope is not None else [
+                    "OPENAI_EDITORIAL_NOT_AUTHORIZED_NOT_EXECUTED"
+                ]
+            ),
+            "validatedResearchPack": {
+                "analysisPacketSha256": analysis_sha256,
+                "reportCandidateSha256": report_sha256,
+                "acceptedInputsOnly": True,
+                "rawSkillOutputUsedDirectly": False,
+            },
+            "canvaExecuted": False,
             "actionable": False,
         }

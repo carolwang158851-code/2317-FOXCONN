@@ -1,0 +1,119 @@
+{
+  "schema_version": "1.0.0",
+  "revision_id": "ENTERPRISE_VALUE_OWNER_POLICY_REVISION_V1",
+  "revision_version": "1.0.0-review",
+  "original_candidate": {
+    "policy_id": "ENTERPRISE_VALUE_OWNER_POLICY_CANDIDATE_V1",
+    "sha256": "6AA2667C8833054CFCFA0F7183540FD4C3F4FD2D56784647315ABC85FE86E015"
+  },
+  "policy_universe_regenerated": false,
+  "frozen_approved_items": [
+    {"threshold_id": "EVOP-ROIC-SPREAD-01", "dimension": "ROIC_WACC_SPREAD", "semantic_sha256": "3E18F122A51D84C81B189D8A8C4BF476BD8EC29F15FD5792C86525A2DE7297F8", "owner_decision": "APPROVED_DESIGN"},
+    {"threshold_id": "EVOP-BALANCE-SHEET-01", "dimension": "CURRENT_BALANCE_SHEET", "semantic_sha256": "5F5BBB00712821CE3A4712D8CC947166ACA7A61A0E2B71DD135343644AAD2714", "owner_decision": "APPROVED_DESIGN"},
+    {"threshold_id": "EVOP-STRESS-RESILIENCE-01", "dimension": "STRESS_RESILIENCE", "semantic_sha256": "C0D1371C8EEF39BA291A9057E407B50C96978C1150BD1AE1D322CF6DEC2FBAA1", "owner_decision": "APPROVED_DESIGN"},
+    {"threshold_id": "EVOP-DILUTION-01", "dimension": "DILUTION", "semantic_sha256": "3F9EDE8344FDC82D5466046A7E74F342612F989FDEF312821063C06424B58D94", "owner_decision": "APPROVED_DESIGN"},
+    {"threshold_id": "EVOP-SMART-01", "dimension": "SMART_RULE_STATES", "semantic_sha256": "575FE3EFD453918822C4D8531EB35A6EE8D54C2B655F4C303BCF26D88CC22AFB", "owner_decision": "APPROVED_DESIGN"}
+  ],
+  "revised_items": [
+    {
+      "threshold_id": "EVOP-FCF-CONVERSION-01",
+      "dimension": "FCF Conversion",
+      "v1_candidate": "Standalone negative-quarter counts drove structural escalation.",
+      "owner_concern": "Hon Hai cash flow is seasonal and working-capital intensive; calendar-quarter counts can misclassify timing as structure.",
+      "revised_proposal": "Prefer same-season, TTM and FY evidence; structural risk needs two relevant weak observations plus an independent corroborator, and structural deterioration also needs repair failure and CFO weakening.",
+      "behavioral_difference": "Three negative standalone quarters alone remain timing pressure and cannot establish structural deterioration; one good quarter cannot clear a structural state.",
+      "remaining_input_dependency": "Comparable same-season/TTM/FY cash conversion, CFO, working-capital, CCC, ROIC and Capex-return evidence.",
+      "owner_decision": "REVISION_PENDING_OWNER_REVIEW"
+    },
+    {
+      "threshold_id": "EVOP-WC-FUNDING-01",
+      "dimension": "Working Capital / Funding",
+      "v1_candidate": "25% WATCH and 50% hard-blocker candidate across any validated resource denominator.",
+      "owner_concern": "The denominator hierarchy was not governed and negative CFO could produce a misleading ratio.",
+      "revised_proposal": "Use immediately available liquidity, then net cash, then positive normalized CFO capacity; keep 25%/50% as research bands only.",
+      "behavioral_difference": "No hard blocker can activate without a valid denominator, an Owner-approved threshold and actual evidence; T4 alone never activates it.",
+      "remaining_input_dependency": "Governed same-basis liquidity, net-cash and normalized CFO-capacity denominators plus later Owner numeric calibration.",
+      "owner_decision": "REVISION_PENDING_OWNER_REVIEW"
+    },
+    {
+      "threshold_id": "EVOP-PER-SHARE-01",
+      "dimension": "Per-share Compounding",
+      "v1_candidate": "A common spread band applied across per-share measures, including quarterly FCF/share.",
+      "owner_concern": "Standalone quarterly FCF/share is too seasonal to define long-term compounding.",
+      "revised_proposal": "Use compatible EPS quarterly-YoY/TTM/FY, BVPS YoY/multi-quarter/FY and FCF/share TTM/FY/comparable cumulative evidence; retain the exact compounding formula.",
+      "behavioral_difference": "Strong compounding requires two compatible positive metrics across two relevant periods; standalone quarterly FCF/share is supporting only.",
+      "remaining_input_dependency": "Compatible share-count and numerator periods, particularly longer-duration FCF/share evidence.",
+      "owner_decision": "REVISION_PENDING_OWNER_REVIEW"
+    },
+    {
+      "threshold_id": "EVOP-CAPITAL-LIGHT-01",
+      "dimension": "Capital-Light",
+      "v1_candidate": "Three aligned groups could establish direction while any missing group made the state inconclusive.",
+      "owner_concern": "Strong transitions need an explicit completeness gate and level/trend separation.",
+      "revised_proposal": "Require at least four of five evaluable factor groups, three aligned groups and two periods for a strong transition.",
+      "behavioral_difference": "Fewer than four evaluable groups caps confidence at PARTIAL/INCONCLUSIVE; no causal consignment claim is allowed.",
+      "remaining_input_dependency": "Comparable receivable, inventory, supplier-financing, cash-conversion and capital-intensity observations.",
+      "owner_decision": "REVISION_PENDING_OWNER_REVIEW"
+    },
+    {
+      "threshold_id": "EVOP-VALUATION-01",
+      "dimension": "Valuation",
+      "v1_candidate": "30th/70th/90th percentile bands mapped to attractive/fair/full/expensive candidate states.",
+      "owner_concern": "Historical percentiles could be mistaken for intrinsic value, trade thresholds or margin of safety.",
+      "revised_proposal": "Treat percentiles as descriptive historical-position bands only; require at least two multiples and ROIC/ROE/FCF/per-share context.",
+      "behavioral_difference": "Margin of safety remains pending Owner numeric calibration, and current assessment requires POST_EVENT or REPORT_CUTOFF price.",
+      "remaining_input_dependency": "Post-event/report-cutoff price, at least two governed multiples and future Owner margin-of-safety calibration.",
+      "owner_decision": "REVISION_PENDING_OWNER_REVIEW"
+    },
+    {
+      "threshold_id": "EVOP-CORE-HOLDING-01",
+      "dimension": "Core Holding Thesis",
+      "v1_candidate": "Gradual downgrade generally required a hard blocker and two adverse actual dimensions over two periods.",
+      "owner_concern": "A confirmed thesis-invalidating event may require faster REVIEW while gradual deterioration still needs persistence.",
+      "revised_proposal": "Path A permits immediate REVIEW for strong, direct, material T0/T1 thesis-invalidating evidence; Path B governs gradual multi-factor deterioration.",
+      "behavioral_difference": "REVIEW can occur faster, but T2 alone cannot downgrade and any final policy remains inactive.",
+      "remaining_input_dependency": "Direct confirmed event evidence or corroborated actual multi-period fundamental evidence.",
+      "owner_decision": "REVISION_PENDING_OWNER_REVIEW"
+    },
+    {
+      "threshold_id": "EVOP-ADD-ON-01",
+      "dimension": "Add-on Capital Gate",
+      "v1_candidate": "Six of seven equal-weight supports with no blocker and current valuation.",
+      "owner_concern": "The factors are not economically equal and secondary confidence cannot offset failed core gates.",
+      "revised_proposal": "Use mandatory gates, four core fundamental support gates and secondary confidence factors; valuation remains mandatory.",
+      "behavioral_difference": "The 6-of-7 score is removed; a failed mandatory gate cannot PASS, and PARTIAL is never a trading instruction.",
+      "remaining_input_dependency": "Current valuation basis and governed ROIC, FCF, funding and per-share states.",
+      "owner_decision": "REVISION_PENDING_OWNER_REVIEW"
+    },
+    {
+      "threshold_id": "EVOP-DOWNGRADE-01",
+      "dimension": "Thesis Downgrade Gate",
+      "v1_candidate": "An unconfirmed T4 concern could contribute to formal WATCH.",
+      "owner_concern": "Scenario interest is not verified thesis-relevant adverse evidence.",
+      "revised_proposal": "T4 creates only SCENARIO_RISK_FLAG; WATCH needs actual/direct evidence or adverse T2 plus an independent corroborator; TRIGGERED has confirmed-event and persistent-fundamental paths.",
+      "behavioral_difference": "T4 alone cannot create WATCH or TRIGGERED, and recovery from TRIGGERED requires multiple confirmations.",
+      "remaining_input_dependency": "Meaningful T0/T1 evidence or corroborated T2 evidence and multi-period actual confirmation.",
+      "owner_decision": "REVISION_PENDING_OWNER_REVIEW"
+    }
+  ],
+  "unresolved_dependencies": [
+    "governed WACC",
+    "post-event or report-cutoff price",
+    "same-basis liquidity and net-cash denominators",
+    "normalized positive CFO capacity",
+    "compatible share-count and longer-duration FCF/share evidence",
+    "Owner numeric margin-of-safety calibration",
+    "Owner-approved funding thresholds"
+  ],
+  "approved_design_count": 5,
+  "revision_pending_owner_review_count": 8,
+  "rejected_count": 0,
+  "activation_state": "NOT_ACTIVE",
+  "owner_approval_artifact_created": false,
+  "ready_for_policy_activation": false,
+  "ready_for_second_owner_review": true,
+  "external_calls": {"network_requests": 0, "openai_api_calls": 0, "canva_calls": 0},
+  "formal_report_production_runs": 0,
+  "publication": false,
+  "actionable": false
+}

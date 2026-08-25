@@ -1,0 +1,194 @@
+{
+  "schema_version": "1.0.0",
+  "contract_id": "P1008_WAR_REPORT_PRODUCTION_V1",
+  "security_ticker": "2317",
+  "actionable": false,
+  "valid_triggers": ["MONTHLY_REVENUE", "QUARTERLY_EARNINGS", "MAJOR_EVENT"],
+  "invalid_formal_triggers": ["DAILY", "WEEKLY_SUMMARY", "CALENDAR_ELAPSED", "NO_MATERIAL_CHANGE"],
+  "no_valid_trigger_behavior": {
+    "state": "OBSERVATION_ONLY",
+    "formal_report_generated": false,
+    "allowed_writes": ["evidence_state", "observation_history"],
+    "publication": false
+  },
+  "chapter_contract": {
+    "count": 11,
+    "order_immutable": true,
+    "chapters": [
+      {"id": "s1", "ordinal": 1, "title_zh": "投資主題與核心判斷"},
+      {"id": "s2", "ordinal": 2, "title_zh": "鑑往：經營與財務趨勢"},
+      {"id": "s3", "ordinal": 3, "title_zh": "本季企業獲利分析"},
+      {"id": "s4", "ordinal": 4, "title_zh": "三大財報與股東價值"},
+      {"id": "s5", "ordinal": 5, "title_zh": "商業模式與競爭力"},
+      {"id": "s6", "ordinal": 6, "title_zh": "外部戰情與未來獲利傳導"},
+      {"id": "s7", "ordinal": 7, "title_zh": "3+3+3 與資本配置"},
+      {"id": "s8", "ordinal": 8, "title_zh": "估值"},
+      {"id": "s9", "ordinal": 9, "title_zh": "前瞻情境與投資判斷"},
+      {"id": "s10", "ordinal": 10, "title_zh": "最後 SMART 總結"},
+      {"id": "s11", "ordinal": 11, "title_zh": "正式附錄"}
+    ],
+    "unaffected_major_event_text": "本次事件未改變原判斷"
+  },
+  "template_contract": {
+    "template_id": "HON_HAI_WAR_REPORT_MOTHER_V1",
+    "template_path": "templates/HON_HAI_WAR_REPORT_MOTHER_V1.html",
+    "template_sha256": "0588341F1DD94A64AC36C8ED3CCB7E8618758EA15096700CE0316B135609A4A0",
+    "proven_mother_source_name": "HON_HAI_FY2026_Q2_ENTERPRISE_VALUE_WAR_REPORT.html",
+    "proven_mother_source_sha256": "35BC300C3AD9D6783C8AD4F4BBDD850E51ED13065630DA6B361D3A2378C264B6",
+    "required_root": "<article class=\"report\">",
+    "self_contained": true,
+    "preserve": ["css", "typography", "report_width", "sticky_navigation", "responsive_css", "print_css"],
+    "external_scripts_allowed": false,
+    "external_stylesheets_allowed": false,
+    "primary_artifact": "HTML",
+    "pdf_primary": false,
+    "zip_primary": false
+  },
+  "production_inputs": {
+    "required_classes": ["FINANCIAL_BASELINE", "HISTORICAL_SERIES", "RESEARCH_EVIDENCE", "CURRENT_MARKET_SNAPSHOT", "PREVIOUS_REPORT_STATE"],
+    "previous_report_fields": ["core_holding_thesis", "add_on_capital_gate", "thesis_downgrade_gate", "smart_state", "unresolved_questions"]
+  },
+  "data_precedence": [
+    "REPOSITORY_GOVERNED_FINANCIAL_DATA",
+    "HON_HAI_OFFICIAL_FINANCIAL_STATEMENTS",
+    "OFFICIAL_EARNINGS_RELEASE_TRANSCRIPT_INVESTOR_MATERIALS",
+    "REPUTABLE_MARKET_DATA_PROVIDER",
+    "EXTERNAL_NEWS_EVIDENCE"
+  ],
+  "precedence_rules": {
+    "lower_level_may_overwrite_higher_level": false,
+    "news_is_financial_authority": false,
+    "conflict_behavior": "FAIL_CLOSED_UNRESOLVED_CRITICAL_KPI_CONFLICT"
+  },
+  "historical_retention_policy": {
+    "primary_dataset": "FULL_HISTORY",
+    "data_retention": "ALL_AVAILABLE_COMPARABLE_HISTORY",
+    "mutation_policy": "APPEND_ONLY",
+    "chronological": true,
+    "delete_for_chart_aesthetics": false,
+    "visualization_zoom_views": ["RECENT_8Q", "RECENT_12Q"],
+    "zoom_may_replace_primary": false,
+    "crowded_axis_policy": "REDUCE_TICK_LABEL_DENSITY_NOT_DATA_DENSITY"
+  },
+  "chart_contract": {
+    "source": "CUMULATIVE_DATA_SERIES",
+    "regenerate_each_report": true,
+    "families": [
+      "REVENUE_GROSS_PROFIT_OPERATING_PROFIT",
+      "GROSS_MARGIN_OPERATING_MARGIN",
+      "EPS",
+      "CFO_CAPEX_FCF",
+      "CCC_WORKING_CAPITAL",
+      "ROIC",
+      "BVPS",
+      "SHARE_COUNT_DILUTION",
+      "PS_PE_PB",
+      "PEER_VALUATION_CAPITAL_EFFICIENCY_HISTORY"
+    ],
+    "required_metadata": ["decision_question", "period", "unit", "source_locator", "formula_or_transformation", "input_sha256", "commentary"],
+    "embed_in_html": true,
+    "observations_may_be_removed_for_layout": false
+  },
+  "kpi_contract": {
+    "enterprise_value_spine": ["OPERATING_PROFIT_QUALITY", "FCF_CONVERSION", "ROIC_INCREMENTAL_ROIC", "PER_SHARE_VALUE_COMPOUNDING"],
+    "causal_sequence": ["Revenue", "Gross Profit", "Opex", "Operating Profit", "Net Income", "Working Capital", "CFO", "Capex", "FCF", "Invested Capital", "ROIC", "Incremental ROIC", "EPS/BVPS/FCF per Share", "Valuation"],
+    "operating_profit_quality": {
+      "formula_chain": ["Revenue - COGS = Gross Profit", "Gross Profit - Opex = Operating Profit", "Operating Profit + Non-operating items = Pretax Income", "Pretax - Tax/NCI adjustments = Parent Net Income", "Parent Net Income / weighted-average shares = EPS"],
+      "gp_minus_op_label": "DERIVED_OPEX_PROXY",
+      "separate_profit_dollars_from_margin": true
+    },
+    "fcf_conversion": {
+      "required_trigger": "QUARTERLY_EARNINGS",
+      "required_chapter": "s4",
+      "series": ["CFO", "Capex", "FCF"],
+      "comparisons": ["PREVIOUS_QUARTER", "SAME_PERIOD_PRIOR_YEAR", "PREVIOUS_FULL_FISCAL_YEAR", "LONGER_HISTORY"],
+      "classifications": ["CYCLICAL_OR_TIMING_PRESSURE", "STRUCTURAL_RISK_NOT_RULED_OUT", "STRUCTURAL_DETERIORATION"],
+      "verification_metrics": ["A/R", "Inventory", "A/P", "CCC", "CFO", "Capex", "FCF", "Funding Need", "Interest Expense"],
+      "fabricate_working_capital_bridge": false
+    },
+    "consignment_hypothesis": {
+      "automatic_operating_profit_causality": false,
+      "testable_chain": ["Consignment increases", "Inventory/Working Capital decreases", "Funding Need decreases", "Interest decreases", "CFO/FCF increases", "Invested Capital decreases", "ROIC increases"],
+      "must_verify_with_financial_data": true
+    },
+    "roic": {
+      "methodology_version": "ROIC_V1_NORMALIZED_OPERATING",
+      "nopat_formula": "Operating Profit * (1 - normalized operating tax rate)",
+      "invested_capital_formula": "Operating Assets - Non-interest-bearing Operating Liabilities",
+      "roic_formula": "NOPAT / Average Invested Capital",
+      "incremental_roic_formula": "Delta NOPAT / Delta Invested Capital",
+      "basis_labels_required": ["QUARTERLY", "TTM", "ANNUAL"],
+      "missing_same_basis_quarterly": "PENDING_OR_UNAVAILABLE",
+      "third_party_ttm_may_replace_quarterly": false
+    },
+    "per_share_value": {
+      "series": ["EPS", "BVPS", "FCF_PER_SHARE", "SHARE_COUNT"],
+      "decision_question": "PER_SHARE_VALUE_COMPOUNDS_FASTER_THAN_DILUTION",
+      "dilution_automatically_negative": false
+    },
+    "valuation": {
+      "stack": ["P/S", "P/E", "P/B", "FCF", "ROIC", "ROE"],
+      "logic": ["ROIC_RELATIVE_TO_WACC", "FCF_QUALITY", "PER_SHARE_VALUE", "VALUATION_MULTIPLES"],
+      "distinguish": ["MECHANICAL_P/S_EXPANSION", "GENUINE_VALUATION_RERATING"],
+      "sensitivity_is_target_price": false
+    }
+  },
+  "decision_contract": {
+    "dimension_count": 3,
+    "dimensions": [
+      {"id": "CORE_HOLDING_THESIS", "allowed_states": ["維持", "REVIEW", "降級"]},
+      {"id": "ADD_ON_CAPITAL_GATE", "allowed_states": ["通過", "PARTIAL", "尚未通過"]},
+      {"id": "THESIS_DOWNGRADE_GATE", "allowed_states": ["尚未觸發", "WATCH", "TRIGGERED"]}
+    ],
+    "aggregate_numeric_score_allowed": false,
+    "evidence_derived": true,
+    "previous_report_comparison": ["PREVIOUS_STATE", "CURRENT_STATE", "WHAT_CHANGED", "WHY_IT_CHANGED", "WHAT_WOULD_CHANGE_IT_NEXT"]
+  },
+  "smart_contract": {
+    "chapter": "s10",
+    "persistent_across_revisions": true,
+    "categories": ["Operating Margin", "ROE", "EPS", "ASIC/Consignment", "CFO/FCF", "ROIC", "P/S rerating", "Apple/NVIDIA long-term risk", "3+3+3 capital allocation", "per-share value compounding"],
+    "fields": ["metric_or_thesis", "current_state", "evidence", "next_verification_condition", "time_horizon"]
+  },
+  "reader_language_contract": {
+    "locale": "zh-Hant-TW",
+    "register": "TAIWAN_INSTITUTIONAL_INVESTMENT_RESEARCH",
+    "retained_abbreviations": ["ROIC", "FCF", "ROE", "EPS", "BVPS", "CCC", "P/S", "P/E", "P/B", "WACC", "CFO", "Capex"],
+    "forbidden_main_prose_terms": ["P1008", "production authority", "authority", "DATA GAP", "fail-closed", "actionable=false", "publication=false", "OWNER REVIEW REQUIRED", "STRUCTURAL_RISK_NOT_RULED_OUT", "CORE_HOLDING_THESIS", "ADD_ON_CAPITAL_GATE", "THESIS_DOWNGRADE_GATE", "AUTH-", "IR-EVIDENCE-"],
+    "forbidden_scoring_examples": ["78/100", "A-", "B+"]
+  },
+  "report_revision_contract": {
+    "identity_fields": ["report_key", "revision"],
+    "same_event_policy": "APPEND_REVISION_NOT_DUPLICATE_CARD",
+    "revision_required_fields": ["what_changed", "why", "which_data_changed", "investment_conclusion_changed"]
+  },
+  "retention_contract": {
+    "quarterly_reports": "RETAIN_PERMANENTLY",
+    "major_event_reports": "RETAIN_PERMANENTLY",
+    "monthly_revenue_reports": "EXISTING_REPORT_RETENTION_GOVERNANCE",
+    "routine_observations": "EVIDENCE_OR_OBSERVATION_HISTORY_ONLY"
+  },
+  "runtime_sequence": [
+    "RESOLVE_TRIGGER", "RESOLVE_REPORT_KEY", "LOAD_PREVIOUS_REPORT_STATE", "LOAD_MOTHER_TEMPLATE",
+    "LOAD_FINANCIAL_BASELINE", "LOAD_FULL_HISTORY", "APPEND_CONFIRMED_OBSERVATIONS", "VALIDATE_DATA",
+    "CALCULATE_ALLOWED_DERIVED_METRICS", "LOAD_TRIGGER_RELEVANT_RESEARCH", "RUN_ENTERPRISE_VALUE_CAUSAL_ANALYSIS",
+    "UPDATE_DECISION_ENGINE", "UPDATE_SMART_STATE", "REGENERATE_CUMULATIVE_CHARTS",
+    "POPULATE_FIXED_11_CHAPTER_TEMPLATE", "RENDER_SELF_CONTAINED_HTML", "VALIDATE_REPORT",
+    "PRODUCE_OWNER_REVIEW_CANDIDATE", "STOP"
+  ],
+  "validation_contract": {
+    "fail_closed_conditions": [
+      "MOTHER_TEMPLATE_UNRESOLVED", "FINANCIAL_BASELINE_INTEGRITY_FAILURE", "SOURCE_PERIOD_AMBIGUOUS",
+      "DERIVED_FORMULA_CONTRACT_INCONSISTENT", "REPORT_KEY_COLLISION_UNRESOLVED", "TEMPLATE_STRUCTURE_CORRUPTED",
+      "EMBEDDED_CHART_RENDER_FAILURE", "CHAPTER_COUNT_OR_ORDER_CHANGED", "CRITICAL_KPI_CONFLICT_UNRESOLVED"
+    ],
+    "best_effort_formal_report": false,
+    "reader_prose_internal_terms_blocked": true
+  },
+  "publication_policy": {
+    "owner_review_required": true,
+    "automatic_publication": false,
+    "public_platform_calls": false,
+    "terminal_state": "OWNER_REVIEW_CANDIDATE"
+  }
+}

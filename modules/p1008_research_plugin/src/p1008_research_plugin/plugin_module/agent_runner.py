@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 from ..openai.model_registry import ModelDefinition
 from ..openai.tool_registry import ToolRegistry
 from ..runtime.runtime_config import PHASE3B_LIVE_MODEL_ID, RuntimeConfig
+from ..reporting.report_contracts import ReportCandidate
 from .contracts import (
     BaselineSnapshot,
     Confidence,
@@ -76,6 +77,7 @@ METRIC_FIELDS = ("revenue", "EPS", "margins", "valuation", "fx_impact")
 OPENAI_CLIENT_MAX_RETRIES = 0
 AGENT_RUN_MAX_TURNS = 1
 RESPONSES_MAX_TOOL_CALLS = 1
+EDITORIAL_RESPONSES_MAX_TOOL_CALLS = 0
 STEP_FOR_PLUGIN = {
     PluginId.WEB_SEARCH: ExecutionStep.WEB_SEARCH,
     PluginId.DATA_ANALYTICS: ExecutionStep.DATA_ANALYTICS,
@@ -374,6 +376,87 @@ class LiveAgentsSdkClient:
         input_tokens = int(getattr(usage, "input_tokens", 0) or 0)
         output_tokens = int(getattr(usage, "output_tokens", 0) or 0)
         return synthesis, TokenUsage(
+            source="AGENTS_SDK",
+            model_id=self.model.model_id,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=input_tokens + output_tokens,
+        )
+
+    def synthesize_editorial(
+        self,
+        *,
+        payload: dict[str, Any],
+        instructions: str,
+    ) -> tuple[ReportCandidate, TokenUsage]:
+        """Run one typed editorial task with the same governed SDK client."""
+        configured_model = self.config.require_live_credentials()
+        if (
+            configured_model != PHASE3B_LIVE_MODEL_ID
+            or configured_model != self.model.model_id
+            or not self.model.network_required
+        ):
+            raise AgentExecutionError("Live editorial model registry binding is invalid")
+        if payload.get("taskType") != "WAR_REPORT_EDITORIAL_SYNTHESIS":
+            raise AgentExecutionError("Live editorial task type is invalid")
+        if payload.get("webSearchAllowed") is not False:
+            raise AgentExecutionError("Live editorial cannot enable Web Search")
+        if payload.get("publication") is not False or payload.get("actionable") is not False:
+            raise AgentExecutionError("Live editorial governance boundary is invalid")
+        if self.synthesis_calls >= 1:
+            raise AgentExecutionError("An editorial run cannot synthesize more than once")
+
+        try:
+            sdk = importlib.import_module("".join(("ag", "ents")))
+            openai_sdk = importlib.import_module("openai")
+            agent_class = getattr(sdk, "Agent")
+            runner_class = getattr(sdk, "Runner")
+            model_settings_class = getattr(sdk, "ModelSettings")
+            retry_settings_class = getattr(sdk, "ModelRetrySettings")
+            provider_class = getattr(sdk, "OpenAIProvider")
+            run_config_class = getattr(sdk, "RunConfig")
+            async_openai_class = getattr(openai_sdk, "AsyncOpenAI")
+        except (ImportError, AttributeError) as exc:
+            raise AgentExecutionError("OpenAI Agents SDK is unavailable") from exc
+
+        agent = agent_class(
+            name="P1008 War Report Editorial Agent",
+            instructions=instructions,
+            model=self.model.model_id,
+            tools=[],
+            output_type=ReportCandidate,
+        )
+        openai_client = async_openai_class(max_retries=OPENAI_CLIENT_MAX_RETRIES)
+        model_settings = model_settings_class(
+            parallel_tool_calls=False,
+            extra_args={"max_tool_calls": EDITORIAL_RESPONSES_MAX_TOOL_CALLS},
+            retry=retry_settings_class(max_retries=OPENAI_CLIENT_MAX_RETRIES),
+        )
+        run_config = run_config_class(
+            model_provider=provider_class(openai_client=openai_client, use_responses=True),
+            model_settings=model_settings,
+            tracing_disabled=True,
+        )
+        self.synthesis_calls += 1
+        result = runner_class.run_sync(
+            agent,
+            json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+            max_turns=AGENT_RUN_MAX_TURNS,
+            run_config=run_config,
+        )
+        response_id = getattr(result, "last_response_id", None)
+        self.provider_response_id = response_id if isinstance(response_id, str) else None
+        self.provider_request_ids, traces, citations = _provider_trace(result)
+        if traces or citations:
+            raise AgentExecutionError("Editorial execution cannot use hosted Web Search")
+        self.hosted_web_search_trace = []
+        self.provider_citations = []
+        output = result.final_output
+        candidate = output if isinstance(output, ReportCandidate) else ReportCandidate.model_validate(output)
+        usage = getattr(getattr(result, "context_wrapper", None), "usage", None)
+        input_tokens = int(getattr(usage, "input_tokens", 0) or 0)
+        output_tokens = int(getattr(usage, "output_tokens", 0) or 0)
+        return candidate, TokenUsage(
             source="AGENTS_SDK",
             model_id=self.model.model_id,
             input_tokens=input_tokens,
