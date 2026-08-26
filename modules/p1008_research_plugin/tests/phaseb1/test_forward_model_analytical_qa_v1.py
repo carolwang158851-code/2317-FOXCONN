@@ -121,9 +121,10 @@ class ForwardModelAnalyticalQAV1Tests(unittest.TestCase):
         result = ttm_eps_valuation(price=Decimal("263"), q3_2025=Decimal("4.15"), q4_2025=Decimal("3.23"), q1_2026=Decimal("3.56"), q2_2026=Decimal("4.27"))
         self.assertEqual(result["h2_2025_eps"], Decimal("7.38"))
 
-    def test_qa09_pre_event_price_not_current_label(self):
+    def test_qa09_price_label_is_event_time_aware(self):
         body = (PACKAGE_ROOT / "modules/p1008_research_plugin/src/p1008_research_plugin/reporting/report_builder.py").read_text(encoding="utf-8")
-        self.assertIn("財報公布前收盤價", body)
+        self.assertIn('valuation["price"]["readerLabel"]', body)
+        self.assertIn("財報公布後報告截止日", body)
         self.assertNotIn('f"現價{valuation', body)
 
     def test_qa10_price_date_preserved(self):

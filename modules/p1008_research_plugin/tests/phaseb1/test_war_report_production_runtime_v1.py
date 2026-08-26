@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import unittest
 from copy import deepcopy
 from pathlib import Path
@@ -15,6 +16,7 @@ except ImportError:
 
 from p1008_research_plugin.phaseb1_common import protected_state_hashes
 from p1008_research_plugin.phaseb1_pipeline import PhaseB1Pipeline
+from p1008_research_plugin.analysis.quarterly_analysis_builder import valuation_time_basis_labels
 from p1008_research_plugin.reporting.war_report_production_contract import (
     WarReportContractError,
     append_full_history,
@@ -225,6 +227,138 @@ class WarReportProductionRuntimeV1Tests(unittest.TestCase):
         self.assertEqual(self.result["owner_review_state"], "OWNER_REVIEW_REQUIRED")
         self.assertGreater(Path(self.result["output_html"]).stat().st_size, 10000)
         self.assertEqual(self.result["external_calls"], {"network": 0, "openai_api": 0, "canva": 0})
+
+    def test_r27_chapter_one_uses_two_stage_enterprise_value_spine(self) -> None:
+        self.assertIn("企業價值第一階段已驗證，第二階段仍待驗證", self.html)
+        self.assertIn("成長是否能轉成資本報酬與現金", self.html)
+        for metric in ("營收", "毛利", "營業利益", "EPS", "CFO", "FCF", "CCC", "P/S", "P/E", "P/B"):
+            self.assertIn(metric, self.html)
+
+    def test_r28_profit_bridge_distinguishes_margin_and_expense_absorption(self) -> None:
+        self.assertIn("2025Q2至2026Q2獲利橋", self.html)
+        self.assertIn("毛利以下營業費用淨額代理值", self.html)
+        self.assertIn("不是公司揭露的單一營業費用科目，也不是營業成本", self.html)
+        self.assertIn("毛利率仍較去年同期下降21個基點", self.html)
+
+    def test_r29_accounts_payable_cashflow_direction_is_correct(self) -> None:
+        self.assertIn("應付帳款是融資抵銷，不是現金吸收", self.html)
+        self.assertIn("提供供應商融資並抵銷部分占用", self.html)
+        self.assertNotIn("應付帳款增加會吸收現金", self.html)
+
+    def test_r30_fcf_uses_same_season_and_full_year_recovery_context(self) -> None:
+        self.assertIn("2025H1 FCF為-552.75億元", self.html)
+        self.assertIn("2025年前九個月擴大至-1,623.35億元", self.html)
+        self.assertIn("全年則回升至530.89億元", self.html)
+        self.assertIn("結構性風險尚未排除", self.html)
+
+    def test_r31_roic_three_layers_remain_separate(self) -> None:
+        for phrase in (
+            "官方同口徑", "部分營運投入資本估算",
+            "年化敏感度", "這不是官方同口徑ROIC",
+        ):
+            self.assertIn(phrase, self.html)
+        self.assertIn("不能當作TTM或正式年度ROIC", self.html)
+
+    def test_r32_capital_light_hypothesis_is_not_causality(self) -> None:
+        self.assertIn("Consignment（客供料）仍是可驗證假說", self.html)
+        self.assertIn("訊號互有支持與反證", self.html)
+        self.assertIn("資本輕量化綜合判斷仍不確定", self.html)
+
+    def test_r33_event_time_valuation_uses_actual_event_date(self) -> None:
+        valuation = self.result["analysis"].quarterly_earnings.valuation_scenarios
+        self.assertEqual(valuation["price"]["eventDate"], "2026-08-12")
+        expected = valuation_time_basis_labels(valuation["price"]["date"], valuation["price"]["eventDate"])
+        self.assertEqual(valuation["price"]["valuationContext"], expected["price_context"])
+        self.assertEqual(valuation["price"]["readerLabel"], expected["reader_label"])
+        known_post_event_case = valuation_time_basis_labels("2026-08-25", "2026-08-12")
+        self.assertEqual(known_post_event_case["price_context"], "POST_EVENT_REPORT_CUTOFF_PRICE")
+        self.assertEqual(known_post_event_case["reader_label"], "財報公布後報告截止日收盤價")
+
+    def test_r34_eight_rule_label_is_consistent(self) -> None:
+        rules = json.loads((Path(self.result["output_root"]) / "enterprise_value_rule_engine.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(rules["rules"]), 8)
+        self.assertIn("八項企業價值證據規則", self.html)
+        self.assertNotIn("七維證據規則", self.html)
+
+    def test_r35_reader_has_no_internal_enum_or_placeholder_leakage(self) -> None:
+        for token in (
+            "DECLARED_IN_", "INITIALIZED_BASELINE", "LOW_RESILIENCE",
+            "ESTIMATE_ACTIVE", "Q_STANDALONE", "INSUFFICIENT_DATA",
+        ):
+            self.assertNotIn(token, self.html)
+        self.assertNotIn("Owner", self.html)
+
+    def test_r36_reader_has_no_database_precision(self) -> None:
+        visible = re.sub(r"<(?:style|script)\\b[^>]*>.*?</(?:style|script)>", " ", self.html, flags=re.DOTALL | re.IGNORECASE)
+        self.assertIsNone(re.search(r"(?<!\\d)\\d+\\.\\d{5,}(?!\\d)", visible))
+
+    def test_r37_full_history_charts_use_only_three_specific_commentaries(self) -> None:
+        charts = json.loads((Path(self.result["output_root"]) / "chart_data_full_history.json").read_text(encoding="utf-8"))
+        full_history = [item for item in charts if item["chartId"].startswith("full_history_")]
+        self.assertTrue(full_history)
+        self.assertTrue(all(len(item["commentaryZh"]) == 3 for item in full_history))
+        for item in full_history:
+            start = self.html.index(f'data-chart-id="{item["chartId"]}"')
+            end = self.html.index("</figure>", start)
+            figure = self.html[start:end]
+            self.assertNotIn("戰略含義：", figure)
+            self.assertNotIn("下一驗證點：", figure)
+
+    def test_r38_variant_and_counter_view_are_explicit(self) -> None:
+        self.assertIn("兩種競爭解釋", self.html)
+        self.assertIn("主解釋", self.html)
+        self.assertIn("替代解釋", self.html)
+        self.assertIn("Q3 CFO、毛利率與同口徑ROIC", self.html)
+
+    def test_r39_smart_is_falsifiable_not_runtime_state_table(self) -> None:
+        for heading in ("目前基線", "增強條件", "削弱條件", "下一觀察"):
+            self.assertIn(heading, self.html)
+        self.assertIn("2026全年FCF仍為負", self.html)
+        self.assertNotIn("SMART-01", self.html)
+
+    def test_r40_appendix_uses_reader_citations_and_collapsed_audit(self) -> None:
+        self.assertIn("論文式來源索引", self.html)
+        self.assertIn("<details><summary>技術稽核說明</summary>", self.html)
+        self.assertIn("CSV與JSON只作可追溯資料定位", self.html)
+
+    def test_r41_valuation_timepoints_and_chart_basis_are_explicit(self) -> None:
+        valuation = self.result["analysis"].quarterly_earnings.valuation_scenarios["valuationTimeBasis"]
+        self.assertEqual(valuation["preEventValuation"]["date"], "2026-08-11")
+        self.assertEqual(valuation["postEventValuation"]["status"], "UNAVAILABLE_LOCAL_AUTHORITY")
+        self.assertIn("事件後P/S、P/E與P/B均不可得", self.html)
+        self.assertIn("歷史季度序列只到2026Q1", self.html)
+        self.assertIn("獨立尺度", self.html)
+
+    def test_r42_chapter_four_exposes_evidence_and_limits_causality(self) -> None:
+        for phrase in (
+            "非現金項目", "資料未提供", "現有證據可確認營運資金是重要因素",
+            "但不足以把全部 CFO 落差歸因於營運資金", "現金及約當現金",
+            "淨現金", "權益總額（含非控制權益）", "90日研究情境",
+        ):
+            self.assertIn(phrase, self.html)
+
+    def test_r43_smart_requires_durable_cash_per_share_and_valuation_confirmation(self) -> None:
+        for phrase in (
+            "Q3單季CFO轉正只算初步改善", "H2、全年或TTM現金轉化恢復",
+            "每股價值", "FCF／相容加權平均股數", "估值第二階段", "形成再評價風險",
+        ):
+            self.assertIn(phrase, self.html)
+
+    def test_r44_editorial_has_no_machine_or_unsupported_forward_language(self) -> None:
+        for forbidden in (
+            "PERIOD_END_SHARE_COUNT", "PEER_VALUATION_CAPITAL_EFFICIENCY_HISTORY",
+            "後續可望回收", "現金治理未通過", "資本治理待補",
+        ):
+            self.assertNotIn(forbidden, self.html)
+
+    def test_r45_reader_stress_precision_and_equity_basis_are_consistent(self) -> None:
+        self.assertIn("壓力情境韌性", self.html)
+        self.assertIn("待驗證", self.html)
+        self.assertNotIn("韌性偏低", self.html)
+        self.assertIn("權益總額（含非控制權益）", self.html)
+        self.assertIn("不得作為歸屬母公司ROE或BVPS分母", self.html)
+        for raw in ("-72339.154", "45111.655", "-117450.809", "21875.585"):
+            self.assertNotIn(raw, self.html)
 
 
 if __name__ == "__main__":

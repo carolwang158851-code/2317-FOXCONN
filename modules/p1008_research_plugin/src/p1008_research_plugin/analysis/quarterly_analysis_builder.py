@@ -65,6 +65,20 @@ def ttm_eps_valuation(*, price: Decimal, q3_2025: Decimal, q4_2025: Decimal, q1_
     return {"ttm_eps": ttm, "ttm_pe": (price / ttm).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP), "h2_2025_eps": q3_2025 + q4_2025}
 
 
+def valuation_time_basis_labels(price_date_value: str, event_date_value: str) -> dict[str, str | bool]:
+    """Classify market evidence from the actual event date, never availability alone."""
+    price_date = date.fromisoformat(price_date_value)
+    event_date = date.fromisoformat(event_date_value)
+    is_pre_event = price_date < event_date
+    return {
+        "is_pre_event": is_pre_event,
+        "price_context": "PRE_EVENT_PRICE" if is_pre_event else "POST_EVENT_REPORT_CUTOFF_PRICE",
+        "reader_label": "財報公布前收盤價" if is_pre_event else "財報公布後報告截止日收盤價",
+        "valuation_state": "PRE_EVENT_VALUATION_CONTEXT" if is_pre_event else "POST_EVENT_REPORT_CUTOFF_CONTEXT",
+        "cutoff_status": "AVAILABLE_PRE_EVENT" if is_pre_event else "AVAILABLE_POST_EVENT",
+    }
+
+
 class QuarterlyAnalysisBuilder:
     def __init__(self, package_root: Path, authority: AuthorityAdapter) -> None:
         self.package_root = package_root.resolve()
@@ -124,6 +138,10 @@ class QuarterlyAnalysisBuilder:
         cf = q["cashFlow"]
         prior = q["priorYearQuarterFinancials"]
         balance = q["balanceSheet"]
+        pre_event_prices = [row for row in price.rows if row["Date"] < q["publicationDate"]]
+        post_event_prices = [row for row in price.rows if row["Date"] >= q["publicationDate"]]
+        latest_pre_event_price = pre_event_prices[-1] if pre_event_prices else None
+        latest_post_event_price = post_event_prices[-1] if post_event_prices else None
         working_capital_days = q["workingCapitalDays"]
         product_mix = q["productMix"]
         strategy = q["strategyFramework"]
@@ -210,6 +228,29 @@ class QuarterlyAnalysisBuilder:
         estimated_weighted_average_shares_million = _d(f["attributableProfitMillionTwd"]) / _d(f["epsTwd"])
         estimated_market_cap_million_twd = price_value * estimated_weighted_average_shares_million
         ps_value = estimated_market_cap_million_twd / ttm_revenue_million_twd
+
+        def valuation_at_price(row: dict[str, str] | None) -> dict[str, Any]:
+            if row is None:
+                return {"status": "UNAVAILABLE_LOCAL_AUTHORITY", "date": None, "price": None, "ps": None, "pe": None, "pb": None}
+            point_price = _d(row["Close"])
+            return {
+                "status": "AVAILABLE",
+                "date": row["Date"],
+                "price": str(point_price),
+                "ps": f"{(point_price * estimated_weighted_average_shares_million / ttm_revenue_million_twd).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)}",
+                "pe": f"{(point_price / ttm_eps).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)}",
+                "pb": row["PB_daily"],
+                "sourceId": authority_ids["price"],
+            }
+
+        pre_event_valuation = valuation_at_price(latest_pre_event_price)
+        post_event_valuation = valuation_at_price(latest_post_event_price)
+        time_basis = valuation_time_basis_labels(latest_price["Date"], q["publicationDate"])
+        is_pre_event_price = bool(time_basis["is_pre_event"])
+        price_context = str(time_basis["price_context"])
+        price_reader_label = str(time_basis["reader_label"])
+        valuation_state = str(time_basis["valuation_state"])
+        cutoff_status = str(time_basis["cutoff_status"])
         forward_scenarios: list[dict[str, str]] = []
         for growth in (Decimal("0.10"), Decimal("0.20"), Decimal("0.30")):
             fy_eps = Decimal("7.83") + h2_2025_eps * (Decimal("1") + growth)
@@ -220,13 +261,16 @@ class QuarterlyAnalysisBuilder:
                 "classification": "SCENARIO",
             })
         valuation_scenarios = {
-            "price": {"value": str(price_value), "unit": "新台幣元", "date": latest_price["Date"], "eventDate": q["publicationDate"], "valuationContext": "PRE_EVENT_PRICE", "readerLabel": "財報公布前收盤價", "classification": "OFFICIAL"},
+            "price": {"value": str(price_value), "unit": "新台幣元", "date": latest_price["Date"], "eventDate": q["publicationDate"], "valuationContext": price_context, "readerLabel": price_reader_label, "classification": "OFFICIAL"},
             "valuationTimeBasis": {
                 "contractId": "VALUATION_TIME_BASIS_V1",
-                "preEventPrice": {"value": str(price_value), "date": latest_price["Date"], "sourceId": authority_ids["price"], "status": "AVAILABLE"},
-                "postEventPrice": {"value": None, "date": None, "status": "UNAVAILABLE_LOCAL_AUTHORITY"},
-                "reportCutoffPrice": {"value": str(price_value), "date": latest_price["Date"], "sourceId": authority_ids["price"], "status": "AVAILABLE_PRE_EVENT"},
-                "valuationState": "PRE_EVENT_VALUATION_CONTEXT",
+                "eventDate": q["publicationDate"],
+                "preEventPrice": ({"value": str(price_value), "date": latest_price["Date"], "sourceId": authority_ids["price"], "status": "AVAILABLE"} if is_pre_event_price else {"value": None, "date": None, "status": "NOT_SELECTED_REPORT_CUTOFF_IS_POST_EVENT"}),
+                "postEventPrice": ({"value": None, "date": None, "status": "UNAVAILABLE_LOCAL_AUTHORITY"} if is_pre_event_price else {"value": str(price_value), "date": latest_price["Date"], "sourceId": authority_ids["price"], "status": "AVAILABLE"}),
+                "reportCutoffPrice": {"value": str(price_value), "date": latest_price["Date"], "sourceId": authority_ids["price"], "status": cutoff_status},
+                "preEventValuation": pre_event_valuation,
+                "postEventValuation": post_event_valuation,
+                "valuationState": valuation_state,
             },
             "pb": {"value": str(pb_value), "unit": "倍", "classification": "DIRECT_PRICE_WITH_LAGGED_DENOMINATOR", "denominatorPeriod": latest_master["Quarter"], "readerLabel": "以最新直接揭露BVPS計算的P/B"},
             "ttmEpsComponents": {"values": [str(item) for item in ttm_components], "unit": "元", "classification": "OFFICIAL"},
@@ -258,13 +302,13 @@ class QuarterlyAnalysisBuilder:
                 "value": f"{ps_value.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)}",
                 "unit": "倍",
                 "classification": "T2_ESTIMATED_DERIVED",
-                "priceContext": "PRE_EVENT_PRICE",
+                "priceContext": price_context,
                 "priceDate": latest_price["Date"],
                 "ttmRevenueMillionTwd": str(ttm_revenue_million_twd),
                 "ttmRevenuePeriods": [*ttm_revenue_periods, "2026Q2"],
                 "weightedAverageSharesMillion": str(estimated_weighted_average_shares_million),
                 "shareBasis": "Q2 attributable profit / officially reported basic EPS; estimated compatible weighted-average shares",
-                "formula": "pre-event price × estimated compatible weighted-average shares / TTM revenue",
+                "formula": "report-cutoff price × estimated compatible weighted-average shares / TTM revenue",
             },
             "forwardPeScenarios": forward_scenarios,
             "peMatrix": [
@@ -279,7 +323,7 @@ class QuarterlyAnalysisBuilder:
                 {"yield": f"{yield_pct}%", "referenceValue": f"{(dividend / (yield_pct / 100)).quantize(Decimal('1'), rounding=ROUND_HALF_UP)}", "classification": "SCENARIO"}
                 for yield_pct in (Decimal("2.5"), Decimal("3.0"), Decimal("3.5"))
             ],
-            "psStatus": "AVAILABLE_T2_PRE_EVENT_CONTEXT",
+            "psStatus": f"AVAILABLE_T2_{valuation_state}",
             "scenarioDisclaimer": "情境參考值，不是目標價或交易指令。",
         }
         revenue_yoy = (_d(f["revenueMillionTwd"]) / _d(prior["revenueMillionTwd"]) - 1) * 100
@@ -316,7 +360,7 @@ class QuarterlyAnalysisBuilder:
             {"metric": "股東權益報酬率 ROE", "whyItMatters": "衡量累積股東資本創造淨利的效率。", "formula": "歸屬股東淨利／平均股東權益", "currentInputs": "官方2026H1 ROE 6.21%；2025H1 5.48%", "currentResult": "+0.73個百分點", "plainLanguage": "公司每使用1元股東自己的資本，能替股東創造多少淨利。", "decisionUse": "檢查BVPS增加是否同時帶來足夠獲利，並評估P/B的經濟支持。", "limitation": "ROE可能受利潤率、資產周轉或槓桿影響；缺完整DuPont時不能全歸因於營運改善。"},
             {"metric": "本益比", "whyItMatters": "描述市場為每1元盈餘支付多少價格。", "formula": "股價／每股盈餘", "currentInputs": f"{price_value}元／TTM EPS {ttm_eps}元", "currentResult": f"{(price_value / ttm_eps).quantize(Decimal('0.01'))}倍", "plainLanguage": "TTM本益比反映市場為過去12個月每1元EPS支付多少價格；Forward本益比是情境。", "decisionUse": "比較估值敏感度。", "limitation": "無Owner核准估值門檻，不判定便宜或昂貴。"},
             {"metric": "股價淨值比", "whyItMatters": "連結市場對股東資本的評價與ROE。", "formula": "股價／每股淨值", "currentInputs": f"股價{price_value}元；受治理BVPS {governed_bvps}元；正式P/B {pb_value}倍", "currentResult": f"{pb_value}倍", "plainLanguage": "P/B只有在ROE可持續且資本效率改善時，才獲得更強的經濟支持。", "decisionUse": "檢查BVPS累積與ROE是否同向改善。", "limitation": "無Owner核准門檻，不判定便宜、昂貴或形成交易規則。"},
-            {"metric": "股息殖利率", "whyItMatters": "連結估值與退休現金流收益。", "formula": "年度股利／股價", "currentInputs": f"{dividend}元／{price_value}元", "currentResult": f"{dividend / price_value * 100:.2f}%", "plainLanguage": "衡量財報公布前收盤價對應的現金股利收益率。", "decisionUse": "評估退休現金流基線。", "limitation": "殖利率不等於股利可持續性；仍需FCF支持。"},
+            {"metric": "股息殖利率", "whyItMatters": "連結估值與退休現金流收益。", "formula": "年度股利／股價", "currentInputs": f"{dividend}元／{price_value}元", "currentResult": f"{dividend / price_value * 100:.2f}%", "plainLanguage": f"衡量{price_reader_label}對應的現金股利收益率。", "decisionUse": "評估退休現金流基線。", "limitation": "殖利率不等於股利可持續性；仍需FCF支持。"},
         ]
         strategy_scorecard = [
             {"strategicPillar": "電動車", "managementCommitment": "3+3三大新興產業", "currentCommercializationStage": "DEVELOPMENT", "currentRevenueEvidence": "Q2運算及其他產品占比5%，不能等同電動車", "currentProfitEvidence": "UNPROVEN", "capitalRequirementEvidence": "UNQUANTIFIED", "cashFlowEvidence": "UNPROVEN", "durability": "EVIDENCE_BUILDING", "competitorReplicability": "UNRESOLVED", "valueCreationStage": "DEVELOPMENT", "nextCheckpoint": "客戶／訂單與分部營收正式揭露"},
@@ -397,6 +441,16 @@ class QuarterlyAnalysisBuilder:
                 "cashConversionCycleDays": working_capital_days["cashConversionCycleDays"],
                 "indexedTo2025Q2": working_capital_index,
                 "assessment": "GROWTH_DRIVEN_ABSORPTION_WITH_EFFICIENCY_IMPROVEMENT",
+            },
+            "balanceSheetEvidence": {
+                "periodEnd": balance["periodEnd"],
+                "cashAndCashEquivalentsMillionTwd": balance["cashAndCashEquivalentsMillionTwd"],
+                "derivedDebtMillionTwd": str(_d(balance["cashAndCashEquivalentsMillionTwd"]) - _d(balance["netCashMillionTwd"])),
+                "netCashMillionTwd": balance["netCashMillionTwd"],
+                "totalEquityMillionTwd": balance["totalEquityMillionTwd"],
+                "liquidityAssessment": "NET_CASH_POSITIVE_CASH_BALANCE_AVAILABLE_CURRENT_RATIO_UNAVAILABLE",
+                "classification": "OFFICIAL_AND_EXACT_DERIVED",
+                "sourceIds": official_ids,
             },
             "investedCapitalBridge": {
                 "periods": ["2026Q1", "2026Q2"],
@@ -529,7 +583,7 @@ class QuarterlyAnalysisBuilder:
                 {"link": "CFO", "grade": "PROVEN_DERIVED", "evidence": f"同口徑2026H1減2026Q1推導Q2 CFO {q2_cfo}百萬元", "limitation": "由官方累計數相減，受簡報整數四捨五入影響", "enterpriseValueImplication": "獲利未轉為營運現金", "nextCheckpoint": "FY2026 Q3／全年CFO"},
                 {"link": "FCF", "grade": "PROVEN_DERIVED", "evidence": f"Q2 CFO減Capex推導FCF {q2_fcf_direct}百萬元", "limitation": "兩條推導路徑差1百萬元並已在容許範圍內揭露", "enterpriseValueImplication": "現金治理尚未通過", "nextCheckpoint": "FY2026 Q3／全年FCF"},
                 {"link": "Dividend Capacity", "grade": "UNPROVEN", "evidence": "既有股利輸入可得", "limitation": "缺正常化FCF與資本需求橋接", "enterpriseValueImplication": "股利能力不可上修", "nextCheckpoint": "FY2026全年FCF與股利政策"},
-                {"link": "Shareholder Return", "grade": "INSUFFICIENT_DATA", "evidence": "市場資料截止早於Results發布", "limitation": "缺完整事件窗口與資本回報橋接", "enterpriseValueImplication": "市場重估尚不能判定", "nextCheckpoint": "完整事件窗口"},
+                {"link": "Shareholder Return", "grade": "INSUFFICIENT_DATA", "evidence": ("市場資料截止早於結果發布" if is_pre_event_price else "市場資料已涵蓋結果發布後，但尚未完成受治理事件窗口歸因"), "limitation": "缺完整基準調整事件窗口與資本回報橋接", "enterpriseValueImplication": "市場重估尚不能單獨歸因於本次財報", "nextCheckpoint": "完整基準調整事件窗口"},
                 {"link": "Retirement Cashflow Safety", "grade": "UNPROVEN", "evidence": "核心持有論點尚未失效", "limitation": "論點存續不等於安全性已證實", "enterpriseValueImplication": "安全邊際不提高", "nextCheckpoint": "Q2現金流、ROIC及後續股利能力"},
             ],
         }
@@ -608,7 +662,16 @@ class QuarterlyAnalysisBuilder:
             balance_sheet_safety=self._metric("219809", "新台幣百萬元淨現金", q["fiscalPeriod"], TrendStatus.STABLE, official_ids),
         )
         publication = date.fromisoformat(q["publicationDate"])
-        event_reaction = EventWindowReaction(status=EventWindowStatus.INSUFFICIENT_DATA, publication_date=publication, return_windows={}, benchmark_adjusted_return=None, limitations=["Authority ends before a complete post-results event window.", "No governed benchmark-adjusted return is available."])
+        event_reaction = EventWindowReaction(
+            status=EventWindowStatus.INSUFFICIENT_DATA,
+            publication_date=publication,
+            return_windows={},
+            benchmark_adjusted_return=None,
+            limitations=[
+                ("Market authority ends before the results event." if is_pre_event_price else "Post-event market authority exists, but a governed benchmark-adjusted event window has not been completed."),
+                "No governed benchmark-adjusted return is available.",
+            ],
+        )
         conditions = [
             RegimeCondition(condition_id="OFFICIAL_QUARTERLY_RESULTS", description="Official Q2 results are hash-bound and validated.", result="PASS", evidence_ids=official_ids),
             RegimeCondition(condition_id="PROFIT_CONVERSION_VERIFIED", description="Revenue, margins, attributable profit and EPS are disclosed.", result="PASS", evidence_ids=official_ids),
@@ -624,10 +687,10 @@ class QuarterlyAnalysisBuilder:
             input_evidence_hashes=evidence_hashes,
             financial_trend=financial,
             quarterly_earnings=q2,
-            valuation_analysis=ValuationAnalysis(current_price=latest_price["Close"], current_pb=latest_price["PB_daily"], governed_historical_pb_position=f"{pb_percentile:.1f} percentile within {len(pbs)} governed observations", roe_support=TrendStatus.IMPROVING, earnings_support=TrendStatus.IMPROVING, valuation_status=ValuationStatus.DESCRIPTIVE_ONLY, valuation_policy_id=None, data_window=f"{price.rows[0]['Date']}..{latest_price['Date']}", limitations=["The market price cutoff predates the earnings event and is therefore PRE_EVENT_VALUATION_CONTEXT, not current price.", "Q4 2025 basic EPS is normalized in the research layer to the official Results value of 3.23 without mutating the master authority.", "P/S uses TTM revenue and an estimated compatible weighted-average-share denominator and is classified T2."]),
-            price_and_market_activity=PriceAndMarketActivity(price_trend=TrendStatus.IMPROVING if _d(returns["20D"]) > 0 else TrendStatus.WATCH, recent_price_context=RecentPriceContext(return_windows=returns, data_window=f"{price.rows[0]['Date']}..{latest_price['Date']}"), event_window_reaction=event_reaction, volume_trend=TrendStatus.IMPROVING if volume_ratio and volume_ratio >= 1 else TrendStatus.WATCH, volume_percentile=f"{volume_percentile:.1f}%", transaction_activity=f"{latest_activity['transaction_count']}筆；成交量為20日均量的{volume_ratio:.2f}倍", abnormal_activity_flag=bool(volume_ratio and volume_ratio >= Decimal('1.5')), data_limitations=["Price and volume authority ends before the official results publication date.", "Volume cannot identify investor intent."]),
+            valuation_analysis=ValuationAnalysis(current_price=latest_price["Close"], current_pb=latest_price["PB_daily"], governed_historical_pb_position=f"{pb_percentile:.1f} percentile within {len(pbs)} governed observations", roe_support=TrendStatus.IMPROVING, earnings_support=TrendStatus.IMPROVING, valuation_status=ValuationStatus.DESCRIPTIVE_ONLY, valuation_policy_id=None, data_window=f"{price.rows[0]['Date']}..{latest_price['Date']}", limitations=[f"The report-cutoff market price is classified as {valuation_state} by comparing price date {latest_price['Date']} with earnings event date {q['publicationDate']}.", "Q4 2025 basic EPS is normalized in the research layer to the official Results value of 3.23 without mutating the master authority.", "P/S uses TTM revenue and an estimated compatible weighted-average-share denominator and is classified T2."]),
+            price_and_market_activity=PriceAndMarketActivity(price_trend=TrendStatus.IMPROVING if _d(returns["20D"]) > 0 else TrendStatus.WATCH, recent_price_context=RecentPriceContext(return_windows=returns, data_window=f"{price.rows[0]['Date']}..{latest_price['Date']}"), event_window_reaction=event_reaction, volume_trend=TrendStatus.IMPROVING if volume_ratio and volume_ratio >= 1 else TrendStatus.WATCH, volume_percentile=f"{volume_percentile:.1f}%", transaction_activity=f"{latest_activity['transaction_count']}筆；成交量為20日均量的{volume_ratio:.2f}倍", abnormal_activity_flag=bool(volume_ratio and volume_ratio >= Decimal('1.5')), data_limitations=[("Market authority ends before the official results publication date." if is_pre_event_price else "Market authority extends beyond the results publication date, but event attribution is not yet governed."), "Volume cannot identify investor intent."]),
             market_regime=MarketRegime(primary_regime=MarketRegimeName.INSUFFICIENT_DATA, evidence_ids=source_ids, confidence=ConfidenceClass.LOW, evaluated_conditions=conditions, alternative_regime=MarketRegimeName.EARNINGS_REASSESSMENT, invalidation_condition="A complete governed post-results price window may permit earnings-reassessment classification."),
-            market_psychology=MarketPsychology(interpretation="Official earnings improved, but the market reaction cannot yet be classified because the authority lacks a complete post-results window.", evidence_basis=official_ids + [authority_ids["price"], authority_ids["activity"]], alternative_explanation="Pre-event price and volume may reflect broader market or anticipation effects.", counter_evidence=["The governed market data ends before the results publication."], confidence=ConfidenceClass.LOW, invalidation_condition="Reassess after complete governed post-event price and volume are available."),
+            market_psychology=MarketPsychology(interpretation="Official earnings improved, but the market reaction cannot yet be attributed to the event without a governed benchmark-adjusted window.", evidence_basis=official_ids + [authority_ids["price"], authority_ids["activity"]], alternative_explanation="Price and volume may reflect broader market, positioning or anticipation effects.", counter_evidence=[("The governed market data ends before the results publication." if is_pre_event_price else "Post-event market data exists, but causal attribution and benchmark adjustment remain incomplete.")], confidence=ConfidenceClass.LOW, invalidation_condition="Reassess after a complete governed benchmark-adjusted event window is available."),
             event_impact_chain=self._impact_chain(official_ids, authority_ids),
             thesis_scorecard=ThesisScorecard(earnings_quality=TrendStatus.IMPROVING, ai_monetization=TrendStatus.IMPROVING, dividend_safety=TrendStatus.WATCH, balance_sheet=TrendStatus.STABLE, valuation=TrendStatus.WATCH, overall_thesis=OverallThesis.MAINTAINED, evidence_ids=source_ids),
             investor_views=InvestorViews(new_money_view=NewMoneyView.WAIT, existing_holding_view=ExistingHoldingView.HOLD, trim_review="NOT_TRIGGERED", sell_review="NOT_TRIGGERED", rationale="Q2 earnings and AI outlook support the thesis, while H1 negative FCF, stale valuation denominators and incomplete event reaction require WATCH/OBSERVE rather than a trading instruction.", actionable=False),
@@ -650,10 +713,12 @@ class QuarterlyAnalysisBuilder:
 
     @staticmethod
     def _conclusions(q2: QuarterlyEarningsAnalysis, official_ids: list[str], authority_ids: dict[str, str], publication: str) -> list[MaterialConclusion]:
+        valuation_state = q2.valuation_scenarios["valuationTimeBasis"]["valuationState"]
+        valuation_context_zh = "財報公布前估值脈絡" if valuation_state == "PRE_EVENT_VALUATION_CONTEXT" else "財報公布後報告截止日估值脈絡"
         return [
             MaterialConclusion(conclusion_id="C-Q2-EARNINGS", statement=f"FY2026 Q2 revenue was {q2.revenue.value} million TWD ({q2.revenue.qoq} QoQ, {q2.revenue.yoy} YoY), operating margin {q2.operating_margin.value}% and EPS {q2.eps.value} TWD.", fact_or_inference=FactOrInference.FACT, evidence_ids=official_ids, source_tier="OFFICIAL_COMPANY_INVESTOR_RELATIONS", source_date=publication, data_cutoff="2026-06-30", confidence=ConfidenceClass.HIGH, alternative_explanation="Year-over-year growth may include base and product-mix effects.", counter_evidence=[f"Gross margin was {q2.gross_margin.qoq} QoQ and {q2.gross_margin.yoy} YoY."], missing_evidence=["audited/reviewed quarterly financial report"], invalidation_condition="Withdraw if the company issues corrected results.", next_validation_event="FY2026 Q2 official financial report / next quarterly earnings"),
             MaterialConclusion(conclusion_id="C-Q2-AI-OUTLOOK", statement="Official guidance describes strong AI infrastructure demand, high-double-digit 3Q26 AI rack shipment growth QoQ and more-than-multiple AI server revenue growth.", fact_or_inference=FactOrInference.FACT, evidence_ids=official_ids, source_tier="OFFICIAL_COMPANY_INVESTOR_RELATIONS", source_date=publication, data_cutoff=publication, confidence=ConfidenceClass.HIGH, alternative_explanation="Guidance is forward-looking and may not convert at the stated pace.", counter_evidence=["The Results document does not quantify customer-specific Apple/iPhone or policy impacts."], missing_evidence=["realized 3Q26 AI shipment and revenue mix"], invalidation_condition="Reassess if subsequent official guidance is reduced or shipments do not convert.", next_validation_event="FY2026 Q3 official earnings"),
-            MaterialConclusion(conclusion_id="C-Q2-CASH-VALUATION", statement=f"Official {q2.cash_flow_period} FCF was negative; Q2-updated TTM P/E and estimated P/S are descriptive PRE_EVENT_VALUATION_CONTEXT, not a current valuation decision.", fact_or_inference=FactOrInference.MIXED if hasattr(FactOrInference, 'MIXED') else FactOrInference.INFERENCE, evidence_ids=official_ids + [authority_ids["master"], authority_ids["price"], authority_ids["cash"]], source_tier="MIXED_OFFICIAL_AND_GOVERNED_AUTHORITY", source_date=publication, data_cutoff=publication, confidence=ConfidenceClass.MEDIUM, alternative_explanation="Working-capital and capex timing can depress cumulative H1 FCF.", counter_evidence=["Q2 attributable profit and EPS improved strongly."], missing_evidence=["complete post-event price window", "direct same-period weighted-average shares", "official same-basis Q2 ROIC"], invalidation_condition="Update after the official financial report and refreshed governed valuation/event-window authority.", next_validation_event="Official Q2 financial report and complete post-results market window"),
+            MaterialConclusion(conclusion_id="C-Q2-CASH-VALUATION", statement=f"Official {q2.cash_flow_period} FCF was negative; Q2-updated TTM P/E and estimated P/S are descriptive {valuation_context_zh}, not a valuation decision.", fact_or_inference=FactOrInference.MIXED if hasattr(FactOrInference, 'MIXED') else FactOrInference.INFERENCE, evidence_ids=official_ids + [authority_ids["master"], authority_ids["price"], authority_ids["cash"]], source_tier="MIXED_OFFICIAL_AND_GOVERNED_AUTHORITY", source_date=publication, data_cutoff=publication, confidence=ConfidenceClass.MEDIUM, alternative_explanation="Working-capital and capex timing can depress cumulative H1 FCF.", counter_evidence=["Q2 attributable profit and EPS improved strongly."], missing_evidence=["complete benchmark-adjusted event window", "direct same-period weighted-average shares", "official same-basis Q2 ROIC"], invalidation_condition="Update after the official financial report and refreshed governed valuation/event-window authority.", next_validation_event="Official Q2 financial report and complete post-results market window"),
         ]
 
     @staticmethod

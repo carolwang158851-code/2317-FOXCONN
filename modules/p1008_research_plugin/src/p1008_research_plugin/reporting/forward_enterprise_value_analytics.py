@@ -472,6 +472,8 @@ def build_forward_enterprise_value_analytics(analysis: AnalysisPacket, historica
         assumptions=["比較期間與財務口徑相容"], confidence=cap_light["confidence"],
         limitations=["未揭露Consignment百分比，代理訊號不得視為因果證明。"],
     ))
+    valuation_state = q.valuation_scenarios["valuationTimeBasis"]["valuationState"]
+    price_context = q.valuation_scenarios["price"]["valuationContext"]
     return {
         "contract_id": "P1008_FORWARD_ENTERPRISE_VALUE_ANALYTICS_V1",
         "framework_axes": [
@@ -484,9 +486,9 @@ def build_forward_enterprise_value_analytics(analysis: AnalysisPacket, historica
         "dilution_sensitivity": dilution,
         "valuation_time_basis": q.valuation_scenarios["valuationTimeBasis"],
         "valuation_context": {
-            "pe": {**q.valuation_scenarios["ttmPe"], "context": "PRE_EVENT_VALUATION_CONTEXT", "price_date": q.valuation_scenarios["price"]["date"]},
-            "pb": {**q.valuation_scenarios["pb"], "context": "PRE_EVENT_VALUATION_CONTEXT"},
-            "ps": {**q.valuation_scenarios["ps"], "context": "PRE_EVENT_VALUATION_CONTEXT"},
+            "pe": {**q.valuation_scenarios["ttmPe"], "context": valuation_state, "price_date": q.valuation_scenarios["price"]["date"]},
+            "pb": {**q.valuation_scenarios["pb"], "context": valuation_state},
+            "ps": {**q.valuation_scenarios["ps"], "context": valuation_state, "priceContext": price_context},
             "historical": {
                 "pe": historical_valuation_context(historical_baseline, metric_id="PE_TTM", current_value=q.valuation_scenarios["ttmPe"]["value"], cutoff_period="2026Q2"),
                 "pb": historical_valuation_context(historical_baseline, metric_id="PB", current_value=q.valuation_scenarios["pb"]["value"], cutoff_period="2026Q2"),

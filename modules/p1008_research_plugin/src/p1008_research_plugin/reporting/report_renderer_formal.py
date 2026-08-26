@@ -112,6 +112,27 @@ class FormalPreviewRenderer:
                 pass
         return value.replace("LIMITED_HISTORY", "歷史資料有限")
 
+    @classmethod
+    def _chart_display(cls, value: str | float, unit: str, *, include_unit: bool = False) -> str:
+        """Format governed raw chart values without changing their stored precision."""
+        number = cls._number(str(value))
+        if number is None:
+            return cls._display(str(value))
+        display_unit = ""
+        if unit in {"新台幣百萬元", "百萬元"}:
+            number /= 100.0
+            display_unit = "億元"
+        elif unit in {"%", "百分比", "百分點"}:
+            display_unit = "%" if unit != "百分點" else "個百分點"
+        elif unit in {"倍", "x"}:
+            display_unit = "倍"
+        rendered = f"{number:.2f}".rstrip("0").rstrip(".")
+        return f"{rendered}{display_unit}" if include_unit else rendered
+
+    @staticmethod
+    def _reader_unit(unit: str) -> str:
+        return "億元" if unit in {"新台幣百萬元", "百萬元"} else unit
+
     @staticmethod
     def _source_label(value: str) -> str:
         if value.startswith("AUTH-MASTER-"):
@@ -163,7 +184,7 @@ class FormalPreviewRenderer:
             cells = [f"<td>{html.escape(chart.labels[index])}</td>"]
             for series in chart.series:
                 raw = series.values[index] if index < len(series.values) else "資料未提供"
-                cells.append(f"<td>{html.escape(cls._display(raw))}</td>")
+                cells.append(f"<td>{html.escape(cls._chart_display(raw, series.unit, include_unit=True))}</td>")
             rows.append("<tr>" + "".join(cells) + "</tr>")
         return f'<table><thead><tr>{header}</tr></thead><tbody>{"".join(rows)}</tbody></table>'
 
@@ -192,11 +213,14 @@ class FormalPreviewRenderer:
             f'<svg class="actual-chart line-chart" data-chart-object="line" data-point-count="{len(chart.labels)}" data-label-count="{len(label_indexes)}" viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(chart.title_zh)}">',
             '<rect x="0" y="0" width="860" height="360" fill="#ffffff"/>',
         ]
+        common_unit = rendered_series[0].unit if rendered_series and all(
+            series.unit == rendered_series[0].unit for series in rendered_series
+        ) else ""
         for step in range(5):
             value = low + span * step / 4
             y = y_at(value)
             parts.append(f'<line x1="{left}" y1="{y:.1f}" x2="{width-right}" y2="{y:.1f}" stroke="#d8dee6" stroke-width="1"/>')
-            parts.append(f'<text x="{left-8}" y="{y+4:.1f}" text-anchor="end" class="axis-label">{value:.1f}</text>')
+            parts.append(f'<text x="{left-8}" y="{y+4:.1f}" text-anchor="end" class="axis-label">{html.escape(cls._chart_display(value, common_unit))}</text>')
         parts.append(f'<line x1="{left}" y1="{top}" x2="{left}" y2="{height-bottom}" stroke="#536273"/>')
         parts.append(f'<line x1="{left}" y1="{height-bottom}" x2="{width-right}" y2="{height-bottom}" stroke="#536273"/>')
         for index, label in enumerate(chart.labels):
@@ -216,10 +240,10 @@ class FormalPreviewRenderer:
                 radius = 5 if index == len(points) - 1 else 3
                 parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{radius}" fill="{color}"/>')
                 if index == len(points) - 1:
-                    parts.append(f'<text x="{x-4:.1f}" y="{y-10:.1f}" text-anchor="end" class="point-label">{html.escape(raw)}</text>')
+                    parts.append(f'<text x="{x-4:.1f}" y="{y-10:.1f}" text-anchor="end" class="point-label">{html.escape(cls._chart_display(raw, series.unit))}</text>')
             legend_x = left + series_index * 210
             parts.append(f'<line x1="{legend_x}" y1="344" x2="{legend_x+24}" y2="344" stroke="{color}" stroke-width="4"/>')
-            parts.append(f'<text x="{legend_x+31}" y="348" class="legend-label">{html.escape(series.label_zh)}（{html.escape(series.unit)}）</text>')
+            parts.append(f'<text x="{legend_x+31}" y="348" class="legend-label">{html.escape(series.label_zh)}（{html.escape(cls._reader_unit(series.unit))}）</text>')
         parts.append("</svg>")
         return "".join(parts)
 
@@ -232,6 +256,22 @@ class FormalPreviewRenderer:
             + f'<strong>{html.escape("天 → ".join(ccc))}天</strong>'
             + '<small>獨立KPI，不與指數共用尺度</small></div>'
         )
+
+    @classmethod
+    def _valuation_split_visual(cls, chart: ChartData) -> str:
+        """Render P/B and P/E on independent scales inside one governed figure."""
+        panels = []
+        for series in chart.series:
+            single = chart.model_copy(update={
+                "title_zh": f"{series.label_zh}歷史序列",
+                "series": [series],
+            })
+            panels.append(
+                '<div class="valuation-scale-panel">'
+                f'<h4>{html.escape(series.label_zh)}（{html.escape(series.unit)}，獨立尺度）</h4>'
+                f'{cls._line_svg(single)}</div>'
+            )
+        return '<div class="valuation-split-scales">' + "".join(panels) + "</div>"
 
     @classmethod
     def _roe_bvps_visual(cls, chart: ChartData) -> str:
@@ -342,6 +382,8 @@ class FormalPreviewRenderer:
                 body = self._working_capital_visual(chart)
             elif chart.chart_id == "roe_equity_compounding":
                 body = self._roe_bvps_visual(chart)
+            elif chart.chart_id == "full_history_valuation":
+                body = self._valuation_split_visual(chart)
             else:
                 body = self._bar_svg(chart) if chart.chart_id == "operating_leverage_spread" else self._line_svg(chart)
         elif chart.visualization_type == "SCENARIO_MATRIX":
@@ -349,7 +391,10 @@ class FormalPreviewRenderer:
         else:
             body = self._table(chart)
         commentary = "".join(f"<li>{html.escape(self._display(item))}</li>" for item in chart.commentary_zh)
-        decision_context = "".join(
+        # Full-history charts already carry a governed three-part investment
+        # commentary.  Repeating the generic five-field block below it creates
+        # mechanical, duplicated prose and obscures the decision meaning.
+        decision_context = "" if chart.chart_id.startswith("full_history_") else "".join(
             f'<p class="chart-meaning"><strong>{label}</strong>{html.escape(self._display(value))}</p>'
             for label, value in (
                 ("觀察：", chart.observation_zh),
@@ -680,6 +725,14 @@ class FormalPreviewRenderer:
                     result.append(KeepTogether([*title_block, line_drawing(chart, 3), callout("現金循環週期", "48天 → 44天 → 42天", "獨立KPI，不與指數共用尺度")]))
                 elif chart.chart_id == "roe_equity_compounding":
                     result.append(KeepTogether([*title_block, line_drawing(chart, 1), callout("可比H1 ROE", "5.48% → 6.21%", "年增+0.73個百分點；2025全年11.3%僅作全年脈絡，H1不年化")]))
+                elif chart.chart_id == "full_history_valuation":
+                    result.extend(title_block)
+                    for series in chart.series:
+                        single = chart.model_copy(update={"series": [series]})
+                        result.append(KeepTogether([
+                            paragraph(f"{series.label_zh}（{series.unit}，獨立尺度）", small),
+                            line_drawing(single),
+                        ]))
                 else:
                     drawing = bar_drawing(chart) if chart.chart_id == "operating_leverage_spread" else line_drawing(chart)
                     result.append(KeepTogether([*title_block, drawing]))

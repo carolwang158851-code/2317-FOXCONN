@@ -187,7 +187,8 @@ class ForwardEnterpriseValueAnalyticsV1Tests(unittest.TestCase):
     def test_f23_reader_report_has_estimate_disclosure(self) -> None:
         self.assertIn("ROIC持續性／資本強度敏感度", self.html)
         self.assertIn("不是官方同口徑ROIC", self.html)
-        self.assertIn("管理層指引或Owner核准門檻", self.html)
+        self.assertIn("核准的估值安全邊際門檻", self.html)
+        self.assertNotIn("Owner", self.html)
 
     def test_f24_forward_ledger_is_complete(self) -> None:
         ledger = json.loads((self.root / "forward_model_ledger.json").read_text(encoding="utf-8"))
