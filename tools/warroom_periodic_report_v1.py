@@ -3473,17 +3473,22 @@ def build_report_markdown(
 
     price = finite_float(latest_daily, "Close")
     pb = finite_float(latest_daily, "PB_daily")
-    bvps = finite_float(latest_daily, "BVPS_ref") or finite_float(latest_master, "BVPS")
+    bvps = finite_float(latest_daily, "BVPS_ref")
     roe = finite_float(latest_master, "ROE_TTM_Pct")
     eps_yoy = finite_float(latest_master, "EPS_YoY_Pct")
     eps_ttm = finite_float(latest_master, "EPS_TTM")
-    dividend_yield = finite_float(latest_master, "DividendYield_Pct")
-    twd_usd = finite_float(latest_macro, "TWD_USD")
-    dxy = finite_float(latest_macro, "DXY")
-    us10y = finite_float(latest_macro, "US_10Y_Yield")
+    cash_dividend = finite_float(latest_master, "CashDividend")
+    dividend_yield = (
+        cash_dividend / price * 100
+        if cash_dividend is not None and price not in (None, 0)
+        else None
+    )
+    latest_fx = latest(data.get("fxRows", []), "Date") or {}
+    twd_usd = finite_float(latest_fx, "TWD_USD")
+    dxy = finite_float(latest_fx, "DXY")
+    us10y = finite_float(latest_fx, "US_10Y_Yield")
     vix = finite_float(latest_macro, "VIX")
     wti = finite_float(latest_macro, "WTI_Oil")
-    latest_fx = latest(data.get("fxRows", []), "Date") or {}
 
     readiness = ((app_state.get("reviewPackage") or {}).get("readiness") or {})
     readiness_score = readiness.get("score", "N/A")
@@ -3540,9 +3545,10 @@ def build_report_markdown(
     market_rows = [
         ["2317 close", latest_daily.get("Date", "N/A"), report_num(price, 1), latest_daily.get("DataSupportLevel", "正式 CSV")],
         ["PB", latest_daily.get("Date", "N/A"), report_ratio(pb), "Close / BVPS"],
-        ["USD/TWD", latest_macro.get("Date", "N/A"), report_num(twd_usd, 3), latest_fx.get("SourceTier") or "macro_snapshot"],
-        ["US10Y", latest_macro.get("Date", "N/A"), report_num(us10y, 3, "%"), "macro_snapshot"],
-        ["VIX / DXY / WTI", latest_macro.get("Date", "N/A"), f"{report_num(vix, 2)} / {report_num(dxy, 2)} / {report_num(wti, 2)}", "macro_snapshot"],
+        ["USD/TWD", latest_fx.get("Date", "N/A"), report_num(twd_usd, 3), latest_fx.get("SourceTier") or "fx_trend_observations"],
+        ["US10Y", latest_fx.get("Date", "N/A"), report_num(us10y, 3, "%"), latest_fx.get("SourceTier") or "fx_trend_observations"],
+        ["VIX / WTI", latest_macro.get("Date", "N/A"), f"{report_num(vix, 2)} / {report_num(wti, 2)}", "macro_snapshot"],
+        ["DXY", latest_fx.get("Date", "N/A"), report_num(dxy, 2), latest_fx.get("SourceTier") or "fx_trend_observations"],
     ]
     six_system_rows = [
         ["基本面 IC", f"ROE {report_num(roe, 2, '%')} / EPS YoY {report_num(eps_yoy, 1, '%')} / EPS TTM {report_num(eps_ttm, 2)}", "基本面支撐", "EPS 與 ROE 是 HOLD 的主要支撐，若後續下修才需要重審估值。"],

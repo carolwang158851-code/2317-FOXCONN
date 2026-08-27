@@ -217,6 +217,15 @@ function finiteNumber(row, field) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function validatedAiRevenueShare(row) {
+  const value = finiteNumber(row, 'AI_Revenue_Pct');
+  const denominator = String(row?.AI_Revenue_Denominator || '').trim().toUpperCase();
+  const support = String(row?.DataSupportLevel || '').trim().toUpperCase();
+  const allowedDenominators = new Set(['TOTAL_REVENUE', 'SERVER_REVENUE', 'CLOUD_NETWORK_REVENUE', 'OTHER']);
+  const authoritySupported = /^(L1|L2|OFFICIAL|AUTHORITATIVE)/.test(support);
+  return Number.isFinite(value) && allowedDenominators.has(denominator) && authoritySupported ? value : null;
+}
+
 function formatNumber(value, digits = 2) {
   return Number.isFinite(value) ? value.toFixed(digits) : 'N/A';
 }
@@ -251,7 +260,7 @@ function clampBacktestValue(value, min, max) {
 
 function buildBacktestObservation(row, displayPB, isLatest = false) {
   const policy = BACKTEST_POLICY;
-  const aiPct = finiteNumber(row, 'AI_Revenue_Pct');
+  const aiPct = validatedAiRevenueShare(row);
   const epsYoy = finiteNumber(row, 'EPS_YoY_Pct');
   const roe = finiteNumber(row, 'ROE_TTM_Pct');
   const opm = finiteNumber(row, 'OperatingMarginPct');
@@ -567,6 +576,7 @@ function calculateDimasCap({
   blockPrice,
   epsYoy
 }) {
+  if (![us10y, fedProb, vix, price, blockPrice, epsYoy].every(Number.isFinite) || blockPrice <= 0) return null;
   let cap = 0;
   if (us10y >= 4.5) cap += 3;else if (us10y >= 4.2) cap += 2;else if (us10y >= 4.0) cap += 1;
   if (fedProb >= 70) cap += 3;else if (fedProb >= 60) cap += 2;else if (fedProb >= 50) cap += 1;
@@ -582,6 +592,11 @@ function calculateDimasCap({
 }
 
 function classifyDimas(cap) {
+  if (!Number.isFinite(cap)) return {
+    level: '資料不足',
+    color: 'text-slate-400',
+    message: '總經必要欄位缺失，不補中性分數。'
+  };
   if (cap >= 14) return {
     level: '🔴 系統性風險',
     color: 'text-red-400',
@@ -612,9 +627,9 @@ function classifyDimas(cap) {
 function calculateFxPressure(twdUsd) {
   if (!Number.isFinite(twdUsd)) {
     return {
-      score: 50,
+      score: null,
       label: '匯率缺值',
-      note: '缺少 TWD_USD，總經 / 匯率指針以中性壓力處理。'
+      note: '缺少 TWD_USD，總經 / 匯率指針不補中性分數。'
     };
   }
 
@@ -632,9 +647,9 @@ function calculateFxPressure(twdUsd) {
 function calculateDxyPressure(dxy) {
   if (!Number.isFinite(dxy)) {
     return {
-      score: 50,
+      score: null,
       label: '美元指數缺值',
-      note: '缺少 DXY，總經五要素雷達以中性壓力處理。'
+      note: '缺少 DXY，總經五要素雷達不補中性分數。'
     };
   }
 
@@ -832,9 +847,6 @@ function calculateChipScore({
   foreignHoldTrend
 }) {
   if (Number.isFinite(foreignHoldChange)) return clampScore(50 + foreignHoldChange * 6);
-  if (foreignHoldTrend === 'RISING') return 65;
-  if (foreignHoldTrend === 'STABLE') return 50;
-  if (foreignHoldTrend === 'DECLINING') return 35;
   return null;
 }
 
@@ -2315,7 +2327,7 @@ const ConceptSwitchChart = ({
       if (view === 'roe') {
         const labels = recentMaster.map(row => row.Quarter || row.QuarterKey).filter(Boolean);
         const roe = recentMaster.map(row => finiteNumber(row, 'ROE_TTM_Pct')).filter(Number.isFinite);
-        const roic = recentMaster.map(row => finiteNumber(row, 'ROIC_Precise_Pct') ?? finiteNumber(row, 'ROIC_Approx_Pct')).filter(Number.isFinite);
+        const roic = recentMaster.map(row => finiteNumber(row, 'ROIC_Precise_Pct')).filter(Number.isFinite);
 
         if (labels.length && roe.length) {
           config = {
@@ -3729,6 +3741,7 @@ const App = () => {
         const validFxTrends = upsertRuntimeRow(validFxTrendCsv, effectiveRuntimeFxTrendRow, 'Date').sort((a, b) => String(b.Date).localeCompare(String(a.Date)));
         const latestMacroEvent = validMacroEvents[0] || null;
         const latestFxTrend = validFxTrends[0] || null;
+        const latestFormalFxTrend = validFxTrendCsv[validFxTrendCsv.length - 1] || null;
         const latestMaster = validMas[0];
         const latestDaily = validDaily[validDaily.length - 1];
         const latestMac = validMac[0];
@@ -3889,15 +3902,15 @@ const App = () => {
           const obsOpm = finiteNumber(latestMaster, 'OperatingMarginPct');
           const obsRoic = finiteNumber(latestMaster, 'ROIC_Precise_Pct');
           const obsCashDividend = finiteNumber(latestMaster, 'CashDividend');
-          const obsAiRevPct = finiteNumber(latestMaster, 'AI_Revenue_Pct');
+          const obsAiRevPct = validatedAiRevenueShare(latestMaster);
           const obsForeignHoldChange = finiteNumber(latestMaster, 'ForeignHoldChange_Pct');
           const obsForeignHoldTrend = latestMaster?.ForeignHoldTrend || null;
           const obsPrevQPrice = finiteNumber(validMas[1], 'QuarterEndClose');
-          const obsUs10y = finiteNumber(latestMac, 'US_10Y_Yield');
+          const obsUs10y = finiteNumber(latestFormalFxTrend, 'US_10Y_Yield');
           const obsFedProb = finiteNumber(latestMac, 'Fed_Hike_Prob_YE');
           const obsVix = finiteNumber(latestMac, 'VIX');
-          const obsTwdUsd = finiteNumber(latestMac, 'TWD_USD');
-          const obsDxy = finiteNumber(latestMac, 'DXY');
+          const obsTwdUsd = finiteNumber(latestFormalFxTrend, 'TWD_USD');
+          const obsDxy = finiteNumber(latestFormalFxTrend, 'DXY');
           const obsBlockPrice = Number.isFinite(obsBvps) ? obsBvps * 1.923 : null;
           const obsQuality = calculateQualityScore(obsRoe, obsRoic, obsOpm);
           const obsCap = calculateDimasCap({
@@ -4015,15 +4028,15 @@ const App = () => {
         const opm = finiteNumber(latestMaster, 'OperatingMarginPct');
         const roic = finiteNumber(latestMaster, 'ROIC_Precise_Pct');
         const cashDividend = finiteNumber(latestMaster, 'CashDividend');
-        const aiRevPct = finiteNumber(latestMaster, 'AI_Revenue_Pct');
+        const aiRevPct = validatedAiRevenueShare(latestMaster);
         const currentForeignHoldChange = finiteNumber(latestMaster, 'ForeignHoldChange_Pct');
         const currentForeignHoldTrend = latestMaster?.ForeignHoldTrend || null;
         const prevQPrice = finiteNumber(validMas[1], 'QuarterEndClose');
-        const us10yVal = finiteNumber(latestMac, 'US_10Y_Yield');
+        const us10yVal = finiteNumber(latestFormalFxTrend, 'US_10Y_Yield');
         const fedProbVal = finiteNumber(latestMac, 'Fed_Hike_Prob_YE');
         const vixVal2 = finiteNumber(latestMac, 'VIX');
-        const twdUsdVal = finiteNumber(latestMac, 'TWD_USD');
-        const dxyVal = finiteNumber(latestMac, 'DXY');
+        const twdUsdVal = finiteNumber(latestFormalFxTrend, 'TWD_USD');
+        const dxyVal = finiteNumber(latestFormalFxTrend, 'DXY');
         const rawRiskLevel = latestMac.RiskLevel;
         const rawRiskNote = latestMac.RiskNote;
         const requiredValues = {
@@ -4550,7 +4563,7 @@ const App = () => {
     note: marketFxPressure.note,
     weight: 0.20,
     sourceField: 'TWD_USD',
-    sourceNote: '取自總經快照的美元兌新台幣欄位，用來觀察匯率偏離壓力。'
+      sourceNote: '取自正式匯率趨勢觀察檔的美元兌新台幣欄位，用來觀察匯率偏離壓力。'
   }, {
     key: 'dxy',
     label: '美元',
@@ -4561,13 +4574,13 @@ const App = () => {
     note: marketDxyPressure.note,
     weight: 0.15,
     sourceField: 'DXY',
-    sourceNote: '取自總經快照美元指數欄位，用來觀察美元流動性偏離。'
+      sourceNote: '取自正式匯率趨勢觀察檔的美元指數欄位，用來觀察美元流動性偏離。'
   }, {
     key: 'vix',
     label: 'VIX',
     fullLabel: 'VIX 波動壓力',
     value: Number.isFinite(coreData?.vix) ? formatNumber(coreData.vix, 2) : 'N/A',
-    score: Number.isFinite(coreData?.vix) ? clampPercent(coreData.vix / 30 * 100) : 45,
+      score: Number.isFinite(coreData?.vix) ? clampPercent(coreData.vix / 30 * 100) : null,
     status: !Number.isFinite(coreData?.vix) ? '資料不足' : coreData.vix >= 27 ? '高壓觸發' : coreData.vix >= 22 ? '波動升溫' : '正常觀察',
     note: !Number.isFinite(coreData?.vix) ? '缺少 VIX 時，只能依其他總經欄位判讀。' : coreData.vix >= 22 ? '市場避險需求升高，戰情室應提高風險折價與資料重審頻率。' : '波動尚未形成主要限制。',
     weight: 0.20,
@@ -4583,13 +4596,13 @@ const App = () => {
     note: !Number.isFinite(coreData?.us10y) ? '缺少利率資料，總經壓力分保守處理。' : coreData.us10y >= 4.2 ? '利率偏高會壓低高股利與高估值的安全邊際，因此提高重審頻率。' : '利率未達警戒線，暫不形成額外壓力。',
     weight: 0.25,
     sourceField: 'US_10Y_Yield',
-    sourceNote: '取自總經快照美債10年利率欄位；本日 RiskNote 已列為觸發來源。'
+      sourceNote: '取自正式匯率趨勢觀察檔的美債10年利率欄位，保留該檔日期。'
   }, {
     key: 'fed',
     label: 'Fed',
     fullLabel: 'Fed 政策機率',
     value: Number.isFinite(coreData?.fedProb) ? `${formatNumber(coreData.fedProb, 1)}%` : 'N/A',
-    score: Number.isFinite(coreData?.fedProb) ? clampPercent(coreData.fedProb) : 50,
+      score: Number.isFinite(coreData?.fedProb) ? clampPercent(coreData.fedProb) : null,
     status: !Number.isFinite(coreData?.fedProb) ? '資料不足' : coreData.fedProb >= 70 ? '重審觸發' : coreData.fedProb >= 60 ? '政策壓力' : '未觸發',
     note: !Number.isFinite(coreData?.fedProb) ? '升息機率缺值時，不得用模型補假資料。' : coreData.fedProb >= 70 ? '政策路徑偏鷹，需檢查估值是否仍能被 EPS 與現金流支撐。' : coreData.fedProb >= 60 ? '政策壓力偏高，但尚不足以單獨改變 HOLD。' : '政策壓力未達重審門檻。',
     weight: 0.20,
