@@ -16,16 +16,19 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import http.client
 import json
 import os
+import ssl
 import subprocess
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 DAILY_COLUMNS = [
@@ -101,6 +104,7 @@ REQUEST_TIMEOUT_SECONDS = 8
 REQUEST_RETRIES = 1
 REQUEST_RETRY_DELAY_SECONDS = 2
 POWERSHELL_TIMEOUT_SECONDS = 20
+HTTP_CLIENT_TIMEOUT_SECONDS = 10
 
 MACRO_SOURCE_LABELS = {
     "stock_price": "2317 close",
@@ -382,6 +386,57 @@ def build_url(url: str, params: dict[str, str] | None = None) -> str:
     return url
 
 
+def fetch_bytes_with_http_client(url: str, redirects_remaining: int = 3) -> bytes | None:
+    """Use a direct verified HTTPS transport when urllib/proxy routing is unavailable."""
+
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme.lower() != "https" or not parsed.hostname:
+        log(f"Python HTTPS fallback rejected non-HTTPS URL: {url}", "WARN")
+        return None
+    target = urllib.parse.urlunsplit(("", "", parsed.path or "/", parsed.query, ""))
+    connection: http.client.HTTPSConnection | None = None
+    try:
+        connection = http.client.HTTPSConnection(
+            parsed.hostname,
+            port=parsed.port,
+            timeout=HTTP_CLIENT_TIMEOUT_SECONDS,
+            context=ssl.create_default_context(),
+        )
+        connection.request(
+            "GET",
+            target,
+            headers={
+                "User-Agent": "Mozilla/5.0 (P1008 staging candidate generator)",
+                "Accept": "application/json,text/csv,text/plain,*/*",
+            },
+        )
+        response = connection.getresponse()
+        if response.status in {301, 302, 303, 307, 308}:
+            location = response.getheader("Location")
+            response.read()
+            if not location or redirects_remaining <= 0:
+                log(f"Python HTTPS fallback redirect rejected: {url}", "WARN")
+                return None
+            redirected = urllib.parse.urljoin(url, location)
+            redirected_host = urllib.parse.urlsplit(redirected).hostname
+            if redirected_host != parsed.hostname:
+                log(f"Python HTTPS fallback cross-host redirect rejected: {url}", "WARN")
+                return None
+            return fetch_bytes_with_http_client(redirected, redirects_remaining - 1)
+        content = response.read()
+        if response.status != 200:
+            log(f"Python HTTPS fallback HTTP {response.status}: {url}", "WARN")
+            return None
+        log(f"Python HTTPS fallback succeeded: {url}")
+        return content
+    except (OSError, TimeoutError, ssl.SSLError, http.client.HTTPException) as error:
+        log(f"Python HTTPS fallback failed: {url} ({error})", "WARN")
+        return None
+    finally:
+        if connection is not None:
+            connection.close()
+
+
 def fetch_bytes_with_powershell(url: str) -> bytes | None:
     script = (
         "$ProgressPreference='SilentlyContinue'; "
@@ -422,7 +477,11 @@ def fetch_bytes(url: str, params: dict[str, str] | None = None) -> bytes | None:
     data = _fetch_bytes_urllib_only(url, params)
     if data is not None:
         return data
-    return fetch_bytes_with_powershell(build_url(url, params))
+    full_url = build_url(url, params)
+    data = fetch_bytes_with_http_client(full_url)
+    if data is not None:
+        return data
+    return fetch_bytes_with_powershell(full_url)
 
 
 def fetch_json(url: str, params: dict[str, str] | None = None) -> Any | None:
@@ -609,6 +668,8 @@ def fetch_twse_stock_day_close(candidate_date: str) -> dict[str, Any] | None:
             source_url=TWSE_STOCK_DAY_URL,
             note_zh="TWSE 指定日期日成交資訊；日期已核對，作為正式收盤價候選。",
             support_level="OFFICIAL_TWSE_A1",
+            source_date=candidate_date,
+            effective_date=candidate_date,
         )
     return None
 
@@ -655,6 +716,8 @@ def fetch_twse_official_close(candidate_date: str) -> dict[str, Any] | None:
             source_url=TWSE_DAILY_ALL_URL,
             note_zh="TWSE OpenAPI STOCK_DAY_ALL；日期已核對後才採用。",
             support_level="OFFICIAL_TWSE_A1",
+            source_date=candidate_date,
+            effective_date=candidate_date,
         )
     return None
 
@@ -685,6 +748,8 @@ def fetch_twse_realtime_close(candidate_date: str) -> dict[str, Any] | None:
         source_url=TWSE_MIS_URL,
         note_zh="TWSE MIS 日期相符的最新成交價；收盤後可作交叉驗證，正式發布仍需 Owner 核准。",
         support_level="RUNTIME_OBSERVATION",
+        source_date=candidate_date,
+        effective_date=candidate_date,
     )
 
 
@@ -696,24 +761,39 @@ def fetch_yahoo_chart_value(ticker: str, *, source_name: str, note_zh: str = "")
         result = payload["chart"]["result"][0]
     except (TypeError, KeyError, IndexError):
         return None
-    values: list[float] = []
+    values: list[tuple[int, float]] = []
     quote = result.get("indicators", {}).get("quote", [{}])[0]
-    for raw in quote.get("close", []) or []:
+    timestamps = result.get("timestamp", []) or []
+    for index, raw in enumerate(quote.get("close", []) or []):
         value = parse_float(raw)
         if value is not None:
-            values.append(value)
+            values.append((index, value))
     if not values:
         value = parse_float(result.get("meta", {}).get("regularMarketPrice"))
         if value is not None:
-            values.append(value)
+            values.append((-1, value))
     if not values:
         return None
+    value_index, latest_value = values[-1]
+    source_date = ""
+    if value_index >= 0 and value_index < len(timestamps):
+        try:
+            source_timestamp = int(timestamps[value_index])
+            timezone_name = str(result.get("meta", {}).get("exchangeTimezoneName") or "UTC")
+            try:
+                source_timezone = ZoneInfo(timezone_name)
+            except ZoneInfoNotFoundError:
+                source_timezone = timezone.utc
+            source_date = datetime.fromtimestamp(source_timestamp, timezone.utc).astimezone(source_timezone).date().isoformat()
+        except (TypeError, ValueError, OSError, OverflowError):
+            source_date = ""
     return source_result(
-        round(values[-1], 3),
+        round(latest_value, 3),
         source_name,
         source_url=url,
         note_zh=note_zh or "Yahoo Finance 日資料；需標示為外部市場資料。",
         support_level="PUBLIC_MARKET_DATA",
+        source_date=source_date,
     )
 
 
