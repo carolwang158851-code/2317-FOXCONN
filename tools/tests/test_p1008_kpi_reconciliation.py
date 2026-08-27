@@ -105,7 +105,11 @@ class KpiReconciliationTests(unittest.TestCase):
 
     def test_pb_formula_reproduces_authority_value(self):
         row = csv_rows(PACKAGE / "data/2317_daily_price.csv")[-1]
-        self.assertEqual("2026-08-11", row["Date"])
+        self.assertEqual("2026-08-27", row["Date"])
+        self.assertEqual("2026Q1", row["QuarterKey"])
+        self.assertEqual(252.0, float(row["Close"]))
+        self.assertEqual(127.12, float(row["BVPS_ref"]))
+        self.assertEqual(1.982, float(row["PB_daily"]))
         self.assertEqual(float(row["PB_daily"]), round(float(row["Close"]) / float(row["BVPS_ref"]), 3))
 
     def test_roic_formula_reproduces_precise_value(self):
