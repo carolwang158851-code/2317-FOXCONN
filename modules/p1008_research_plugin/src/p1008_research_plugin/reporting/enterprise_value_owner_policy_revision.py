@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -43,6 +44,26 @@ def _semantic_hash(value: Mapping[str, Any]) -> str:
     return _sha(raw)
 
 
+def _canonical_base_bytes(expected_sha256: str) -> bytes:
+    package_root = _CONTRACT_DIR.parents[2]
+    relative = _BASE_PATH.relative_to(package_root).as_posix()
+    result = subprocess.run(
+        ["git", "-C", str(package_root), "show", f"HEAD:{relative}"],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0 or _sha(result.stdout) != expected_sha256:
+        raise OwnerPolicyRevisionError("ORIGINAL_CANDIDATE_REFERENCE_MISMATCH")
+    try:
+        materialized = _BASE_PATH.read_bytes()
+    except OSError as exc:
+        raise OwnerPolicyRevisionError("ORIGINAL_CANDIDATE_REFERENCE_MISMATCH") from exc
+    if materialized.replace(b"\r\n", b"\n") != result.stdout.replace(b"\r\n", b"\n"):
+        raise OwnerPolicyRevisionError("ORIGINAL_CANDIDATE_REFERENCE_MISMATCH")
+    return result.stdout
+
+
 def load_policy_revision(path: Path | None = None) -> dict[str, Any]:
     target = path or _REVISION_PATH
     try:
@@ -70,10 +91,10 @@ def validate_policy_revision(revision: Mapping[str, Any]) -> None:
         "canva_calls": 0,
     }:
         raise OwnerPolicyRevisionError("REVISION_EXECUTION_BOUNDARY_INVALID")
-    base_bytes = _BASE_PATH.read_bytes()
     base_ref = revision.get("original_candidate", {})
-    if base_ref.get("policy_id") != "ENTERPRISE_VALUE_OWNER_POLICY_CANDIDATE_V1" or base_ref.get("sha256") != _sha(base_bytes):
+    if base_ref.get("policy_id") != "ENTERPRISE_VALUE_OWNER_POLICY_CANDIDATE_V1":
         raise OwnerPolicyRevisionError("ORIGINAL_CANDIDATE_REFERENCE_MISMATCH")
+    _canonical_base_bytes(str(base_ref.get("sha256", "")))
     base = load_policy_candidate(_BASE_PATH)
     by_id = {item["threshold_id"]: item for item in base["thresholds"]}
     frozen = revision.get("frozen_approved_items", [])

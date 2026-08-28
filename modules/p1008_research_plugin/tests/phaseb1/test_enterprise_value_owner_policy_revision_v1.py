@@ -7,6 +7,11 @@ import sys
 import unittest
 from pathlib import Path
 
+try:
+    from .helpers import current_authority_hashes
+except ImportError:
+    from helpers import current_authority_hashes
+
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[4]
 SRC = PACKAGE_ROOT / "modules" / "p1008_research_plugin" / "src"
@@ -241,14 +246,7 @@ class EnterpriseValueOwnerPolicyRevisionV1Tests(unittest.TestCase):
 
     def test_r38_raw_production_hashes_unchanged(self):
         expected = {
-            "data/CSV_AUTHORITY_MANIFEST.json": "C6FF94A1FB2C9C877D7620184BDDD9A6270355ED833318638C3D87EB634A5398",
-            "data/2317_master_v9.csv": "0BB2FEC6FA3035AC642738BC12EA6959C81C8A79D5221E694BF780427051CF79",
-            "data/2317_daily_price.csv": "1C32081288731725CBA000C1CCC5144A24DD2A6F9A15A2964F930D8953839C6D",
-            "data/2317_daily_market_activity.csv": "021244A6E25894DB93C2223CA493EBA0BD72610D7CE06D4B95BCB5FBFD82D4BB",
-            "data/2317_cash_flow_authority.csv": "082ECA44A96A06F7DAE10DD33CBAF77C75DABA9B1B4DEA27B5B930F8CE8CD95C",
-            "data/macro_snapshot.csv": "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F",
-            "data/macro_event_observations.csv": "76B93F8932BA606390D44D68BD0D57D0BE7CB5D1D1364183F192A062D8B94BF2",
-            "data/fx_trend_observations.csv": "BFEC53845C68D689D20CC29972550279E3A4AE8D473816EFDB0855FF0DD091CD",
+            **current_authority_hashes(),
             "rules/RULE_STATUS_MANIFEST.json": "054DA1FDAF0C75BB27B56DF45B96F1CC1720558D44C700F1AB70AB0280A2FE5C",
         }
         for rel, digest in expected.items():

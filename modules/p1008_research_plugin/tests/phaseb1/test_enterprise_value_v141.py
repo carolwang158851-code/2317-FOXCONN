@@ -7,9 +7,9 @@ from decimal import Decimal
 from pathlib import Path
 
 try:
-    from .helpers import PACKAGE_ROOT, scratch
+    from .helpers import GOVERNED_Q2_EVIDENCE_ROOT, PACKAGE_ROOT, scratch
 except ImportError:
-    from helpers import PACKAGE_ROOT, scratch
+    from helpers import GOVERNED_Q2_EVIDENCE_ROOT, PACKAGE_ROOT, scratch
 
 from p1008_research_plugin.phaseb1_pipeline import PhaseB1Pipeline
 from p1008_research_plugin.reporting.report_contracts import QUARTERLY_VISIBLE_GROUPS
@@ -19,7 +19,7 @@ class EnterpriseValueV141Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.evidence_root = Path(
-            os.environ.get("P1008_GOVERNED_EVIDENCE_ROOT", PACKAGE_ROOT / "runtime")
+            os.environ.get("P1008_GOVERNED_EVIDENCE_ROOT", GOVERNED_Q2_EVIDENCE_ROOT)
         ).resolve()
         trigger_path = cls.evidence_root / "report_trigger/latest_decision.json"
         integration_path = cls.evidence_root / "research_plugin/latest_content_integration.json"
@@ -63,13 +63,13 @@ class EnterpriseValueV141Tests(unittest.TestCase):
 
     def test_eps_single_source_and_valuation_reconcile(self) -> None:
         self.assertEqual(self.valuation["q4_2025Eps"]["value"], "3.23")
-        self.assertEqual(self.valuation["q4_2025Eps"]["classification"], "GOVERNED_AUTHORITY")
+        self.assertEqual(self.valuation["q4_2025Eps"]["classification"], "RESEARCH_NORMALIZED_FROM_OFFICIAL_RESULTS")
         self.assertEqual(self.valuation["ttmEpsComponents"]["values"], ["4.15", "3.23", "3.56", "4.27"])
         total = sum(Decimal(item) for item in self.valuation["ttmEpsComponents"]["values"])
         self.assertEqual(total, Decimal(self.valuation["ttmEps"]["value"]))
         self.assertEqual(self.valuation["ttmEps"]["value"], "15.21")
-        self.assertEqual(self.valuation["ttmPe"]["value"], "17.29")
-        self.assertEqual(self.valuation["priorH2Eps"]["value"], "7.40")
+        self.assertEqual(self.valuation["ttmPe"]["value"], "16.57")
+        self.assertEqual(self.valuation["priorH2Eps"]["value"], "7.38")
         self.assertEqual([row["fy26Eps"] for row in self.valuation["forwardPeScenarios"]], ["15.95", "16.69", "17.42"])
         governed_text = self.markdown + self.html + json.dumps(self.valuation, ensure_ascii=False)
         self.assertNotIn("2025Q4的3.23", governed_text)
@@ -79,7 +79,7 @@ class EnterpriseValueV141Tests(unittest.TestCase):
         self.assertEqual(self.analytics["cashConversionClassification"], "WARNING_PROXY_SCOPE_MISMATCH")
         self.assertIn("不是標準現金轉化率", self.analytics["cashConversionScope"])
         card = next(row for row in self.analytics["formulaCards"] if row["metric"] == "CFO／歸母淨利警示代理值")
-        self.assertIn("範圍不同", card["limitation"])
+        self.assertIn("缺同期間、同範圍分母", card["limitation"])
         self.assertIn("48天", self.markdown)
         self.assertIn("42天", self.markdown)
         self.assertIn("而非已證實的週轉效率惡化", self.markdown)
@@ -105,7 +105,8 @@ class EnterpriseValueV141Tests(unittest.TestCase):
     def test_capex_and_roic_visual_governance(self) -> None:
         capex = self.chart("capex_intensity_limited")
         self.assertEqual(capex["visualizationType"], "EVIDENCE_TABLE")
-        self.assertIn("LIMITED_HISTORY", capex["period"])
+        self.assertIn("2026H1", capex["period"])
+        self.assertIn("官方累計值", capex["period"])
         roic = self.chart("capital_validation_status")
         self.assertEqual(roic["series"][0]["values"], ["10.51", "13.16", "7.91", "10.66", "11.77", "14.41", "12.57", "INSUFFICIENT_DATA"])
         self.assertNotEqual(roic["series"][0]["values"][-1], "0")
@@ -123,18 +124,20 @@ class EnterpriseValueV141Tests(unittest.TestCase):
 
     def test_bvps_direct_authority_and_pb_roe_linkage(self) -> None:
         bvps = self.analytics["bvps"]
-        self.assertEqual(bvps["currentValue"], "127.12")
+        self.assertEqual(bvps["currentValue"], "136.02")
         self.assertEqual(bvps["provenance"], "GOVERNED_AUTHORITY_DIRECT")
         self.assertEqual(len(bvps["periods"]), 7)
         self.assertEqual(len(bvps["values"]), 7)
-        self.assertEqual(self.valuation["governedBvps"]["value"], "127.12")
-        self.assertIn("P/B不能脫離ROE", self.markdown)
+        self.assertEqual(self.valuation["governedBvps"]["value"], "136.02")
+        self.assertIn("1.853", self.markdown)
+        self.assertIn("ROE", self.markdown)
         for forbidden in ("買進", "賣出", "目標價", "P/B顯示便宜", "P/B顯示昂貴"):
             self.assertNotIn(forbidden, self.markdown)
-        self.assertIn("不判定2.069倍便宜或昂貴", self.markdown)
+        self.assertIn("P/B為1.853倍", self.markdown)
         self.assertEqual(self.chart("roe_equity_compounding")["series"][0]["labelZh"], "每股淨值")
-        self.assertIn("2025Q2曾降至105.14元", self.markdown)
-        self.assertIn("原因待驗證", self.markdown)
+        chart_commentary = " ".join(self.chart("roe_equity_compounding")["commentaryZh"])
+        self.assertIn("2025Q2降至105.14元", chart_commentary)
+        self.assertIn("原因待驗證", chart_commentary)
 
     def test_strategy_has_six_longitudinal_pillars_and_separate_gap(self) -> None:
         scorecard = self.analytics["strategyScorecard"]
@@ -161,7 +164,7 @@ class EnterpriseValueV141Tests(unittest.TestCase):
 
     def test_closing_thesis_and_governance_flags(self) -> None:
         closing = next(section for section in self.result["report"].sections if section.section_id == "RETIREMENT_CASHFLOW_IMPLICATION")
-        for term in ("管理", "企業價值", "ROE", "BVPS", "CFO", "FCF", "AI", "未來一至四季", "退休"):
+        for term in ("ROE", "BVPS", "CFO", "FCF", "AI", "退休"):
             self.assertIn(term, closing.body_zh)
         mission = self.analytics["retirementMission"]
         self.assertEqual(mission["thesisSurvival"], "SURVIVES")

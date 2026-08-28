@@ -135,7 +135,9 @@ class HistoricalKPIBackfillV1Tests(unittest.TestCase):
 
     def test_h13_pe_uses_ttm_eps(self) -> None:
         rows = observations_for(self.baseline, "PE_TTM")
-        self.assertEqual(len(rows), 21)
+        self.assertEqual(len(rows), 22)
+        self.assertEqual([x["period"] for x in rows].count("2026Q2"), 1)
+        self.assertEqual(len([x for x in rows if x["period"] != "2026Q2"]), 21)
         self.assertEqual({x["formula_version"] for x in rows}, {"QUARTER_END_PRICE_DIVIDED_BY_TTM_EPS_V1"})
 
     def test_h14_ps_uses_ttm_revenue(self) -> None:
@@ -146,7 +148,9 @@ class HistoricalKPIBackfillV1Tests(unittest.TestCase):
 
     def test_h15_pb_uses_period_end_bvps_basis(self) -> None:
         rows = observations_for(self.baseline, "PB")
-        self.assertEqual(len(rows), 21)
+        self.assertEqual(len(rows), 22)
+        self.assertEqual([x["period"] for x in rows].count("2026Q2"), 1)
+        self.assertEqual(len([x for x in rows if x["period"] != "2026Q2"]), 21)
         self.assertEqual({x["basis"] for x in rows}, {"QUARTER_END_LAST_VALID_TRADING_DAY"})
         self.assertTrue(all(abs(float(x["price"]) / float(next(row["BVPS"] for row in self._master_rows() if row["Quarter"] == x["period"])) - float(x["value"])) <= 0.01 for x in rows))
         q1 = next(x for x in rows if x["period"] == "2026Q1")

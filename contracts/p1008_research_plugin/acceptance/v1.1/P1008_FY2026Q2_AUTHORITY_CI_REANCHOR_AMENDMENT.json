@@ -1,0 +1,83 @@
+{
+  "schemaVersion": "1.0",
+  "receiptId": "P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT_20260828",
+  "scopeId": "P1008-FY2026Q2-AUTHORITY-CI-REANCHOR-20260828",
+  "acceptedBy": "Owner",
+  "acceptedAt": "2026-08-28",
+  "ownerApprovalReference": "P1008 FY2026Q2 CI RE-ANCHOR CONTRACT / FIXTURE / PORTABILITY REMEDIATION V1",
+  "acceptanceStatus": "P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT",
+  "baselineId": "INTEGRATED_SEVEN",
+  "previousReceipt": {
+    "path": "contracts/p1008_research_plugin/acceptance/v1.1/P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT.json",
+    "sha256": "9A0DDC6A85BE96123A7EC378DAC7BDD368D671DB8BFBFDD07DC40EFE438FD187"
+  },
+  "sourceLineage": {
+    "sourceHead": "4216e2ee6771f3cd7cc45e9321f33037ac591d17",
+    "sourceBase": "bfe19f353a7c26676507beeeb566a6ad60fcbedf",
+    "authorityMutationDuringCiRemediation": false
+  },
+  "authorityManifest": {
+    "path": "data/CSV_AUTHORITY_MANIFEST.json",
+    "sha256": "90870F2CBE5F17F0B0BC1033D056542D2F9DDA96F94BCB81E8BF7018817E86F9",
+    "manifestVersion": "1.4.0"
+  },
+  "authorityFiles": {
+    "data/2317_master_v9.csv": "4B8996B5B39128E6DB8FA6DA89CF8AF0E2257FFD8124BD295349DBC32E67E7BF",
+    "data/2317_daily_price.csv": "4FF01364DF90E1C3CE75174C9714B6E0F817F7972CE2309C8052AE1CCDEC5953",
+    "data/2317_daily_market_activity.csv": "899B2F8C103C0DC2993757391DF4617014146FEDE89D82D11B52C53208364E83",
+    "data/2317_cash_flow_authority.csv": "082ECA44A96A06F7DAE10DD33CBAF77C75DABA9B1B4DEA27B5B930F8CE8CD95C",
+    "data/macro_snapshot.csv": "7C3E5F320FBD7F1558CBA670246B5A3062060769A0420A105A4CAF8499DABC63",
+    "data/macro_event_observations.csv": "76B93F8932BA606390D44D68BD0D57D0BE7CB5D1D1364183F192A062D8B94BF2",
+    "data/fx_trend_observations.csv": "29343973B163D3E0B61EF6E6BBD42862E3A324D3E8CC20DE3069FA77D22A8267"
+  },
+  "authoritySummary": {
+    "verifiedFileCount": 7,
+    "masterRows": 22,
+    "latestQuarter": "2026Q2",
+    "dailyPriceRows": 139,
+    "dailyPriceCutoff": "2026-08-27",
+    "marketActivityRows": 89,
+    "marketActivityCutoff": "2026-08-27",
+    "macroRows": 40,
+    "macroCutoff": "2026-08-27",
+    "fxRows": 13,
+    "fxCutoff": "2026-08-27",
+    "eventRows": 493,
+    "eventCutoff": "2026-07-27"
+  },
+  "fy2026Q2Promotion": {
+    "quarterCount": 1,
+    "bvps": "136.02",
+    "roePct": "6.21",
+    "roePeriod": "2026H1",
+    "roeAnnualized": false,
+    "currentPriceDate": "2026-08-27",
+    "currentClose": "252.0",
+    "currentPb": "1.853",
+    "roicStatus": "OWNER_CONDITIONAL_PENDING",
+    "roicCanonicalValue": null
+  },
+  "freshnessPromotion": {
+    "dailyPrice": "PROMOTED_THROUGH_2026-08-27",
+    "marketActivity": "PROMOTED_THROUGH_2026-08-27",
+    "macroSnapshot": "PROMOTED_THROUGH_2026-08-27",
+    "fxTrend": "PROMOTED_THROUGH_2026-08-27",
+    "macroEvents": "UNCHANGED_OBSERVATION_ONLY_THROUGH_2026-07-27"
+  },
+  "macroAuthorityDecision": {
+    "unapprovedRowsAccepted": false,
+    "requiredSha256": "7C3E5F320FBD7F1558CBA670246B5A3062060769A0420A105A4CAF8499DABC63"
+  },
+  "formalPublishExecutedByThisReceipt": false,
+  "newAuthorityWriteDuringCiClosure": false,
+  "governanceAcknowledgementOnly": true,
+  "ownerGateRequired": true,
+  "automaticReportGeneration": false,
+  "automaticPublicReportPublication": false,
+  "ruleHoldMidrModified": false,
+  "runtimeSqliteModified": false,
+  "openAiCalls": 0,
+  "webSearchCalls": 0,
+  "canvaCalls": 0,
+  "actionable": false
+}

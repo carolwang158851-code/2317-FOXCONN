@@ -16,6 +16,20 @@ PACKAGE_ROOT = MODULE_ROOT.parents[1]
 SRC_ROOT = MODULE_ROOT / "src"
 FIXTURE_PATH = MODULE_ROOT / "tests" / "fixtures" / "phaseb1" / "monthly_revenue_fixture.json"
 AUTHORITY_BASELINES_PATH = MODULE_ROOT / "tests" / "fixtures" / "authority_baselines.json"
+GOVERNED_Q2_FIXTURE_ROOT = MODULE_ROOT / "tests" / "fixtures" / "phaseb1" / "governed_q2"
+GOVERNED_Q2_EVIDENCE_ROOT = GOVERNED_Q2_FIXTURE_ROOT / "runtime"
+GOVERNED_Q2_SOURCE_MOTHER = (
+    GOVERNED_Q2_FIXTURE_ROOT
+    / "source"
+    / "HON_HAI_FY2026_Q2_ENTERPRISE_VALUE_WAR_REPORT.html"
+)
+CURRENT_AUTHORITY_RECEIPT_REL = Path(
+    "contracts/p1008_research_plugin/acceptance/v1.1/"
+    "P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT.json"
+)
+CURRENT_AUTHORITY_RECEIPT_SHA256 = (
+    "93176AC4E6E42B034500A27742077990C97B22E70C9BE2C2E1D80DFA85A0A390"
+)
 sys.path.insert(0, str(SRC_ROOT))
 
 
@@ -33,6 +47,19 @@ def scratch(prefix: str) -> Iterator[Path]:
 
 def fixture() -> dict[str, object]:
     return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+
+
+def current_authority_hashes() -> dict[str, str]:
+    raw = (PACKAGE_ROOT / CURRENT_AUTHORITY_RECEIPT_REL).read_bytes()
+    if hashlib.sha256(raw).hexdigest().upper() != CURRENT_AUTHORITY_RECEIPT_SHA256:
+        raise RuntimeError("Current authority amendment receipt hash mismatch")
+    receipt = json.loads(raw.decode("utf-8-sig"))
+    return {
+        str(receipt["authorityManifest"]["path"]): str(
+            receipt["authorityManifest"]["sha256"]
+        ),
+        **{str(path): str(digest) for path, digest in receipt["authorityFiles"].items()},
+    }
 
 
 def write_fixture(root: Path, payload: dict[str, object]) -> Path:

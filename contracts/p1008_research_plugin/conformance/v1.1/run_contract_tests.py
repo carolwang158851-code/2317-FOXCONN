@@ -38,10 +38,10 @@ V1_CONTRACT_ROOT = PACKAGE_ROOT / "contracts" / "p1008_research_plugin" / "v1.0"
 MODULE_RELATIVE_PATH = Path("modules/p1008_research_plugin")
 CURRENT_AUTHORITY_AMENDMENT_PATH = (
     "contracts/p1008_research_plugin/acceptance/v1.1/"
-    "P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT.json"
+    "P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT.json"
 )
 CURRENT_AUTHORITY_AMENDMENT_SHA256 = (
-    "9A0DDC6A85BE96123A7EC378DAC7BDD368D671DB8BFBFDD07DC40EFE438FD187"
+    "93176AC4E6E42B034500A27742077990C97B22E70C9BE2C2E1D80DFA85A0A390"
 )
 
 
@@ -289,6 +289,7 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                 "PHASE_A_AUTHORITY_DATA_CLOSURE_COMPLETE",
                 "PHASE_A_FINAL_INTEGRATION_RECONCILED",
                 "P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT",
+                "P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT",
             },
             "Phase A authority receipt is not accepted",
         )
@@ -681,7 +682,7 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                 and receipt.get("canvaCalls") == 0,
                 "Final integration recorded an unauthorized state change or call",
             )
-        else:
+        elif acceptance_status == "P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT":
             require(
                 classification == "INTEGRATED_SEVEN"
                 and receipt.get("baselineId") == "INTEGRATED_SEVEN",
@@ -789,6 +790,120 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                 and receipt.get("webSearchCalls") == 0
                 and receipt.get("canvaCalls") == 0,
                 "TWSE remediation governance boundary drifted",
+            )
+        else:
+            require(
+                classification == "INTEGRATED_SEVEN"
+                and receipt.get("baselineId") == "INTEGRATED_SEVEN",
+                "FY2026Q2 CI re-anchor is bound to the wrong baseline",
+            )
+            previous = receipt.get("previousReceipt", {})
+            previous_path = previous.get("path", "")
+            require(
+                previous_path
+                == "contracts/p1008_research_plugin/acceptance/v1.1/P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT.json"
+                and previous.get("sha256")
+                == "9A0DDC6A85BE96123A7EC378DAC7BDD368D671DB8BFBFDD07DC40EFE438FD187",
+                "FY2026Q2 CI re-anchor predecessor identity mismatch",
+            )
+            previous_committed = git_blob_bytes(root, previous_path)
+            require(
+                sha256_bytes(previous_committed) == previous.get("sha256"),
+                "Historical TWSE authority amendment hash changed",
+            )
+            require(
+                normalize_checkout_eol((root / previous_path).read_bytes())
+                == normalize_checkout_eol(previous_committed),
+                "Historical TWSE authority amendment worktree changed",
+            )
+            previous_document = json.loads(previous_committed.decode("utf-8-sig"))
+            require(
+                previous_document.get("acceptanceStatus")
+                == "P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT"
+                and previous_document.get("authorityManifest", {}).get("sha256")
+                == "C6FF94A1FB2C9C877D7620184BDDD9A6270355ED833318638C3D87EB634A5398",
+                "Historical TWSE authority amendment content drifted",
+            )
+            manifest_reference = receipt.get("authorityManifest", {})
+            require(
+                manifest_reference
+                == {
+                    "path": "data/CSV_AUTHORITY_MANIFEST.json",
+                    "sha256": sha256_bytes(
+                        git_blob_bytes(root, "data/CSV_AUTHORITY_MANIFEST.json")
+                    ),
+                    "manifestVersion": "1.4.0",
+                },
+                "FY2026Q2 CI re-anchor authority manifest mismatch",
+            )
+            require(
+                receipt.get("authoritySummary")
+                == {
+                    "verifiedFileCount": 7,
+                    "masterRows": 22,
+                    "latestQuarter": "2026Q2",
+                    "dailyPriceRows": 139,
+                    "dailyPriceCutoff": "2026-08-27",
+                    "marketActivityRows": 89,
+                    "marketActivityCutoff": "2026-08-27",
+                    "macroRows": 40,
+                    "macroCutoff": "2026-08-27",
+                    "fxRows": 13,
+                    "fxCutoff": "2026-08-27",
+                    "eventRows": 493,
+                    "eventCutoff": "2026-07-27",
+                },
+                "FY2026Q2 CI re-anchor authority summary drifted",
+            )
+            q2 = receipt.get("fy2026Q2Promotion", {})
+            require(
+                q2
+                == {
+                    "quarterCount": 1,
+                    "bvps": "136.02",
+                    "roePct": "6.21",
+                    "roePeriod": "2026H1",
+                    "roeAnnualized": False,
+                    "currentPriceDate": "2026-08-27",
+                    "currentClose": "252.0",
+                    "currentPb": "1.853",
+                    "roicStatus": "OWNER_CONDITIONAL_PENDING",
+                    "roicCanonicalValue": None,
+                },
+                "FY2026Q2 promotion boundary drifted",
+            )
+            lineage = receipt.get("sourceLineage", {})
+            source_head = lineage.get("sourceHead", "")
+            source_base = lineage.get("sourceBase", "")
+            require(
+                source_head == "4216e2ee6771f3cd7cc45e9321f33037ac591d17"
+                and source_base == "bfe19f353a7c26676507beeeb566a6ad60fcbedf"
+                and lineage.get("authorityMutationDuringCiRemediation") is False
+                and subprocess.run(
+                    ["git", "-C", str(root), "merge-base", "--is-ancestor", source_base, source_head],
+                    check=False,
+                ).returncode
+                == 0
+                and subprocess.run(
+                    ["git", "-C", str(root), "merge-base", "--is-ancestor", source_head, "HEAD"],
+                    check=False,
+                ).returncode
+                == 0,
+                "FY2026Q2 CI re-anchor source lineage is invalid",
+            )
+            require(
+                receipt.get("formalPublishExecutedByThisReceipt") is False
+                and receipt.get("newAuthorityWriteDuringCiClosure") is False
+                and receipt.get("governanceAcknowledgementOnly") is True
+                and receipt.get("ownerGateRequired") is True
+                and receipt.get("automaticReportGeneration") is False
+                and receipt.get("automaticPublicReportPublication") is False
+                and receipt.get("ruleHoldMidrModified") is False
+                and receipt.get("runtimeSqliteModified") is False
+                and receipt.get("openAiCalls") == 0
+                and receipt.get("webSearchCalls") == 0
+                and receipt.get("canvaCalls") == 0,
+                "FY2026Q2 CI re-anchor governance boundary drifted",
             )
         macro_decision = receipt.get("macroAuthorityDecision", {})
         require(

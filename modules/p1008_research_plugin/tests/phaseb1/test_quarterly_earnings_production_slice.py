@@ -9,9 +9,9 @@ from pathlib import Path
 import pdfplumber
 
 try:
-    from .helpers import PACKAGE_ROOT, SRC_ROOT, scratch
+    from .helpers import GOVERNED_Q2_EVIDENCE_ROOT, PACKAGE_ROOT, SRC_ROOT, scratch
 except ImportError:
-    from helpers import PACKAGE_ROOT, SRC_ROOT, scratch
+    from helpers import GOVERNED_Q2_EVIDENCE_ROOT, PACKAGE_ROOT, SRC_ROOT, scratch
 
 from p1008_research_plugin.phaseb1_pipeline import PhaseB1Pipeline
 from p1008_research_plugin.quarterly_earnings import (
@@ -27,7 +27,9 @@ from p1008_research_plugin.reporting import template_governance
 class QuarterlyEarningsProductionSliceTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        evidence_root = Path(os.environ.get("P1008_GOVERNED_EVIDENCE_ROOT", PACKAGE_ROOT / "runtime")).resolve()
+        evidence_root = Path(
+            os.environ.get("P1008_GOVERNED_EVIDENCE_ROOT", GOVERNED_Q2_EVIDENCE_ROOT)
+        ).resolve()
         trigger_path = evidence_root / "report_trigger/latest_decision.json"
         integration_path = evidence_root / "research_plugin/latest_content_integration.json"
         if not trigger_path.is_file() or not integration_path.is_file():
@@ -93,25 +95,27 @@ class QuarterlyEarningsProductionSliceTests(unittest.TestCase):
             self.assertEqual(len(manifest["templateGovernance"]["taskEnvelopes"]), 5)
 
             sections = {item.section_id: item.body_zh for item in report["report"].sections}
-            self.assertIn("推導Q2 CFO", sections["EXECUTIVE_SUMMARY"])
+            self.assertIn("官方2026H1 CFO", sections["EXECUTIVE_SUMMARY"])
             self.assertIn("估值安全性沒有改善", sections["EXECUTIVE_SUMMARY"])
             self.assertIn("第三個3", sections["GOVERNANCE_COMMITMENT_EXECUTION"])
             self.assertIn("26.67個百分點", sections["OPERATING_LEVERAGE"])
             self.assertIn("營業費用淨額代理值", sections["OPERATING_LEVERAGE"])
             self.assertIn("受治理ROIC", sections["CAPITAL_EFFICIENCY"])
             self.assertIn("不是0或下降", sections["CAPITAL_EFFICIENCY"])
-            self.assertIn("CFO／歸母淨利警示代理值", sections["EARNINGS_TO_CASH_QUALITY"])
-            self.assertIn("不是同口徑標準現金轉化率", sections["EARNINGS_TO_CASH_QUALITY"])
+            self.assertIn("不以H1現金流除以Q2單季歸母淨利", sections["EARNINGS_TO_CASH_QUALITY"])
+            self.assertIn("不把H1累計值改標為Q2單季", sections["EARNINGS_TO_CASH_QUALITY"])
             self.assertIn("AI是營收驅動", sections["AI_SERVER_CLOUD_NETWORKING"])
             self.assertIn("AI特定營業利益", sections["AI_SERVER_CLOUD_NETWORKING"])
             self.assertNotIn("AI已證明能擴大營收與營業利益", sections["AI_SERVER_CLOUD_NETWORKING"])
             self.assertIn("鴻海官方2025Q4 basic EPS 3.23元", sections["VALUATION"])
             self.assertIn("合計15.21元", sections["VALUATION"])
-            self.assertIn("17.29倍", sections["VALUATION"])
-            self.assertIn("2025H2 EPS為7.40元", sections["VALUATION"])
-            self.assertIn("受治理直接BVPS 127.12元", sections["VALUATION"])
-            self.assertIn("P/B不能脫離ROE判讀", sections["VALUATION"])
-            self.assertIn("不判定2.069倍便宜或昂貴", sections["VALUATION"])
+            self.assertIn("16.57倍", sections["VALUATION"])
+            self.assertIn("2025H2 EPS為7.38元", sections["VALUATION"])
+            self.assertIn("BVPS 136.02元", sections["VALUATION"])
+            report_markdown = (run_root / "report_candidate.md").read_text(encoding="utf-8")
+            self.assertIn("1.853", report_markdown)
+            self.assertIn("ROE", report_markdown)
+            self.assertIn("P/B為1.853倍", sections["VALUATION"])
             for forbidden in ("BUY", "SELL", "ADD", "TRIM", "TARGET PRICE", "目標價"):
                 self.assertNotIn(forbidden, sections["VALUATION"])
 
@@ -139,7 +143,8 @@ class QuarterlyEarningsProductionSliceTests(unittest.TestCase):
 
             cash = next(item for item in charts if item["chartId"] == "cash_quality_evidence")
             self.assertEqual(cash["visualizationType"], "QUANTITATIVE_CHART")
-            self.assertEqual(cash["labels"], ["2026Q1", "2026Q2（H1減Q1推導）"])
+            self.assertEqual(cash["labels"], ["2026H1"])
+            self.assertIn("官方累計值", json.dumps(cash, ensure_ascii=False))
 
             capital = next(item for item in charts if item["chartId"] == "capital_validation_status")
             self.assertEqual(capital["visualizationType"], "QUANTITATIVE_CHART")
@@ -233,7 +238,9 @@ class QuarterlyEarningsProductionSliceTests(unittest.TestCase):
             config_target = package / QuarterlyEarningsPacket.CONFIG_REL
             config_target.parent.mkdir(parents=True)
             shutil.copy2(config_source, config_target)
-            evidence_root = Path(os.environ.get("P1008_GOVERNED_EVIDENCE_ROOT", PACKAGE_ROOT / "runtime")).resolve()
+            evidence_root = Path(
+                os.environ.get("P1008_GOVERNED_EVIDENCE_ROOT", GOVERNED_Q2_EVIDENCE_ROOT)
+            ).resolve()
             integration_source = evidence_root / "research_plugin" / "latest_content_integration.json"
             integration_target = package / QuarterlyEarningsPacket.INTEGRATION_REL
             integration_target.parent.mkdir(parents=True)

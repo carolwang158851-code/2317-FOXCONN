@@ -4,6 +4,7 @@ import hashlib
 import http.server
 import json
 import shutil
+import subprocess
 import sys
 import threading
 import urllib.request
@@ -28,6 +29,15 @@ import warroom_report_governance as governance  # noqa: E402
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
+
+
+def git_blob_bytes(relative: str, revision: str = "HEAD") -> bytes:
+    return subprocess.run(
+        ["git", "show", f"{revision}:{relative}"],
+        cwd=PACKAGE_ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+    ).stdout
 
 
 class _Response:
@@ -272,7 +282,15 @@ class PhaseB1OpsLauncherReportRecoveryTests(unittest.TestCase):
             ).read_text(encoding="utf-8")
         )
         self.assertEqual(source_receipt["trackedDestinationPath"], tracked)
-        self.assertEqual(source_receipt["trackedDestinationSha256"], sha256(tracked_path))
+        original_canonical = git_blob_bytes(tracked, "48900b7")
+        self.assertEqual(
+            source_receipt["trackedDestinationSha256"],
+            hashlib.sha256(original_canonical).hexdigest().upper(),
+        )
+        current_canonical = git_blob_bytes(tracked)
+        self.assertEqual(
+            tracked_path.read_bytes().replace(b"\r\n", b"\n"), current_canonical
+        )
         self.assertTrue(source_receipt["byteIdentityVerified"])
         for path in (
             PACKAGE_ROOT / "launcher.html",

@@ -174,3 +174,12 @@ P1008_BUILD_REPORT.bat text eol=lf
 tests/test_phaseb1_launcher.py text eol=lf
 tools/p1008_build_analysis.py text eol=lf
 tools/p1008_build_report.py text eol=lf
+contracts/p1008_report_production/v1.1/ENTERPRISE_VALUE_OWNER_POLICY_CANDIDATE_V1.json text eol=lf
+contracts/p1008_report_production/v1.1/templates/HON_HAI_WAR_REPORT_MOTHER_V1.html text eol=lf
+contracts/p1008_research_plugin/acceptance/v1.1/P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT.json text eol=lf
+contracts/p1008_research_plugin/acceptance/v1.1/P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT.json text eol=lf
+modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/runtime/research_plugin/latest_content_integration.json binary
+modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/runtime/report_trigger/latest_decision.json binary
+modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/runtime/official_ir_evidence/P1008-OFFICIAL-IR-20260812T161537534050Z/receipts/IR-RECEIPT-6D5D0281AD7B2C179220.json binary
+modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/runtime/official_ir_evidence/P1008-OFFICIAL-IR-20260812T161537534050Z/raw/IR-RECEIPT-6D5D0281AD7B2C179220.bin binary
+modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/source/HON_HAI_FY2026_Q2_ENTERPRISE_VALUE_WAR_REPORT.html binary

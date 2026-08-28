@@ -11,6 +11,7 @@ import hashlib
 import html
 import json
 import re
+import subprocess
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
@@ -59,17 +60,35 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest().upper()
 
 
+def _canonical_committed_text(path: Path, expected_sha256: str) -> bytes:
+    package_root = _CONTRACT_DIR.parents[2]
+    relative = path.relative_to(package_root).as_posix()
+    result = subprocess.run(
+        ["git", "-C", str(package_root), "show", f"HEAD:{relative}"],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0 or _sha256(result.stdout) != expected_sha256:
+        raise WarReportContractError("MOTHER_TEMPLATE_HASH_MISMATCH")
+    try:
+        materialized = path.read_bytes()
+    except OSError as exc:
+        raise WarReportContractError("MOTHER_TEMPLATE_UNRESOLVED") from exc
+    if materialized.replace(b"\r\n", b"\n") != result.stdout.replace(b"\r\n", b"\n"):
+        raise WarReportContractError("MOTHER_TEMPLATE_HASH_MISMATCH")
+    return result.stdout
+
+
 def resolve_mother_template() -> str:
     contract = load_contract()
     template_contract = contract["template_contract"]
     path = _CONTRACT_DIR / template_contract["template_path"]
     try:
-        raw = path.read_bytes()
+        raw = _canonical_committed_text(path, template_contract["template_sha256"])
         text = raw.decode("utf-8")
     except (OSError, UnicodeDecodeError) as exc:
         raise WarReportContractError("MOTHER_TEMPLATE_UNRESOLVED") from exc
-    if _sha256(raw) != template_contract["template_sha256"]:
-        raise WarReportContractError("MOTHER_TEMPLATE_HASH_MISMATCH")
     if '<article class="report"' not in text:
         raise WarReportContractError("MOTHER_TEMPLATE_ROOT_MISSING")
     actual = tuple((item[0], re.sub(r"^\d+｜", "", item[1]).strip()) for item in _SECTION.findall(text))

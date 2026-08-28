@@ -247,7 +247,7 @@ class PhaseAFinalOwnerReviewTests(unittest.TestCase):
         self.assertEqual(rows, [])
         self.assertEqual(
             self.module.sha256_file(ROOT / "data/macro_snapshot.csv"),
-            "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F",
+            "7C3E5F320FBD7F1558CBA670246B5A3062060769A0420A105A4CAF8499DABC63",
         )
 
 

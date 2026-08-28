@@ -82,13 +82,15 @@ class PhaseAMacroRemediationTests(unittest.TestCase):
         formal = PACKAGE_ROOT / remediation.FORMAL_REL
         self.assertEqual(
             sha256(formal),
-            "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F",
+            "7C3E5F320FBD7F1558CBA670246B5A3062060769A0420A105A4CAF8499DABC63",
         )
         _, header, rows = remediation.read_macro(formal)
         date_index = header.index("Date")
         value_index = header.index("Hon_Hai_Rev_YoY")
         by_date = {row[date_index]: row for row in rows}
-        self.assertEqual(len(rows), 39)
+        self.assertEqual(len(rows), 40)
+        self.assertEqual(len(by_date), 40)
+        self.assertIn("2026-08-27", by_date)
         for invalid_date in remediation.EXPECTED_INVALID_DATES:
             self.assertEqual(by_date[invalid_date][value_index], "")
         self.assertTrue(
@@ -109,8 +111,8 @@ class PhaseAMacroRemediationTests(unittest.TestCase):
             for item in manifest.get("nonAuthoritativeFiles", [])
         }
         expected_cutoffs = {
-            "data/macro_snapshot.csv": "2026-07-10",
-            "data/fx_trend_observations.csv": "2026-07-27",
+            "data/macro_snapshot.csv": "2026-08-27",
+            "data/fx_trend_observations.csv": "2026-08-27",
             "data/macro_event_observations.csv": "2026-07-27",
         }
         for path, cutoff in expected_cutoffs.items():

@@ -7,9 +7,9 @@ from pathlib import Path
 from uuid import uuid4
 
 try:
-    from .helpers import PACKAGE_ROOT
+    from .helpers import GOVERNED_Q2_EVIDENCE_ROOT, GOVERNED_Q2_SOURCE_MOTHER, PACKAGE_ROOT
 except ImportError:
-    from helpers import PACKAGE_ROOT
+    from helpers import GOVERNED_Q2_EVIDENCE_ROOT, GOVERNED_Q2_SOURCE_MOTHER, PACKAGE_ROOT
 
 from p1008_research_plugin.phaseb1_common import protected_state_hashes
 from p1008_research_plugin.reporting.enterprise_value_rule_engine import (
@@ -32,10 +32,10 @@ from p1008_research_plugin.reporting.war_report_production_runtime import run_wa
 EVIDENCE_ROOT = Path(
     os.environ.get(
         "P1008_GOVERNED_EVIDENCE_ROOT",
-        r"C:\Users\a2231\OneDrive\foxconn_dashboard\foxconn-system\P1008_QUARTERLY_EARNINGS_PHASE_B1_PRODUCTION_SLICE_V1\runtime",
+        GOVERNED_Q2_EVIDENCE_ROOT,
     )
 ).resolve()
-SOURCE_MOTHER = Path.home() / "Downloads" / "HON_HAI_FY2026_Q2_ENTERPRISE_VALUE_WAR_REPORT.html"
+SOURCE_MOTHER = GOVERNED_Q2_SOURCE_MOTHER.resolve()
 
 
 class ForwardEnterpriseValueAnalyticsV1Tests(unittest.TestCase):

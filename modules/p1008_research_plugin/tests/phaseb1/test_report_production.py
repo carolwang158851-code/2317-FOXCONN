@@ -113,11 +113,11 @@ class PhaseB1ReportProductionTests(unittest.TestCase):
                 current_price = list(csv.DictReader(handle))[-1]
             self.assertEqual(
                 (frozen_price["Date"], frozen_price["PB_daily"]),
-                ("2026-07-27", "1.99"),
+                ("2026-08-27", "1.853"),
             )
             self.assertEqual(
                 (current_price["Date"], current_price["PB_daily"]),
-                ("2026-08-11", "2.069"),
+                ("2026-08-27", "1.853"),
             )
 
     def test_run_manifest_records_zero_external_calls(self) -> None:

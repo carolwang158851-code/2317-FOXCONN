@@ -6,9 +6,9 @@ import unittest
 from pathlib import Path
 
 try:
-    from .helpers import PACKAGE_ROOT, scratch
+    from .helpers import GOVERNED_Q2_EVIDENCE_ROOT, PACKAGE_ROOT, scratch
 except ImportError:
-    from helpers import PACKAGE_ROOT, scratch
+    from helpers import GOVERNED_Q2_EVIDENCE_ROOT, PACKAGE_ROOT, scratch
 
 from p1008_research_plugin.phaseb1_pipeline import PhaseB1Pipeline
 from p1008_research_plugin.reporting.report_contracts import QUARTERLY_VISIBLE_GROUPS
@@ -18,7 +18,7 @@ class EnterpriseValueV14Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.evidence_root = Path(
-            os.environ.get("P1008_GOVERNED_EVIDENCE_ROOT", PACKAGE_ROOT / "runtime")
+            os.environ.get("P1008_GOVERNED_EVIDENCE_ROOT", GOVERNED_Q2_EVIDENCE_ROOT)
         ).resolve()
         trigger_path = cls.evidence_root / "report_trigger/latest_decision.json"
         integration_path = cls.evidence_root / "research_plugin/latest_content_integration.json"
@@ -76,7 +76,8 @@ class EnterpriseValueV14Tests(unittest.TestCase):
         self.assertEqual(wc["cashConversionCycleDays"], ["48", "44", "42"])
         self.assertEqual(wc["assessment"], "GROWTH_DRIVEN_ABSORPTION_WITH_EFFICIENCY_IMPROVEMENT")
         capex = next(item for item in self.charts if item["chartId"] == "capex_intensity_limited")
-        self.assertIn("LIMITED_HISTORY", capex["period"])
+        self.assertIn("2026H1", capex["period"])
+        self.assertIn("官方累計值", capex["period"])
 
     def test_eight_quarter_operating_leverage_history_is_complete(self) -> None:
         history = self.result["analysis"].quarterly_earnings.quarterly_history
