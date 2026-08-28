@@ -89,11 +89,31 @@
     }
   },
   "workingCapitalDays": {
-    "periods": ["2025Q2", "2026Q1", "2026Q2"],
-    "accountsReceivableDays": ["51", "51", "46"],
-    "inventoryDays": ["54", "53", "50"],
-    "accountsPayableDays": ["57", "60", "54"],
-    "cashConversionCycleDays": ["48", "44", "42"]
+    "periods": [
+      "2025Q2",
+      "2026Q1",
+      "2026Q2"
+    ],
+    "accountsReceivableDays": [
+      "51",
+      "51",
+      "46"
+    ],
+    "inventoryDays": [
+      "54",
+      "53",
+      "50"
+    ],
+    "accountsPayableDays": [
+      "57",
+      "60",
+      "54"
+    ],
+    "cashConversionCycleDays": [
+      "48",
+      "44",
+      "42"
+    ]
   },
   "productMix": {
     "period": "FY2026 Q2",
@@ -138,5 +158,110 @@
     "quantified tariff impact",
     "policy-risk scenario values"
   ],
-  "actionable": false
+  "actionable": false,
+  "canonicalPromotion": {
+    "status": "PASS_WITH_ROIC_CONDITIONAL_PENDING",
+    "ownerApprovalReference": "P1008_FY2026Q2_OWNER_PROMOTION_FINAL_OWNER_APPROVAL_DIRECTIVE",
+    "canonicalQuarter": "2026Q2",
+    "effectiveDate": "2026-08-13",
+    "bvps": {
+      "value": "136.02",
+      "unit": "TWD_PER_SHARE",
+      "period": "2026Q2",
+      "classification": "OFFICIAL_REPORTED",
+      "displayLabelZh": "136.02元（官方申報）",
+      "sourceLocator": "https://openapi.twse.com.tw/v1/opendata/t187ap07_L_ci",
+      "sourceDate": "2026-08-27",
+      "derivation": null
+    },
+    "roe": {
+      "value": "6.21",
+      "unit": "PERCENT",
+      "period": "2026H1",
+      "annualized": false,
+      "classification": "OFFICIAL_REPORTED",
+      "displayLabelZh": "6.21%（2026上半年官方值，未年化）",
+      "comparablePriorValue": "5.48",
+      "sourceLocator": "https://www.honhai.com/zh-tw/press-center/press-releases/latest-news/2094",
+      "derivation": null
+    },
+    "roic": {
+      "candidateValue": "16.46",
+      "canonicalValue": null,
+      "unit": "PERCENT",
+      "period": "2026Q2",
+      "classification": "OWNER_CONDITIONAL_PENDING",
+      "displayLabelZh": "16.46%（條件式推算，尚未升格）",
+      "formula": "NOPAT_Annual / InvestedCapital * 100",
+      "numerator": {
+        "name": "NOPAT_Annual",
+        "valueMillionTwd": "277886.5536",
+        "formula": "94803 * (1 - 26.72%) * 4"
+      },
+      "denominator": {
+        "name": "InvestedCapital",
+        "valueMillionTwd": "1688127.607",
+        "formula": "InterestBearingDebt + ParentEquity - Cash",
+        "interestBearingDebtMillionTwd": "743193.000",
+        "parentEquityMillionTwd": "1907936.607",
+        "cashMillionTwd": "963002.000"
+      },
+      "methodologyLocator": "data/2317_master_v9.csv#roicNote",
+      "sourceLocators": [
+        "https://image.honhai.com/upload/202608/law_talk/Hon_Hai_2Q26_Results_Chinese%28%E6%8A%95%E5%BD%B1%E7%89%88%29_revised%28wp%29_20260818_7900.pdf",
+        "https://openapi.twse.com.tw/v1/opendata/t187ap07_L_ci"
+      ],
+      "releaseGate": {
+        "gates": {
+          "A": {
+            "status": "FAIL",
+            "labelZh": "未證明淨現金可用現金及約當現金減利息負債反推",
+            "reasonZh": "官方逐字稿揭露現金及定期存款約1.52兆元與淨現金219,809百萬元；候選使用現金及約當現金963,002百萬元。現金口徑不同，官方未明確定義Net Cash為963,002減利息負債。",
+            "sourceLocator": "https://image.honhai.com/upload/202608/law_talk/Hon_Hai_2Q26_Results_Chinese%28%E6%8A%95%E5%BD%B1%E7%89%88%29_revised%28wp%29_20260818_7900.pdf"
+          },
+          "B": {
+            "status": "PASS",
+            "labelZh": "日期、期間及合併範圍相容",
+            "reasonZh": "現金、淨現金及歸屬母公司權益均為2026-06-30合併口徑。",
+            "sourceLocators": [
+              "https://image.honhai.com/upload/202608/law_talk/Hon_Hai_2Q26_Results_Chinese%28%E6%8A%95%E5%BD%B1%E7%89%88%29_revised%28wp%29_20260818_7900.pdf",
+              "https://openapi.twse.com.tw/v1/opendata/t187ap07_L_ci"
+            ]
+          },
+          "C": {
+            "status": "PASS",
+            "labelZh": "26.72%僅為既有P1008年度稅率方法輸入",
+            "reasonZh": "來源綁定既有master公式與2026Q1反推鏈；不標示為公司Q2有效稅率。",
+            "sourceLocator": "data/2317_master_v9.csv#roicNote"
+          },
+          "D": {
+            "status": "PASS",
+            "labelZh": "既有歷史方法採單季營業利益年化",
+            "reasonZh": "master roicNote固定為OpInc×(1−TaxRate)×4後除以投入資本。",
+            "sourceLocator": "data/2317_master_v9.csv#roicNote"
+          }
+        },
+        "allPassed": false,
+        "trendComparable": false,
+        "trendComparableZh": "公式慣例相同，但Q2候選分母的淨現金口徑未通過Gate A，禁止顯示Q1至Q2數值趨勢。"
+      }
+    },
+    "currentPb": {
+      "value": "1.853",
+      "unit": "MULTIPLE",
+      "classification": "DERIVED_VERIFIED",
+      "displayLabelZh": "1.853x（推算）",
+      "close": "252.0",
+      "closeDate": "2026-08-27",
+      "bvps": "136.02",
+      "bvpsPeriod": "2026Q2",
+      "formula": "252.0 / 136.02"
+    },
+    "aiIndustryGuard": {
+      "historicalAi40CurrentInput": false,
+      "cloudNetworking51IsAiShare": false,
+      "aiRevenuePct": null
+    },
+    "actionable": false
+  }
 }

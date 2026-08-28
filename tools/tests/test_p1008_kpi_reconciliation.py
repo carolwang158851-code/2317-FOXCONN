@@ -52,7 +52,7 @@ class KpiReconciliationTests(unittest.TestCase):
         block = self.new_ui[self.new_ui.index("function buildSystems"):self.new_ui.index("function renderRightPanel")]
         for token in (
             "const bvps = toNumber(daily.BVPS_ref)", "const pb = toNumber(daily.PB_daily)",
-            "const roe = toNumber(master.ROE_TTM_Pct)", "const us10y = toNumber(fx.US_10Y_Yield)",
+            "const promoted = quarterly?.canonicalPromotion || {}", "toNumber(promoted.roe.value)", "const us10y = toNumber(fx.US_10Y_Yield)",
             "const vix = toNumber(macro.VIX)", "const dxy = toNumber(fx.DXY)",
             "cashDividend / close * 100",
         ):
@@ -106,14 +106,16 @@ class KpiReconciliationTests(unittest.TestCase):
     def test_pb_formula_reproduces_authority_value(self):
         row = csv_rows(PACKAGE / "data/2317_daily_price.csv")[-1]
         self.assertEqual("2026-08-27", row["Date"])
-        self.assertEqual("2026Q1", row["QuarterKey"])
+        self.assertEqual("2026Q2", row["QuarterKey"])
         self.assertEqual(252.0, float(row["Close"]))
-        self.assertEqual(127.12, float(row["BVPS_ref"]))
-        self.assertEqual(1.982, float(row["PB_daily"]))
+        self.assertEqual(136.02, float(row["BVPS_ref"]))
+        self.assertEqual(1.853, float(row["PB_daily"]))
         self.assertEqual(float(row["PB_daily"]), round(float(row["Close"]) / float(row["BVPS_ref"]), 3))
 
     def test_roic_formula_reproduces_precise_value(self):
-        row = csv_rows(PACKAGE / "data/2317_master_v9.csv")[-1]
+        rows = csv_rows(PACKAGE / "data/2317_master_v9.csv")
+        self.assertEqual("N/A", rows[-1]["ROIC_Precise_Pct"])
+        row = next(item for item in reversed(rows) if item["ROIC_Precise_Pct"] not in {"", "N/A"})
         actual = round(float(row["NOPAT_Annual_100M"]) / float(row["InvestedCapital_100M"]) * 100, 2)
         self.assertEqual(float(row["ROIC_Precise_Pct"]), actual)
 
@@ -123,20 +125,24 @@ class KpiReconciliationTests(unittest.TestCase):
         self.assertEqual(float(row["free_cash_flow_core_thousand_ntd"]), actual)
         self.assertEqual(float(row["free_cash_flow_core_100m_ntd"]), actual / 100000)
 
-    def test_q2_is_owner_review_only_not_master_authority(self):
+    def test_q2_is_promoted_without_inventing_ai_share(self):
         q2 = json.loads((PACKAGE / "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json").read_text(encoding="utf-8"))
         quarters = {row["Quarter"] for row in csv_rows(PACKAGE / "data/2317_master_v9.csv")}
         self.assertEqual("FY2026 Q2", q2["fiscalPeriod"])
-        self.assertNotIn("2026Q2", quarters)
+        self.assertIn("2026Q2", quarters)
+        self.assertEqual("PASS_WITH_ROIC_CONDITIONAL_PENDING", q2["canonicalPromotion"]["status"])
         self.assertEqual("NOT_DISCLOSED", q2["productMix"]["aiSpecificShareStatus"])
         self.assertIsNone(q2["productMix"]["aiSpecificRevenueSharePct"])
 
     def test_ai_40_is_not_confused_with_q2_cloud_share_51(self):
-        master = csv_rows(PACKAGE / "data/2317_master_v9.csv")[-1]
+        rows = csv_rows(PACKAGE / "data/2317_master_v9.csv")
+        master = next(row for row in rows if row["Quarter"] == "2026Q1")
+        current = next(row for row in rows if row["Quarter"] == "2026Q2")
         q2 = json.loads((PACKAGE / "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json").read_text(encoding="utf-8"))
         self.assertEqual("40.0", master["AI_Revenue_Pct"])
         self.assertNotIn("AI_Revenue_Denominator", master)
         self.assertEqual("L3", master["DataSupportLevel"])
+        self.assertEqual("N/A", current["AI_Revenue_Pct"])
         self.assertEqual("51", q2["productMix"]["cloudAndNetworkingRevenueSharePct"])
 
     def test_report_is_downstream_and_uses_same_sources(self):
@@ -154,6 +160,18 @@ class KpiReconciliationTests(unittest.TestCase):
         self.assertEqual(self.result["inventory"], len(rows))
         classes = {row["value_classification"] for row in rows}
         self.assertTrue({"OFFICIAL_REPORTED", "AUTHORITATIVE_SOURCE_REPORTED", "DERIVED_VERIFIED", "RESEARCH_ESTIMATE", "STALE", "UNVERIFIED", "INVALID"}.issubset(classes))
+
+    def test_q2_inventory_preserves_field_specific_periods_and_pending_states(self):
+        with (self.out / "KPI_INVENTORY.csv").open(encoding="utf-8", newline="") as handle:
+            by_id = {row["metric_id"]: row for row in csv.DictReader(handle)}
+        self.assertEqual("2026H1_OR_2026Q2_FIELD_SPECIFIC", by_id["FIN.ROE_H1"]["as_of_date"])
+        self.assertIn("annualized=false", by_id["FIN.ROE_H1"]["notes"])
+        self.assertEqual("OWNER_CONDITIONAL_PENDING", by_id["FIN.ROIC"]["value_classification"])
+        self.assertEqual("INSUFFICIENT_DATA", by_id["FIN.ROIC"]["status"])
+        self.assertEqual("INSUFFICIENT_DATA", by_id["MODEL5.CHIP"]["status"])
+        for metric_id in ("FIN.OCF_H1", "FIN.CAPEX_H1", "FIN.FCF_H1"):
+            self.assertEqual("OFFICIAL_REPORTED", by_id[metric_id]["value_classification"])
+            self.assertIn("不是Q2單季", by_id[metric_id]["notes"])
 
     def test_six_ic_inventory_is_disabled_not_replaced(self):
         six = [row for row in audit.KPI_ROWS if row["semantic_layer"] == "SIX_IC"]

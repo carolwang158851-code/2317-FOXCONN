@@ -4,7 +4,7 @@
   "rootCause": "The principal score collision was caused by overlapping UI-derived scoring and legacy fallback/hardcoded values. Report generation is downstream and was not the source of War Room KPI truth.",
   "authorityManifest": {
     "path": "data/CSV_AUTHORITY_MANIFEST.json",
-    "sha256": "C6FF94A1FB2C9C877D7620184BDDD9A6270355ED833318638C3D87EB634A5398"
+    "sha256": "90870F2CBE5F17F0B0BC1033D056542D2F9DDA96F94BCB81E8BF7018817E86F9"
   },
   "authorityPaths": [
     "data/2317_cash_flow_authority.csv",
@@ -105,19 +105,19 @@
       "notes": ""
     },
     {
-      "kpi_id": "FIN.ROE_TTM",
-      "display_name": "近十二月 ROE",
+      "kpi_id": "FIN.ROE_H1",
+      "display_name": "2026H1 ROE（未年化）",
       "semantic_layer": "P0_FINANCIAL",
-      "source_path": "data/2317_master_v9.csv",
-      "source_field": "ROE_TTM_Pct",
+      "source_path": "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json",
+      "source_field": "canonicalPromotion.roe.value",
       "formula": "DIRECT",
       "unit": "%",
-      "producer": "Owner authority CSV",
+      "producer": "Owner-approved official Q2 packet",
       "consumers": "old UI;reports;new UI evidence",
-      "authority": "CSV_AUTHORITY",
-      "classification": "AUTHORITATIVE_SOURCE_REPORTED",
+      "authority": "OFFICIAL_EVIDENCE",
+      "classification": "OFFICIAL_REPORTED",
       "status": "ACTIVE",
-      "notes": "Owner權威CSV欄位，非本次重算"
+      "notes": "period=2026H1; annualized=false; 不得標為Q2/TTM/年化"
     },
     {
       "kpi_id": "FIN.ROIC",
@@ -130,9 +130,9 @@
       "producer": "Owner authority CSV",
       "consumers": "old UI;reports",
       "authority": "CSV_AUTHORITY",
-      "classification": "DERIVED_VERIFIED",
-      "status": "ACTIVE",
-      "notes": "ROIC_Approx_Pct不得替代"
+      "classification": "OWNER_CONDITIONAL_PENDING",
+      "status": "INSUFFICIENT_DATA",
+      "notes": "16.46%候選未通過Gate A；ROIC_Approx_Pct不得替代"
     },
     {
       "kpi_id": "FIN.BVPS",
@@ -210,19 +210,49 @@
       "notes": ""
     },
     {
-      "kpi_id": "FIN.FCF_CORE",
-      "display_name": "核心自由現金流",
+      "kpi_id": "FIN.OCF_H1",
+      "display_name": "2026H1營業現金流",
       "semantic_layer": "P0_CASH_FLOW",
-      "source_path": "data/2317_cash_flow_authority.csv",
-      "source_field": "free_cash_flow_core_100m_ntd",
-      "formula": "(OCF-PPE_CAPEX)/100000",
-      "unit": "億新台幣",
-      "producer": "official report authority pipeline",
+      "source_path": "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json",
+      "source_field": "cashFlow.operatingCashFlowMillionTwd",
+      "formula": "DIRECT",
+      "unit": "新台幣百萬元",
+      "producer": "official Q2 evidence packet",
       "consumers": "reports;cash-flow evidence",
-      "authority": "CSV_AUTHORITY",
-      "classification": "DERIVED_VERIFIED",
+      "authority": "OFFICIAL_EVIDENCE",
+      "classification": "OFFICIAL_REPORTED",
       "status": "ACTIVE",
-      "notes": ""
+      "notes": "H1累計值，不是Q2單季"
+    },
+    {
+      "kpi_id": "FIN.CAPEX_H1",
+      "display_name": "2026H1資本支出",
+      "semantic_layer": "P0_CASH_FLOW",
+      "source_path": "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json",
+      "source_field": "cashFlow.capexMillionTwd",
+      "formula": "DIRECT",
+      "unit": "新台幣百萬元",
+      "producer": "official Q2 evidence packet",
+      "consumers": "reports;cash-flow evidence",
+      "authority": "OFFICIAL_EVIDENCE",
+      "classification": "OFFICIAL_REPORTED",
+      "status": "ACTIVE",
+      "notes": "H1累計值，不是Q2單季"
+    },
+    {
+      "kpi_id": "FIN.FCF_H1",
+      "display_name": "2026H1自由現金流",
+      "semantic_layer": "P0_CASH_FLOW",
+      "source_path": "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json",
+      "source_field": "cashFlow.freeCashFlowMillionTwd",
+      "formula": "CFO-CAPEX",
+      "unit": "新台幣百萬元",
+      "producer": "official Q2 evidence packet",
+      "consumers": "reports;cash-flow evidence",
+      "authority": "OFFICIAL_EVIDENCE",
+      "classification": "OFFICIAL_REPORTED",
+      "status": "ACTIVE",
+      "notes": "H1累計值，不是Q2單季"
     },
     {
       "kpi_id": "MACRO.US10Y",
@@ -415,9 +445,9 @@
       "producer": "old UI calculateRadarPackage",
       "consumers": "old UI radar",
       "authority": "DERIVED_REVIEW_AID",
-      "classification": "DERIVED_VERIFIED",
-      "status": "ACTIVE",
-      "notes": "缺值時N/A"
+      "classification": "INSUFFICIENT_DATA",
+      "status": "INSUFFICIENT_DATA",
+      "notes": "Q2缺值時N/A，不得沿用舊值"
     },
     {
       "kpi_id": "MODEL5.MACRO",
@@ -504,20 +534,24 @@
     "IC.DATA_QUALITY": "N/A_NO_CANONICAL_EXACT_SCORE"
   },
   "sourceDates": {
-    "financial": "2026Q1",
-    "price": "2026-08-11",
+    "financial": "2026Q2",
+    "price": "2026-08-27",
     "cashFlow": "2026Q1",
-    "macro": "2026-07-10",
-    "fx": "2026-07-27"
+    "macro": "2026-08-27",
+    "fx": "2026-08-27"
   },
   "reproducibility": {
     "PB": [
-      2.069,
-      2.069
+      1.853,
+      1.853
     ],
     "ROIC": [
       12.57,
       12.57
+    ],
+    "ROIC_CURRENT_PERIOD": [
+      null,
+      null
     ],
     "FCF": [
       -32557191.0,

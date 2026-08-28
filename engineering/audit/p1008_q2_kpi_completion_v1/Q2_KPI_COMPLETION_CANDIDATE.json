@@ -1,0 +1,100 @@
+{
+  "actionable": false,
+  "authorityMutation": false,
+  "companyCode": "2317",
+  "dataGaps": [
+    "ROIC_NET_CASH_DEFINITION_SCOPE_UNRESOLVED"
+  ],
+  "effectiveDate": "2026-08-13",
+  "entity": "Hon Hai Precision Industry Co., Ltd.",
+  "fiscalPeriod": "FY2026 Q2",
+  "formalCsvModified": false,
+  "kpis": {
+    "bvps": {
+      "classification": "OFFICIAL_REPORTED",
+      "derivation": null,
+      "displayLabelZh": "136.02元（官方申報）",
+      "period": "2026Q2",
+      "sourceDate": "2026-08-27",
+      "sourceLocator": "https://openapi.twse.com.tw/v1/opendata/t187ap07_L_ci",
+      "unit": "TWD_PER_SHARE",
+      "value": "136.02"
+    },
+    "roe": {
+      "annualized": false,
+      "classification": "OFFICIAL_REPORTED",
+      "comparablePriorValue": "5.48",
+      "derivation": null,
+      "displayLabelZh": "6.21%（2026上半年官方值，未年化）",
+      "period": "2026H1",
+      "sourceLocator": "https://www.honhai.com/zh-tw/press-center/press-releases/latest-news/2094",
+      "unit": "PERCENT",
+      "value": "6.21"
+    },
+    "roic": {
+      "candidateValue": "16.46",
+      "canonicalValue": null,
+      "classification": "OWNER_CONDITIONAL_PENDING",
+      "denominator": {
+        "cashMillionTwd": "963002.000",
+        "formula": "InterestBearingDebt + ParentEquity - Cash",
+        "interestBearingDebtMillionTwd": "743193.000",
+        "name": "InvestedCapital",
+        "parentEquityMillionTwd": "1907936.607",
+        "valueMillionTwd": "1688127.607"
+      },
+      "displayLabelZh": "16.46%（條件式推算，尚未升格）",
+      "formula": "NOPAT_Annual / InvestedCapital * 100",
+      "methodologyLocator": "data/2317_master_v9.csv#roicNote",
+      "numerator": {
+        "formula": "94803 * (1 - 26.72%) * 4",
+        "name": "NOPAT_Annual",
+        "valueMillionTwd": "277886.5536"
+      },
+      "period": "2026Q2",
+      "releaseGate": {
+        "allPassed": false,
+        "gates": {
+          "A": {
+            "labelZh": "未證明淨現金可用現金及約當現金減利息負債反推",
+            "reasonZh": "官方逐字稿揭露現金及定期存款約1.52兆元與淨現金219,809百萬元；候選使用現金及約當現金963,002百萬元。現金口徑不同，官方未明確定義Net Cash為963,002減利息負債。",
+            "sourceLocator": "https://image.honhai.com/upload/202608/law_talk/Hon_Hai_2Q26_Results_Chinese%28%E6%8A%95%E5%BD%B1%E7%89%88%29_revised%28wp%29_20260818_7900.pdf",
+            "status": "FAIL"
+          },
+          "B": {
+            "labelZh": "日期、期間及合併範圍相容",
+            "reasonZh": "現金、淨現金及歸屬母公司權益均為2026-06-30合併口徑。",
+            "sourceLocators": [
+              "https://image.honhai.com/upload/202608/law_talk/Hon_Hai_2Q26_Results_Chinese%28%E6%8A%95%E5%BD%B1%E7%89%88%29_revised%28wp%29_20260818_7900.pdf",
+              "https://openapi.twse.com.tw/v1/opendata/t187ap07_L_ci"
+            ],
+            "status": "PASS"
+          },
+          "C": {
+            "labelZh": "26.72%僅為既有P1008年度稅率方法輸入",
+            "reasonZh": "來源綁定既有master公式與2026Q1反推鏈；不標示為公司Q2有效稅率。",
+            "sourceLocator": "data/2317_master_v9.csv#roicNote",
+            "status": "PASS"
+          },
+          "D": {
+            "labelZh": "既有歷史方法採單季營業利益年化",
+            "reasonZh": "master roicNote固定為OpInc×(1−TaxRate)×4後除以投入資本。",
+            "sourceLocator": "data/2317_master_v9.csv#roicNote",
+            "status": "PASS"
+          }
+        },
+        "trendComparable": false,
+        "trendComparableZh": "公式慣例相同，但Q2候選分母的淨現金口徑未通過Gate A，禁止顯示Q1至Q2數值趨勢。"
+      },
+      "sourceLocators": [
+        "https://image.honhai.com/upload/202608/law_talk/Hon_Hai_2Q26_Results_Chinese%28%E6%8A%95%E5%BD%B1%E7%89%88%29_revised%28wp%29_20260818_7900.pdf",
+        "https://openapi.twse.com.tw/v1/opendata/t187ap07_L_ci"
+      ],
+      "unit": "PERCENT"
+    }
+  },
+  "publicationDate": "2026-08-12",
+  "result": "PASS_WITH_ROIC_CONDITIONAL_PENDING",
+  "schemaVersion": "1.1",
+  "status": "OWNER_APPROVED_FOR_PROMOTION"
+}

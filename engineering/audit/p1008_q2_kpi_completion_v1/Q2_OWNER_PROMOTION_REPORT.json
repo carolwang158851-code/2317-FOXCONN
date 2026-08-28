@@ -1,0 +1,85 @@
+{
+  "schemaVersion": "1.0",
+  "result": "PASS_WITH_ROIC_CONDITIONAL_PENDING",
+  "ownerApprovalReference": "P1008_FY2026Q2_OWNER_PROMOTION_FINAL_OWNER_APPROVAL_DIRECTIVE",
+  "canonicalQuarterBefore": "2026Q1",
+  "canonicalQuarterAfter": "2026Q2",
+  "roicStatus": "OWNER_CONDITIONAL_PENDING",
+  "roicReleaseGate": {
+    "gates": {
+      "A": {
+        "status": "FAIL",
+        "labelZh": "未證明淨現金可用現金及約當現金減利息負債反推",
+        "reasonZh": "官方逐字稿揭露現金及定期存款約1.52兆元與淨現金219,809百萬元；候選使用現金及約當現金963,002百萬元。現金口徑不同，官方未明確定義Net Cash為963,002減利息負債。",
+        "sourceLocator": "https://image.honhai.com/upload/202608/law_talk/Hon_Hai_2Q26_Results_Chinese%28%E6%8A%95%E5%BD%B1%E7%89%88%29_revised%28wp%29_20260818_7900.pdf"
+      },
+      "B": {
+        "status": "PASS",
+        "labelZh": "日期、期間及合併範圍相容",
+        "reasonZh": "現金、淨現金及歸屬母公司權益均為2026-06-30合併口徑。",
+        "sourceLocators": [
+          "https://image.honhai.com/upload/202608/law_talk/Hon_Hai_2Q26_Results_Chinese%28%E6%8A%95%E5%BD%B1%E7%89%88%29_revised%28wp%29_20260818_7900.pdf",
+          "https://openapi.twse.com.tw/v1/opendata/t187ap07_L_ci"
+        ]
+      },
+      "C": {
+        "status": "PASS",
+        "labelZh": "26.72%僅為既有P1008年度稅率方法輸入",
+        "reasonZh": "來源綁定既有master公式與2026Q1反推鏈；不標示為公司Q2有效稅率。",
+        "sourceLocator": "data/2317_master_v9.csv#roicNote"
+      },
+      "D": {
+        "status": "PASS",
+        "labelZh": "既有歷史方法採單季營業利益年化",
+        "reasonZh": "master roicNote固定為OpInc×(1−TaxRate)×4後除以投入資本。",
+        "sourceLocator": "data/2317_master_v9.csv#roicNote"
+      }
+    },
+    "allPassed": false,
+    "trendComparable": false,
+    "trendComparableZh": "公式慣例相同，但Q2候選分母的淨現金口徑未通過Gate A，禁止顯示Q1至Q2數值趨勢。"
+  },
+  "pre": {
+    "data/2317_master_v9.csv": {
+      "sha256": "0BB2FEC6FA3035AC642738BC12EA6959C81C8A79D5221E694BF780427051CF79",
+      "fileSizeBytes": 12782
+    },
+    "data/2317_daily_price.csv": {
+      "sha256": "5F59F71BF0CF51BDE96F0FBE39CFF5D8ED5A6BF3893C376A3FA89DB7F5870EAD",
+      "fileSizeBytes": 7875
+    },
+    "data/CSV_AUTHORITY_MANIFEST.json": {
+      "sha256": "92813936E828C7E4740F0781EC8AC010D901F0CF811F36BCC71054460B280C73",
+      "fileSizeBytes": 25812
+    }
+  },
+  "post": {
+    "data/2317_master_v9.csv": {
+      "sha256": "4B8996B5B39128E6DB8FA6DA89CF8AF0E2257FFD8124BD295349DBC32E67E7BF",
+      "fileSizeBytes": 13421
+    },
+    "data/2317_daily_price.csv": {
+      "sha256": "4FF01364DF90E1C3CE75174C9714B6E0F817F7972CE2309C8052AE1CCDEC5953",
+      "fileSizeBytes": 7875
+    },
+    "data/CSV_AUTHORITY_MANIFEST.json": {
+      "sha256": "90870F2CBE5F17F0B0BC1033D056542D2F9DDA96F94BCB81E8BF7018817E86F9",
+      "fileSizeBytes": 27064
+    }
+  },
+  "master": {
+    "rowCountBefore": 21,
+    "rowCountAfter": 22,
+    "q2Count": 1,
+    "historicalRowsImmutable": true
+  },
+  "daily": {
+    "rowCount": 139,
+    "reboundFrom": "2026-08-13",
+    "currentClose": "252.0",
+    "currentPb": "1.853"
+  },
+  "formalCsvModified": true,
+  "reportPublished": false,
+  "actionable": false
+}

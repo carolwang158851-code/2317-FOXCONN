@@ -50,14 +50,16 @@ KPI_ROWS = [
     _kpi("FIN.EPS_Q", "單季 EPS", "P0_FINANCIAL", "data/2317_master_v9.csv", "EPS_Q", "DIRECT", "元", "Owner authority CSV", "old UI;reports", "CSV_AUTHORITY", "AUTHORITATIVE_SOURCE_REPORTED"),
     _kpi("FIN.EPS_TTM", "近十二月 EPS", "P0_FINANCIAL", "data/2317_master_v9.csv", "EPS_TTM", "DIRECT", "元", "Owner authority CSV", "old UI;reports;new UI evidence", "CSV_AUTHORITY", "AUTHORITATIVE_SOURCE_REPORTED"),
     _kpi("FIN.EPS_YOY", "EPS 年增率", "P0_FINANCIAL", "data/2317_master_v9.csv", "EPS_YoY_Pct", "DIRECT", "%", "Owner authority CSV", "old UI;reports;new UI evidence", "CSV_AUTHORITY", "AUTHORITATIVE_SOURCE_REPORTED"),
-    _kpi("FIN.ROE_TTM", "近十二月 ROE", "P0_FINANCIAL", "data/2317_master_v9.csv", "ROE_TTM_Pct", "DIRECT", "%", "Owner authority CSV", "old UI;reports;new UI evidence", "CSV_AUTHORITY", "AUTHORITATIVE_SOURCE_REPORTED", notes="Owner權威CSV欄位，非本次重算"),
-    _kpi("FIN.ROIC", "精確 ROIC", "P0_FINANCIAL", "data/2317_master_v9.csv", "ROIC_Precise_Pct", "NOPAT_Annual_100M/InvestedCapital_100M*100", "%", "Owner authority CSV", "old UI;reports", "CSV_AUTHORITY", "DERIVED_VERIFIED", notes="ROIC_Approx_Pct不得替代"),
+    _kpi("FIN.ROE_H1", "2026H1 ROE（未年化）", "P0_FINANCIAL", "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json", "canonicalPromotion.roe.value", "DIRECT", "%", "Owner-approved official Q2 packet", "old UI;reports;new UI evidence", "OFFICIAL_EVIDENCE", "OFFICIAL_REPORTED", notes="period=2026H1; annualized=false; 不得標為Q2/TTM/年化"),
+    _kpi("FIN.ROIC", "精確 ROIC", "P0_FINANCIAL", "data/2317_master_v9.csv", "ROIC_Precise_Pct", "NOPAT_Annual_100M/InvestedCapital_100M*100", "%", "Owner authority CSV", "old UI;reports", "CSV_AUTHORITY", "OWNER_CONDITIONAL_PENDING", "INSUFFICIENT_DATA", "16.46%候選未通過Gate A；ROIC_Approx_Pct不得替代"),
     _kpi("FIN.BVPS", "每股淨值", "P0_FINANCIAL", "data/2317_master_v9.csv", "BVPS", "DIRECT", "元", "Owner authority CSV", "daily PB reference", "CSV_AUTHORITY", "AUTHORITATIVE_SOURCE_REPORTED"),
     _kpi("MKT.CLOSE", "正式收盤價", "P0_MARKET", "data/2317_daily_price.csv", "Close", "DIRECT", "元", "TWSE authority pipeline", "old UI;reports;new UI evidence", "CSV_AUTHORITY", "OFFICIAL_REPORTED"),
     _kpi("VAL.PB_DAILY", "每日股價淨值比", "P0_VALUATION", "data/2317_daily_price.csv", "PB_daily", "round(Close/BVPS_ref,3)", "倍", "daily price authority pipeline", "old UI;reports;new UI evidence", "CSV_AUTHORITY", "DERIVED_VERIFIED"),
     _kpi("FIN.DIVIDEND", "現金股利", "P0_FINANCIAL", "data/2317_master_v9.csv", "CashDividend", "DIRECT", "元", "Owner authority CSV", "old UI;reports;new UI evidence", "CSV_AUTHORITY", "AUTHORITATIVE_SOURCE_REPORTED"),
     _kpi("FIN.DIVIDEND_YIELD", "現金殖利率", "DERIVED_FINANCIAL", "data/2317_master_v9.csv + data/2317_daily_price.csv", "CashDividend;Close", "CashDividend/Close*100", "%", "deterministic consumer calculation", "old UI;reports;new UI evidence", "DERIVED_FROM_AUTHORITY", "DERIVED_VERIFIED"),
-    _kpi("FIN.FCF_CORE", "核心自由現金流", "P0_CASH_FLOW", "data/2317_cash_flow_authority.csv", "free_cash_flow_core_100m_ntd", "(OCF-PPE_CAPEX)/100000", "億新台幣", "official report authority pipeline", "reports;cash-flow evidence", "CSV_AUTHORITY", "DERIVED_VERIFIED"),
+    _kpi("FIN.OCF_H1", "2026H1營業現金流", "P0_CASH_FLOW", "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json", "cashFlow.operatingCashFlowMillionTwd", "DIRECT", "新台幣百萬元", "official Q2 evidence packet", "reports;cash-flow evidence", "OFFICIAL_EVIDENCE", "OFFICIAL_REPORTED", notes="H1累計值，不是Q2單季"),
+    _kpi("FIN.CAPEX_H1", "2026H1資本支出", "P0_CASH_FLOW", "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json", "cashFlow.capexMillionTwd", "DIRECT", "新台幣百萬元", "official Q2 evidence packet", "reports;cash-flow evidence", "OFFICIAL_EVIDENCE", "OFFICIAL_REPORTED", notes="H1累計值，不是Q2單季"),
+    _kpi("FIN.FCF_H1", "2026H1自由現金流", "P0_CASH_FLOW", "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json", "cashFlow.freeCashFlowMillionTwd", "CFO-CAPEX", "新台幣百萬元", "official Q2 evidence packet", "reports;cash-flow evidence", "OFFICIAL_EVIDENCE", "OFFICIAL_REPORTED", notes="H1累計值，不是Q2單季"),
     _kpi("MACRO.US10Y", "美國十年期公債殖利率", "OBSERVATION", "data/fx_trend_observations.csv", "US_10Y_Yield", "DIRECT", "%", "FX sidecar", "old UI;reports;new UI evidence", "OBSERVATION_ONLY", "STALE"),
     _kpi("MACRO.VIX", "VIX 波動率", "OBSERVATION", "data/macro_snapshot.csv", "VIX", "DIRECT", "index", "macro sidecar", "old UI;reports;new UI evidence", "NON_AUTHORITATIVE_L3", "STALE"),
     _kpi("MACRO.DXY", "美元指數", "OBSERVATION", "data/fx_trend_observations.csv", "DXY", "DIRECT", "index", "FX sidecar", "old UI;reports;new UI evidence", "OBSERVATION_ONLY", "STALE"),
@@ -77,7 +79,7 @@ for kpi_id, name, notes in (
 KPI_ROWS += [
     _kpi("MODEL5.FUND", "五維度基本面", "FIVE_DIMENSION", "old UI governed inputs", "quality inputs", "existing formula", "score 0-100", "old UI calculateRadarPackage", "old UI radar", "DERIVED_REVIEW_AID", "RESEARCH_ESTIMATE"),
     _kpi("MODEL5.INDUSTRY", "五維度產業面", "FIVE_DIMENSION", "data/2317_master_v9.csv", "AI_Revenue_Pct", "existing formula after input gate", "score 0-100", "old UI calculateRadarPackage", "old UI radar", "L3_OBSERVATION", "UNVERIFIED", "INSUFFICIENT_DATA", "40%缺分母且為L3"),
-    _kpi("MODEL5.CHIP", "五維度籌碼面", "FIVE_DIMENSION", "data/2317_master_v9.csv", "ForeignHoldChange_Pct", "existing formula", "score 0-100", "old UI calculateRadarPackage", "old UI radar", "DERIVED_REVIEW_AID", "DERIVED_VERIFIED", notes="缺值時N/A"),
+    _kpi("MODEL5.CHIP", "五維度籌碼面", "FIVE_DIMENSION", "data/2317_master_v9.csv", "ForeignHoldChange_Pct", "existing formula", "score 0-100", "old UI calculateRadarPackage", "old UI radar", "DERIVED_REVIEW_AID", "INSUFFICIENT_DATA", "INSUFFICIENT_DATA", "Q2缺值時N/A，不得沿用舊值"),
     _kpi("MODEL5.MACRO", "五維度總經面", "FIVE_DIMENSION", "old UI DIMAS inputs", "capScore", "existing formula", "score 0-100", "old UI calculateRadarPackage", "old UI radar", "DERIVED_REVIEW_AID", "STALE", "SOURCE_STALE", "缺必要輸入時N/A"),
     _kpi("MODEL5.VALUATION", "五維度估值面", "FIVE_DIMENSION", "data/2317_daily_price.csv", "PB_daily", "existing interpolation", "score 0-100", "old UI calculateRadarPackage", "old UI radar", "DERIVED_REVIEW_AID", "DERIVED_VERIFIED"),
     _kpi("GOV.PUBLISH_READINESS", "正式發布可用度", "GOVERNANCE", "runtime/p1008_app_state.json", "reviewPackage.readiness", "existing validation score", "%", "owner publish runtime", "Launcher;new UI governance panel", "GOVERNANCE_RUNTIME", "AUTHORITATIVE_SOURCE_REPORTED"),
@@ -124,6 +126,8 @@ def _rows(path: Path) -> list[dict[str, str]]:
 
 
 def _latest(root: Path, source: str) -> str:
+    if source.endswith("config/quarterly_earnings/FY2026_Q2.json"):
+        return "2026H1_OR_2026Q2_FIELD_SPECIFIC"
     if " + " in source or not source.startswith("data/"):
         return "MULTI_SOURCE_OR_RUNTIME"
     path = root / source
@@ -176,9 +180,16 @@ def generate(package_root: Path) -> dict:
     _write_csv(out / "STALE_ZOMBIE_REPORT.csv", stale_rows)
 
     master, daily, cash = _rows(root / "data/2317_master_v9.csv")[-1], _rows(root / "data/2317_daily_price.csv")[-1], _rows(root / "data/2317_cash_flow_authority.csv")[-1]
+    comparable_roic = next(
+        row for row in reversed(_rows(root / "data/2317_master_v9.csv"))
+        if row["ROIC_Precise_Pct"] not in {"", "N/A"}
+        and row["NOPAT_Annual_100M"] not in {"", "N/A"}
+        and row["InvestedCapital_100M"] not in {"", "N/A", "0"}
+    )
     reproducibility = {
         "PB": [float(daily["PB_daily"]), round(float(daily["Close"])/float(daily["BVPS_ref"]), 3)],
-        "ROIC": [float(master["ROIC_Precise_Pct"]), round(float(master["NOPAT_Annual_100M"])/float(master["InvestedCapital_100M"])*100, 2)],
+        "ROIC": [float(comparable_roic["ROIC_Precise_Pct"]), round(float(comparable_roic["NOPAT_Annual_100M"])/float(comparable_roic["InvestedCapital_100M"])*100, 2)],
+        "ROIC_CURRENT_PERIOD": [None, None],
         "FCF": [float(cash["free_cash_flow_core_thousand_ntd"]), float(cash["operating_cash_flow_thousand_ntd"])-float(cash["ppe_capex_thousand_ntd"])],
     }
     lineage = {

@@ -4533,13 +4533,16 @@
         };
       }
 
-      function buildSystems({ appState, eventState, news, daily, master, fx, macro }) {
+      function buildSystems({ appState, eventState, news, daily, master, quarterly, fx, macro }) {
         const readiness = appState?.reviewPackage?.readiness || {};
         const published = eventState?.status === "OWNER_PUBLISHED" || news?.formalSynced === true;
         const close = toNumber(daily.Close);
         const bvps = toNumber(daily.BVPS_ref);
         const pb = toNumber(daily.PB_daily);
-        const roe = toNumber(master.ROE_TTM_Pct);
+        const promoted = quarterly?.canonicalPromotion || {};
+        const roe = promoted?.roe?.period === "2026H1" && promoted?.roe?.annualized === false
+          ? toNumber(promoted.roe.value)
+          : null;
         const epsYoY = toNumber(master.EPS_YoY_Pct);
         const epsTtm = toNumber(master.EPS_TTM);
         const cashDividend = toNumber(master.CashDividend);
@@ -4563,7 +4566,7 @@
           published,
           latestDate,
           nextReview,
-          metrics: { close, bvps, pb, roe, epsYoY, epsTtm, dividendYield, us10y, vix, wti, dxy, twdUsd, sourceReady },
+          metrics: { close, bvps, pb, roe, roePeriod: promoted?.roe?.period || "N/A", roeAnnualized: promoted?.roe?.annualized, epsYoY, epsTtm, dividendYield, us10y, vix, wti, dxy, twdUsd, sourceReady },
           systems: {
             val: {
               label: "估值 IC",
@@ -4583,8 +4586,8 @@
               state: "未提供正式分數",
               tone: "derived",
               color: "",
-              headline: `ROE ${pct(roe)}、EPS YoY ${pct(epsYoY)}、EPS TTM ${fixed(epsTtm, 2)}。`,
-              evidence: `正式季度資料 ${master.Quarter || "N/A"}；本頁只投影正式欄位，不另行評分。`,
+              headline: `ROE ${pct(roe)}（${promoted?.roe?.period || "N/A"}官方值，未年化）、EPS YoY ${pct(epsYoY)}、EPS TTM ${fixed(epsTtm, 2)}。`,
+              evidence: `正式季度 ${master.Quarter || "N/A"}；ROE保留${promoted?.roe?.period || "N/A"}期間，不改稱Q2、TTM或年化值。`,
               owner: "Owner 動作：依既有戰情室治理規則查核基本面證據。"
             },
             cash: {
@@ -4640,7 +4643,7 @@
         const { metrics, systems } = state;
         const rows = [
           { id: "PB", value: metrics.pb === null ? "N/A" : `${fixed(metrics.pb, 3)}x`, status: "正式衍生", note: `PB_daily = Close ${fixed(metrics.close, 1)} / BVPS_ref ${fixed(metrics.bvps, 2)}。`, key: "val", color: systems.val.color, meter: 0 },
-          { id: "ROE (LTM)", value: pct(metrics.roe), status: "正式季度欄位", note: `EPS YoY ${pct(metrics.epsYoY)}；不在瀏覽器內轉換成 IC 分數。`, key: "fund", color: systems.fund.color, meter: 0 },
+          { id: "ROE", value: pct(metrics.roe), status: `${metrics.roePeriod}官方／未年化`, note: `EPS YoY ${pct(metrics.epsYoY)}；ROE不是Q2單季、TTM或年化值，也不轉成IC分數。`, key: "fund", color: systems.fund.color, meter: 0 },
           { id: "殖利率 / US10Y", value: `${pct(metrics.dividendYield)} / ${pct(metrics.us10y)}`, status: "不同期別", note: "殖利率為正式資料推算；US10Y 是觀察資料，保留各自日期。", key: "cash", color: systems.cash.color, meter: 0 },
           { id: "USD/TWD", value: fixed(metrics.twdUsd, 3), status: "匯率觀察資料", note: "只顯示匯率趨勢觀察檔的最新列，不跨來源補值。", key: "macro", color: systems.macro.color, meter: 0 },
           { id: "VIX / DXY", value: `${fixed(metrics.vix, 2)} / ${fixed(metrics.dxy, 2)}`, status: "不同觀察來源", note: "VIX 來自總經觀察；DXY 來自匯率觀察；不換算 IC 分數。", key: "macro", color: systems.macro.color, meter: 0 }
@@ -4758,7 +4761,7 @@
         host.style.setProperty("--active-color", item.color);
         host.innerHTML = `
           <div>
-            <div class="active-summary-line"><b>焦點</b><span>${escapeHtml(item.label)}｜${item.score}｜${escapeHtml(item.state)}</span></div>
+            <div class="active-summary-line"><b>焦點</b><span>${escapeHtml(item.label)}｜${item.score === null ? "N/A" : item.score}｜${escapeHtml(item.state)}</span></div>
             <div class="active-summary-line"><b>依據</b><span>${escapeHtml(brief(item.evidence, 56))}</span></div>
             <div class="active-summary-line"><b>Owner</b><span>${escapeHtml(brief(item.owner, 52))}</span></div>
           </div>
@@ -4868,12 +4871,13 @@
       }
 
       async function init() {
-        const [appState, eventState, news, dailyRows, masterRows, fxRows, macroRows] = await Promise.all([
+        const [appState, eventState, news, dailyRows, masterRows, quarterly, fxRows, macroRows] = await Promise.all([
           fetchJson("runtime/p1008_app_state.json"),
           fetchJson("runtime/warroom_event_review_state.json"),
           fetchJson("runtime/warroom_news_scan_snapshot.json"),
           fetchCsv("data/2317_daily_price.csv"),
           fetchCsv("data/2317_master_v9.csv"),
+          fetchJson("modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json"),
           fetchCsv("data/fx_trend_observations.csv"),
           fetchCsv("data/macro_snapshot.csv")
         ]);
@@ -4881,7 +4885,7 @@
         const master = latestByDate(masterRows, "QuarterEndDate");
         const fx = latestByDate(fxRows, "Date");
         const macro = latestByDate(macroRows, "Date");
-        const state = buildSystems({ appState, eventState, news, daily, master, fx, macro });
+        const state = buildSystems({ appState, eventState, news, daily, master, quarterly, fx, macro });
         applyIcTones(state.systems);
         window.__p1008DynamicState = state;
         if (shell) shell.classList.add("p1008-runtime-bound");

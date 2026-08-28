@@ -1,0 +1,62 @@
+{
+  "schemaVersion": "1.0",
+  "entity": "Hon Hai Precision Industry Co., Ltd.",
+  "companyCode": "2317",
+  "fiscalPeriod": "FY2026 Q2",
+  "retrievalDate": "2026-08-27",
+  "sources": {
+    "honHaiResults": {
+      "sourceTier": "PRIMARY_OFFICIAL",
+      "sourceType": "OFFICIAL_COMPANY_RESULTS_PDF",
+      "sourceLocator": "https://image.honhai.com/upload/202608/law_talk/Hon_Hai_2Q26_Results_Chinese%28%E6%8A%95%E5%BD%B1%E7%89%88%29_revised%28wp%29_20260818_7900.pdf",
+      "sourceDocumentSha256": "F014BE750095543B35ED2D482C0CF7A40B4A448167796F8AC4560AB928E609C5",
+      "publicationDate": "2026-08-12",
+      "facts": {
+        "operatingIncomeMillionTwd": "94803",
+        "pretaxProfitMillionTwd": "94866",
+        "incomeTaxExpenseMillionTwd": "24810",
+        "cashAndCashEquivalentsMillionTwd": "963002",
+        "netCashMillionTwd": "219809"
+      }
+    },
+    "twseBalanceSheet": {
+      "sourceTier": "PRIMARY_OFFICIAL",
+      "sourceType": "TWSE_OPENAPI_OFFICIAL_FILING",
+      "sourceLocator": "https://openapi.twse.com.tw/v1/opendata/t187ap07_L_ci",
+      "sourceDate": "2026-08-27",
+      "rowIdentity": {
+        "yearRoc": "115",
+        "quarter": "2",
+        "companyCode": "2317"
+      },
+      "facts": {
+        "parentEquityThousandTwd": "1907936607.00",
+        "treasuryShares": "1483078.00",
+        "bookValuePerShareTwd": "136.02"
+      }
+    },
+    "honHaiPressRelease": {
+      "sourceTier": "PRIMARY_OFFICIAL",
+      "sourceType": "OFFICIAL_COMPANY_PRESS_RELEASE",
+      "sourceLocator": "https://www.honhai.com/zh-tw/press-center/press-releases/latest-news/2094",
+      "publicationDate": "2026-08-12",
+      "facts": {
+        "roeH1Pct": "6.21",
+        "roePriorH1Pct": "5.48",
+        "roePeriod": "2026H1"
+      }
+    },
+    "p1008Methodology": {
+      "sourceTier": "P1008_GOVERNED_AUTHORITY",
+      "sourceType": "FORMAL_CSV_METHODOLOGY",
+      "sourceLocator": "data/2317_master_v9.csv#roicNote",
+      "facts": {
+        "formula": "ROIC_Precise = NOPAT_Annual / InvestedCapital; NOPAT = OperatingIncome * (1 - AnnualTaxRate) * 4; InvestedCapital = InterestBearingDebt + ParentEquity - Cash",
+        "annualTaxRatePct": "26.72",
+        "annualTaxRateLineage": "2026Q1 NOPAT_Annual_100M 2216 / (OperatingIncome_Q_100M 756 * 4)",
+        "interestBearingDebtFormula": "CashAndCashEquivalents - NetCash"
+      }
+    }
+  },
+  "actionable": false
+}

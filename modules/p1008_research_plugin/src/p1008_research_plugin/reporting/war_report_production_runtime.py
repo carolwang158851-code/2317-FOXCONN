@@ -192,9 +192,9 @@ def build_financial_baseline(analysis: AnalysisPacket) -> list[dict[str, Any]]:
         _metric("OM", period, q.operating_margin.value, "%", src),
         _metric("NM", period, q.net_margin.value, "%", src),
         _metric("Derived Opex Proxy", period, a["operatingExpenseProxyMillionTwd"], "新台幣百萬元", src, derived=True, formula="GP_MINUS_OP_V1"),
-        _metric("CFO", period, a["q2StandaloneCfoMillionTwd"], "新台幣百萬元", src, derived=True, formula="H1_MINUS_Q1_V1"),
-        _metric("Capex", period, a["q2StandaloneCapexMillionTwd"], "新台幣百萬元", src, derived=True, formula="H1_MINUS_Q1_V1"),
-        _metric("FCF", period, a["q2StandaloneFcfMillionTwd"], "新台幣百萬元", src, derived=True, formula="CFO_MINUS_CAPEX_V1"),
+        _metric("CFO", a["h1CashFlowPeriod"], a["h1OperatingCashFlowMillionTwd"], "新台幣百萬元", src),
+        _metric("Capex", a["h1CashFlowPeriod"], a["h1CapexMillionTwd"], "新台幣百萬元", src),
+        _metric("FCF", a["h1CashFlowPeriod"], a["h1FreeCashFlowMillionTwd"], "新台幣百萬元", src),
         _metric("A/R", wc["periods"][last], wc["accountsReceivableMillionTwd"][last], "新台幣百萬元", src),
         _metric("Inventory", wc["periods"][last], wc["inventoryMillionTwd"][last], "新台幣百萬元", src),
         _metric("A/P", wc["periods"][last], wc["accountsPayableMillionTwd"][last], "新台幣百萬元", src),
@@ -257,10 +257,10 @@ def build_fcf_conversion_state(package_root: Path, analysis: AnalysisPacket) -> 
         for row in cash.rows
     ]
     observations.append({
-        "period": q.fiscal_period.replace("FY", "").replace(" ", ""),
-        "CFO": a["q2StandaloneCfoMillionTwd"],
-        "Capex": a["q2StandaloneCapexMillionTwd"],
-        "FCF": a["q2StandaloneFcfMillionTwd"],
+        "period": a["h1CashFlowPeriod"],
+        "CFO": a["h1OperatingCashFlowMillionTwd"],
+        "Capex": a["h1CapexMillionTwd"],
+        "FCF": a["h1FreeCashFlowMillionTwd"],
     })
     negative_tail = 0
     for item in reversed(observations):
@@ -340,16 +340,19 @@ def build_full_history_charts(package_root: Path, analysis: AnalysisPacket, hist
         return ChartDataBuilder().build(analysis), [], []
     authority = AuthorityAdapter(package_root, ContractLoader(package_root))
     master = authority.read_csv("data/2317_master_v9.csv")
-    rows = list(master.rows)
-    if not rows:
+    all_rows = list(master.rows)
+    if not all_rows:
         raise WarReportRuntimeError("FULL_HISTORY_EMPTY")
+    q = analysis.quarterly_earnings
+    qperiod = q.fiscal_period.replace("FY", "").replace(" ", "")
+    current_rows = [row for row in all_rows if row["Quarter"] == qperiod]
+    if len(current_rows) != 1:
+        raise WarReportRuntimeError("FULL_HISTORY_CURRENT_PERIOD_NOT_UNIQUE")
+    current_row = current_rows[0]
+    rows = [row for row in all_rows if row["Quarter"] != qperiod]
     periods = [row["Quarter"] for row in rows]
     if periods != sorted(periods) or len(periods) != len(set(periods)):
         raise WarReportRuntimeError("FULL_HISTORY_NOT_UNIQUE_CHRONOLOGICAL")
-    q = analysis.quarterly_earnings
-    qperiod = q.fiscal_period.replace("FY", "").replace(" ", "")
-    if qperiod in periods:
-        raise WarReportRuntimeError("FULL_HISTORY_PERIOD_COLLISION")
     labels = periods + [qperiod]
     a = q.enterprise_value_analytics
     sources = list(q.revenue.evidence_ids)
@@ -386,7 +389,7 @@ def build_full_history_charts(package_root: Path, analysis: AnalysisPacket, hist
         ChartSeries(label_zh="CFO", unit="新台幣百萬元", values=[item["value"] for item in cash_rows["CFO"]]),
         ChartSeries(label_zh="Capex", unit="新台幣百萬元", values=[item["value"] for item in cash_rows["CAPEX"]]),
         ChartSeries(label_zh="FCF", unit="新台幣百萬元", values=[item["value"] for item in cash_rows["FCF"]]),
-    ], [cash_source, *sources], ["圖形特徵：2026Q2單季CFO與FCF同為負值，與當季獲利成長方向相反。", "為何重要：帳面獲利尚未轉成可自由配置現金，資本支出並非唯一壓力來源。", "論點含義：Q3單季轉正只算初步改善；主要確認仍是H2、全年或TTM現金轉化恢復。"] ))
+    ], [cash_source, *sources], ["圖形特徵：圖中Q2單季值是H1減Q1的稽核推算，不是官方H1現金流的改標。", "為何重要：正式核心基線仍是2026H1累計CFO與FCF；單季推算只作歷史對照。", "論點含義：主要確認仍是H2、全年或TTM現金轉化恢復。"] ))
     cumulative = {metric: observations_for(historical_baseline, metric, basis="YTD_CUMULATIVE") for metric in ("CFO", "CAPEX", "FCF")}
     cumulative_labels = [item["period"] for item in cumulative["FCF"]]
     if cumulative_labels:
@@ -408,8 +411,8 @@ def build_full_history_charts(package_root: Path, analysis: AnalysisPacket, hist
         ChartSeries(label_zh="NWC Proxy", unit="新台幣百萬元", values=[item["value"] for item in nwc_rows]),
     ], sources, ["圖形特徵：Q1至Q2的營運資金代理值增加1,747.38億元。", "為何重要：應收與存貨合計增加3,794.24億元，應付增加2,046.86億元只抵銷部分占用。", "論點含義：供應商融資提供緩衝而非現金消耗；淨占用仍壓低Q2 CFO。"] ))
     charts.extend([
-        _chart("full_history_roic", "ROIC完整歷史與本期待驗", "資本效率是否改善？", labels, [ChartSeries(label_zh="ROIC", unit="%", values=[r["ROIC_Precise_Pct"] for r in rows] + ["INSUFFICIENT_DATA"])], full_sources, ["圖形特徵：歷史同口徑ROIC波動，2026Q1為12.57%；2026Q2不是零，而是資料待補。", "為何重要：本期可計算部分營運投入資本估算，但無法取代完整同口徑實際ROIC。", "論點含義：新增資本是否提高報酬仍待驗；下一季須補標準化NOPAT與完整平均投入資本。"]),
-        _chart("full_history_bvps", "每股淨值完整歷史與本期待驗", "帳面價值是否持續傳達至每股？", labels, [ChartSeries(label_zh="BVPS", unit="新台幣元", values=[r["BVPS"] for r in rows] + ["INSUFFICIENT_DATA"])], full_sources, ["圖形特徵：BVPS中期上升至2026Q1的127.12元，但2025Q2曾出現明顯回落。", "為何重要：帳面價值累積並非直線，需連同股利與股數變化解釋。", "論點含義：股東資本複利方向正面；2026Q2直接BVPS與完整股東總報酬仍待補。"]),
+        _chart("full_history_roic", "ROIC完整歷史與本期待驗", "資本效率是否改善？", labels, [ChartSeries(label_zh="ROIC", unit="%", values=[r["ROIC_Precise_Pct"] for r in rows] + ["INSUFFICIENT_DATA"])], full_sources, ["圖形特徵：歷史同口徑ROIC波動，2026Q1為12.57%；2026Q2不是零，而是條件式候選未通過來源口徑閘門。", "為何重要：16.46%候選值使用的現金口徑無法與官方現金及定期存款總額一致核對，因此不得升格。", "論點含義：新增資本是否提高報酬仍待驗；須補齊同口徑有息負債與現金輸入後重算。"]),
+        _chart("full_history_bvps", "每股淨值完整歷史", "帳面價值是否持續傳達至每股？", labels, [ChartSeries(label_zh="BVPS", unit="新台幣元", values=[r["BVPS"] for r in rows] + [current_row["BVPS"]])], full_sources, ["圖形特徵：2026Q2官方BVPS為136.02元，高於2026Q1的127.12元。", "為何重要：帳面價值累積仍需連同股利與股數變化解釋，單季上升不等於股東總報酬已完成。", "論點含義：每股帳面價值獲官方資料支持；現金轉化與ROIC仍須分開驗證。"]),
         _chart("full_history_valuation", "歷史季度P/B與TTM P/E（分尺度）", "截至2026Q1的歷史評價如何變化？", periods, [
             ChartSeries(label_zh="P/B", unit="倍", values=[item["value"] for item in observations_for(historical_baseline, "PB")]),
             ChartSeries(label_zh="TTM P/E", unit="倍", values=[item["value"] for item in observations_for(historical_baseline, "PE_TTM")]),
@@ -673,7 +676,7 @@ def _quarterly_research_chapters(
         {"指標": "營業利益", "本期": f"{_reader_number(op_now)}億元", "比較": f"年增{a['operatingProfitYoyPct']}%", "判讀": "增速顯著高於營收"},
         {"指標": "毛利率／營益率", "本期": f"{q.gross_margin.value}%／{q.operating_margin.value}%", "比較": f"年變動{q.gross_margin.yoy}／{q.operating_margin.yoy}", "判讀": "毛利承壓、費用吸收改善"},
         {"指標": "EPS", "本期": f"{q.eps.value}元", "比較": f"年變動{q.eps.yoy}", "判讀": "每股獲利獲支持"},
-        {"指標": "Q2 CFO／FCF", "本期": f"{_reader_amount_million(a['q2StandaloneCfoMillionTwd'])}／{_reader_amount_million(a['q2StandaloneFcfMillionTwd'])}", "比較": "同口徑累計數相減推導", "判讀": "獲利尚未轉成自由現金"},
+        {"指標": "2026H1 CFO／FCF", "本期": f"{_reader_amount_million(a['h1OperatingCashFlowMillionTwd'])}／{_reader_amount_million(a['h1FreeCashFlowMillionTwd'])}", "比較": "官方H1累計值", "判讀": "上半年獲利尚未轉成自由現金"},
         {"指標": "CCC", "本期": f"{wc['cashConversionCycleDays'][-1]}天", "比較": f"2025Q2為{wc['cashConversionCycleDays'][0]}天", "判讀": "效率改善但資金仍占用"},
         {"指標": "估值", "本期": f"P/S {_reader_number(valuation['ps']['value'])}倍；P/E {_reader_number(valuation['ttmPe']['value'])}倍；P/B {_reader_number(valuation['pb']['value'])}倍", "比較": f"{valuation_context}價格{_reader_number(valuation['price']['value'])}元", "判讀": "描述性位置，不設交易門檻"},
     ]
@@ -740,13 +743,13 @@ def _quarterly_research_chapters(
         })
 
     estimated_shares = Decimal(str(valuation["ps"]["weightedAverageSharesMillion"]))
-    q2_fcf_per_share = Decimal(str(a["q2StandaloneFcfMillionTwd"])) / estimated_shares
+    h1_fcf_per_share = Decimal(str(a["h1FreeCashFlowMillionTwd"])) / estimated_shares
     smart_specs = [
         ("營業利益品質", f"營益率{q.operating_margin.value}%，營業利益年增{a['operatingProfitYoyPct']}%", "營益率維持或提高，且毛利率不再下滑", "毛利率與營益率同步下降", "FY2026 Q3財報／法說"),
-        ("營運現金回收", f"Q2 CFO {_reader_amount_million(a['q2StandaloneCfoMillionTwd'])}，CCC {wc['cashConversionCycleDays'][-1]}天", "Q3單季CFO轉正只算初步改善；H2、全年或TTM現金轉化恢復才是主要確認", "CFO持續為負，或應收與存貨天數反轉上升", "FY2026 Q3及全年現金流量表"),
-        ("自由現金流", f"Q2 FCF {_reader_amount_million(a['q2StandaloneFcfMillionTwd'])}", "H2、全年或TTM FCF轉正且不依賴一次性營運資金釋放", "2026全年FCF仍為負", "FY2026 Q3／全年現金流量表"),
-        ("資本報酬", f"部分營運投入資本單季估算ROIC {_reader_number(roic_estimate['quarterly_roic_pct'])}%；官方同口徑Q2值待補", "標準化NOPAT與完整平均投入資本可比，且ROIC改善", "投入資本增幅持續高於NOPAT", "正式Q2補充資料／FY2026 Q3"),
-        ("每股價值", f"Q2 EPS {q.eps.value}元；BVPS截至2026Q1為{valuation['governedBvps']['value']}元；Q2 FCF／相容加權平均股數約{_reader_number(q2_fcf_per_share)}元／股；期末股數待補", "EPS、BVPS與FCF／股在相容期間共同改善，且股數未稀釋每股成果", "EPS上升但BVPS或FCF／股轉弱，或股數增幅抵銷分子成長", "FY2026 Q3／全年每股與現金資料"),
+        ("營運現金回收", f"2026H1 CFO {_reader_amount_million(a['h1OperatingCashFlowMillionTwd'])}，Q2期末CCC {wc['cashConversionCycleDays'][-1]}天", "後續累計CFO改善只算初步改善；H2、全年或TTM現金轉化恢復才是主要確認", "CFO持續為負，或應收與存貨天數反轉上升", "FY2026 Q3及全年現金流量表"),
+        ("自由現金流", f"2026H1 FCF {_reader_amount_million(a['h1FreeCashFlowMillionTwd'])}", "H2、全年或TTM FCF轉正且不依賴一次性營運資金釋放", "2026全年FCF仍為負", "FY2026 Q3／全年現金流量表"),
+        ("資本報酬", "Q2 ROIC候選16.46%未通過現金／負債來源口徑閘門，維持資料不足", "補齊同口徑有息負債、現金、NOPAT與平均投入資本後重算", "來源口徑仍無法對齊或投入資本增幅持續高於NOPAT", "正式Q2補充資料／FY2026 Q3"),
+        ("每股價值", f"Q2 EPS {q.eps.value}元；官方BVPS 136.02元；2026H1 FCF／相容加權平均股數約{_reader_number(h1_fcf_per_share)}元／股", "EPS、BVPS與FCF／股在相容期間共同改善，且股數未稀釋每股成果", "EPS與BVPS上升但FCF／股轉弱，或股數增幅抵銷分子成長", "FY2026 Q3／全年每股與現金資料"),
         ("估值第二階段", f"事件前P/S、P/E、P/B均處歷史較高位置；ROIC、FCF與每股價值尚未共同確認", "ROIC、正常化FCF與每股價值共同改善，為較高估值提供第二階段證據", "較高歷史位置延續，但ROIC、FCF或每股價值驗證失敗，形成再評價風險", "FY2026 Q3／全年財務及事件後正式行情"),
         ("AI價值轉化", "AI已到營收階段；專屬利潤、ROIC與FCF未揭露", "官方揭露可核對的AI獲利或現金證據", "AI成長伴隨合併毛利、ROIC與FCF惡化", "後續季報／法說"),
     ]
@@ -771,9 +774,9 @@ def _quarterly_research_chapters(
     chapters["s1"] = (
         "<h3>企業價值第一階段已驗證，第二階段仍待驗證</h3>"
         f"<p><strong>核心判斷：</strong>FY2026 Q2營收年增41%，營業利益年增{a['operatingProfitYoyPct']}%，"
-        f"兩者相差{a['operatingLeverageSpreadPct']}個百分點，顯示規模已轉為營運槓桿；但Q2 CFO為"
-        f"{_reader_amount_million(a['q2StandaloneCfoMillionTwd'])}、FCF為{_reader_amount_million(a['q2StandaloneFcfMillionTwd'])}，"
-        f"獲利尚未完成現金轉化。核心論點維持，估值安全與退休現金流安全不因此上修。{official_cite}{cash_cite}</p>"
+        f"兩者相差{a['operatingLeverageSpreadPct']}個百分點，顯示規模已轉為營運槓桿；但2026H1官方CFO為"
+        f"{_reader_amount_million(a['h1OperatingCashFlowMillionTwd'])}、FCF為{_reader_amount_million(a['h1FreeCashFlowMillionTwd'])}，"
+        f"上半年獲利尚未完成現金轉化。核心論點維持，估值安全與退休現金流安全不因此上修。{official_cite}{cash_cite}</p>"
         "<p><strong>本季新增：</strong>營益率改善、EPS上升與官方H1 ROE提高，支持營運端價值創造；"
         "<strong>尚未完成：</strong>同口徑Q2 ROIC、AI專屬利潤與現金、全年FCF回收。"
         "因此目前不是「成長失效」，而是「成長是否能轉成資本報酬與現金」的第二階段驗證。</p>"
@@ -805,11 +808,11 @@ def _quarterly_research_chapters(
     )
 
     chapters["s4"] = (
-        "<h3>FCF 轉化：本期負值已驗證，但不能跳過季節性與歷史回收脈絡</h3>"
-        f"<p>Q2單季CFO由2026H1減2026Q1推導為{_reader_amount_million(a['q2StandaloneCfoMillionTwd'])}，"
-        f"資本支出為{_reader_amount_million(a['q2StandaloneCapexMillionTwd'])}，因此FCF為"
-        f"{_reader_amount_million(a['q2StandaloneFcfMillionTwd'])}。兩條推導路徑僅差{_reader_number(a['q2StandaloneFcfRoundingDifferenceMillionTwd'], 0)}百萬元，"
-        f"在揭露四捨五入容許範圍內。{official_cite}{cash_cite}</p>"
+        "<h3>FCF 轉化：H1累計負值已驗證，但不能跳過季節性與歷史回收脈絡</h3>"
+        f"<p>官方2026H1營業現金流為{_reader_amount_million(a['h1OperatingCashFlowMillionTwd'])}，"
+        f"資本支出為{_reader_amount_million(a['h1CapexMillionTwd'])}，自由現金流為"
+        f"{_reader_amount_million(a['h1FreeCashFlowMillionTwd'])}。上述均為H1累計值，不是Q2單季現金流。"
+        f"{official_cite}{cash_cite}</p>"
         "<p>同季比較顯示2025H1 FCF為-552.75億元；2025年前九個月擴大至-1,623.35億元，全年則回升至530.89億元；"
         "2026H1再降至-1,500.09億元。2025全年回收證明季內資金占用可能逆轉，但2026H1仍不足以判定只是季節性。"
         "目前分類為「結構性風險尚未排除」，不是「已證實結構性惡化」。</p>"
@@ -820,9 +823,9 @@ def _quarterly_research_chapters(
             {"橋接項目": "歸屬母公司淨利", "Q2證據": f"{_reader_amount_million(q.attributable_profit.value)}", "證據狀態": "官方直接值；與合併CFO會計範圍不同"},
             {"橋接項目": "非現金項目", "Q2證據": "資料未提供", "證據狀態": "無法量化折舊、減損等調整"},
             {"橋接項目": "營運資金代理變化", "Q2證據": f"增加{_reader_amount_million(net_wc_change)}", "證據狀態": "應收＋存貨－應付；不是完整現金流量表營運資金橋"},
-            {"橋接項目": "營業現金流", "Q2證據": f"{_reader_amount_million(a['q2StandaloneCfoMillionTwd'])}", "證據狀態": "由官方H1減Q1同口徑推導"},
-            {"橋接項目": "資本支出／自由現金流", "Q2證據": f"{_reader_amount_million(a['q2StandaloneCapexMillionTwd'])}／{_reader_amount_million(a['q2StandaloneFcfMillionTwd'])}", "證據狀態": "同口徑推導"},
-        ], ("橋接項目", "Q2證據", "證據狀態"))
+            {"橋接項目": "營業現金流", "Q2證據": f"{_reader_amount_million(a['h1OperatingCashFlowMillionTwd'])}", "證據狀態": "官方2026H1累計值；不是Q2單季"},
+            {"橋接項目": "資本支出／自由現金流", "Q2證據": f"{_reader_amount_million(a['h1CapexMillionTwd'])}／{_reader_amount_million(a['h1FreeCashFlowMillionTwd'])}", "證據狀態": "官方2026H1累計值；不是Q2單季"},
+        ], ("橋接項目", "現金流證據", "證據狀態"))
         + f"<p>現有證據可確認營運資金是重要因素，但不足以把全部 CFO 落差歸因於營運資金。非現金項目與完整現金流量表調整尚未提供。{official_cite}{cash_cite}</p>"
         "<h3>營運資金：應付帳款是融資抵銷，不是現金吸收</h3>"
         f"<p>Q1至Q2應收增加{_reader_amount_million(ar_q2-ar_q1)}、存貨增加{_reader_amount_million(inv_q2-inv_q1)}，兩者吸收現金；"
@@ -831,7 +834,7 @@ def _quarterly_research_chapters(
         "<h3>資產負債表與壓力情境：緩衝存在，但不能取代現金回收</h3>"
         + _table([
             {"項目": "現金及約當現金", "2026-06-30": _reader_amount_million(balance["cashAndCashEquivalentsMillionTwd"]), "判讀": "官方期末流動性存量"},
-            {"項目": "推導有息負債", "2026-06-30": _reader_amount_million(balance["derivedDebtMillionTwd"]), "判讀": "現金減淨現金的精確推導；不是公司直接列示欄位"},
+            {"項目": "有息負債", "2026-06-30": "資料不足", "判讀": "現金及約當現金與官方現金及定期存款口徑不一致，不採用現金減淨現金推導"},
             {"項目": "淨現金", "2026-06-30": _reader_amount_million(balance["netCashMillionTwd"]), "判讀": "正值提供緩衝，不等於FCF已改善"},
             {"項目": "權益總額（含非控制權益）", "2026-06-30": _reader_amount_million(balance["totalEquityMillionTwd"]), "判讀": "合併資產負債表權益總額；不得作為歸屬母公司ROE或BVPS分母"},
             {"項目": "流動性限制", "2026-06-30": "流動比率資料未提供", "判讀": "不據此宣稱短期償債能力全面穩健"},
@@ -844,13 +847,13 @@ def _quarterly_research_chapters(
         + "<p>以上是既有90日敏感度，不是預測或政策門檻。淨現金提供存量緩衝，但兩個壓力情境顯示營運資金惡化會放大資金需求，因此只能判定韌性仍需現金回收驗證，不能對整體韌性作出確定的類別結論。</p>"
         "<h3>ROIC三層證據必須分開</h3>"
         "<p><strong>ROIC持續性／資本強度敏感度：</strong>以下三層不得混為同一個實際報酬率。</p>"
-        f"<p><strong>官方同口徑：</strong>Q2 單季同口徑 ROIC 待補；缺口不是零。"
+        f"<p><strong>官方同口徑：</strong>Q2 ROIC候選16.46%未通過現金／負債來源口徑閘門，維持資料不足；缺口不是零。"
         f"<strong>部分營運投入資本估算：</strong>以應收、存貨、營運用不動產廠房設備減應付帳款，平均投入資本"
         f"{_reader_amount_million(roic_estimate['average_invested_capital_million_twd'])}，單季估算ROIC "
         f"{_reader_number(roic_estimate['quarterly_roic_pct'])}%；這不是官方同口徑ROIC。"
         "<strong>年化敏感度：</strong>僅描述單季延伸，不能當作TTM或正式年度ROIC。"
         "相容口徑WACC尚未提供，因此不能正式判定ROIC與資金成本的利差。</p>"
-        "<h3>每股價值</h3><p>EPS已由官方資料確認；BVPS截至2026Q1為127.12元，Q2直接值尚未提供；"
+        "<h3>每股價值</h3><p>EPS與BVPS已由官方資料確認；2026Q2 BVPS為136.02元；"
         "FCF／股依相容加權平均股數估算，僅用於辨識現金風險。每股價值仍需EPS、BVPS、FCF與股數共同驗證。</p>"
         + visuals("s4")
     )
@@ -863,7 +866,7 @@ def _quarterly_research_chapters(
         + _table([
             {"經濟面向": "利潤率", "本期證據": f"毛利率{q.gross_margin.value}%、營益率{q.operating_margin.value}%", "判讀": "營益率改善來自毛利以下費用吸收，尚非毛利結構升級"},
             {"經濟面向": "資本強度", "本期證據": f"Capex／營收{a['capexIntensityRevenuePct']}%；營運資金代理值增加{_reader_amount_million(net_wc_change)}", "判讀": "規模成長仍需要資本與營運資金"},
-            {"經濟面向": "現金轉化", "本期證據": f"CFO {_reader_amount_million(a['q2StandaloneCfoMillionTwd'])}；FCF {_reader_amount_million(a['q2StandaloneFcfMillionTwd'])}", "判讀": "效率改善尚未完整轉成現金"},
+            {"經濟面向": "現金轉化", "本期證據": f"2026H1 CFO {_reader_amount_million(a['h1OperatingCashFlowMillionTwd'])}；FCF {_reader_amount_million(a['h1FreeCashFlowMillionTwd'])}", "判讀": "效率改善尚未完整轉成現金"},
             {"經濟面向": "資本報酬", "本期證據": f"部分營運ROIC估算{_reader_number(roic_estimate['quarterly_roic_pct'])}%；官方同口徑待補", "判讀": "尚不能證明新增資本效率提高"},
         ], ("經濟面向", "本期證據", "判讀"))
         +
@@ -896,8 +899,8 @@ def _quarterly_research_chapters(
         + _table([
             {"主題": "AI伺服器成長", "既有說法": "Q3 AI Rack出貨季增高雙位數", "截至本報告結果": "前瞻指引，實現值尚未揭露", "判定": "仍開放驗證"},
             {"主題": "營業利益轉化", "既有說法": "規模與整合有助營運效率", "截至本報告結果": f"Q2營業利益年增{a['operatingProfitYoyPct']}%，營益率升至{q.operating_margin.value}%", "判定": "本季財務結果支持"},
-            {"主題": "ROE／資本效率", "既有說法": "需由正式目標與同口徑資料核對", "截至本報告結果": "H1 ROE改善；Q2同口徑ROIC待補", "判定": "部分支持"},
-            {"主題": "資本支出", "既有說法": "本地證據沒有可比指引區間", "截至本報告結果": f"Q2推導Capex {_reader_amount_million(a['q2StandaloneCapexMillionTwd'])}", "判定": "無法判定超前或落後"},
+            {"主題": "ROE／資本效率", "既有說法": "需由正式目標與同口徑資料核對", "截至本報告結果": "官方2026H1 ROE為6.21%（未年化）；Q2 ROIC候選未通過來源口徑閘門", "判定": "部分支持"},
+            {"主題": "資本支出", "既有說法": "本地證據沒有可比指引區間", "截至本報告結果": f"2026H1官方Capex {_reader_amount_million(a['h1CapexMillionTwd'])}", "判定": "無法判定超前或落後"},
         ], ("主題", "既有說法", "截至本報告結果", "判定"))
     )
 
@@ -906,7 +909,7 @@ def _quarterly_research_chapters(
         + _table(timepoint_rows, ("估值時點", "價格日期／收盤價", "P/S", "P/E", "P/B"))
         + f"<p>財報事件日為{valuation['price']['eventDate']}。{time_basis_sentence}本地正式行情截止{valuation['price']['date']}，"
         f"{post_event_sentence}"
-        f"事件前估值使用更新至Q2的TTM營收與EPS，以及截至2026Q1的直接BVPS。{official_cite}{master_cite}{price_cite}</p>"
+        f"事件前估值使用更新至Q2的TTM營收、EPS與官方BVPS 136.02元。{official_cite}{master_cite}{price_cite}</p>"
         f"<p>同一市場資料窗口的20期報酬為{analysis.price_and_market_activity.recent_price_context.return_windows.get('20D')}。"
         "這只能描述股價動能，不能在沒有基準調整事件研究時歸因於本次財報。</p>"
         f"<p>歷史位置顯示，P/S中位數約{_reader_number(historical['ps']['median'])}倍、目前約在第{_reader_number(historical['ps']['percentile_pct'])}百分位；"
@@ -933,7 +936,7 @@ def _quarterly_research_chapters(
     chapters["s10"] = (
         "<h3>未來一至四季的可推翻驗證表</h3>"
         + _table(smart_rows, ("驗證主題", "目前基線", "增強條件", "削弱條件", "下一觀察"))
-        + "<p><strong>最後判斷：</strong>營收轉為營業利益的第一階段獲得支持；新增資本是否提高報酬仍缺同口徑ROIC；Q2負CFO與負FCF顯示獲利尚未完成現金轉化。"
+        + "<p><strong>最後判斷：</strong>營收轉為營業利益的第一階段獲得支持；新增資本是否提高報酬仍缺同口徑ROIC；2026H1負CFO與負FCF顯示獲利尚未完成現金轉化。"
         +
         "核心持有論點維持，但安全邊際不上修。任何未來更新都必須以表中條件驗證，而不是以敘事強弱替代數據。</p>"
     )
@@ -992,7 +995,7 @@ def _build_chapters(
     if fcf_state is not None:
         chapters["s4"] = (
             '<h3>FCF 轉化</h3>'
-            '<p>Q2 CFO、Capex與FCF依同口徑累計數推導；負FCF使結構性風險尚未排除，後續需以營運資金回收與全年現金流驗證。</p>'
+            '<p>正式核心基線採2026H1官方累計CFO、Capex與FCF，不改標成Q2單季；負FCF使結構性風險尚未排除，後續需以營運資金回收與全年現金流驗證。</p>'
             f'<p>FCF 證據分類：{html.escape(str(fcf_state["classification"]))}；這不是季節性或結構性惡化的自動斷言。</p>'
             '<p>Q2 單季同口徑 ROIC 待補；不得以第三方 TTM ROIC 替代。</p>'
             + chapters["s4"]

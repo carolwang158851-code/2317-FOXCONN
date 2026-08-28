@@ -106,7 +106,7 @@ class WarReportProductionRuntimeV1Tests(unittest.TestCase):
         self.assertEqual(manifest["reportRuntime"], "ENTERPRISE_VALUE_WAR_REPORT_V1")
         self.assertEqual(manifest["reportChapterCount"], 11)
         self.assertEqual(sum(rendered.count(f'<section id="s{i}"') for i in range(1, 12)), 11)
-        self.assertIn("Q2 單季同口徑 ROIC 待補", rendered)
+        self.assertIn("Q2 ROIC候選16.46%未通過現金／負債來源口徑閘門", rendered)
         self.assertTrue(result["protected_state_unchanged"])
 
     def test_r4_quarterly_requires_fcf_conversion(self) -> None:
@@ -150,7 +150,7 @@ class WarReportProductionRuntimeV1Tests(unittest.TestCase):
     def test_r11_q2_same_basis_roic_remains_missing(self) -> None:
         roic = resolve_quarterly_roic(official_same_basis_quarterly=None)
         self.assertIsNone(roic["value"])
-        self.assertIn("Q2 單季同口徑 ROIC 待補", self.html)
+        self.assertIn("Q2 ROIC候選16.46%未通過現金／負債來源口徑閘門", self.html)
 
     def test_r12_third_party_ttm_cannot_fill_quarterly_roic(self) -> None:
         self.assertIsNone(resolve_quarterly_roic(official_same_basis_quarterly=None, third_party_ttm=18.2)["value"])
@@ -324,8 +324,8 @@ class WarReportProductionRuntimeV1Tests(unittest.TestCase):
     def test_r41_valuation_timepoints_and_chart_basis_are_explicit(self) -> None:
         valuation = self.result["analysis"].quarterly_earnings.valuation_scenarios["valuationTimeBasis"]
         self.assertEqual(valuation["preEventValuation"]["date"], "2026-08-11")
-        self.assertEqual(valuation["postEventValuation"]["status"], "UNAVAILABLE_LOCAL_AUTHORITY")
-        self.assertIn("事件後P/S、P/E與P/B均不可得", self.html)
+        self.assertEqual(valuation["postEventValuation"]["status"], "AVAILABLE")
+        self.assertIn("本地正式行情已涵蓋事件後時點", self.html)
         self.assertIn("歷史季度序列只到2026Q1", self.html)
         self.assertIn("獨立尺度", self.html)
 
@@ -339,9 +339,13 @@ class WarReportProductionRuntimeV1Tests(unittest.TestCase):
 
     def test_r43_smart_requires_durable_cash_per_share_and_valuation_confirmation(self) -> None:
         for phrase in (
-            "Q3單季CFO轉正只算初步改善", "H2、全年或TTM現金轉化恢復",
+            "後續累計CFO改善只算初步改善", "H2、全年或TTM現金轉化恢復",
             "每股價值", "FCF／相容加權平均股數", "估值第二階段", "形成再評價風險",
         ):
+            self.assertIn(phrase, self.html)
+
+    def test_r43a_cash_flow_keeps_official_h1_period_semantics(self) -> None:
+        for phrase in ("2026H1 CFO", "-691.22億元", "2026H1 FCF", "-1500.09億元", "不是Q2單季現金流"):
             self.assertIn(phrase, self.html)
 
     def test_r44_editorial_has_no_machine_or_unsupported_forward_language(self) -> None:

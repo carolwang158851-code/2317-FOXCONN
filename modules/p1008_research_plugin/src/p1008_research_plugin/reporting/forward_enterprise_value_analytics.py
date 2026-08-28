@@ -411,9 +411,12 @@ def build_forward_enterprise_value_analytics(analysis: AnalysisPacket, historica
     gross_profit = _d(a["grossProfitMillionTwd"])
     cogs = revenue - gross_profit
     source_ids = list(q.revenue.evidence_ids)
+    latest_actual_roic = a.get("roic", {}).get("latestGovernedActualReferencePct")
+    if latest_actual_roic in {None, "", "N/A", "INSUFFICIENT_DATA"}:
+        raise ForwardAnalyticsError("ROIC_REFERENCE_UNAVAILABLE")
     roic = roic_sensitivity(
         operating_profit=a["operatingProfitMillionTwd"], pretax_income=a["pretaxProfitMillionTwd"],
-        income_tax=a["incomeTaxExpenseMillionTwd"], latest_actual_roic_pct=analysis.financial_trend.roic.value,
+        income_tax=a["incomeTaxExpenseMillionTwd"], latest_actual_roic_pct=latest_actual_roic,
         input_ids=source_ids, invested_capital_bridge=a.get("investedCapitalBridge"),
     )
     scenario_inputs = (
