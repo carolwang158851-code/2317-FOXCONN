@@ -24,7 +24,36 @@ from pathlib import Path
 
 DEFAULT_PORT_START = 8767
 DEFAULT_PORT_END = 8899
-EXPECTED_SERVER_VERSION = "P1008_APP_SERVER_20260719_MARKET_ACTIVITY_V1"
+DEFAULT_PAGE_PROBE_TIMEOUT = 2.0
+EXPECTED_SERVER_VERSION = "P1008_APP_SERVER_20260812_OFFICIAL_IR_PARTIAL_COVERAGE_V1_1"
+
+
+def resolve_git_head(package_root: Path) -> str:
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(package_root), "rev-parse", "HEAD"],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "UNKNOWN"
+    value = completed.stdout.strip()
+    return value if completed.returncode == 0 and value else "UNKNOWN"
+
+
+def same_package_root(actual: object, expected: Path) -> bool:
+    if not isinstance(actual, str) or not actual.strip():
+        return False
+    try:
+        actual_path = os.path.normcase(os.path.realpath(actual))
+        expected_path = os.path.normcase(os.path.realpath(str(expected.resolve())))
+    except OSError:
+        return False
+    return actual_path == expected_path
 
 
 def browser_candidates() -> list[str]:
@@ -97,9 +126,11 @@ def news_health_is_blocked(payload: dict) -> bool:
 
 def page_ok(
     port: int,
-    timeout: float = 0.6,
+    timeout: float = DEFAULT_PAGE_PROBE_TIMEOUT,
     reject_blocked_news: bool = False,
     reject_codex_network_sandbox: bool = False,
+    expected_package_root: Path | None = None,
+    expected_git_head: str | None = None,
 ) -> bool:
     url = f"http://127.0.0.1:{port}/launcher.html"
     try:
@@ -126,6 +157,12 @@ def page_ok(
                 return False
             payload = json.loads(response.read().decode("utf-8", errors="replace"))
             if payload.get("serverVersion") != EXPECTED_SERVER_VERSION:
+                return False
+            if expected_package_root is not None and not same_package_root(
+                payload.get("resolvedPackageRoot"), expected_package_root
+            ):
+                return False
+            if expected_git_head is not None and payload.get("gitHead") != expected_git_head:
                 return False
             server_context = payload.get("serverContext", {}) if isinstance(payload, dict) else {}
             if reject_codex_network_sandbox and server_context.get("codexNetworkSandbox"):
@@ -165,11 +202,23 @@ def build_ports(start: int, end: int) -> list[int]:
     return list(range(start, end + 1))
 
 
-def choose_port(ports: list[int], reuse_existing: bool = True) -> tuple[int | None, bool, list[int]]:
+def choose_port(
+    ports: list[int],
+    reuse_existing: bool = True,
+    *,
+    expected_package_root: Path | None = None,
+    expected_git_head: str | None = None,
+) -> tuple[int | None, bool, list[int]]:
     blocked_news_ports: list[int] = []
     if reuse_existing:
         for port in ports:
-            if page_ok(port, reject_blocked_news=False, reject_codex_network_sandbox=True):
+            if page_ok(
+                port,
+                reject_blocked_news=False,
+                reject_codex_network_sandbox=True,
+                expected_package_root=expected_package_root,
+                expected_git_head=expected_git_head,
+            ):
                 return port, True, blocked_news_ports
     for port in ports:
         if port_is_free(port):
@@ -229,7 +278,13 @@ def main() -> int:
         print(f"[ERROR] Invalid port range: {exc}")
         return 4
 
-    port, already_running, blocked_news_ports = choose_port(ports, reuse_existing=not args.fresh)
+    expected_git_head = resolve_git_head(package_root)
+    port, already_running, blocked_news_ports = choose_port(
+        ports,
+        reuse_existing=not args.fresh,
+        expected_package_root=package_root,
+        expected_git_head=expected_git_head,
+    )
     if port is None:
         print(f"[ERROR] No usable local port from {ports[0]} to {ports[-1]}.")
         print("[FIX] Close old P1008 browser/server sessions, or retry with a wider range:")
@@ -247,10 +302,20 @@ def main() -> int:
         proc = start_server(package_root, port, log_path)
         print(f"[INFO] Started local app server on port {port}; pid={proc.pid}; log={log_path}")
         for _ in range(6):
-            if page_ok(port, reject_blocked_news=False):
+            if page_ok(
+                port,
+                reject_blocked_news=False,
+                expected_package_root=package_root,
+                expected_git_head=expected_git_head,
+            ):
                 break
             time.sleep(0.35)
-        if not page_ok(port, reject_blocked_news=False):
+        if not page_ok(
+            port,
+            reject_blocked_news=False,
+            expected_package_root=package_root,
+            expected_git_head=expected_git_head,
+        ):
             print(f"[ERROR] Local app server did not respond quickly on port {port}.")
             print("[FIX] Close old Python/http.server processes or retry after a few seconds.")
             return 5

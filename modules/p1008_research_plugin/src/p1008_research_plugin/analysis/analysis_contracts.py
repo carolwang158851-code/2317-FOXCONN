@@ -11,7 +11,7 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_serializer, model_validator
 
 
 NonEmpty = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
@@ -277,10 +277,48 @@ class MaterialConclusion(StrictModel):
     next_validation_event: NonEmpty
 
 
+class QuarterlyMetric(StrictModel):
+    value: NonEmpty
+    unit: NonEmpty
+    period: NonEmpty
+    qoq: NonEmpty | None = None
+    yoy: NonEmpty | None = None
+    evidence_ids: list[NonEmpty] = Field(min_length=1)
+
+
+class QuarterlyEarningsAnalysis(StrictModel):
+    fiscal_period: NonEmpty
+    revenue: QuarterlyMetric
+    gross_margin: QuarterlyMetric
+    operating_margin: QuarterlyMetric
+    net_margin: QuarterlyMetric
+    attributable_profit: QuarterlyMetric
+    eps: QuarterlyMetric
+    business_disclosures: list[NonEmpty] = Field(min_length=1)
+    ai_server_cloud_networking: list[NonEmpty] = Field(min_length=1)
+    official_outlook: list[NonEmpty] = Field(min_length=1)
+    apple_iphone_exposure_status: Literal["REVIEW_REQUIRED"]
+    fx_tariff_policy_risk_status: Literal["REVIEW_REQUIRED"]
+    cash_flow_period: NonEmpty
+    cash_flow_status: Literal[
+        "OFFICIAL_RESULTS_H1_NOT_STANDALONE_Q2",
+        "PENDING_OFFICIAL_REPORT",
+    ]
+    free_cash_flow_status: Literal["OFFICIAL_H1_UPDATED", "NOT_YET_UPDATED"]
+    source_receipt: NonEmpty
+    source_hash: Sha256
+    source_pages: dict[NonEmpty, NonEmpty]
+    limitations: list[NonEmpty]
+    enterprise_value_analytics: dict[NonEmpty, Any]
+    valuation_scenarios: dict[NonEmpty, Any]
+    quarterly_history: dict[NonEmpty, Any]
+    governance_signals: list[dict[NonEmpty, Any]] = Field(min_length=3)
+
+
 class AnalysisPacket(StrictModel):
     record_type: Literal["P1008_ANALYSIS_PACKET"] = "P1008_ANALYSIS_PACKET"
     run_id: NonEmpty
-    event_type: Literal["MONTHLY_REVENUE"]
+    event_type: Literal["MONTHLY_REVENUE", "QUARTERLY_EARNINGS"]
     generated_at_utc: datetime
     authority_manifest_sha256: Sha256
     authority_file_hashes: dict[NonEmpty, Sha256]
@@ -289,6 +327,7 @@ class AnalysisPacket(StrictModel):
     input_evidence_hashes: dict[NonEmpty, Sha256]
     deterministic_mode: Literal[True] = True
     financial_trend: FinancialTrend
+    quarterly_earnings: QuarterlyEarningsAnalysis | None = None
     valuation_analysis: ValuationAnalysis
     price_and_market_activity: PriceAndMarketActivity
     market_regime: MarketRegime
@@ -301,8 +340,21 @@ class AnalysisPacket(StrictModel):
     source_evidence_ids: list[NonEmpty] = Field(min_length=1)
     actionable: Literal[False]
 
+    @model_serializer(mode="wrap")
+    def omit_inapplicable_quarterly_block(self, serializer: Any) -> dict[str, Any]:
+        payload = serializer(self)
+        if payload.get("quarterly_earnings") is None:
+            payload.pop("quarterly_earnings", None)
+        if payload.get("quarterlyEarnings") is None:
+            payload.pop("quarterlyEarnings", None)
+        return payload
+
     @model_validator(mode="after")
     def enforce_analysis_boundary(self) -> "AnalysisPacket":
+        if self.event_type == "QUARTERLY_EARNINGS" and self.quarterly_earnings is None:
+            raise ValueError("quarterly earnings analysis is required for QUARTERLY_EARNINGS")
+        if self.event_type == "MONTHLY_REVENUE" and self.quarterly_earnings is not None:
+            raise ValueError("monthly revenue analysis cannot contain quarterly earnings")
         expected = {
             "ACCUMULATION_35_45",
             "RETIREMENT_TRANSITION_46_60",

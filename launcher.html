@@ -180,8 +180,8 @@
       </div>
       <div class="buttons">
         <button id="fullscreen-toggle" type="button" aria-pressed="false">全螢幕</button>
-        <a class="button" href="./output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html?from=launcher_manual">進入新 UI</a>
-        <a class="button" href="./reports.html?from=launcher">研報庫</a>
+        <a id="new-ui-link" class="button" href="./ui/P1008_WARROOM_COMMAND_CENTER_v24.html?from=launcher_manual">進入新 UI</a>
+        <a id="research-library-link" class="button" href="./reports.html?from=launcher">研報庫</a>
         <a class="button" href="./SOP_v4.html?from=launcher">SOP</a>
       </div>
     </header>
@@ -212,6 +212,29 @@
         <button id="run-report">產生日報</button>
         <button id="refresh">刷新狀態</button>
       </div>
+      <div class="notice blue" style="margin-top:12px">
+        <div class="between"><div><strong>Official IR Evidence</strong><div class="small">Schedule awareness is not results authority.</div></div><span id="official-ir-status" class="badge blue">NO_CHANGE</span></div>
+        <div class="grid four" style="margin-top:10px">
+          <div class="stat"><div class="label">Event / Period</div><div id="official-ir-event" class="small">N/A</div></div>
+          <div class="stat"><div class="label">Official source</div><div id="official-ir-source" class="small">N/A</div></div>
+          <div class="stat"><div class="label">Document type</div><div id="official-ir-document" class="small">NOT_YET_AVAILABLE</div></div>
+          <div class="stat"><div class="label">Retrieved</div><div id="official-ir-retrieved" class="small">N/A</div></div>
+          <div class="stat"><div class="label">Coverage</div><div id="official-ir-coverage" class="small">N/A</div></div>
+          <div class="stat"><div class="label">Failed sources</div><div id="official-ir-failures" class="small">NONE</div></div>
+        </div>
+      </div>
+      <div class="notice blue" id="report-trigger-panel" style="margin-top:12px">
+        <div class="between">
+          <div><strong>戰報觸發 Trigger</strong><div id="trigger-next-action" class="small">等待治理狀態</div></div>
+          <span id="trigger-status" class="badge blue">NO MATERIAL CHANGE</span>
+        </div>
+        <div class="grid four" style="margin-top:10px">
+          <div class="stat"><div class="label">Event</div><div id="trigger-event" class="value">N/A</div></div>
+          <div class="stat"><div class="label">Event Type / Validation</div><div id="trigger-event-type" class="value">NONE</div><div id="trigger-validation" class="small">NO_EVIDENCE</div></div>
+          <div class="stat"><div class="label">Report Key</div><div id="trigger-report-key" class="small">N/A</div></div>
+          <div class="stat"><div class="label">Revision</div><div id="trigger-revision" class="value">N/A</div></div>
+        </div>
+      </div>
       <div class="notice violet" style="margin-top:12px">
         <div class="between">
           <div>
@@ -233,6 +256,12 @@
         <div class="stat"><div class="label">正式 CSV 邊界</div><div id="formal-boundary" class="value">檢查中</div><div class="small">一鍵資料流程前後 hash 必須不變</div></div>
         <div class="stat"><div class="label">新聞 connector</div><div id="connector-status" class="value">N/A</div><div class="small">未核准來源不得連網</div></div>
         <div class="stat"><div class="label">最新戰報</div><div id="latest-report" class="value">N/A</div><div class="small">日報 / 週報 / 月報 manifest</div></div>
+      </div>
+      <div class="grid four" style="margin-top:12px">
+        <div class="stat"><div class="label">Served package root</div><div id="served-package-root" class="small">N/A</div></div>
+        <div class="stat"><div class="label">Served git HEAD</div><div id="served-git-head" class="small">N/A</div></div>
+        <div class="stat"><div class="label">Latest rolling brief date</div><div id="latest-rolling-brief-date" class="value">N/A</div></div>
+        <div class="stat"><div class="label">Latest archived report date</div><div id="latest-archived-report-date" class="value">N/A</div><div id="report-library-health" class="small">CHECKING</div></div>
       </div>
       <div class="notice blue" style="margin-top:12px">
         <div class="between">
@@ -313,7 +342,7 @@
         </div>
         <div class="buttons" style="align-items:end">
           <button id="owner-publish" class="danger" disabled>正式發布 CSV</button>
-          <a id="open-new-ui" class="button primary" href="./output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html?from=launcher">進入新 UI</a>
+          <a id="open-new-ui" class="button primary" href="./ui/P1008_WARROOM_COMMAND_CENTER_v24.html?from=launcher">進入新 UI</a>
         </div>
       </div>
     </section>
@@ -340,7 +369,7 @@
 
   <script>
     const state = { app: null, review: null, log: '', autoRedirected: false };
-    const EXPECTED_SERVER_VERSION = 'P1008_APP_SERVER_20260710_FULLSCREEN_REPORT_V1';
+    const EXPECTED_SERVER_VERSION = 'P1008_APP_SERVER_20260812_OFFICIAL_IR_PARTIAL_COVERAGE_V1_1';
     const $ = (id) => document.getElementById(id);
     const P1008_IMMERSIVE_KEY = 'p1008_immersive_mode';
     function readImmersivePref() {
@@ -567,12 +596,26 @@
     };
 
     function setBusy(disabled) {
+      const trigger = (state.app || {}).reportTrigger || {};
       ['run-default', 'run-update', 'run-news', 'run-report', 'run-analysis-candidate', 'run-report-candidate', 'owner-publish', 'copy-approval-phrase'].forEach((id) => {
         const el = $(id);
         if (!el) return;
         if (id === 'owner-publish') el.disabled = disabled || !canPublish();
         else if (id === 'copy-approval-phrase') el.disabled = disabled || !(state.review || {}).ownerApprovalPhrase;
+        else if (id === 'run-analysis-candidate') el.disabled = disabled || trigger.analysisEligible !== true;
+        else if (id === 'run-report-candidate') el.disabled = disabled || trigger.reportEligible !== true;
         else el.disabled = disabled;
+      });
+    }
+
+    function setReportNavigationBlocked(blocked) {
+      ['new-ui-link', 'research-library-link'].forEach((id) => {
+        const link = $(id);
+        if (!link) return;
+        link.classList.toggle('disabled', blocked);
+        link.setAttribute('aria-disabled', blocked ? 'true' : 'false');
+        if (blocked) link.setAttribute('tabindex', '-1');
+        else link.removeAttribute('tabindex');
       });
     }
 
@@ -598,20 +641,26 @@
       const dailyComponent = components.dailyPrice || {};
       const marketComponent = components.marketActivity || app.marketActivity || {};
       const newsComponent = components.news || {};
+      const officialIR = components.officialIR || app.officialIR || {};
       const phaseB1 = components.phaseB1 || {};
+      const trigger = app.reportTrigger || {};
       const busy = app.status === 'RUNNING';
 
       $('gate-badge').className = badgeClass(gate.code || 'CHECKING');
       $('gate-badge').textContent = gate.code || 'CHECKING';
       $('gate-message').textContent = gate.zh || '讀取 Launcher gate 中。';
-      $('gate-panel').className = `panel ${gate.canEnterNewUi ? 'accent-green' : gate.code === 'PIPELINE_FAILED' || gate.code === 'FORMAL_CSV_BOUNDARY_VIOLATED' ? 'accent-red' : 'accent-amber'}`;
+      const reportLibraryBlocked = gate.code === 'REPORT_LIBRARY_FAIL_CLOSED';
+      setReportNavigationBlocked(reportLibraryBlocked);
+      $('gate-panel').className = `panel ${gate.canEnterNewUi ? 'accent-green' : gate.code === 'PIPELINE_FAILED' || gate.code === 'FORMAL_CSV_BOUNDARY_VIOLATED' || reportLibraryBlocked ? 'accent-red' : 'accent-amber'}`;
       $('auto-redirect-note').className = `notice ${gate.canEnterNewUi ? 'green' : 'amber'}`;
       const stayMode = new URLSearchParams(location.search).get('stay') === '1';
       $('auto-redirect-note').textContent = gate.canEnterNewUi
         ? stayMode
           ? 'Gate 已通過；目前為 Launcher 審查停留模式，請按「進入新 UI」進入決策摘要。'
           : 'Gate 已通過；若剛完成一鍵資料流程或正式發布，Launcher 會自動進入新 UI。'
-        : 'Gate 尚未通過；請先完成候選資料、總經/新聞/FX 或 Owner 審查。';
+        : reportLibraryBlocked
+          ? '研報庫驗證失敗：新 UI 與研報庫導覽已停用，請依 health 訊息修復後重新整理。'
+          : 'Gate 尚未通過；請先完成候選資料、總經/新聞/FX 或 Owner 審查。';
 
       $('job-badge').className = badgeClass(app.status || 'IDLE');
       $('job-badge').textContent = app.status || 'IDLE';
@@ -619,9 +668,27 @@
       $('market-activity-status').textContent = marketComponent.status || marketComponent.launcher_status || 'N/A';
       $('market-activity-date').textContent = `最後成功日期：${marketComponent.lastSuccessDate || marketComponent.last_success_date || 'N/A'}`;
       $('news-component-status').textContent = newsComponent.status || 'NO_CHANGE';
+      $('official-ir-status').className = badgeClass(officialIR.status || 'NO_CHANGE');
+      $('official-ir-status').textContent = officialIR.status || 'NO_CHANGE';
+      $('official-ir-event').textContent = [officialIR.event || officialIR.canonical_event_id, officialIR.fiscalPeriod].filter(Boolean).join(' / ') || 'N/A';
+      $('official-ir-source').textContent = officialIR.officialSource || 'N/A';
+      $('official-ir-document').textContent = officialIR.documentType || 'NOT_YET_AVAILABLE';
+      $('official-ir-retrieved').textContent = officialIR.retrievedAt || officialIR.evaluated_at_utc || 'N/A';
+      $('official-ir-coverage').textContent = officialIR.coverageComplete === true ? 'COMPLETE' : officialIR.coverageComplete === false ? 'INCOMPLETE' : 'N/A';
+      $('official-ir-failures').textContent = (officialIR.failedSources || officialIR.failed_sources || []).map((item) => `${item.source_id}: ${item.error || item.status}`).join(' / ') || 'NONE';
       $('overall-component-status').textContent = app.overallStatus || app.status || 'IDLE';
       $('phaseb1-run-id').textContent = phaseB1.runId || 'N/A';
       $('phaseb1-output').textContent = phaseB1.outputPath || 'N/A';
+      $('trigger-status').className = badgeClass(trigger.status || 'NO_MATERIAL_CHANGE');
+      $('trigger-status').textContent = trigger.status || 'NO_MATERIAL_CHANGE';
+      $('trigger-event').textContent = trigger.event || 'N/A';
+      $('trigger-event-type').textContent = trigger.eventType || 'NONE';
+      $('trigger-validation').textContent = trigger.validationState || trigger.error || 'NO_EVIDENCE';
+      $('trigger-report-key').textContent = trigger.reportKey || 'N/A';
+      $('trigger-revision').textContent = trigger.revision || 'N/A';
+      $('trigger-next-action').textContent = trigger.analysisEligible
+        ? (trigger.reportEligible ? 'Owner 可手動產生戰報候選' : 'Owner 可手動產生分析候選')
+        : '尚未取得有效治理觸發；不產生正式戰報';
       const receiptPaths = marketComponent.receiptPaths || marketComponent.receipt_paths || [];
       $('market-activity-log').textContent = `Receipt／log：${receiptPaths[0] || marketComponent.logPath || marketComponent.run_dir || 'N/A'}`;
       $('job-type').textContent = JOB_TYPE_ZH[app.jobType] || app.jobType || '無執行中任務';
@@ -634,6 +701,11 @@
       const checkedCount = networkSummary.checked ?? sourceHealth.length;
       $('connector-status').textContent = `${successCount}/${checkedCount || approvedCount} success`;
       $('latest-report').textContent = latestDaily?.date || latestDaily?.title || 'N/A';
+      $('served-package-root').textContent = app.resolvedPackageRoot || 'N/A';
+      $('served-git-head').textContent = app.gitHead || 'N/A';
+      $('latest-rolling-brief-date').textContent = latest.latestRollingBriefDate || 'N/A';
+      $('latest-archived-report-date').textContent = latest.latestArchivedReportDate || 'N/A';
+      $('report-library-health').textContent = `${latest.health?.status || 'UNKNOWN'} ${latest.health?.code || ''}`.trim();
       $('network-status-badge').className = badgeClass(networkSummary.status || 'NO_SCAN');
       $('network-status-badge').textContent = networkSummary.status || 'NO_SCAN';
       $('connector-health-summary').textContent = networkSummary.status
@@ -725,7 +797,7 @@
         state.autoRedirected = true;
         $('auto-redirect-note').textContent = 'Gate 已通過，正在進入新 UI。';
         setTimeout(() => {
-          location.assign(withImmersive(`./output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html?from=launcher&ts=${Date.now()}`));
+          location.assign(withImmersive(`./ui/P1008_WARROOM_COMMAND_CENTER_v24.html?from=launcher&ts=${Date.now()}`));
         }, 900);
       }
     }
@@ -819,6 +891,7 @@
     $('run-update').addEventListener('click', () => runJob('/api/p1008/run/update-data'));
     $('run-news').addEventListener('click', () => runJob('/api/p1008/run/news-scan'));
     $('run-report').addEventListener('click', () => runJob('/api/p1008/run/report'));
+    $('run-report').textContent = '評估戰報 Trigger';
     $('run-analysis-candidate').addEventListener('click', () => runJob('/api/p1008/run/analysis-candidate'));
     $('run-report-candidate').addEventListener('click', () => runJob('/api/p1008/run/report-candidate'));
     $('refresh').addEventListener('click', refreshAll);
@@ -832,7 +905,7 @@
   <script>
     (function installDecisionUiPolish() {
       const jobTypeZh = {
-        default: '一鍵更新：資料 + 新聞（不自動產報）',
+        default: '一鍵更新：資料 + 新聞 + rolling brief（不追加研報庫）',
         'update-data': '只更新資料',
         'news-scan': '只掃描新聞',
         report: '產生日報',
@@ -1019,6 +1092,7 @@
           ['owner-publish', '正式發布 CSV'],
         ];
         buttons.forEach(([id, label]) => text(id, label));
+        text('run-report', '評估戰報 Trigger');
       }
       function polishDecisionUi() {
         if (typeof state === 'undefined') return;

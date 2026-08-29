@@ -15,8 +15,7 @@ echo   P1008 TWSE market activity incremental update
 echo ===================================================
 echo [RULE] Bundled Python 3.12 only; no System Python fallback.
 echo [RULE] TWSE TLS verification stays enabled; max three monthly files.
-echo [RULE] Candidate-only: this command never modifies formal CSV or manifest.
-echo [RULE] Formal publish requires a separate Owner-gated owner_publish_csv_v2 action.
+echo [RULE] Formal publish uses owner_publish_csv_v2 atomic append.
 
 if not exist "%PYTHON_EXE%" (
   echo [ERROR] Approved Bundled Python is missing: "%PYTHON_EXE%"

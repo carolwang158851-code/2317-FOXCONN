@@ -103,6 +103,41 @@ class ScriptBuilder:
     def longform(self, report: ReportCandidate) -> str:
         report = self._require_report(report)
         section = {item.section_id: item.body_zh for item in report.sections}
+        if report.event_type == "QUARTERLY_EARNINGS":
+            return f"""# 五分鐘季度研究影片候選稿
+
+## 今日核心問題
+{report.primary_investor_question}
+
+## Executive Summary
+{section['EXECUTIVE_SUMMARY']}
+
+## Q2財務與AI展望
+{section['Q2_FINANCIAL_SUMMARY']}
+
+{section['GROWTH_QUALITY']}
+
+{section['MARGIN_QUALITY']}
+
+{section['AI_SERVER_CLOUD_NETWORKING']}
+
+## 現金流、資本效率與估值
+{section['EARNINGS_TO_CASH_QUALITY']}
+
+{section['CAPITAL_EFFICIENCY']}
+
+{section['VALUATION']}
+
+## 風險與下一個驗證點
+{section['NON_GREEN_DEEP_REVIEW']}
+
+{section['NEXT_VALIDATION_DATE_AND_EVENT']}
+
+推翻條件：{section['INVALIDATION_CONDITIONS']}
+
+## 畫面合規字卡（不口播）
+{section['ACTIONABLE_FALSE_DISCLAIMER']}
+""".replace("\r\n", "\n")
         return f"""# 五分鐘研究影片候選稿
 
 ## 今日核心問題
@@ -143,6 +178,33 @@ class ScriptBuilder:
     def shorts_75s(self, report: ReportCandidate) -> str:
         report = self._require_report(report)
         section = {item.section_id: item.body_zh for item in report.sections}
+        if report.event_type == "QUARTERLY_EARNINGS":
+            quarterly_summary = section["Q2_FINANCIAL_SUMMARY"].replace(
+                "FY2026 Q2", "本季"
+            )
+            return f"""# 75秒 Shorts 候選稿
+
+## 0–5秒
+今天看鴻海二零二六年第二季：獲利成長，但現金轉化仍要驗證。
+
+## 5–15秒
+{quarterly_summary}
+
+## 15–35秒
+毛利率6.12%、營益率3.75%、淨利率2.37%，每股盈餘4.27元；營益率改善，但毛利率仍需觀察。
+
+## 35–50秒
+AI伺服器與雲端網路展望正向，但這是前瞻指引，仍要由第三季實績驗證。
+
+## 50–65秒
+上半年自由現金流為負；目前市場資料截至發布前，不能判讀法說後價格反應。
+
+## 65–75秒
+論點維持。追蹤毛利率、現金流與AI出貨；客戶、匯率、關稅及政策影響待正式揭露。
+
+## 畫面合規字卡（不口播）
+本內容為公開、非個人化研究候選；actionable=false。
+""".replace("\r\n", "\n")
         revenue = self._match(self._REVENUE, section["WHAT_CHANGED"], "monthly revenue")
         fcf = self._match(self._FCF, section["CASH_FLOW_AND_DIVIDEND_SAFETY"], "free cash flow")
         valuation = self._match(self._VALUATION, section["VALUATION_INTERPRETATION"], "valuation")

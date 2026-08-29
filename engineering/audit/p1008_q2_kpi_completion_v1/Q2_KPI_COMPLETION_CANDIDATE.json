@@ -1,0 +1,118 @@
+{
+  "actionable": false,
+  "authorityMutation": false,
+  "companyCode": "2317",
+  "dataGaps": [],
+  "effectiveDate": "2026-08-13",
+  "entity": "Hon Hai Precision Industry Co., Ltd.",
+  "fiscalPeriod": "FY2026 Q2",
+  "formalCsvModified": false,
+  "kpis": {
+    "bvps": {
+      "classification": "OFFICIAL_REPORTED",
+      "derivation": null,
+      "displayLabelZh": "136.02元（官方申報）",
+      "period": "2026Q2",
+      "sourceDate": "2026-08-27",
+      "sourceLocator": "https://openapi.twse.com.tw/v1/opendata/t187ap07_L_ci",
+      "unit": "TWD_PER_SHARE",
+      "value": "136.02"
+    },
+    "roe": {
+      "annualized": false,
+      "classification": "OFFICIAL_REPORTED",
+      "comparablePriorValue": "5.48",
+      "derivation": null,
+      "displayLabelZh": "6.21%（2026上半年官方值，未年化）",
+      "period": "2026H1",
+      "sourceLocator": "https://www.honhai.com/zh-tw/press-center/press-releases/latest-news/2094",
+      "unit": "PERCENT",
+      "value": "6.21"
+    },
+    "roic": {
+      "candidateValue": "12.35",
+      "canonicalValue": "12.35",
+      "classification": "DERIVED_VERIFIED",
+      "denominator": {
+        "cashMillionTwd": "963002.000",
+        "formula": "InterestBearingDebt + ParentEquity - Cash",
+        "interestBearingDebtComponents": {
+          "bankBorrowingsNoncurrentMillionTwd": "6712",
+          "bondsPayableNoncurrentMillionTwd": "294708",
+          "commercialPaperAndAcceptancesMillionTwd": "93459",
+          "currentPortionLongTermLiabilitiesMillionTwd": "64303",
+          "interestBearingDebtMillionTwd": "1304531",
+          "shortTermBorrowingsMillionTwd": "845349"
+        },
+        "interestBearingDebtFormula": "845349 + 93459 + 64303 + 294708 + 6712",
+        "interestBearingDebtMillionTwd": "1304531.000",
+        "interestBearingDebtSourceLocator": "https://mops.twse.com.tw/mops/web/t164sb03?co_id=2317&year=115&season=02",
+        "name": "InvestedCapital",
+        "parentEquityMillionTwd": "1907936.607",
+        "valueMillionTwd": "2249465.607"
+      },
+      "displayLabelZh": "12.35%（推算）",
+      "formula": "NOPAT_Annual / InvestedCapital * 100",
+      "methodologyLocator": "data/2317_master_v9.csv#roicNote",
+      "numerator": {
+        "formula": "94803 * (1 - 26.72%) * 4",
+        "name": "NOPAT_Annual",
+        "valueMillionTwd": "277886.5536"
+      },
+      "period": "2026Q2",
+      "rejectedCandidateHistory": [
+        {
+          "canonical": false,
+          "classification": "REJECTED",
+          "reasonCode": "NET_CASH_DENOMINATOR_SCOPE_MISMATCH",
+          "reasonZh": "16.46%使用Cash減Net Cash反推負債，但兩者現金口徑不同，因此分母不成立。",
+          "value": "16.46"
+        }
+      ],
+      "releaseGate": {
+        "allPassed": true,
+        "gates": {
+          "A": {
+            "labelZh": "有息負債採正式資產負債表直接組成",
+            "reasonZh": "有息負債1,304,531百萬元由五項正式負債欄位直接加總，不使用Cash減Net Cash反推。",
+            "sourceLocator": "https://mops.twse.com.tw/mops/web/t164sb03?co_id=2317&year=115&season=02",
+            "status": "PASS"
+          },
+          "B": {
+            "labelZh": "日期、期間及合併範圍相容",
+            "reasonZh": "現金、淨現金及歸屬母公司權益均為2026-06-30合併口徑。",
+            "sourceLocators": [
+              "https://image.honhai.com/upload/202608/law_talk/Hon_Hai_2Q26_Results_Chinese%28%E6%8A%95%E5%BD%B1%E7%89%88%29_revised%28wp%29_20260818_7900.pdf",
+              "https://openapi.twse.com.tw/v1/opendata/t187ap07_L_ci"
+            ],
+            "status": "PASS"
+          },
+          "C": {
+            "labelZh": "26.72%僅為既有P1008年度稅率方法輸入",
+            "reasonZh": "來源綁定既有master公式與2026Q1反推鏈；不標示為公司Q2有效稅率。",
+            "sourceLocator": "data/2317_master_v9.csv#roicNote",
+            "status": "PASS"
+          },
+          "D": {
+            "labelZh": "既有歷史方法採單季營業利益年化",
+            "reasonZh": "master roicNote固定為OpInc×(1−TaxRate)×4後除以投入資本。",
+            "sourceLocator": "data/2317_master_v9.csv#roicNote",
+            "status": "PASS"
+          }
+        },
+        "trendComparable": false,
+        "trendComparableZh": "Q2已採直接有息負債方法；Q1未獲授權以相同方法重算，因此禁止宣稱Q1至Q2為有效趨勢。"
+      },
+      "sourceLocators": [
+        "https://image.honhai.com/upload/202608/law_talk/Hon_Hai_2Q26_Results_Chinese%28%E6%8A%95%E5%BD%B1%E7%89%88%29_revised%28wp%29_20260818_7900.pdf",
+        "https://openapi.twse.com.tw/v1/opendata/t187ap07_L_ci",
+        "https://mops.twse.com.tw/mops/web/t164sb03?co_id=2317&year=115&season=02"
+      ],
+      "unit": "PERCENT"
+    }
+  },
+  "publicationDate": "2026-08-12",
+  "result": "PASS",
+  "schemaVersion": "1.1",
+  "status": "OWNER_APPROVED_FOR_PROMOTION"
+}

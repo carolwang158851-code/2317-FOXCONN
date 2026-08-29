@@ -536,6 +536,19 @@
 
     <section>
       <h2>16. Phase A 候選資料與 Owner 發布邊界</h2>
+      <div class="note">
+        <strong>TWSE authority incremental sequence:</strong>
+        <code>P1008_1A_UPDATE_DAILY_PRICE.bat</code> →
+        <code>P1008_1B_UPDATE_MARKET_ACTIVITY.bat</code> →
+        <code>p1008_validate_authority_freshness.cmd</code> → other staging/runtime data.
+        Each authority updater may atomically change only its designated CSV plus
+        <code>CSV_AUTHORITY_MANIFEST.json</code>. Any failure blocks all downstream steps.
+      </div>
+      <ul>
+        <li>Daily Price rows require a verified TWSE month receipt, valid Close/PB, and <code>OFFICIAL_TWSE / OK</code> support.</li>
+        <li>Market Activity validates the same date's Daily Price Close against TWSE before formal append.</li>
+        <li>A non-<code>UPDATED</code> result must leave every formal authority file byte-identical.</li>
+      </ul>
       <div class="ok">
         Launcher「一鍵更新資料與資訊」只執行 Daily Price candidate、Market Activity
         candidate、Macro／FX／News candidate、validation 與 readiness；完成後停在
@@ -566,7 +579,7 @@
         return "./launcher.html?stay=1&from=sop_v4";
       }
       if (from === "newui") {
-        return "./output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html?from=sop_v4&ts=" + Date.now();
+        return "./ui/P1008_WARROOM_COMMAND_CENTER_v24.html?from=sop_v4&ts=" + Date.now();
       }
       if (from === "oldui") {
         return "./index_p1008_v7.html?from=sop_v4&ts=" + Date.now();

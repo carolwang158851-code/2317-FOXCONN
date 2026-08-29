@@ -1,5 +1,17 @@
 ﻿# P1008 Launcher 自動化工作流
 
+## G1 戰報觸發與候選產製
+
+一般交易日執行「一鍵更新資料與資訊」時，News／Research 後會以最新、已驗證且
+hash-bound 的研究整合結果評估 G1 Trigger。`NO_MATERIAL_CHANGE` 只更新 Launcher
+狀態，不產生 Analysis、Report，也不追加研究庫。
+
+季報或法說事件只有在正式公司／監管證據或既有 G1 合格交叉驗證成立時，才會成為
+`TRIGGERED_INTERNAL_REPORT`。Owner 此後仍須手動依序啟動 Analysis Candidate 與
+Report Candidate；兩者在伺服器端都會重驗相同 `report_key`、revision、decision 與
+evidence lineage。Trigger 不等於 Publish；對外產製與發布仍須另一個 Owner approval，
+且所有 runtime receipt 維持 `actionable=false`。
+
 ## 入口
 
 決策者入口是根目錄的 `P1008_APP.bat`。它會呼叫 `P1008_2_OPEN_WARROOM.bat`，由 `tools/p1008_open_warroom.py` 啟動或重用本機 App server，預設開啟 `launcher.html`。日常使用會優先重用健康的 Launcher，避免多次雙擊後累積一堆 Python server；若維護者剛更新 server 程式碼，才手動加 `--fresh` 強制開新 session。
@@ -25,13 +37,14 @@ POST /api/p1008/run/default
 固定順序：
 
 1. `preflight`：檢查必要工具、manifest、正式 CSV，建立 hash baseline。
-2. `update-data`：呼叫既有 Daily Price BAT，只產生日價、Macro 與 FX staging candidate／runtime snapshot。
-3. `market-activity`：呼叫 `P1008_1B_UPDATE_MARKET_ACTIVITY.bat`，以 Bundled Python 3.12 產生 TWSE Market Activity candidate、raw receipt 與 Owner review；不發布正式 CSV。
-4. `news-scan`：呼叫 `tools/warroom_news_scanner_v2.py`，只產生新聞／事件 candidate 與逐來源 `networkSummary` / `sourceHealth`。
-5. `validation/readiness`：重新整理 review package 並確認所有正式 CSV 與 manifest hash 未變，停在 Owner review。
+2. `daily-price-authority`：呼叫 `P1008_1A_UPDATE_DAILY_PRICE.bat`，以驗證過的 TWSE month receipt 增量更新 Daily Price 與 manifest；兩檔必須原子更新，否則 rollback 並 fail closed。
+3. `market-activity`：呼叫 `P1008_1B_UPDATE_MARKET_ACTIVITY.bat`，驗證 Daily Price Close 與同一份 TWSE receipt 後，原子 append Market Activity 與 manifest。
+4. `authority-freshness`：檢查 TWSE 最新有效交易日、Daily Price 與 Market Activity 的日期連續性及一致性。
+5. `update-data`：只有前三項全部成功後，才執行其他 Macro／FX staging candidate 與 runtime snapshot 更新。
+6. `news-scan`：只有 authority chain 全部成功後，才產生新聞／事件 candidate 與逐來源 `networkSummary` / `sourceHealth`。
+7. `validation/readiness`：重新整理 review package；只有上述 TWSE authority updater 可變更其限定的正式 CSV 與 manifest，其餘正式 authority 仍受 hash boundary 保護。
 
-一鍵資料流程永遠不 append 正式 CSV，也不自動產生日報。`POST /api/p1008/run/report`
-是分離的手動入口，不屬於 default job。
+任一 Daily Price、Market Activity 或 freshness gate 失敗時，後續資料、新聞與 rolling brief 均不執行。`POST /api/p1008/run/report` 是分離的手動入口，不屬於 default job。
 
 ## Phase B1 手動分析／戰報候選
 
@@ -54,10 +67,7 @@ calls 均為 0，且所有候選 `actionable=false`。
 
 ## Phase A Authority Data Closure
 
-- `warroom_market_activity_updater.py` 永遠是 candidate-only。即使存在新交易日，也只寫入
-  `runtime/market_activity_incremental/<RUN_ID>/`；正式
-  `data/2317_daily_market_activity.csv` 只能由 `owner_publish_csv_v2.py`
-  配合日期範圍專屬 Owner phrase 發布。
+- `warroom_daily_price_updater.py` 與 `warroom_market_activity_updater.py` 是限定範圍的正式 TWSE authority updater：只接受已驗證 receipt，並透過 `owner_publish_csv_v2.py` 原子更新對應 CSV 與 manifest。一般 staging candidate 仍須經 Owner gate。
 - 日價 publisher 在最終寫入前會再次拒絕週六／週日、非
   `OFFICIAL_TWSE_*` 或 `OWNER_APPROVED` 來源、無效／零值 Close、PB 不一致及衝突
   Date。相同 Date 且完整列一致時視為 idempotent，不重複追加。
@@ -66,8 +76,7 @@ calls 均為 0，且所有候選 `actionable=false`。
   atomic replace 與 rollback。本次 Phase A closure 不執行正式移除。
 - `Hon_Hai_Rev_YoY` 的文字值不得當作數字或 0。無可追溯數值來源時，remediation
   candidate 留空並列為資料缺口，等待 Owner gate。
-- Market Activity、Macro 與 Daily Price candidate 建立前後，正式 CSV 與
-  `CSV_AUTHORITY_MANIFEST.json` hash 必須完全不變。
+- 每個 TWSE authority step 只能變更其對應 CSV 與 `CSV_AUTHORITY_MANIFEST.json`；非 `UPDATED` 狀態不得變更任何正式檔。Macro、FX 與 News candidate 建立前後，正式 CSV 與 manifest hash 必須完全不變。
 
 若候選日期是週末或交易所休市日，Launcher / 新 UI 會沿用最近正式交易日的 2317 Close/PB 供畫面連續，並標示 `MARKET_CLOSED_CARRY_FORWARD`。此列不 append 到正式 `2317_daily_price.csv`，正式 publish 只會處理已生成且通過 readiness 的候選 CSV。
 
@@ -119,11 +128,21 @@ Launcher 的 crawler 成功率只計算 `requiresNetwork=true` 的網路來源�
 | `POST /api/p1008/run/default` | 執行完整一鍵資料流程 | 不 publish |
 | `POST /api/p1008/run/update-data` | 只補跑資料更新 | 不 publish |
 | `POST /api/p1008/run/news-scan` | 只補跑新聞掃描 v2，更新 source health | 未核准來源不連網 |
+| `POST /api/p1008/run/official-ir-scan` | 只掃描固定核准的鴻海 IR／MOPS 官方來源並重評 G1 | 不更新 TWSE CSV、不產生 Analysis/Report、不發布 |
 | `POST /api/p1008/run/report` | 只產生日報 | 不改正式 CSV |
 | `POST /api/p1008/run/analysis-candidate` | 手動產生 Phase B1 MONTHLY_REVENUE Analysis 候選 | 不連網、不呼叫模型、runtime-only |
 | `POST /api/p1008/run/report-candidate` | 從已驗證 Analysis 產生 Report 與腳本候選 | 不可繞過 Analysis gate、不發布 |
 | `POST /api/p1008/publish/formal` | Owner 強確認後 append 正式 CSV | 只能呼叫既有 publish gate |
 | `GET /api/p1008/log?jobId=...` | 讀取任務 log | 只讀 |
+
+## Official IR evidence lifecycle
+
+- Normal day: Official IR scan → `NO_CHANGE` → no report.
+- Scheduled earnings date: Event Calendar → `EVENT_SCHEDULE_CONFIRMED` / `WATCH`; schedule alone never proves results and never triggers a report.
+- Results PDF, quarterly report, results-specific official release, or matching 2317 MOPS filing: raw official bytes are receipt/hash-bound, validated by `ResearchContentOrchestrator`, then evaluated by the existing G1 runtime.
+- A later transcript is supplemental evidence for the same fiscal-period report identity; an unchanged deterministic claim does not create a duplicate report or revision.
+- Scan integrity and source coverage are separate: a temporary failure at one official endpoint remains visible as incomplete coverage, while independently receipt/hash-validated evidence from another official source continues into the existing G1 evaluation. Security, schema, receipt, or provenance failures remain fail closed for the affected evidence.
+- Trigger != Analysis; Analysis != Report; Report != Publish. All candidate creation remains an explicit Owner action and publication remains separately gated.
 
 ## 跳轉規則
 

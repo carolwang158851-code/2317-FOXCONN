@@ -74,7 +74,7 @@ body.p1008-focus-mode>div{max-width:none!important;min-height:100vh}
     function sourceHomeHref() {
       const from = sourceParam();
       if (from === "launcher") return "./launcher.html?stay=1&from=report_viewer";
-      if (from === "newui") return "./output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html?from=report_viewer&ts=" + Date.now();
+      if (from === "newui") return "./ui/P1008_WARROOM_COMMAND_CENTER_v24.html?from=report_viewer&ts=" + Date.now();
       if (from === "oldui") return "./index_p1008_v7.html?from=report_viewer&ts=" + Date.now();
       return "./launcher.html?stay=1&from=report_viewer";
     }
@@ -1025,7 +1025,7 @@ body.p1008-focus-mode>div{max-width:none!important;min-height:100vh}
             <div class="text-sm">${escapeHtml(String(e && (e.message||e) || e))}</div>
             <div class="text-xs mt-2 text-slate-300">
               ${fileMode
-                ? "目前是資料夾雙擊 file:// 模式，部分瀏覽器會阻擋 markdown/manifest 讀取。"
+                ? "不支援 file:// 互動模式。"
                 : "請檢查：1) 套件內 reports/ 是否存在 2) 報告檔名是否完全一致 3) 是否用 http/https 開啟"}
             </div>
             <div class="mt-4 flex flex-wrap gap-2">
@@ -1034,13 +1034,21 @@ body.p1008-focus-mode>div{max-width:none!important;min-height:100vh}
               <a class="px-3 py-2 rounded-lg border border-slate-600 bg-slate-900 text-slate-100 font-black" href="${escapeHtml(withSource('./reports/generated/latest_report.html'))}">最新本機戰報 HTML</a>
             </div>
             <div class="text-xs mt-3 text-slate-300">
-              完整互動閱讀建議用 <code>P1008_2_OPEN_WARROOM.bat</code> 開啟本機伺服器後再進入研報庫。
+              請回到套件根目錄，雙擊 <code>P1008_APP.bat</code>，再由 Launcher 進入研報庫。
             </div>
           </div>`;
       }
     }
 
     async function boot(){
+      if (location.protocol === "file:") {
+        contentEl.innerHTML = `<div class="warn">
+          <div class="font-black mb-2">不支援 file:// 互動模式</div>
+          <div class="text-sm">研報閱讀器不會在直接雙擊模式載入 manifest 或報告內容。</div>
+          <div class="text-sm mt-3">請回到套件根目錄，雙擊 <code>P1008_APP.bat</code>，再由 Launcher 進入研報庫。</div>
+        </div>`;
+        return;
+      }
       const params = new URLSearchParams(location.search);
       const id = params.get("id");
       const catalog = await loadReportCatalog();

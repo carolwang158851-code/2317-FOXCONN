@@ -1,0 +1,14 @@
+{
+  "receiptId": "P1008-PHASE-B1-OPS-R2-TRACKED-UI-SOURCE",
+  "scope": "P1008 Phase B1-OPS PR #10 Clean-Clone Bootstrap and Tracked UI Remediation R2",
+  "acceptedBy": "Owner",
+  "authorizationPhrase": "OWNER_APPROVE_P1008_PHASE_B1_OPS_R2_CLEAN_CLONE_BOOTSTRAP_5F744C45",
+  "sourceAbsolutePath": "C:\\Users\\a2231\\OneDrive\\foxconn_dashboard\\foxconn-system\\CODEX_P1008_PACKAGE\\output\\ui-concepts\\P1008_WARROOM_COMMAND_CENTER_v24.html",
+  "sourceSha256": "E6692A9FF8009C819C03D94B9C5CA0EF720983308FEA4B9B9098DAAE7DA877DD",
+  "sourceByteLength": 174565,
+  "trackedDestinationPath": "ui/P1008_WARROOM_COMMAND_CENTER_v24.html",
+  "trackedDestinationSha256": "E6692A9FF8009C819C03D94B9C5CA0EF720983308FEA4B9B9098DAAE7DA877DD",
+  "byteIdentityVerified": true,
+  "normalization": "LF",
+  "actionable": false
+}

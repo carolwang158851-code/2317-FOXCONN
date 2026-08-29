@@ -172,3 +172,31 @@ class RuntimeManager:
             "midr_changed": False,
             "actionable": False,
         }
+
+    def resolve_editorial_client(self, authorization: Mapping[str, Any]) -> object:
+        """Select the existing live client for one explicitly authorized editorial task."""
+        from ..plugin_module.agent_runner import LiveAgentsSdkClient
+        from ..plugin_module.router import PluginRouter
+        from ..reporting.report_contracts import EditorialExecutionAuthorization
+
+        auth = EditorialExecutionAuthorization.model_validate(authorization)
+        if self.config.phase != "PHASE_3B_PLUGIN_SHADOW":
+            raise RuntimeError("Editorial execution requires the explicit governed live runtime")
+        model = self.models.resolve_phase3b(self.config)
+        PluginRouter.route_editorial(
+            task_type=auth.task_id,
+            owner_authorized=auth.owner_authorized,
+            live_enabled=self.config.live_openai,
+            network_enabled=self.config.network_enabled,
+            model_id=model.model_id,
+        )
+        return LiveAgentsSdkClient(
+            config=self.config,
+            model=model,
+            prompt_path=(
+                Path(__file__).resolve().parents[1]
+                / "prompts"
+                / "phase3b_financial_brief.md"
+            ),
+            tool_registry=self.tools,
+        )

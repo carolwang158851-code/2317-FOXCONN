@@ -1,0 +1,14 @@
+collision_id,priority,type,description_zh,locations,status,remediation_zh
+COL-001,P0,STALE_UI_PAYLOAD,新UI曾內嵌2025日期與六IC舊分數,new UI,REMEDIATED,預設改N/A
+COL-002,P0,FALLBACK_SCORE,新UI缺資料時曾以預設分數替代,new UI,REMEDIATED,六個分數停止產生
+COL-003,P0,OVERLAPPING_UI_SCORING,新UI六分數與舊UI五維模型重疊衍生,old/new UI,REMEDIATED,停用新UI獨立數值；舊模型保留
+COL-004,P1,SEMANTIC_COLLISION,現金流IC顯示殖利率相對US10Y而非FCF,new UI,DOCUMENTED,本階段不改卡片
+COL-005,P1,SOURCE_STALE,價格、macro與FX來源較目前日期舊,data,FAIL_CLOSED,保留實際as-of
+COL-006,P1,AUTHORITY_SHADOW,master v10名稱暗示新版但非authority,data,QUARANTINE,拒絕v10
+COL-007,P2,ORPHAN_FILE,點號暫存檔沒有消費端,data,QUARANTINE,不作正式來源
+COL-008,P1,APPROX_FALLBACK,舊UI曾以ROIC_Approx補ROIC_Precise,old UI,REMEDIATED,只接受precise
+COL-009,P1,UNVERIFIED_INPUT,AI 40%為L3且缺分母；Q2 51%是雲端網通,data,REMEDIATED,40退出目前分數輸入
+COL-010,P1,FALLBACK_SCORE,舊五維模型曾在輸入缺失時產生替代分數,old UI,REMEDIATED,缺值即N/A
+COL-011,P1,FREQUENCY_MISMATCH,季度、每日與觀察資料同畫面,consumers,DOCUMENTED,保留各自as-of
+COL-012,P1,AUTHORITY_SCOPE,macro與sidecar屬nonAuthoritative,manifest,DOCUMENTED,不得升格正式KPI
+COL-013,P1,DOWNSTREAM_ROLE,戰報是下游輸出，不是分數來源,report generator,VERIFIED,只讀同一KPI

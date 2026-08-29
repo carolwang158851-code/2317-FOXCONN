@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0.0",
+  "contract_id": "P1008_FORWARD_MODEL_ANALYTICAL_QA_CONTRACT_V1",
+  "valuation_time_basis": {
+    "contract_id": "VALUATION_TIME_BASIS_V1",
+    "contexts": ["PRE_EVENT_PRICE", "POST_EVENT_PRICE", "REPORT_CUTOFF_PRICE"],
+    "required_fields": ["price", "price_date", "event_date", "valuation_context", "source"],
+    "pre_event_reader_label_zh": "財報公布前收盤價",
+    "post_event_unavailable_policy": "EXPLICITLY_UNAVAILABLE_NEVER_FABRICATE"
+  },
+  "report_presentation_precision": {
+    "contract_id": "REPORT_PRESENTATION_PRECISION_V1",
+    "reader_decimals": {
+      "TWD_MILLION": 0,
+      "TWD_BILLION": 1,
+      "EPS": 2,
+      "BVPS": 2,
+      "ROIC_ROE_MARGIN": 2,
+      "PE_PB_PS": 2,
+      "DAYS": 1,
+      "RATIO_PERCENT": 2,
+      "SHARES_MILLION": 3
+    },
+    "raw_machine_precision_preserved": true
+  },
+  "reader_facing": {
+    "status_zh": "審閱版｜尚未正式發布",
+    "forbidden_tokens": ["P1008", "OWNER REVIEW REQUIRED", "STRUCTURAL_RISK_NOT_RULED_OUT", "CORE_HOLDING_THESIS", "ADD_ON_CAPITAL_GATE", "THESIS_DOWNGRADE_GATE"],
+    "internal_tier_codes_allowed": false,
+    "raw_authority_ids_allowed": false,
+    "consignment_term_zh": "Consignment（客供料）"
+  },
+  "valuation": {
+    "q4_2025_basic_eps_twd": "3.23",
+    "q4_source_document_sha256": "91E4994341856DF0E1985DD87704DBE17E1E35CA66FF730CE8CA833CA7766EC0",
+    "ttm_eps_formula": "2025Q3 + 2025Q4 official basic EPS + 2026Q1 + 2026Q2",
+    "pb_denominator_period_required": true,
+    "ps_estimate_allowed_with_governed_price_ttm_revenue_and_compatible_share_basis": true,
+    "historical_percentile_is_policy": false
+  },
+  "chapter_6_transmission_required_fields": [
+    "external_driver",
+    "first_order_financial_effect",
+    "second_order_effect",
+    "fcf_or_roic_transmission",
+    "current_evidence",
+    "unresolved_variable"
+  ],
+  "formal_report_production_allowed": false,
+  "network_requests": 0,
+  "openai_api_calls": 0,
+  "canva_calls": 0,
+  "publication": false,
+  "actionable": false
+}

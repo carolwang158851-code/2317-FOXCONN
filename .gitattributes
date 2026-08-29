@@ -92,9 +92,36 @@ contracts/p1008_research_plugin/acceptance/v1.1/PHASE_ROUTING_ACCEPTANCE_RECORD.
 contracts/p1008_research_plugin/acceptance/v1.1/evidence/PHASE_A_MACRO_ROW_IDENTITY_RECEIPT.json text eol=lf
 contracts/p1008_research_plugin/acceptance/v1.1/evidence/phase_a_twse_202607/2026-07.twse.raw.csv binary
 contracts/p1008_research_plugin/acceptance/v1.1/evidence/phase_a_twse_202607/2026-07.receipt.json text eol=lf
+contracts/p1008_report_governance/v1.0/REPORT_GOVERNANCE_CONTRACT.md text eol=lf
+contracts/p1008_report_governance/v1.0/contract.manifest.json text eol=lf
+contracts/p1008_report_governance/v1.0/EXTERNAL_DISCOVERY_PROVIDER_CONTRACT.md text eol=lf
+contracts/p1008_report_governance/v1.0/authorizations/P1008_ANYSEARCH_DISCOVERY_SCAN_AUTHORIZATION_V1.json text eol=lf
+contracts/p1008_report_governance/v1.0/authorizations/P1008_OFFICIAL_IR_EVIDENCE_INGESTION_AUTHORIZATION_V1.json text eol=lf
+contracts/p1008_report_governance/v1.0/policies/external_discovery_provider_policy.json text eol=lf
+contracts/p1008_report_governance/v1.0/repins/ANYSEARCH_V3_0_1_GOVERNED_REPIN.json text eol=lf
+contracts/p1008_report_governance/v1.0/schemas/event_evidence.schema.json text eol=lf
+contracts/p1008_report_governance/v1.0/schemas/report_trigger_decision.schema.json text eol=lf
+contracts/p1008_report_governance/v1.0/schemas/core_view_change_decision.schema.json text eol=lf
+contracts/p1008_report_governance/v1.0/schemas/publication_decision.schema.json text eol=lf
+contracts/p1008_report_governance/v1.0/schemas/model_provenance.schema.json text eol=lf
+contracts/p1008_report_governance/v1.0/schemas/report_decision_receipt.schema.json text eol=lf
+contracts/p1008_report_governance/v1.0/schemas/materiality_threshold_policy.schema.json text eol=lf
 rules/RULE_STATUS_MANIFEST.json text eol=lf
 tools/p1008_app_server.py text eol=lf
 tools/p1008_build_phaseb1_final_review.py text eol=lf
+contracts/p1008_report_production/acceptance/v1.1/PHASE_B1_OPS_OWNER_AUTHORIZATION_RECORD.json text eol=lf
+contracts/p1008_report_production/acceptance/v1.1/PHASE_B1_OPS_R1_OWNER_AUTHORIZATION_RECORD.json text eol=lf
+contracts/p1008_report_production/acceptance/v1.1/PHASE_B1_OPS_R2_OWNER_AUTHORIZATION_RECORD.json text eol=lf
+contracts/p1008_report_production/acceptance/v1.1/PHASE_B1_OPS_R2_TRACKED_UI_SOURCE_RECEIPT.json text eol=lf
+docs/P1008_PHASE_B1_OPS_LAUNCHER_REPORT_RECOVERY.md text eol=lf
+report_viewer.html text eol=lf
+reports.html text eol=lf
+ui/P1008_WARROOM_COMMAND_CENTER_v24.html text eol=lf
+tests/test_p1008_app_market_activity_pipeline.py text eol=lf
+tests/test_phaseb1_ops_launcher_report_recovery.py text eol=lf
+tools/p1008_open_warroom.py text eol=lf
+tools/warroom_periodic_report_v1.py text eol=lf
+tools/warroom_rolling_brief.py text eol=lf
 contracts/p1008_analysis/v1.0/ANALYSIS_CONTRACT.md text eol=lf
 contracts/p1008_analysis/v1.0/contract.manifest.json text eol=lf
 contracts/p1008_analysis/v1.0/schemas/analysis_gate_result.schema.json text eol=lf
@@ -114,12 +141,16 @@ contracts/p1008_report_production/v1.0/schemas/evidence_reference.schema.json te
 contracts/p1008_report_production/v1.0/schemas/report_candidate.schema.json text eol=lf
 contracts/p1008_report_production/v1.0/schemas/report_gate_result.schema.json text eol=lf
 contracts/p1008_report_production/v1.0/schemas/shorts_duration_validation.schema.json text eol=lf
+contracts/p1008_report_governance/v1.0/schemas/trigger_issuance_receipt.schema.json text eol=lf
+contracts/p1008_report_governance/v1.0/schemas/trigger_issuance_index.schema.json text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/analysis/__init__.py text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/analysis/analysis_builder.py text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/analysis/analysis_contracts.py text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/analysis/analysis_validator.py text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/phaseb1_common.py text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/phaseb1_pipeline.py text eol=lf
+modules/p1008_research_plugin/src/p1008_research_plugin/adapters/research_skill_governance_adapter.py text eol=lf
+modules/p1008_research_plugin/src/p1008_research_plugin/adapters/anysearch_runtime.py text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/reporting/__init__.py text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/reporting/chart_data_builder.py text eol=lf
 modules/p1008_research_plugin/src/p1008_research_plugin/reporting/report_builder.py text eol=lf
@@ -143,3 +174,13 @@ P1008_BUILD_REPORT.bat text eol=lf
 tests/test_phaseb1_launcher.py text eol=lf
 tools/p1008_build_analysis.py text eol=lf
 tools/p1008_build_report.py text eol=lf
+contracts/p1008_report_production/v1.1/ENTERPRISE_VALUE_OWNER_POLICY_CANDIDATE_V1.json text eol=lf
+contracts/p1008_report_production/v1.1/templates/HON_HAI_WAR_REPORT_MOTHER_V1.html text eol=lf
+contracts/p1008_research_plugin/acceptance/v1.1/P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT.json text eol=lf
+contracts/p1008_research_plugin/acceptance/v1.1/P1008_FY2026Q2_ROIC_FINALIZATION_CLOSEOUT.json text eol=lf
+contracts/p1008_research_plugin/acceptance/v1.1/P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT.json text eol=lf
+modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/runtime/research_plugin/latest_content_integration.json binary
+modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/runtime/report_trigger/latest_decision.json binary
+modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/runtime/official_ir_evidence/P1008-OFFICIAL-IR-20260812T161537534050Z/receipts/IR-RECEIPT-6D5D0281AD7B2C179220.json binary
+modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/runtime/official_ir_evidence/P1008-OFFICIAL-IR-20260812T161537534050Z/raw/IR-RECEIPT-6D5D0281AD7B2C179220.bin binary
+modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/source/HON_HAI_FY2026_Q2_ENTERPRISE_VALUE_WAR_REPORT.html binary

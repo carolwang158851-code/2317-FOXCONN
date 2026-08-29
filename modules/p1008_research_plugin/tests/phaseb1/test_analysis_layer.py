@@ -10,9 +10,9 @@ from unittest import mock
 from pydantic import ValidationError
 
 try:
-    from .helpers import PACKAGE_ROOT, authority_sandbox, fixture, scratch, write_fixture
+    from .helpers import PACKAGE_ROOT, authority_sandbox, fixture, fixture_pipeline, scratch, write_fixture
 except ImportError:  # direct discovery with phaseb1 as the start directory
-    from helpers import PACKAGE_ROOT, authority_sandbox, fixture, scratch, write_fixture
+    from helpers import PACKAGE_ROOT, authority_sandbox, fixture, fixture_pipeline, scratch, write_fixture
 
 from p1008_research_plugin.adapters.authority_adapter import AuthorityAdapter, AuthorityAdapterError
 from p1008_research_plugin.analysis.analysis_contracts import AnalysisPacket
@@ -26,9 +26,10 @@ class PhaseB1AnalysisLayerTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         with scratch("analysis-valid-") as output:
-            result = PhaseB1Pipeline(PACKAGE_ROOT).run_all(output_base=output)
+            pipeline = fixture_pipeline(output)
+            result = pipeline.run_all(output_base=output)
             cls.packet = result["analysis"]
-            cls.evidence = PhaseB1Pipeline(PACKAGE_ROOT).load_inputs()[1]
+            cls.evidence = pipeline.load_inputs()[1]
 
     def test_valid_analysis_has_required_vocabulary_and_actionable_false(self) -> None:
         self.assertFalse(self.packet.actionable)
@@ -85,35 +86,35 @@ class PhaseB1AnalysisLayerTests(unittest.TestCase):
             payload = fixture()
             payload["packets"][0]["expires_on"] = "2026-07-26"
             with self.assertRaises(PhaseB1PipelineError):
-                PhaseB1Pipeline(PACKAGE_ROOT, write_fixture(root, payload)).load_inputs()
+                fixture_pipeline(root, write_fixture(root, payload)).load_inputs()
 
     def test_unsupported_source_domain_fails_closed(self) -> None:
         with scratch("bad-domain-") as root:
             payload = fixture()
             payload["packets"][0]["evidence"][0]["source_locators"][0]["locator"] = "https://example.invalid/revenue"
             with self.assertRaises(PhaseB1PipelineError):
-                PhaseB1Pipeline(PACKAGE_ROOT, write_fixture(root, payload)).load_inputs()
+                fixture_pipeline(root, write_fixture(root, payload)).load_inputs()
 
     def test_conflicting_official_evidence_fails_closed(self) -> None:
         with scratch("conflict-") as root:
             payload = fixture()
             payload["packets"][1]["evidence"][0]["field_values"]["revenue"] = "conflicting official value"
             with self.assertRaises(PhaseB1PipelineError):
-                PhaseB1Pipeline(PACKAGE_ROOT, write_fixture(root, payload)).load_inputs()
+                fixture_pipeline(root, write_fixture(root, payload)).load_inputs()
 
     def test_missing_evidence_id_fails_closed(self) -> None:
         with scratch("missing-id-") as root:
             payload = fixture()
             payload["packets"][0]["evidence"][0].pop("evidence_id")
             with self.assertRaises(PhaseB1PipelineError):
-                PhaseB1Pipeline(PACKAGE_ROOT, write_fixture(root, payload)).load_inputs()
+                fixture_pipeline(root, write_fixture(root, payload)).load_inputs()
 
     def test_invalid_source_tier_fails_closed(self) -> None:
         with scratch("bad-tier-") as root:
             payload = fixture()
             payload["packets"][0]["evidence"][0]["source_locators"][0]["source_tier"] = "SOCIAL_MEDIA"
             with self.assertRaises(PhaseB1PipelineError):
-                PhaseB1Pipeline(PACKAGE_ROOT, write_fixture(root, payload)).load_inputs()
+                fixture_pipeline(root, write_fixture(root, payload)).load_inputs()
 
     def test_missing_counterevidence_and_alternative_fail_schema(self) -> None:
         payload = self.packet.model_dump(mode="json", by_alias=True)
@@ -150,7 +151,8 @@ class PhaseB1AnalysisLayerTests(unittest.TestCase):
 
     def test_protected_state_drift_fails_closed(self) -> None:
         with scratch("protected-drift-") as output:
-            baseline = protected_state_hashes(PACKAGE_ROOT)
+            pipeline = fixture_pipeline(output)
+            baseline = protected_state_hashes(pipeline.package_root)
             changed = dict(baseline)
             changed["runtime_sqlite"] = "DRIFT"
             with mock.patch(
@@ -158,7 +160,7 @@ class PhaseB1AnalysisLayerTests(unittest.TestCase):
                 side_effect=[baseline, changed],
             ):
                 with self.assertRaises(PhaseB1PipelineError):
-                    PhaseB1Pipeline(PACKAGE_ROOT).build_analysis(output_base=output)
+                    pipeline.build_analysis(output_base=output)
 
 
 if __name__ == "__main__":

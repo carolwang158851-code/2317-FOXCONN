@@ -49,9 +49,9 @@ FROZEN_MACRO_SHA256 = (
 )
 FROZEN_MACRO_SIZE = 9075
 CURRENT_MACRO_SHA256 = (
-    "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F"
+    "7C3E5F320FBD7F1558CBA670246B5A3062060769A0420A105A4CAF8499DABC63"
 )
-CURRENT_MACRO_SIZE = 9012
+CURRENT_MACRO_SIZE = 9451
 ERRATA_RELATIVE = (
     "contracts/p1008_research_plugin/acceptance/errata/v2.0/"
     "OWNER_ACCEPTANCE_HASH_ERRATA.json"
@@ -156,6 +156,51 @@ RAW_BINARY_EVIDENCE_PATHS = {
         "contracts/p1008_research_plugin/acceptance/v1.1/evidence/"
         "phase_a_twse_202607/2026-07.twse.raw.csv"
     ),
+    (
+        "modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/"
+        "runtime/research_plugin/latest_content_integration.json"
+    ),
+    (
+        "modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/"
+        "runtime/report_trigger/latest_decision.json"
+    ),
+    (
+        "modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/"
+        "runtime/official_ir_evidence/P1008-OFFICIAL-IR-20260812T161537534050Z/"
+        "receipts/IR-RECEIPT-6D5D0281AD7B2C179220.json"
+    ),
+    (
+        "modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/"
+        "runtime/official_ir_evidence/P1008-OFFICIAL-IR-20260812T161537534050Z/"
+        "raw/IR-RECEIPT-6D5D0281AD7B2C179220.bin"
+    ),
+    (
+        "modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/"
+        "source/HON_HAI_FY2026_Q2_ENTERPRISE_VALUE_WAR_REPORT.html"
+    ),
+}
+PHASEB1_REANCHOR_HASH_GOVERNED_PATHS = {
+    (
+        "contracts/p1008_report_production/v1.1/"
+        "ENTERPRISE_VALUE_OWNER_POLICY_CANDIDATE_V1.json"
+    ),
+    (
+        "contracts/p1008_report_production/v1.1/templates/"
+        "HON_HAI_WAR_REPORT_MOTHER_V1.html"
+    ),
+    (
+        "contracts/p1008_research_plugin/acceptance/v1.1/"
+        "P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT.json"
+    ),
+    (
+        "contracts/p1008_research_plugin/acceptance/v1.1/"
+        "P1008_FY2026Q2_ROIC_FINALIZATION_CLOSEOUT.json"
+    ),
+    (
+        "contracts/p1008_research_plugin/acceptance/v1.1/"
+        "P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT.json"
+    ),
+    *RAW_BINARY_EVIDENCE_PATHS,
 }
 PHASEB1_HASH_GOVERNED_PATHS = {
     ".github/workflows/p1008-phaseb1-analysis-report.yml",
@@ -175,6 +220,22 @@ PHASEB1_HASH_GOVERNED_PATHS = {
         "contracts/p1008_report_production/acceptance/v1.0/"
         "PHASE_B1_OWNER_AUTHORIZATION_RECORD.json"
     ),
+    (
+        "contracts/p1008_report_production/acceptance/v1.1/"
+        "PHASE_B1_OPS_OWNER_AUTHORIZATION_RECORD.json"
+    ),
+    (
+        "contracts/p1008_report_production/acceptance/v1.1/"
+        "PHASE_B1_OPS_R1_OWNER_AUTHORIZATION_RECORD.json"
+    ),
+    (
+        "contracts/p1008_report_production/acceptance/v1.1/"
+        "PHASE_B1_OPS_R2_OWNER_AUTHORIZATION_RECORD.json"
+    ),
+    (
+        "contracts/p1008_report_production/acceptance/v1.1/"
+        "PHASE_B1_OPS_R2_TRACKED_UI_SOURCE_RECEIPT.json"
+    ),
     "contracts/p1008_report_production/v1.0/REPORT_PRODUCTION_CONTRACT.md",
     "contracts/p1008_report_production/v1.0/contract.manifest.json",
     "contracts/p1008_report_production/v1.0/schemas/chart_data.schema.json",
@@ -184,6 +245,8 @@ PHASEB1_HASH_GOVERNED_PATHS = {
     "contracts/p1008_report_production/v1.0/schemas/report_gate_result.schema.json",
     "contracts/p1008_report_production/v1.0/schemas/shorts_duration_validation.schema.json",
     "docs/APP_WORKFLOW.md",
+    "docs/P1008_PHASE_B1_OPS_LAUNCHER_REPORT_RECOVERY.md",
+    "ui/P1008_WARROOM_COMMAND_CENTER_v24.html",
     "modules/p1008_research_plugin/docs/phaseb1/PhaseB1_Analysis_Report_MVP.md",
     "modules/p1008_research_plugin/src/p1008_research_plugin/analysis/__init__.py",
     (
@@ -234,10 +297,44 @@ PHASEB1_HASH_GOVERNED_PATHS = {
     "modules/p1008_research_plugin/tests/phaseb1/test_report_production.py",
     "modules/p1008_research_plugin/tests/phaseb1/test_script_candidates.py",
     "tests/test_phaseb1_launcher.py",
+    "report_viewer.html",
+    "reports.html",
+    "tests/test_p1008_app_market_activity_pipeline.py",
+    "tests/test_phaseb1_ops_launcher_report_recovery.py",
     "tools/p1008_build_analysis.py",
     "tools/p1008_build_report.py",
     "tools/p1008_build_phaseb1_final_review.py",
+    "tools/p1008_open_warroom.py",
+    "tools/warroom_periodic_report_v1.py",
+    "tools/warroom_rolling_brief.py",
 }
+G1_REPORT_GOVERNANCE_HASH_GOVERNED_PATHS = {
+    "contracts/p1008_report_governance/v1.0/REPORT_GOVERNANCE_CONTRACT.md",
+    "contracts/p1008_report_governance/v1.0/contract.manifest.json",
+    "contracts/p1008_report_governance/v1.0/EXTERNAL_DISCOVERY_PROVIDER_CONTRACT.md",
+    "contracts/p1008_report_governance/v1.0/authorizations/P1008_ANYSEARCH_DISCOVERY_SCAN_AUTHORIZATION_V1.json",
+    "contracts/p1008_report_governance/v1.0/authorizations/P1008_OFFICIAL_IR_EVIDENCE_INGESTION_AUTHORIZATION_V1.json",
+    "contracts/p1008_report_governance/v1.0/policies/external_discovery_provider_policy.json",
+    "contracts/p1008_report_governance/v1.0/repins/ANYSEARCH_V3_0_1_GOVERNED_REPIN.json",
+    "contracts/p1008_report_governance/v1.0/schemas/event_evidence.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/report_trigger_decision.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/core_view_change_decision.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/publication_decision.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/model_provenance.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/report_decision_receipt.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/materiality_threshold_policy.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/trigger_issuance_receipt.schema.json",
+    "contracts/p1008_report_governance/v1.0/schemas/trigger_issuance_index.schema.json",
+    "modules/p1008_research_plugin/src/p1008_research_plugin/adapters/anysearch_runtime.py",
+    "modules/p1008_research_plugin/src/p1008_research_plugin/adapters/research_skill_governance_adapter.py",
+}
+
+GOVERNED_ANYSEARCH_RUNTIME_PATH = (
+    "src/p1008_research_plugin/adapters/anysearch_runtime.py"
+)
+GOVERNED_OFFICIAL_IR_RUNTIME_PATH = (
+    "src/p1008_research_plugin/adapters/official_ir_evidence_adapter.py"
+)
 
 
 def sha256(path: Path) -> str:
@@ -263,6 +360,8 @@ def expected_hash_governed_paths() -> set[str]:
         set(PHASE3A_R_TARGETFILES)
         | set(TEST_CONSTANT_PATHS)
         | set(PHASEB1_HASH_GOVERNED_PATHS)
+        | set(G1_REPORT_GOVERNANCE_HASH_GOVERNED_PATHS)
+        | set(PHASEB1_REANCHOR_HASH_GOVERNED_PATHS)
     )
     for relative_root in (
         "contracts/p1008_research_plugin/v1.0",
@@ -339,7 +438,7 @@ class Phase2ABoundaryTests(unittest.TestCase):
             entries.append(path)
         self.assertEqual(len(entries), len(set(entries)))
         self.assertEqual(set(entries), expected_hash_governed_paths())
-        self.assertEqual(len(entries), 144)
+        self.assertEqual(len(entries), 185)
 
     def test_crlf_and_mixed_manifest_bytes_are_rejected(self) -> None:
         for rejected in (MANIFEST_CRLF_SHA256, MANIFEST_MIXED_SHA256):
@@ -436,12 +535,63 @@ class Phase2ABoundaryTests(unittest.TestCase):
         secret_reads = []
         for path in SRC_ROOT.rglob("*.py"):
             text = path.read_text(encoding="utf-8")
-            if pattern.search(text):
-                violations.append(path.relative_to(MODULE_ROOT).as_posix())
-            if "OPENAI_API_KEY" in text or "os.environ" in text:
-                secret_reads.append(path.relative_to(MODULE_ROOT).as_posix())
+            relative = path.relative_to(MODULE_ROOT).as_posix()
+            if pattern.search(text) and relative not in {
+                GOVERNED_ANYSEARCH_RUNTIME_PATH,
+                GOVERNED_OFFICIAL_IR_RUNTIME_PATH,
+            }:
+                violations.append(relative)
+            if (
+                ("OPENAI_API_KEY" in text or "os.environ" in text)
+                and relative
+                not in {
+                    GOVERNED_ANYSEARCH_RUNTIME_PATH,
+                    "src/p1008_research_plugin/reporting/owner_communication_renderer.py",
+                }
+            ):
+                secret_reads.append(relative)
         self.assertEqual(violations, [])
         self.assertEqual(secret_reads, [])
+
+    def test_governed_official_ir_network_exception_is_exact(self) -> None:
+        runtime_path = MODULE_ROOT / GOVERNED_OFFICIAL_IR_RUNTIME_PATH
+        text = runtime_path.read_text(encoding="utf-8")
+        network_imports = re.findall(
+            r"^\s*(?:from|import)\s+(?:openai|agents|requests|httpx|socket|urllib\.request|http\.client)\b[^\n]*",
+            text,
+            re.MULTILINE,
+        )
+        self.assertEqual(
+            network_imports,
+            ["import socket", "from urllib.request import Request, build_opener, HTTPRedirectHandler"],
+        )
+        self.assertIn("P1008_OFFICIAL_IR_EVIDENCE_INGESTION_AUTHORIZATION_V1", text)
+        self.assertIn("OFF_DOMAIN_URL_REJECTED", text)
+        self.assertIn("PRIVATE_NETWORK_REJECTED", text)
+        self.assertNotIn("OPENAI_API_KEY", text)
+        self.assertNotIn("os.environ", text)
+
+    def test_governed_anysearch_network_and_secret_exception_is_exact(self) -> None:
+        runtime_path = MODULE_ROOT / GOVERNED_ANYSEARCH_RUNTIME_PATH
+        text = runtime_path.read_text(encoding="utf-8")
+        network_imports = re.findall(
+            r"^\s*(?:from|import)\s+(?:openai|agents|requests|httpx|socket|urllib\.request|http\.client)\b[^\n]*",
+            text,
+            re.MULTILINE,
+        )
+        self.assertEqual(
+            network_imports,
+            ["from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener"],
+        )
+        self.assertIn('_SECRET_NAME = "ANYSEARCH_API_KEY"', text)
+        self.assertEqual(text.count("os.environ.get(_SECRET_NAME)"), 1)
+        self.assertNotIn("OPENAI_API_KEY", text)
+        self.assertIn("build_opener(ProxyHandler({}), _RejectRedirect())", text)
+        self.assertIn("if endpoint != _ALLOWED_ENDPOINT", text)
+        self.assertIn("if response.geturl() != _ALLOWED_ENDPOINT", text)
+        self.assertIn("max_attempts", text)
+        self.assertIn("fallback_enabled", text)
+        self.assertNotIn("owner_authorized_smoke_request", text)
 
     def test_no_runtime_or_governance_store_is_created(self) -> None:
         watched = [

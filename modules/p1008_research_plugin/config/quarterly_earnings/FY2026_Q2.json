@@ -1,0 +1,306 @@
+{
+  "schemaVersion": "1.0",
+  "eventType": "QUARTERLY_EARNINGS",
+  "canonicalEventId": "HON_HAI_FY2026_Q2_EARNINGS",
+  "reportKey": "P1008_FY2026_Q2_EARNINGS",
+  "fiscalPeriod": "FY2026 Q2",
+  "publicationDate": "2026-08-12",
+  "expectedSourceSha256": "F014BE750095543B35ED2D482C0CF7A40B4A448167796F8AC4560AB928E609C5",
+  "expectedDocumentType": "RESULTS_DOCUMENT_CONFIRMED",
+  "sourcePages": {
+    "incomeStatement": "6",
+    "cashFlow": "9",
+    "financialOutlook": "4,12-13",
+    "aiCloudNetworking": "20-22,39"
+  },
+  "financials": {
+    "revenueMillionTwd": "2525894",
+    "revenueQoqPct": "19",
+    "revenueYoyPct": "41",
+    "grossProfitMillionTwd": "154533",
+    "grossMarginPct": "6.12",
+    "grossMarginQoqBps": "-6",
+    "grossMarginYoyBps": "-21",
+    "operatingIncomeMillionTwd": "94803",
+    "nonOperatingIncomeExpenseMillionTwd": "63",
+    "pretaxProfitMillionTwd": "94866",
+    "incomeTaxExpenseMillionTwd": "24810",
+    "operatingMarginPct": "3.75",
+    "operatingMarginQoqBps": "18",
+    "operatingMarginYoyBps": "60",
+    "attributableProfitMillionTwd": "59974",
+    "netMarginPct": "2.37",
+    "netMarginQoqBps": "2",
+    "netMarginYoyBps": "-10",
+    "epsTwd": "4.27",
+    "epsQoqPct": "20",
+    "epsYoyPct": "34"
+  },
+  "priorYearQuarterFinancials": {
+    "period": "FY2025 Q2",
+    "revenueMillionTwd": "1793468",
+    "grossProfitMillionTwd": "113529",
+    "operatingIncomeMillionTwd": "56596",
+    "pretaxProfitMillionTwd": "65149",
+    "incomeTaxExpenseMillionTwd": "15613",
+    "attributableProfitMillionTwd": "44361"
+  },
+  "cashFlow": {
+    "period": "2026H1",
+    "operatingCashFlowMillionTwd": "-69122",
+    "capexMillionTwd": "80886",
+    "freeCashFlowMillionTwd": "-150009",
+    "definition": "Operating cash flow minus capital expenditure",
+    "status": "OFFICIAL_RESULTS_H1_NOT_STANDALONE_Q2"
+  },
+  "balanceSheet": {
+    "periodEnd": "2026-06-30",
+    "cashAndCashEquivalentsMillionTwd": "963002",
+    "accountsReceivableNetMillionTwd": "1385237",
+    "inventoryMillionTwd": "1370073",
+    "accountsPayableMillionTwd": "1527523",
+    "totalAssetsMillionTwd": "5622576",
+    "totalEquityMillionTwd": "2119588",
+    "netCashMillionTwd": "219809",
+    "propertyPlantEquipmentMillionTwd": "576855",
+    "q1": {
+      "accountsReceivableNetMillionTwd": "1166008",
+      "inventoryMillionTwd": "1209878",
+      "accountsPayableMillionTwd": "1322837",
+      "propertyPlantEquipmentMillionTwd": "562220"
+    },
+    "priorYear": {
+      "periodEnd": "2025-06-30",
+      "accountsReceivableNetMillionTwd": "940523",
+      "inventoryMillionTwd": "935827",
+      "accountsPayableMillionTwd": "1003773"
+    }
+  },
+  "historicalEpsCorrections": {
+    "2025Q4": {
+      "basicEpsTwd": "3.23",
+      "sourceId": "HON_HAI_FY2025_Q4_RESULTS_OFFICIAL",
+      "sourceType": "OFFICIAL_COMPANY_RESULTS_PDF",
+      "sourceLocator": "https://image.honhai.com/upload/202603/law_talk/Hon_Hai_4Q25_Results_Chinese_20260316_2632.pdf#page=5",
+      "sourceDocumentSha256": "91E4994341856DF0E1985DD87704DBE17E1E35CA66FF730CE8CA833CA7766EC0",
+      "localReceiptId": "IR-RECEIPT-9C30ABA406FFA1325E24",
+      "authorityMutation": false,
+      "normalizationReason": "正式Q4結果簡報第5頁揭露基本EPS 3.23元；master中的3.25為USER_CURATED_WEB_DATA，不作本分析線的canonical EPS。"
+    }
+  },
+  "workingCapitalDays": {
+    "periods": [
+      "2025Q2",
+      "2026Q1",
+      "2026Q2"
+    ],
+    "accountsReceivableDays": [
+      "51",
+      "51",
+      "46"
+    ],
+    "inventoryDays": [
+      "54",
+      "53",
+      "50"
+    ],
+    "accountsPayableDays": [
+      "57",
+      "60",
+      "54"
+    ],
+    "cashConversionCycleDays": [
+      "48",
+      "44",
+      "42"
+    ]
+  },
+  "productMix": {
+    "period": "FY2026 Q2",
+    "cloudAndNetworkingRevenueSharePct": "51",
+    "aiSpecificRevenueSharePct": null,
+    "aiSpecificShareStatus": "NOT_DISCLOSED"
+  },
+  "strategyFramework": {
+    "officialTerminology": "3+3",
+    "verifiedPillars": [
+      "電動車",
+      "數位健康",
+      "機器人",
+      "人工智慧",
+      "半導體",
+      "新世代通訊技術"
+    ],
+    "thirdThreeStatus": "NOT_VERIFIED_IN_GOVERNED_OFFICIAL_SOURCE",
+    "sourceId": "HON_HAI_OFFICIAL_3_PLUS_3",
+    "sourceLocator": "https://www.honhai.com/zh-tw/press-center/press-releases/latest-news",
+    "sourceClass": "AUTHORITY",
+    "sourceTier": "OFFICIAL"
+  },
+  "businessDisclosures": [
+    "AI infrastructure demand is strong and the company continues expanding global AI capacity.",
+    "The company describes capability from customer development and co-design through scaled manufacturing.",
+    "AI supply-chain integration spans components, liquid cooling, modular data centers and data-center systems."
+  ],
+  "aiCloudNetworking": [
+    "3Q26 AI rack shipments are expected to grow high-double-digits QoQ.",
+    "3Q26 AI server revenue is expected to grow by more than a multiple.",
+    "2026 AI rack shipment market share is expected to increase."
+  ],
+  "officialOutlook": [
+    "3Q26: significant QoQ growth and strong YoY growth.",
+    "FY2026: strong growth outlook.",
+    "Management describes next-year outlook as positive."
+  ],
+  "notDisclosedInResults": [
+    "Apple/iPhone customer-specific exposure",
+    "quantified FX sensitivity",
+    "quantified tariff impact",
+    "policy-risk scenario values"
+  ],
+  "actionable": false,
+  "canonicalPromotion": {
+    "status": "PASS",
+    "ownerApprovalReference": "P1008_FY2026Q2_OWNER_PROMOTION_FINAL_OWNER_APPROVAL_DIRECTIVE",
+    "canonicalQuarter": "2026Q2",
+    "effectiveDate": "2026-08-13",
+    "bvps": {
+      "value": "136.02",
+      "unit": "TWD_PER_SHARE",
+      "period": "2026Q2",
+      "classification": "OFFICIAL_REPORTED",
+      "displayLabelZh": "136.02元（官方申報）",
+      "sourceLocator": "https://openapi.twse.com.tw/v1/opendata/t187ap07_L_ci",
+      "sourceDate": "2026-08-27",
+      "derivation": null
+    },
+    "roe": {
+      "value": "6.21",
+      "unit": "PERCENT",
+      "period": "2026H1",
+      "annualized": false,
+      "classification": "OFFICIAL_REPORTED",
+      "displayLabelZh": "6.21%（2026上半年官方值，未年化）",
+      "comparablePriorValue": "5.48",
+      "sourceLocator": "https://www.honhai.com/zh-tw/press-center/press-releases/latest-news/2094",
+      "derivation": null
+    },
+    "roic": {
+      "candidateValue": "12.35",
+      "canonicalValue": "12.35",
+      "unit": "PERCENT",
+      "period": "2026Q2",
+      "classification": "DERIVED_VERIFIED",
+      "displayLabelZh": "12.35%（推算）",
+      "formula": "NOPAT_Annual / InvestedCapital * 100",
+      "numerator": {
+        "name": "NOPAT_Annual",
+        "valueMillionTwd": "277886.5536",
+        "formula": "94803 * (1 - 26.72%) * 4"
+      },
+      "denominator": {
+        "name": "InvestedCapital",
+        "valueMillionTwd": "2249465.607",
+        "formula": "InterestBearingDebt + ParentEquity - Cash",
+        "interestBearingDebtMillionTwd": "1304531.000",
+        "parentEquityMillionTwd": "1907936.607",
+        "cashMillionTwd": "963002.000",
+        "interestBearingDebtComponents": [
+          {
+            "name": "ShortTermBorrowings",
+            "labelZh": "短期借款",
+            "valueMillionTwd": "845349"
+          },
+          {
+            "name": "CommercialPaperAndAcceptances",
+            "labelZh": "應付商業本票／承兌匯票",
+            "valueMillionTwd": "93459"
+          },
+          {
+            "name": "CurrentPortionLongTermLiabilities",
+            "labelZh": "一年內到期長期負債",
+            "valueMillionTwd": "64303"
+          },
+          {
+            "name": "BondsPayableNoncurrent",
+            "labelZh": "應付公司債－非流動",
+            "valueMillionTwd": "294708"
+          },
+          {
+            "name": "BankBorrowingsNoncurrent",
+            "labelZh": "銀行借款－非流動",
+            "valueMillionTwd": "6712"
+          }
+        ],
+        "interestBearingDebtFormula": "845349 + 93459 + 64303 + 294708 + 6712",
+        "interestBearingDebtSourceLocator": "https://mops.twse.com.tw/mops/web/t164sb03?co_id=2317&year=115&season=02"
+      },
+      "methodologyLocator": "data/2317_master_v9.csv#roicNote",
+      "sourceLocators": [
+        "https://image.honhai.com/upload/202608/law_talk/Hon_Hai_2Q26_Results_Chinese%28%E6%8A%95%E5%BD%B1%E7%89%88%29_revised%28wp%29_20260818_7900.pdf",
+        "https://openapi.twse.com.tw/v1/opendata/t187ap07_L_ci",
+        "https://mops.twse.com.tw/mops/web/t164sb03?co_id=2317&year=115&season=02"
+      ],
+      "releaseGate": {
+        "gates": {
+          "A": {
+            "status": "PASS",
+            "labelZh": "有息負債採正式資產負債表直接組成",
+            "reasonZh": "有息負債1,304,531百萬元由短期借款、商業本票／承兌匯票、一年內到期長期負債、非流動公司債及非流動銀行借款直接加總，不使用Cash減Net Cash反推。",
+            "sourceLocator": "https://mops.twse.com.tw/mops/web/t164sb03?co_id=2317&year=115&season=02"
+          },
+          "B": {
+            "status": "PASS",
+            "labelZh": "日期、期間及合併範圍相容",
+            "reasonZh": "現金、淨現金及歸屬母公司權益均為2026-06-30合併口徑。",
+            "sourceLocators": [
+              "https://image.honhai.com/upload/202608/law_talk/Hon_Hai_2Q26_Results_Chinese%28%E6%8A%95%E5%BD%B1%E7%89%88%29_revised%28wp%29_20260818_7900.pdf",
+              "https://openapi.twse.com.tw/v1/opendata/t187ap07_L_ci"
+            ]
+          },
+          "C": {
+            "status": "PASS",
+            "labelZh": "26.72%僅為既有P1008年度稅率方法輸入",
+            "reasonZh": "來源綁定既有master公式與2026Q1反推鏈；不標示為公司Q2有效稅率。",
+            "sourceLocator": "data/2317_master_v9.csv#roicNote"
+          },
+          "D": {
+            "status": "PASS",
+            "labelZh": "既有歷史方法採單季營業利益年化",
+            "reasonZh": "master roicNote固定為OpInc×(1−TaxRate)×4後除以投入資本。",
+            "sourceLocator": "data/2317_master_v9.csv#roicNote"
+          }
+        },
+        "allPassed": true,
+        "trendComparable": false,
+        "trendComparableZh": "Q2已採直接有息負債方法；Q1未獲授權以相同直接有息負債方法重算，因此禁止宣稱Q1至Q2為有效趨勢。"
+      },
+      "rejectedCandidateHistory": [
+        {
+          "value": "16.46",
+          "classification": "REJECTED",
+          "reasonCode": "NET_CASH_DENOMINATOR_SCOPE_MISMATCH",
+          "reasonZh": "16.46%以現金及約當現金963,002百萬元減淨現金219,809百萬元反推有息負債743,193百萬元；公司淨現金口徑包含現金及定期存款，與現金及約當現金口徑不同，因此分母不成立。",
+          "canonical": false
+        }
+      ]
+    },
+    "currentPb": {
+      "value": "1.853",
+      "unit": "MULTIPLE",
+      "classification": "DERIVED_VERIFIED",
+      "displayLabelZh": "1.853x（推算）",
+      "close": "252.0",
+      "closeDate": "2026-08-27",
+      "bvps": "136.02",
+      "bvpsPeriod": "2026Q2",
+      "formula": "252.0 / 136.02"
+    },
+    "aiIndustryGuard": {
+      "historicalAi40CurrentInput": false,
+      "cloudNetworking51IsAiShare": false,
+      "aiRevenuePct": null
+    },
+    "actionable": false
+  }
+}

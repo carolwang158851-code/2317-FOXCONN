@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1.0",
+  "amendmentId": "P1008-PHASE-A-CLOSURE-RECEIPT-CROSS-PLATFORM-PORTABILITY",
+  "amendmentType": "CROSS_PLATFORM_RECEIPT_PORTABILITY",
+  "defectClassification": "CROSS_PLATFORM_RECEIPT_REPRODUCIBILITY_DEFECT",
+  "remediationMethod": "CANONICAL_GIT_BLOB_VERIFICATION",
+  "historicalReceipt": {
+    "path": "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_AUTHORITY_DATA_CLOSURE_RECEIPT.json",
+    "canonicalGitBlobSha256": "C9291E01C7370FFB1D70FDF7F6363C672E77912BFA74DD6C5862F4146DD52213",
+    "observedWindowsMaterializedSha256": "BDCB02E982FE4FA9742E9CD156EBFF8E36CE3B8F815A10EF41FE43415CF6E398",
+    "historicalReceiptPreserved": true,
+    "semanticEquality": "Parsed JSON semantics are identical after CRLF/LF checkout materialization.",
+    "lineEndingDifference": "CRLF/LF only"
+  },
+  "authorityChanged": false,
+  "productionCodeChanged": false,
+  "reason": "The historical pin names canonical Git blob bytes; a Windows worktree may materialize equivalent text with CRLF. Immutable identity therefore uses HEAD:path raw Git blob bytes without normalization.",
+  "actionable": false
+}

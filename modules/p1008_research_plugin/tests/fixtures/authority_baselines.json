@@ -56,5 +56,19 @@
       "data/macro_event_observations.csv",
       "data/macro_snapshot.csv"
     ]
+  },
+  "phaseB1Frozen": {
+    "version": "P1008_FY2026Q2_FIXTURE_AUTHORITY_20260828",
+    "gitRevision": "4216e2ee6771f3cd7cc45e9321f33037ac591d17",
+    "manifestSha256": "90870F2CBE5F17F0B0BC1033D056542D2F9DDA96F94BCB81E8BF7018817E86F9",
+    "dailyPriceSha256": "4FF01364DF90E1C3CE75174C9714B6E0F817F7972CE2309C8052AE1CCDEC5953",
+    "dailyPriceCutoff": "2026-08-27",
+    "marketActivitySha256": "899B2F8C103C0DC2993757391DF4617014146FEDE89D82D11B52C53208364E83",
+    "marketActivityCutoff": "2026-08-27",
+    "paths": [
+      "data/CSV_AUTHORITY_MANIFEST.json",
+      "data/2317_daily_price.csv",
+      "data/2317_daily_market_activity.csv"
+    ]
   }
 }

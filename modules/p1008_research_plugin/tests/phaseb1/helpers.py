@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import shutil
+import subprocess
 import sys
 from contextlib import contextmanager
 from pathlib import Path
@@ -13,6 +15,21 @@ MODULE_ROOT = Path(__file__).resolve().parents[2]
 PACKAGE_ROOT = MODULE_ROOT.parents[1]
 SRC_ROOT = MODULE_ROOT / "src"
 FIXTURE_PATH = MODULE_ROOT / "tests" / "fixtures" / "phaseb1" / "monthly_revenue_fixture.json"
+AUTHORITY_BASELINES_PATH = MODULE_ROOT / "tests" / "fixtures" / "authority_baselines.json"
+GOVERNED_Q2_FIXTURE_ROOT = MODULE_ROOT / "tests" / "fixtures" / "phaseb1" / "governed_q2"
+GOVERNED_Q2_EVIDENCE_ROOT = GOVERNED_Q2_FIXTURE_ROOT / "runtime"
+GOVERNED_Q2_SOURCE_MOTHER = (
+    GOVERNED_Q2_FIXTURE_ROOT
+    / "source"
+    / "HON_HAI_FY2026_Q2_ENTERPRISE_VALUE_WAR_REPORT.html"
+)
+CURRENT_AUTHORITY_RECEIPT_REL = Path(
+    "contracts/p1008_research_plugin/acceptance/v1.1/"
+    "P1008_FY2026Q2_ROIC_FINALIZATION_CLOSEOUT.json"
+)
+CURRENT_AUTHORITY_RECEIPT_SHA256 = (
+    "B1D431C6380E2914E40203DA6A077B3414029F100FA14FB0108E63F5D4069050"
+)
 sys.path.insert(0, str(SRC_ROOT))
 
 
@@ -30,6 +47,19 @@ def scratch(prefix: str) -> Iterator[Path]:
 
 def fixture() -> dict[str, object]:
     return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+
+
+def current_authority_hashes() -> dict[str, str]:
+    raw = (PACKAGE_ROOT / CURRENT_AUTHORITY_RECEIPT_REL).read_bytes()
+    if hashlib.sha256(raw).hexdigest().upper() != CURRENT_AUTHORITY_RECEIPT_SHA256:
+        raise RuntimeError("Current authority amendment receipt hash mismatch")
+    receipt = json.loads(raw.decode("utf-8-sig"))
+    return {
+        str(receipt["authorityManifest"]["path"]): str(
+            receipt["authorityManifest"]["sha256"]
+        ),
+        **{str(path): str(digest) for path, digest in receipt["authorityFiles"].items()},
+    }
 
 
 def write_fixture(root: Path, payload: dict[str, object]) -> Path:
@@ -51,3 +81,91 @@ def authority_sandbox(root: Path) -> Path:
         package / "rules" / "RULE_STATUS_MANIFEST.json",
     )
     return package
+
+
+def frozen_authority_package(root: Path) -> Path:
+    """Materialize the Phase B1 golden authority, independent of production data."""
+
+    package = root / "frozen-package"
+    shutil.copytree(
+        PACKAGE_ROOT / "contracts" / "p1008_research_plugin" / "v1.0",
+        package / "contracts" / "p1008_research_plugin" / "v1.0",
+    )
+    (package / "rules").mkdir(parents=True)
+    shutil.copy2(
+        PACKAGE_ROOT / "rules" / "RULE_STATUS_MANIFEST.json",
+        package / "rules" / "RULE_STATUS_MANIFEST.json",
+    )
+    baseline = json.loads(AUTHORITY_BASELINES_PATH.read_text(encoding="utf-8"))[
+        "phaseB1Frozen"
+    ]
+    revision = str(baseline["gitRevision"])
+
+    def frozen_blob(relative: str) -> bytes:
+        result = subprocess.run(
+            ["git", "-C", str(PACKAGE_ROOT), "show", f"{revision}:{relative}"],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Frozen Phase B1 authority is unavailable: {revision}:{relative}"
+            )
+        return result.stdout
+
+    manifest_relative = "data/CSV_AUTHORITY_MANIFEST.json"
+    manifest_bytes = frozen_blob(manifest_relative)
+    manifest_digest = hashlib.sha256(manifest_bytes).hexdigest().upper()
+    if manifest_digest != str(baseline["manifestSha256"]).upper():
+        raise RuntimeError("Frozen Phase B1 authority hash mismatch: manifest")
+
+    try:
+        manifest = json.loads(manifest_bytes.decode("utf-8-sig"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Frozen Phase B1 authority manifest is invalid") from exc
+
+    declared_files = [
+        *manifest.get("authoritativeFiles", []),
+        *manifest.get("nonAuthoritativeFiles", []),
+    ]
+    if not declared_files:
+        raise RuntimeError("Frozen Phase B1 authority manifest declares no files")
+
+    expected: dict[str, str] = {}
+    for entry in declared_files:
+        if not isinstance(entry, dict):
+            raise RuntimeError("Frozen Phase B1 authority manifest entry is invalid")
+        relative = entry.get("path")
+        digest = entry.get("sha256")
+        if not isinstance(relative, str) or not relative.startswith("data/"):
+            raise RuntimeError("Frozen Phase B1 authority path is invalid")
+        if relative == manifest_relative or relative in expected:
+            raise RuntimeError(f"Frozen Phase B1 authority path is duplicated: {relative}")
+        if not isinstance(digest, str) or len(digest) != 64:
+            raise RuntimeError(f"Frozen Phase B1 authority digest is invalid: {relative}")
+        expected[relative] = digest.upper()
+
+    manifest_target = package / manifest_relative
+    manifest_target.parent.mkdir(parents=True, exist_ok=False)
+    manifest_target.write_bytes(manifest_bytes)
+
+    for relative, digest in expected.items():
+        content = frozen_blob(relative)
+        actual = hashlib.sha256(content).hexdigest().upper()
+        if actual != digest:
+            raise RuntimeError(f"Frozen Phase B1 authority hash mismatch: {relative}")
+        target = package / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+
+    return package
+
+
+def fixture_pipeline(root: Path, fixture_path: Path | None = None):
+    from p1008_research_plugin.phaseb1_pipeline import PhaseB1Pipeline
+
+    return PhaseB1Pipeline(
+        frozen_authority_package(root),
+        fixture_path or FIXTURE_PATH,
+    )

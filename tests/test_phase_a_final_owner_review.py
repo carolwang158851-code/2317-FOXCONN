@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import shutil
+import subprocess
 import sys
 import unittest
 import uuid
@@ -31,6 +32,7 @@ TWSE_OFFICIAL_URL = (
     "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY"
     "?date=20260701&stockNo=2317&response=csv"
 )
+FROZEN_PHASE_A_REVISION = "ac53c1dd151e2e2645cdd3128a7dd70cfad7c582"
 
 
 def load_module():
@@ -52,6 +54,25 @@ class PhaseAFinalOwnerReviewTests(unittest.TestCase):
             TWSE_RECEIPT_PATH.read_text(encoding="utf-8")
         )
         cls.twse = cls.module.parse_twse_month(cls.raw, "2026-07")
+
+    def frozen_phase_a_root(self) -> Path:
+        fixture = ROOT / "runtime" / "phase_a_test_temp" / uuid.uuid4().hex
+        for relative in (
+            "data/2317_daily_price.csv",
+            "data/2317_daily_market_activity.csv",
+            "data/macro_snapshot.csv",
+            "data/CSV_AUTHORITY_MANIFEST.json",
+        ):
+            result = subprocess.run(
+                ["git", "-C", str(ROOT), "show", f"{FROZEN_PHASE_A_REVISION}:{relative}"],
+                check=True,
+                capture_output=True,
+            )
+            destination = fixture / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(result.stdout)
+        self.addCleanup(lambda: shutil.rmtree(fixture, ignore_errors=True))
+        return fixture
 
     def test_review_uses_preserved_receipt_without_network(self) -> None:
         raw_sha = hashlib.sha256(self.raw).hexdigest().upper()
@@ -85,7 +106,8 @@ class PhaseAFinalOwnerReviewTests(unittest.TestCase):
             )
 
     def test_complete_market_candidate_requires_six_close_matches(self) -> None:
-        _, formal_rows = self.module.read_csv(ROOT / "data/2317_daily_price.csv")
+        fixture = self.frozen_phase_a_root()
+        _, formal_rows = self.module.read_csv(fixture / "data/2317_daily_price.csv")
         price_by_date = {
             row["Date"]: row["Close"]
             for row in formal_rows
@@ -99,7 +121,7 @@ class PhaseAFinalOwnerReviewTests(unittest.TestCase):
         stage1_rows = [
             row
             for row in original_read_formal_activity(
-                ROOT / "data/2317_daily_market_activity.csv"
+                fixture / "data/2317_daily_market_activity.csv"
             )
             if row["date"] not in self.module.FULL_MARKET_DATES
         ]
@@ -109,10 +131,10 @@ class PhaseAFinalOwnerReviewTests(unittest.TestCase):
         self.module.read_formal_activity = lambda _path: stage1_rows
         try:
             result = self.module.build_market_candidate(
-                ROOT,
+                fixture,
                 self.twse,
                 expected_price,
-                ROOT / "runtime" / "test-review",
+                fixture / "runtime" / "test-review",
             )
         finally:
             self.module.atomic_write = original_atomic_write
@@ -132,31 +154,32 @@ class PhaseAFinalOwnerReviewTests(unittest.TestCase):
         )
 
     def test_stage1_market_candidate_uses_formal_price_and_writes_receipt_only(self) -> None:
+        fixture = self.frozen_phase_a_root()
         output_dir = (
-            ROOT
+            fixture
             / "runtime"
             / "phase_a_test_temp"
             / f"stage1-market-{uuid.uuid4().hex}"
         )
         formal_paths = [
-            ROOT / self.module.FORMAL_DAILY,
-            ROOT / self.module.FORMAL_MARKET,
-            ROOT / self.module.FORMAL_MACRO,
-            ROOT / self.module.MANIFEST,
+            fixture / self.module.FORMAL_DAILY,
+            fixture / self.module.FORMAL_MARKET,
+            fixture / self.module.FORMAL_MACRO,
+            fixture / self.module.MANIFEST,
         ]
         before = {path: self.module.sha256_file(path) for path in formal_paths}
         original_read_formal_activity = self.module.read_formal_activity
         stage1_rows = [
             row
             for row in original_read_formal_activity(
-                ROOT / "data/2317_daily_market_activity.csv"
+                fixture / "data/2317_daily_market_activity.csv"
             )
             if row["date"] not in self.module.FULL_MARKET_DATES
         ]
         self.module.read_formal_activity = lambda _path: stage1_rows
         try:
             result = self.module.build_stage1_market_activity_candidate(
-                ROOT, TWSE_EVIDENCE_DIR, output_dir
+                fixture, TWSE_EVIDENCE_DIR, output_dir
             )
             receipt = json.loads(
                 Path(result["receipt_path"]).read_text(encoding="utf-8")
@@ -224,7 +247,7 @@ class PhaseAFinalOwnerReviewTests(unittest.TestCase):
         self.assertEqual(rows, [])
         self.assertEqual(
             self.module.sha256_file(ROOT / "data/macro_snapshot.csv"),
-            "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F",
+            "7C3E5F320FBD7F1558CBA670246B5A3062060769A0420A105A4CAF8499DABC63",
         )
 
 

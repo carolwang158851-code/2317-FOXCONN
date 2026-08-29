@@ -8,7 +8,10 @@ import re
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Iterable, Mapping
+from typing import TYPE_CHECKING, Iterable, Mapping
+
+if TYPE_CHECKING:
+    from ..quarterly_earnings import QuarterlyEarningsPacket
 
 from .analysis_contracts import (
     AnalysisPacket,
@@ -102,7 +105,22 @@ class AnalysisBuilder:
         run_id: str,
         generated_at_utc: datetime,
         validated_evidence: ValidatedEvidence,
+        event_type: str = "MONTHLY_REVENUE",
+        quarterly_packet: "QuarterlyEarningsPacket | None" = None,
     ) -> AnalysisPacket:
+        if event_type == "QUARTERLY_EARNINGS":
+            if quarterly_packet is None:
+                raise ValueError("QUARTERLY_EARNINGS requires a governed Official IR packet")
+            from .quarterly_analysis_builder import QuarterlyAnalysisBuilder
+
+            return QuarterlyAnalysisBuilder(self.package_root, self.authority).build(
+                run_id=run_id,
+                generated_at_utc=generated_at_utc,
+                validated_evidence=validated_evidence,
+                quarterly_packet=quarterly_packet,
+            )
+        if event_type != "MONTHLY_REVENUE":
+            raise ValueError(f"Unsupported Phase B1 event type: {event_type}")
         verified = self.authority.verify_all()
         hashes = {
             item["relative_path"]: item["sha256"] for item in verified["verified"]

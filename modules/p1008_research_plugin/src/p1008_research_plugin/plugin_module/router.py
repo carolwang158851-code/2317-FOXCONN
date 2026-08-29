@@ -83,3 +83,31 @@ class PluginRouter:
             manual_shadow=True,
             actionable=False,
         )
+
+    @staticmethod
+    def route_editorial(
+        *, task_type: str, owner_authorized: bool, live_enabled: bool,
+        network_enabled: bool, model_id: str,
+    ) -> dict[str, object]:
+        """Fail-closed selection of the existing live client for one editorial task."""
+        from ..runtime.runtime_config import PHASE3B_LIVE_MODEL_ID
+
+        if task_type != "WAR_REPORT_EDITORIAL_SYNTHESIS":
+            raise ValueError("Unsupported editorial task type")
+        if not owner_authorized:
+            raise ValueError("Editorial live execution requires Owner authorization")
+        if not live_enabled:
+            raise ValueError("Editorial live execution is disabled")
+        if not network_enabled:
+            raise ValueError("Editorial network execution is disabled")
+        if model_id != PHASE3B_LIVE_MODEL_ID:
+            raise ValueError("Editorial model is not approved")
+        return {
+            "taskType": task_type,
+            "client": "LiveAgentsSdkClient",
+            "model": model_id,
+            "maxCalls": 1,
+            "fallbackAllowed": False,
+            "webSearchAllowed": False,
+            "actionable": False,
+        }

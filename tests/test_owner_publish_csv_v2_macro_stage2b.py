@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -37,11 +38,23 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
 
 
+def controlled_test_temp_root() -> Path:
+    configured = os.environ.get("P1008_TEST_TEMP_ROOT", "").strip()
+    if configured:
+        root = Path(configured)
+    else:
+        local_app_data = os.environ.get("LOCALAPPDATA", "").strip()
+        if not local_app_data:
+            raise RuntimeError("P1008_TEST_TEMP_ROOT_REQUIRED")
+        root = Path(local_app_data) / "P1008" / "pytest-temp"
+    root.mkdir(parents=True, exist_ok=True)
+    return root.resolve()
+
+
 class OwnerPublishCsvV2MacroStage2BTests(unittest.TestCase):
     def setUp(self) -> None:
         self.root = (
-            PACKAGE_ROOT
-            / "runtime"
+            controlled_test_temp_root()
             / "macro_stage2b_owner_gate_tests"
             / uuid.uuid4().hex
         )

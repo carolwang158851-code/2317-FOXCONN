@@ -1,0 +1,4909 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>P1008 Product Warroom PCB v24</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #02070a;
+      --pcb: #061416;
+      --pcb2: #0a1c1f;
+      --panel: rgba(6, 21, 23, .66);
+      --panel-strong: rgba(8, 25, 27, .84);
+      --line: rgba(132, 180, 170, .22);
+      --line-soft: rgba(132, 180, 170, .10);
+      --text: #eef6f2;
+      --muted: #9fb2ac;
+      --dim: #657a74;
+      --green: #62e08d;
+      --mint: #60d9be;
+      --cyan: #61d2ff;
+      --amber: #e3b54f;
+      --red: #e45d62;
+      --orange: #d58b35;
+      --gray: #87928f;
+      --decision: #f0bf4a;
+      --decision-glow: rgba(240, 191, 74, .30);
+      --chip: #111d1e;
+      --chip2: #061012;
+      --font: "Noto Sans TC", "Microsoft JhengHei", "Segoe UI", Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      min-height: 100%;
+      overflow: hidden;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 50% 44%, rgba(74, 213, 170, .16), transparent 26%),
+        radial-gradient(circle at 18% 22%, rgba(94, 197, 255, .08), transparent 23%),
+        linear-gradient(180deg, #071015 0%, #02070a 100%);
+      font-family: var(--font);
+    }
+
+    body.live-layer-mode {
+      display: block;
+      overflow: hidden;
+    }
+
+    body::before,
+    body::after {
+      display: none;
+    }
+
+    .live-background {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 50% 44%, rgba(74, 213, 170, .16), transparent 26%),
+        radial-gradient(circle at 18% 22%, rgba(94, 197, 255, .08), transparent 23%),
+        linear-gradient(180deg, #071015 0%, #02070a 100%);
+    }
+
+    h1, h2, h3, h4, p { margin: 0; }
+
+    .shell {
+      position: relative;
+      left: auto;
+      top: auto;
+      z-index: 1;
+      width: min(1609px, 100vw, calc((100vh - 8px) * 1609 / 977));
+      height: min(977px, calc(100vh - 8px), calc(100vw * 977 / 1609));
+      min-width: 0;
+      min-height: 0;
+      margin: 0 auto;
+      overflow: hidden;
+      padding: 10px 12px 12px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: 56px minmax(0, 1fr) 278px 50px;
+      gap: 7px;
+      background:
+        linear-gradient(180deg, rgba(3, 10, 13, .32), rgba(3, 10, 13, .72)),
+        radial-gradient(circle at 50% 46%, rgba(84, 240, 169, .12), transparent 31%);
+      transform: none;
+      transform-origin: initial;
+    }
+
+    .shell::before {
+      content: "";
+      position: absolute;
+      inset: -80px -110px;
+      z-index: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, rgba(2, 8, 10, .86), rgba(2, 8, 10, .30) 30%, rgba(2, 8, 10, .30) 70%, rgba(2, 8, 10, .86)),
+        linear-gradient(180deg, rgba(2, 8, 10, .74), rgba(2, 8, 10, .16) 20%, rgba(2, 8, 10, .18) 72%, rgba(2, 8, 10, .82));
+      opacity: .50;
+      filter: saturate(1.05) contrast(1.02) blur(.3px);
+      transform: scale(1.24);
+    }
+
+    .shell::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse at 50% 46%, transparent 0 28%, rgba(0,0,0,.14) 48%, rgba(0,0,0,.62) 100%),
+        linear-gradient(180deg, rgba(0,0,0,.16), rgba(0,0,0,.38));
+    }
+
+    .shell > .topbar,
+    .shell > .main,
+    .shell > .bottom,
+    .shell > .footer {
+      position: relative;
+      z-index: 1;
+    }
+
+    .topbar,
+    .panel,
+    .bottom-panel,
+    .footer {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(133, 180, 170, .065);
+      background:
+        linear-gradient(180deg, rgba(5, 18, 20, .55), rgba(3, 10, 12, .48)),
+        linear-gradient(90deg, rgba(92, 224, 183, .020), transparent 55%, rgba(216, 181, 79, .016));
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,.008),
+        inset 0 0 38px rgba(0,0,0,.16),
+        0 0 18px rgba(0, 0, 0, .12);
+      backdrop-filter: none;
+    }
+
+    .topbar::before,
+    .panel::before,
+    .bottom-panel::before,
+    .footer::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: .12;
+      background:
+        linear-gradient(rgba(95, 214, 190, .055) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(95, 214, 190, .045) 1px, transparent 1px);
+      background-size: 44px 44px;
+    }
+
+    .topbar > *,
+    .panel > *,
+    .bottom-panel > *,
+    .footer > * {
+      position: relative;
+      z-index: 2;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1.35fr) minmax(88px, .55fr) minmax(136px, .75fr) minmax(132px, .75fr) minmax(112px, .62fr) minmax(112px, .62fr) minmax(126px, .72fr);
+      align-items: center;
+      min-width: 0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 0 12px;
+      min-width: 0;
+    }
+
+    .brand > div:last-child {
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(95,210,255,.55);
+      background:
+        linear-gradient(135deg, rgba(81, 188, 255, .24), rgba(70, 226, 164, .08)),
+        #06151a;
+      color: #d8fbff;
+      font-size: 22px;
+      font-weight: 950;
+      box-shadow: 0 0 18px rgba(97, 210, 255, .22);
+    }
+
+    .brand h1 {
+      font-size: 18px;
+      line-height: 1.08;
+      font-weight: 950;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      letter-spacing: .01em;
+    }
+
+    .brand p {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 820;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .top-cell {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 0 12px;
+      border-left: 1px solid rgba(132, 180, 170, .22);
+      min-width: 0;
+    }
+
+    .top-cell span {
+      color: var(--dim);
+      font-size: 10px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .top-cell b {
+      margin-top: 6px;
+      color: #f3faf6;
+      font-size: 12px;
+      font-weight: 930;
+      white-space: nowrap;
+    }
+
+    .ok { color: var(--green) !important; }
+    .warn { color: var(--amber) !important; }
+    .red { color: var(--red) !important; }
+    .amber { color: var(--amber) !important; }
+    .green { color: var(--green) !important; }
+    .gray { color: var(--gray) !important; }
+
+    .tools {
+      display: flex;
+      justify-content: flex-end;
+      gap: 11px;
+      padding-right: 12px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .tools a,
+    .tools button {
+      color: var(--muted);
+      text-decoration: none;
+      border: 1px solid rgba(132, 180, 170, .20);
+      border-radius: 6px;
+      padding: 5px 7px;
+      background: rgba(3, 10, 12, .42);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .tools a:hover,
+    .tools button:hover {
+      color: #eef6f2;
+      border-color: rgba(96, 217, 190, .55);
+      background: rgba(96, 217, 190, .10);
+    }
+
+    .tools button:disabled {
+      opacity: .48;
+      cursor: not-allowed;
+    }
+
+    .tools button[aria-pressed="true"] {
+      color: #d7fff1;
+      border-color: rgba(98, 224, 141, .62);
+      background: rgba(6, 78, 59, .26);
+    }
+
+    .main {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(250px, .82fr) minmax(420px, 1.55fr) minmax(300px, .96fr);
+      gap: 7px;
+    }
+
+    .left-stack {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: 245px minmax(0, 1fr);
+      gap: 7px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 20px 10px;
+      border-bottom: 1px solid rgba(132,180,170,.16);
+    }
+
+    .section-title h2,
+    .section-title h3 {
+      color: #d8eee7;
+      font-size: 15px;
+      font-weight: 950;
+      letter-spacing: .02em;
+      text-shadow: 0 0 10px rgba(96,217,190,.16);
+    }
+
+    .section-title span {
+      color: rgba(156, 185, 176, .78);
+      font-size: 10px;
+      font-weight: 860;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .decision-copy {
+      padding: 10px 15px 10px;
+    }
+
+    .decision-copy small {
+      display: block;
+      color: #d8e6df;
+      font-size: 14px;
+      font-weight: 920;
+      margin-bottom: 7px;
+    }
+
+    .hold-word {
+      color: var(--decision);
+      font-size: 50px;
+      line-height: .95;
+      font-weight: 950;
+      letter-spacing: .04em;
+      text-shadow:
+        0 0 18px var(--decision-glow),
+        0 0 38px rgba(240, 191, 74, .14);
+    }
+
+    .decision-copy h4 {
+      margin-top: 9px;
+      font-size: 14px;
+      line-height: 1.32;
+      font-weight: 900;
+    }
+
+    .decision-copy p {
+      margin-top: 9px;
+      color: #b7c8c1;
+      font-size: 11px;
+      line-height: 1.42;
+      font-weight: 780;
+    }
+
+    .decision-foot {
+      margin-top: 8px;
+      padding-top: 7px;
+      border-top: 1px solid rgba(132,180,170,.14);
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .confidence-body {
+      padding: 10px 13px 10px;
+      display: grid;
+      grid-template-rows: minmax(132px, .8fr) auto;
+      gap: 10px;
+      height: calc(100% - 48px);
+    }
+
+    .confidence-top {
+      display: grid;
+      grid-template-columns: 142px minmax(0, 1fr);
+      align-items: center;
+      gap: 9px;
+      min-width: 0;
+    }
+
+    .confidence-ring {
+      position: relative;
+      width: 142px;
+      aspect-ratio: 1;
+      margin: auto;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at center, #061012 0 43%, transparent 44%),
+        conic-gradient(from -92deg,
+          rgba(95, 220, 168, .96) 0deg 116deg,
+          rgba(0,0,0,0) 116deg 126deg,
+          rgba(82, 210, 190, .72) 126deg 213deg,
+          rgba(0,0,0,0) 213deg 224deg,
+          rgba(105, 132, 138, .40) 224deg 298deg,
+          rgba(0,0,0,0) 298deg 360deg);
+      box-shadow:
+        inset 0 0 0 10px rgba(255,255,255,.035),
+        0 0 32px rgba(95,220,168,.18);
+    }
+
+    .confidence-ring::before {
+      content: "";
+      position: absolute;
+      inset: 22px;
+      border-radius: 50%;
+      border: 1px solid rgba(132,180,170,.28);
+      background: rgba(2,8,10,.82);
+    }
+
+    .confidence-ring::after {
+      content: "";
+      position: absolute;
+      inset: 9px;
+      border-radius: 50%;
+      background:
+        conic-gradient(from -92deg,
+          rgba(255,255,255,.22) 0deg 2deg,
+          transparent 2deg 116deg,
+          rgba(255,255,255,.16) 116deg 126deg,
+          transparent 126deg 213deg,
+          rgba(255,255,255,.13) 213deg 224deg,
+          transparent 224deg 298deg,
+          rgba(255,255,255,.10) 298deg 360deg);
+      mask: radial-gradient(circle at center, transparent 0 64%, #000 65% 76%, transparent 77%);
+      pointer-events: none;
+    }
+
+    .confidence-ring strong {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: #e9f5ef;
+      font-size: 35px;
+      font-weight: 950;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .confidence-caption h4 {
+      color: #bfeeda;
+      font-size: 13px;
+      font-weight: 940;
+      line-height: 1.25;
+    }
+
+    .confidence-caption p {
+      margin-top: 6px;
+      color: #b5c8c1;
+      font-size: 9.8px;
+      line-height: 1.38;
+      font-weight: 760;
+    }
+
+    .quality-bars {
+      display: grid;
+      gap: 7px;
+      opacity: .68;
+    }
+
+    .q-row {
+      display: grid;
+      grid-template-columns: 50px 1fr 30px;
+      align-items: center;
+      gap: 8px;
+      color: #cad9d3;
+      font-size: 10px;
+      font-weight: 820;
+    }
+
+    .q-track {
+      height: 3px;
+      background: rgba(255,255,255,.065);
+      overflow: hidden;
+    }
+
+    .q-track i {
+      display: block;
+      height: 100%;
+      width: var(--v);
+      background: linear-gradient(90deg, rgba(98,224,141,.34), rgba(96,217,190,.58));
+      box-shadow: none;
+    }
+
+    .board {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border: 1px solid rgba(132,180,170,.08);
+      background:
+        linear-gradient(180deg, rgba(2, 8, 10, .06), rgba(2, 8, 10, .08)),
+        url("assets/p1008_motherboard_ultrawide_30x9_20260706.png") center center / cover no-repeat,
+        #061315;
+      box-shadow:
+        inset 0 0 54px rgba(0,0,0,.26),
+        inset 0 0 0 1px rgba(255,255,255,.012),
+        0 0 34px rgba(83, 224, 170, .08);
+    }
+
+    .board::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      opacity: .16;
+      background:
+        linear-gradient(90deg, transparent 0 25px, rgba(91,220,190,.06) 26px, transparent 27px 74px),
+        linear-gradient(0deg, transparent 0 31px, rgba(91,220,190,.045) 32px, transparent 33px 82px),
+        radial-gradient(circle, rgba(223,181,83,.26) 1px, transparent 2px);
+      background-size: 74px 74px, 82px 82px, 28px 28px;
+      mask-image: radial-gradient(ellipse at center, #000 0 82%, transparent 100%);
+    }
+
+    .board-title,
+    .signal-legend,
+    .board-svg,
+    .component,
+    .chip,
+    .decision-core,
+    .risk-pressure {
+      display: none;
+    }
+
+    .board-title {
+      display: none !important;
+    }
+
+    .board-title {
+      position: absolute;
+      z-index: 7;
+      left: 24px;
+      right: 24px;
+      top: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      border-bottom: 1px solid rgba(132,180,170,.16);
+      padding-bottom: 10px;
+      pointer-events: none;
+    }
+
+    .board-title h2 {
+      font-size: 18px;
+      font-weight: 950;
+      letter-spacing: .02em;
+    }
+
+    .board-title span {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .signal-legend {
+      position: absolute;
+      z-index: 8;
+      right: 126px;
+      top: 78px;
+      display: flex;
+      gap: 18px;
+      color: #b8cac3;
+      font-size: 12px;
+      font-weight: 830;
+    }
+
+    .dot {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      margin-right: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 12px currentColor;
+    }
+
+    .board-svg {
+      position: absolute;
+      inset: 52px 20px 48px;
+      z-index: 2;
+      width: calc(100% - 40px);
+      height: calc(100% - 100px);
+      opacity: .95;
+    }
+
+    .trace-bg {
+      fill: none;
+      stroke: rgba(96, 210, 190, .16);
+      stroke-width: 1;
+    }
+
+    .trace-green,
+    .trace-amber,
+    .trace-red {
+      fill: none;
+      stroke-width: 4.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      filter: drop-shadow(0 0 7px currentColor);
+    }
+
+    .trace-green { stroke: var(--green); color: var(--green); }
+    .trace-amber { stroke: var(--amber); color: var(--amber); }
+    .trace-red { stroke: var(--red); color: var(--red); }
+
+    .via {
+      fill: currentColor;
+      filter: drop-shadow(0 0 8px currentColor);
+    }
+
+    .component {
+      position: absolute;
+      z-index: 3;
+      border: 1px solid rgba(132,180,170,.18);
+      background: rgba(5,14,16,.64);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.02);
+    }
+
+    .c1 { left: 11%; top: 13%; width: 46px; height: 72px; }
+    .c2 { left: 18%; top: 7%; width: 74px; height: 32px; }
+    .c3 { right: 12%; top: 12%; width: 56px; height: 68px; }
+    .c4 { right: 7%; bottom: 18%; width: 82px; height: 34px; }
+    .c5 { left: 7%; bottom: 18%; width: 82px; height: 34px; }
+    .c6 { left: 50%; bottom: 9%; width: 96px; height: 28px; transform: translateX(-50%); }
+
+    .chip {
+      position: absolute;
+      z-index: 6;
+      width: 136px;
+      min-height: 150px;
+      padding: 18px 14px 16px;
+      text-align: center;
+      border: 1px solid color-mix(in srgb, var(--chip-color, var(--mint)) 34%, rgba(183, 220, 210, .18));
+      color: var(--chip-color, var(--mint));
+      background:
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,.10), transparent 42%),
+        linear-gradient(145deg, rgba(25, 39, 39, .98), rgba(7, 14, 16, .98));
+      box-shadow:
+        0 18px 28px rgba(0,0,0,.42),
+        inset 0 0 0 1px rgba(255,255,255,.035),
+        0 0 18px color-mix(in srgb, var(--chip-color, var(--mint)) 14%, transparent);
+    }
+
+    .chip::before,
+    .chip::after {
+      content: "";
+      position: absolute;
+      left: -10px;
+      right: -10px;
+      height: 8px;
+      background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--chip-color, var(--amber)) 72%, #e6d2a0) 0 4px, transparent 4px 10px);
+      filter: drop-shadow(0 0 4px color-mix(in srgb, var(--chip-color, var(--amber)) 34%, transparent));
+    }
+
+    .chip::before { top: -7px; }
+    .chip::after { bottom: -7px; }
+
+    .pin-left,
+    .pin-right {
+      position: absolute;
+      top: 10px;
+      bottom: 10px;
+      width: 8px;
+      background: repeating-linear-gradient(0deg, color-mix(in srgb, var(--chip-color, var(--amber)) 72%, #e6d2a0) 0 4px, transparent 4px 10px);
+      filter: drop-shadow(0 0 4px color-mix(in srgb, var(--chip-color, var(--amber)) 34%, transparent));
+    }
+
+    .pin-left { left: -8px; }
+    .pin-right { right: -8px; }
+
+    .chip small {
+      display: block;
+      color: #a9bab4;
+      font-size: 14px;
+      font-weight: 880;
+    }
+
+    .chip h3 {
+      margin-top: 10px;
+      color: #eaf3ef;
+      font-size: 16px;
+      line-height: 1.25;
+      font-weight: 940;
+    }
+
+    .chip em {
+      display: block;
+      margin-top: 3px;
+      color: #a9bab4;
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 780;
+    }
+
+    .chip b {
+      display: block;
+      margin-top: 13px;
+      font-size: 32px;
+      line-height: 1;
+      font-weight: 950;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .chip span {
+      display: block;
+      margin-top: 8px;
+      font-size: 13px;
+      font-weight: 930;
+    }
+
+    .chip.fund { left: 25%; top: 11%; }
+    .chip.val { right: 24%; top: 11%; }
+    .chip.quality { left: 15%; top: 41%; }
+    .chip.cash { right: 11%; top: 41%; }
+    .chip.ai { left: 25%; bottom: 11%; }
+    .chip.macro { right: 25%; bottom: 11%; }
+
+    .decision-core {
+      position: absolute;
+      z-index: 8;
+      left: 50%;
+      top: 50%;
+      width: 210px;
+      min-height: 210px;
+      transform: translate(-50%, -50%);
+      padding: 28px 20px 22px;
+      text-align: center;
+      border: 2px solid rgba(132,180,170,.34);
+      background:
+        radial-gradient(circle at 50% 20%, rgba(255,255,255,.10), transparent 35%),
+        linear-gradient(145deg, #1b2829, #071113);
+      box-shadow:
+        0 26px 38px rgba(0,0,0,.55),
+        0 0 42px rgba(96,224,184,.16),
+        inset 0 0 0 1px rgba(255,255,255,.05);
+    }
+
+    .decision-core::before,
+    .decision-core::after {
+      content: "";
+      position: absolute;
+      left: -16px;
+      right: -16px;
+      height: 10px;
+      background: repeating-linear-gradient(90deg, rgba(230,210,160,.82) 0 5px, transparent 5px 11px);
+      filter: drop-shadow(0 0 5px rgba(216,175,85,.30));
+    }
+
+    .decision-core::before { top: -10px; }
+    .decision-core::after { bottom: -10px; }
+
+    .decision-core small {
+      color: var(--muted);
+      font-size: 15px;
+      font-weight: 880;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+
+    .decision-core b {
+      display: block;
+      margin-top: 22px;
+      color: var(--green);
+      font-size: 46px;
+      line-height: .9;
+      font-weight: 950;
+      text-shadow: 0 0 24px rgba(98,224,141,.32);
+    }
+
+    .decision-core span {
+      display: block;
+      margin-top: 12px;
+      color: #dbe8e2;
+      font-size: 15px;
+      font-weight: 880;
+    }
+
+    .decision-core em {
+      display: block;
+      margin-top: 12px;
+      color: var(--muted);
+      font-style: normal;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .decision-core .strength {
+      margin-top: 18px;
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .risk-pressure {
+      position: absolute;
+      z-index: 9;
+      left: 50%;
+      bottom: 28px;
+      width: 470px;
+      transform: translateX(-50%);
+      text-align: center;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 850;
+      text-transform: uppercase;
+    }
+
+    .risk-track {
+      margin-top: 9px;
+      height: 8px;
+      border: 1px solid rgba(132,180,170,.18);
+      background: linear-gradient(90deg, var(--green) 0 38%, var(--amber) 38% 72%, var(--red) 72% 100%);
+      box-shadow: 0 0 18px rgba(216,175,85,.16);
+    }
+
+    .neutral-core-overlay {
+      position: absolute;
+      z-index: 12;
+      left: 50%;
+      top: 50%;
+      width: clamp(148px, 24%, 188px);
+      aspect-ratio: 1.08;
+      transform: translate(-50%, -47%);
+      display: grid;
+      place-items: center;
+      align-content: center;
+      gap: 8px;
+      text-align: center;
+      border: 1px solid rgba(190, 212, 202, .22);
+      background:
+        linear-gradient(180deg, rgba(18, 30, 31, .78), rgba(7, 14, 15, .82)),
+        radial-gradient(circle at center, rgba(238, 246, 242, .10), transparent 64%);
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,.035),
+        inset 0 0 28px rgba(0,0,0,.42),
+        0 0 22px rgba(238,246,242,.08);
+      pointer-events: none;
+    }
+
+    .neutral-core-overlay small {
+      color: rgba(222, 234, 229, .78);
+      font-size: 10px;
+      font-weight: 880;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .neutral-core-overlay strong {
+      color: var(--decision);
+      font-size: clamp(28px, 3.6vw, 42px);
+      line-height: .9;
+      font-weight: 950;
+      letter-spacing: .035em;
+      text-shadow:
+        0 0 16px var(--decision-glow),
+        0 0 30px rgba(240,191,74,.12);
+    }
+
+    .neutral-core-overlay span {
+      color: #d8e4df;
+      font-size: 12px;
+      font-weight: 860;
+    }
+
+    .neutral-core-overlay em {
+      color: var(--muted);
+      font-style: normal;
+      font-size: 10px;
+      font-weight: 760;
+    }
+
+    .right-panel {
+      display: grid;
+      grid-template-rows: 50px repeat(4, minmax(0, 1fr)) 24px;
+      gap: 0;
+      padding: 0 16px 12px;
+      background:
+        linear-gradient(90deg, rgba(2, 10, 13, .14), rgba(5, 19, 22, .18) 24%, rgba(5, 19, 22, .24)),
+        linear-gradient(180deg, rgba(93,210,190,.014), rgba(0,0,0,.025));
+      border-left-color: rgba(132,180,170,.055);
+    }
+
+    .right-panel .section-title {
+      padding-left: 0;
+      padding-right: 0;
+    }
+
+    .monitor {
+      position: relative;
+      display: grid;
+      grid-template-columns: 100px 1fr 48px;
+      gap: 10px;
+      align-items: center;
+      border-bottom: 1px solid rgba(132,180,170,.085);
+      min-height: 0;
+    }
+
+    .monitor::before {
+      content: "";
+      position: absolute;
+      left: -14px;
+      top: 17px;
+      bottom: 18px;
+      width: 1px;
+      background: linear-gradient(var(--green), rgba(98,224,141,.18));
+      box-shadow: 0 0 12px rgba(98,224,141,.34);
+    }
+
+    .monitor::after {
+      content: "";
+      position: absolute;
+      left: -19px;
+      top: 17px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 12px rgba(98,224,141,.55);
+    }
+
+    .monitor.amber::after { background: var(--amber); box-shadow: 0 0 12px rgba(227,181,79,.55); }
+    .monitor.amber::before { background: linear-gradient(var(--amber), rgba(227,181,79,.12)); }
+
+    .monitor h4 {
+      color: #dce9e3;
+      font-size: 13px;
+      font-weight: 920;
+    }
+
+    .monitor strong {
+      display: block;
+      margin-top: 5px;
+      color: #f5fbf8;
+      font-size: 23px;
+      line-height: 1;
+      font-weight: 950;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .spark {
+      width: 100%;
+      height: 82px;
+      overflow: visible;
+      border-left: 1px solid rgba(132,180,170,.12);
+      border-right: 1px solid rgba(132,180,170,.06);
+      background:
+        linear-gradient(180deg, rgba(96,217,190,.035), rgba(0,0,0,0) 62%),
+        linear-gradient(90deg, rgba(96,217,190,.035), transparent 24%, transparent 74%, rgba(96,217,190,.025));
+    }
+
+    .spark-grid {
+      stroke: rgba(132,180,170,.11);
+      stroke-width: 1;
+      stroke-dasharray: 3 6;
+    }
+
+    .spark-threshold {
+      fill: none;
+      stroke: rgba(227,181,79,.34);
+      stroke-width: 1;
+      stroke-dasharray: 6 7;
+      vector-effect: non-scaling-stroke;
+    }
+
+    .spark-event {
+      fill: rgba(96,217,190,.055);
+    }
+
+    .spark-line {
+      fill: none;
+      stroke: var(--mint);
+      stroke-width: 2.1;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+      filter: drop-shadow(0 0 6px rgba(96,217,190,.46));
+    }
+
+    .spark-fill {
+      fill: rgba(96,217,190,.020);
+    }
+
+    .spark-dot {
+      fill: #d8fff3;
+      stroke: var(--mint);
+      stroke-width: 2;
+      filter: drop-shadow(0 0 6px rgba(96,217,190,.62));
+    }
+
+    .spark.amber {
+      background:
+        linear-gradient(180deg, rgba(227,181,79,.045), rgba(0,0,0,0) 62%),
+        linear-gradient(90deg, rgba(227,181,79,.035), transparent 24%, transparent 74%, rgba(227,181,79,.025));
+    }
+
+    .spark.amber .spark-line { stroke: var(--amber); filter: drop-shadow(0 0 6px rgba(227,181,79,.42)); }
+    .spark.amber .spark-fill { fill: rgba(227,181,79,.022); }
+    .spark.amber .spark-dot { stroke: var(--amber); filter: drop-shadow(0 0 6px rgba(227,181,79,.62)); }
+
+    .scale {
+      color: #9eb1aa;
+      font-size: 9.5px;
+      line-height: 1.9;
+      font-weight: 780;
+      text-align: right;
+    }
+
+    .tag {
+      display: inline-block;
+      margin-top: 7px;
+      padding: 3px 7px;
+      border: 1px solid rgba(98,224,141,.34);
+      color: var(--green);
+      background: rgba(98,224,141,.08);
+      font-size: 10px;
+      font-weight: 900;
+    }
+
+    .tag.amber {
+      border-color: rgba(227,181,79,.38);
+      color: var(--amber);
+      background: rgba(227,181,79,.08);
+    }
+
+    .monitor-note {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 780;
+    }
+
+    @keyframes alertPulse {
+      0%, 100% {
+        box-shadow:
+          inset 0 0 0 1px rgba(255,255,255,.010),
+          0 0 0 rgba(227,181,79,0);
+      }
+      50% {
+        box-shadow:
+          inset 0 0 0 1px rgba(255,255,255,.035),
+          0 0 18px rgba(227,181,79,.26);
+      }
+    }
+
+    .pulse-alert {
+      animation: alertPulse 2.8s ease-in-out infinite;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .pulse-alert {
+        animation: none;
+      }
+    }
+
+    .bottom {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1fr 1.36fr 1.05fr 1.34fr;
+      gap: 0;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(132,180,170,.055);
+      background:
+        linear-gradient(180deg, rgba(5, 18, 20, .30), rgba(3, 10, 12, .22)),
+        linear-gradient(90deg, rgba(93,210,190,.032), rgba(216,181,79,.016));
+      box-shadow:
+        inset 0 0 34px rgba(0,0,0,.15),
+        0 0 16px rgba(0,0,0,.12);
+    }
+
+    .bottom-panel {
+      padding: 0 10px 6px;
+      border: 0;
+      border-left: 1px solid rgba(132,180,170,.052);
+      background: transparent;
+      box-shadow: none;
+      backdrop-filter: none;
+    }
+
+    .bottom-panel:first-child {
+      border-left: 0;
+    }
+
+    .bottom-panel::before {
+      opacity: .07;
+    }
+
+    .bottom-panel .section-title {
+      padding-left: 0;
+      padding-right: 0;
+      padding-top: 8px;
+      padding-bottom: 4px;
+    }
+
+    .bottom-panel .section-title h3 {
+      color: #dcebe5;
+      font-size: 13px;
+      letter-spacing: .015em;
+      text-shadow: 0 0 8px rgba(96,217,190,.10);
+    }
+
+    .bottom-panel .section-title span {
+      color: rgba(149, 177, 169, .64);
+      font-size: 9px;
+    }
+
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      color: #c8d8d2;
+      font-size: 10px;
+      font-weight: 780;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .table th {
+      color: #788d86;
+      font-size: 9px;
+      font-weight: 880;
+      text-align: left;
+      padding: 4px 2px;
+      line-height: 1.1;
+      border-bottom: 1px solid rgba(132,180,170,.11);
+    }
+
+    .table td {
+      padding: 4px 2px;
+      line-height: 1.12;
+      border-bottom: 1px solid rgba(132,180,170,.07);
+      white-space: nowrap;
+    }
+
+    .mini-bar {
+      display: inline-block;
+      width: 46px;
+      height: 5px;
+      background: rgba(255,255,255,.08);
+      vertical-align: middle;
+    }
+
+    .mini-bar i {
+      display: block;
+      width: var(--v);
+      height: 100%;
+      background: currentColor;
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    .review-grid {
+      display: grid;
+      grid-template-columns: 30px minmax(96px, 1fr) 54px 48px 38px;
+      gap: 0;
+      color: #c9d8d2;
+      font-size: 9.5px;
+      font-weight: 780;
+    }
+
+    .review-grid div {
+      padding: 4px 3px;
+      border-bottom: 1px solid rgba(132,180,170,.07);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .review-grid .head {
+      color: #788d86;
+      font-size: 9px;
+      font-weight: 900;
+    }
+
+    .pill {
+      display: inline-grid;
+      place-items: center;
+      min-width: 23px;
+      height: 17px;
+      border: 1px solid currentColor;
+      background: color-mix(in srgb, currentColor 14%, transparent);
+      font-size: 9.5px;
+      font-weight: 940;
+    }
+
+    .state-list {
+      display: grid;
+      gap: 3px;
+      padding-top: 2px;
+      color: #c7d7d1;
+      font-size: 10px;
+      font-weight: 790;
+    }
+
+    .state-row {
+      display: grid;
+      grid-template-columns: 70px 1fr 10px;
+      gap: 7px;
+      align-items: center;
+      border-bottom: 1px solid rgba(132,180,170,.07);
+      padding: 3px 0;
+    }
+
+    .state-row b {
+      color: #dce9e3;
+      font-weight: 850;
+    }
+
+    .state-light {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 10px rgba(98,224,141,.58);
+    }
+
+    .summary-list {
+      margin: 0;
+      padding: 4px 0 0;
+      list-style: none;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 5px;
+      color: #c8d8d2;
+      font-size: 11.5px;
+      line-height: 1.32;
+      font-weight: 780;
+    }
+
+    .summary-list li {
+      padding: 4px 7px;
+      border-left: 2px solid rgba(96,217,190,.38);
+      background: rgba(5,18,20,.22);
+      color: #d4e4de;
+      white-space: normal;
+    }
+
+    .summary-list li:nth-child(2) {
+      border-left-color: var(--decision);
+      color: #f1d58c;
+    }
+
+    .summary-list li:nth-child(4) {
+      border-left-color: var(--amber);
+    }
+
+    .footer {
+      display: grid;
+      grid-template-columns: minmax(150px, 1fr) minmax(88px, .55fr) minmax(230px, 1.7fr) minmax(116px, .72fr) minmax(126px, .78fr) minmax(100px, .62fr);
+      align-items: center;
+      gap: 0;
+      padding: 0 18px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 780;
+    }
+
+    .footer span {
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      border-right: 1px solid rgba(132,180,170,.18);
+      padding-right: 18px;
+    }
+
+    .design-reference {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      width: 100vw;
+      height: 100vh;
+      object-fit: contain;
+      background: #010507;
+      pointer-events: none;
+    }
+
+    body.exact-reference-mode::before,
+    body.exact-reference-mode::after {
+      display: none;
+    }
+
+    body.exact-reference-mode .shell {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    body.live-layer-mode .design-reference {
+      display: none;
+    }
+
+    .right-panel.v18-gauge-panel {
+      grid-template-rows: 50px repeat(4, minmax(0, 1fr)) 26px;
+      padding: 0 16px 12px;
+    }
+
+    .gauge-monitor {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(92px, .68fr) 132px;
+      align-items: center;
+      gap: 12px;
+      min-height: 0;
+      border-bottom: 1px solid rgba(132,180,170,.08);
+    }
+
+    .gauge-monitor::before {
+      content: "";
+      position: absolute;
+      left: -14px;
+      top: 18px;
+      bottom: 18px;
+      width: 1px;
+      background: linear-gradient(var(--gauge-color, var(--green)), rgba(98,224,141,.14));
+      box-shadow: 0 0 10px color-mix(in srgb, var(--gauge-color, var(--green)) 42%, transparent);
+    }
+
+    .gauge-monitor::after {
+      content: "";
+      position: absolute;
+      left: -19px;
+      top: 18px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--gauge-color, var(--green));
+      box-shadow: 0 0 12px color-mix(in srgb, var(--gauge-color, var(--green)) 58%, transparent);
+    }
+
+    .gauge-meta h4 {
+      color: #dce9e3;
+      font-size: 13px;
+      font-weight: 920;
+    }
+
+    .gauge-meta strong {
+      display: block;
+      margin-top: 5px;
+      color: #f6fbf8;
+      font-size: 25px;
+      line-height: 1;
+      font-weight: 950;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .gauge-status {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 3px 8px;
+      border: 1px solid color-mix(in srgb, var(--gauge-color, var(--green)) 46%, transparent);
+      color: var(--gauge-color, var(--green));
+      background: color-mix(in srgb, var(--gauge-color, var(--green)) 10%, transparent);
+      font-size: 10px;
+      font-weight: 900;
+    }
+
+    .gauge-face {
+      width: 132px;
+      height: 86px;
+      overflow: visible;
+    }
+
+    .gauge-base {
+      fill: none;
+      stroke: rgba(132,180,170,.16);
+      stroke-width: 12;
+      stroke-linecap: round;
+    }
+
+    .gauge-good,
+    .gauge-watch,
+    .gauge-risk {
+      fill: none;
+      stroke-width: 12;
+      stroke-linecap: round;
+      opacity: .82;
+    }
+
+    .gauge-good { stroke: rgba(98,224,141,.86); }
+    .gauge-watch { stroke: rgba(227,181,79,.86); }
+    .gauge-risk { stroke: rgba(228,93,98,.82); }
+
+    .gauge-tick {
+      stroke: rgba(210,232,224,.22);
+      stroke-width: 1;
+    }
+
+    .gauge-needle {
+      stroke: #edf9f3;
+      stroke-width: 2.4;
+      stroke-linecap: round;
+      transform-origin: 66px 68px;
+      transform: rotate(var(--needle, 0deg));
+      filter: drop-shadow(0 0 6px color-mix(in srgb, var(--gauge-color, var(--green)) 62%, transparent));
+    }
+
+    .gauge-hub {
+      fill: #061112;
+      stroke: #dcece5;
+      stroke-width: 1.5;
+    }
+
+    .gauge-caption {
+      fill: #98aaa3;
+      font-size: 8px;
+      font-weight: 800;
+    }
+
+    .gauge-note {
+      color: #8fa69e;
+      font-size: 10px;
+      line-height: 1.35;
+      font-weight: 760;
+      margin-top: 7px;
+    }
+
+    .bottom.v18-bottom {
+      grid-template-columns: 1.05fr 1.38fr 1.7fr;
+      min-height: 0;
+    }
+
+    .bottom.v18-bottom .bottom-panel {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .audit-stack {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      min-height: 0;
+      padding-top: 4px;
+    }
+
+    .decision-audit {
+      display: grid;
+      gap: 6px;
+      align-content: start;
+      min-height: 0;
+    }
+
+    .audit-row {
+      display: grid;
+      grid-template-columns: 86px 1fr;
+      gap: 8px;
+      align-items: start;
+      padding: 6px 8px;
+      border-left: 2px solid var(--accent, rgba(96,217,190,.42));
+      background: rgba(5,18,20,.28);
+      color: #d8e7e1;
+      font-size: 12px;
+      line-height: 1.35;
+      font-weight: 780;
+    }
+
+    .audit-row b {
+      color: var(--accent, #60d9be);
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .audit-note {
+      padding: 8px 9px;
+      border: 1px solid rgba(227,181,79,.20);
+      background: rgba(227,181,79,.055);
+      color: #d8c991;
+      font-size: 11px;
+      line-height: 1.45;
+      font-weight: 780;
+    }
+
+    .v18-bottom .table td,
+    .v18-bottom .table th {
+      padding-top: 5px;
+      padding-bottom: 5px;
+    }
+
+    .v18-bottom .review-grid {
+      font-size: 10px;
+    }
+
+    .shell.v19-layout {
+      grid-template-rows: 56px minmax(0, 1fr) 286px 42px;
+      padding-bottom: 10px;
+    }
+
+    .shell.v19-layout .main {
+      grid-template-columns: minmax(284px, .92fr) minmax(560px, 1.58fr) minmax(320px, .98fr);
+      gap: 8px;
+    }
+
+    .shell.v19-layout .left-stack {
+      grid-template-rows: 222px minmax(0, 1fr);
+    }
+
+    .shell.v19-layout .decision-copy {
+      padding-top: 6px;
+    }
+
+    .shell.v19-layout .hold-word {
+      font-size: clamp(54px, 4.7vw, 76px);
+      line-height: .92;
+      color: var(--decision);
+      text-shadow: 0 0 16px rgba(227,181,79,.22);
+    }
+
+    .shell.v19-layout .confidence-body {
+      height: calc(100% - 44px);
+      padding: 6px 14px 9px;
+      grid-template-rows: 108px minmax(0, 1fr);
+      gap: 5px;
+    }
+
+    .shell.v19-layout .confidence-top {
+      grid-template-columns: 112px minmax(0, 1fr);
+      align-items: center;
+      gap: 12px;
+      min-height: 0;
+    }
+
+    .shell.v19-layout .confidence-ring {
+      width: 112px;
+    }
+
+    .shell.v19-layout .confidence-ring strong {
+      font-size: 30px;
+    }
+
+    .shell.v19-layout .confidence-caption h4 {
+      font-size: 14px;
+      color: #d9f6e8;
+    }
+
+    .shell.v19-layout .confidence-caption p {
+      font-size: 10.5px;
+      line-height: 1.45;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .shell.v19-layout .quality-bars {
+      gap: 4px;
+      opacity: .78;
+    }
+
+    .shell.v19-layout .quality-row {
+      grid-template-columns: 52px minmax(0, 1fr) 34px;
+      font-size: 10px;
+    }
+
+    .right-panel.v19-gauge-panel {
+      grid-template-rows: 42px repeat(4, minmax(0, 1fr)) 22px;
+      padding: 0 16px 10px;
+      gap: 0;
+    }
+
+    .right-panel.v19-gauge-panel .section-title {
+      padding-top: 12px;
+      padding-bottom: 4px;
+    }
+
+    .v19-gauge-row {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(112px, 1fr) 104px;
+      align-items: center;
+      gap: 12px;
+      min-height: 0;
+      padding: 5px 0 5px 11px;
+      border-bottom: 1px solid rgba(132,180,170,.085);
+    }
+
+    .v19-gauge-row::before {
+      content: "";
+      position: absolute;
+      left: -15px;
+      top: 13px;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--gauge-color, var(--green));
+      box-shadow: 0 0 12px color-mix(in srgb, var(--gauge-color, var(--green)) 58%, transparent);
+    }
+
+    .v19-gauge-meta {
+      min-width: 0;
+    }
+
+    .v19-gauge-meta h4 {
+      color: #dce9e3;
+      font-size: 12px;
+      line-height: 1.1;
+      font-weight: 930;
+      white-space: nowrap;
+    }
+
+    .v19-gauge-meta strong {
+      display: block;
+      margin-top: 4px;
+      color: #f7fbf7;
+      font-size: 27px;
+      line-height: .95;
+      font-weight: 960;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .v19-gauge-status {
+      display: inline-block;
+      margin-top: 5px;
+      padding: 2px 7px;
+      border: 1px solid color-mix(in srgb, var(--gauge-color, var(--green)) 46%, transparent);
+      background: color-mix(in srgb, var(--gauge-color, var(--green)) 10%, transparent);
+      color: var(--gauge-color, var(--green));
+      font-size: 10px;
+      line-height: 1.2;
+      font-weight: 900;
+    }
+
+    .v19-gauge-note {
+      margin-top: 5px;
+      color: #a8bbb4;
+      font-size: 10px;
+      line-height: 1.32;
+      font-weight: 760;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .v19-gauge-face {
+      width: 104px;
+      height: 66px;
+      overflow: visible;
+    }
+
+    .v19-gauge-face .base {
+      fill: none;
+      stroke: rgba(132,180,170,.16);
+      stroke-width: 8;
+      stroke-linecap: round;
+    }
+
+    .v19-gauge-face .good,
+    .v19-gauge-face .watch,
+    .v19-gauge-face .risk {
+      fill: none;
+      stroke-width: 8;
+      stroke-linecap: round;
+      opacity: .82;
+    }
+
+    .v19-gauge-face .good { stroke: rgba(98,224,141,.86); }
+    .v19-gauge-face .watch { stroke: rgba(227,181,79,.86); }
+    .v19-gauge-face .risk { stroke: rgba(228,93,98,.82); }
+
+    .v19-gauge-face .needle {
+      stroke: #edf9f3;
+      stroke-width: 2;
+      stroke-linecap: round;
+      transform-origin: 52px 52px;
+      transform: rotate(var(--needle, 0deg));
+      filter: drop-shadow(0 0 5px color-mix(in srgb, var(--gauge-color, var(--green)) 62%, transparent));
+    }
+
+    .v19-gauge-face .hub {
+      fill: #061112;
+      stroke: #dcece5;
+      stroke-width: 1.3;
+    }
+
+    .v19-gauge-face text {
+      fill: #a9bbb4;
+      font-size: 7px;
+      font-weight: 800;
+    }
+
+    .v19-bottom {
+      grid-template-columns: .92fr 1.28fr 1.95fr;
+    }
+
+    .bottom.v19-bottom .bottom-panel {
+      padding: 0 14px 10px;
+      min-width: 0;
+    }
+
+    .bottom.v19-bottom .section-title h3 {
+      font-size: 14px;
+      color: #edf6f1;
+      text-shadow: 0 0 10px rgba(96,217,190,.14);
+    }
+
+    .bottom.v19-bottom .table {
+      font-size: 11px;
+    }
+
+    .bottom.v19-bottom .review-grid {
+      grid-template-columns: 40px minmax(160px, 1fr) 74px 52px 52px;
+      font-size: 11px;
+      gap: 0;
+    }
+
+    .v19-summary-stack {
+      display: grid;
+      grid-template-columns: 1.05fr 1fr;
+      gap: 10px;
+      min-height: 0;
+      align-content: start;
+    }
+
+    .v19-summary-card {
+      display: grid;
+      gap: 7px;
+      align-content: start;
+      min-width: 0;
+    }
+
+    .v19-summary-line {
+      display: grid;
+      grid-template-columns: 76px minmax(0, 1fr);
+      gap: 10px;
+      padding: 8px 10px;
+      border-left: 2px solid var(--accent, var(--green));
+      background: rgba(2,12,14,.36);
+      color: #e6f1ec;
+      font-size: 13px;
+      line-height: 1.38;
+      font-weight: 820;
+    }
+
+    .v19-summary-line b {
+      color: var(--accent, var(--green));
+      white-space: nowrap;
+      font-weight: 950;
+    }
+
+    .v19-action-note {
+      padding: 10px 12px;
+      border: 1px solid rgba(227,181,79,.24);
+      background: rgba(227,181,79,.06);
+      color: #eadca8;
+      font-size: 12.5px;
+      line-height: 1.45;
+      font-weight: 820;
+    }
+
+    .footer.v19-footer {
+      height: 42px;
+      font-size: 10px;
+      opacity: .78;
+    }
+
+    .v19-gauge-row {
+      grid-template-columns: minmax(108px, 1fr) 94px;
+      gap: 7px;
+      padding-left: 9px;
+      padding-right: 2px;
+    }
+
+    .v19-gauge-face {
+      width: 94px;
+      height: 60px;
+      justify-self: end;
+    }
+
+    .v19-gauge-meta strong {
+      font-size: 25px;
+    }
+
+    .v19-gauge-note {
+      font-size: 9.5px;
+    }
+
+    .shell.v20-layout {
+      grid-template-rows: 56px minmax(0, 1fr) 228px 32px;
+      gap: 8px;
+      padding-bottom: 8px;
+    }
+
+    .shell.v20-layout .main {
+      grid-template-columns: minmax(292px, .92fr) minmax(590px, 1.62fr) minmax(324px, .98fr);
+      gap: 8px;
+    }
+
+    .shell.v20-layout .left-stack {
+      grid-template-rows: 218px minmax(0, 1fr);
+    }
+
+    .shell.v20-layout .decision-copy {
+      padding-top: 4px;
+    }
+
+    .shell.v20-layout .confidence-body {
+      height: calc(100% - 44px);
+      grid-template-rows: 112px minmax(0, 1fr);
+      align-content: center;
+      padding-top: 8px;
+      padding-bottom: 8px;
+    }
+
+    .shell.v20-layout .confidence-top {
+      align-self: center;
+    }
+
+    .shell.v20-layout .confidence-ring {
+      width: 112px;
+      align-self: center;
+    }
+
+    .shell.v20-layout .quality-bars {
+      align-self: center;
+      gap: 5px;
+    }
+
+    .shell.v20-layout .board {
+      background-position: center center;
+      background-size: contain;
+      background-repeat: no-repeat;
+    }
+
+    .shell.v20-layout .right-panel.v20-gauge-panel {
+      grid-template-rows: 40px repeat(4, minmax(0, 1fr)) 20px;
+      padding-bottom: 8px;
+    }
+
+    .shell.v20-layout .v19-gauge-row {
+      align-content: center;
+      padding-top: 3px;
+      padding-bottom: 3px;
+    }
+
+    .shell.v20-layout .v19-gauge-meta strong {
+      font-size: 24px;
+    }
+
+    .shell.v20-layout .v19-gauge-note {
+      -webkit-line-clamp: 1;
+      margin-top: 4px;
+    }
+
+    .bottom.v20-bottom {
+      grid-template-columns: .9fr 1.22fr 1.98fr;
+      align-items: stretch;
+    }
+
+    .bottom.v20-bottom .bottom-panel {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      padding: 0 14px 8px;
+      min-height: 0;
+    }
+
+    .bottom.v20-bottom .bottom-panel .section-title {
+      padding-top: 9px;
+      padding-bottom: 3px;
+    }
+
+    .bottom.v20-bottom .table,
+    .bottom.v20-bottom .review-grid,
+    .bottom.v20-bottom .v19-summary-stack {
+      align-self: center;
+    }
+
+    .bottom.v20-bottom .table {
+      font-size: 10.5px;
+    }
+
+    .bottom.v20-bottom .review-grid {
+      font-size: 10.5px;
+    }
+
+    .bottom.v20-bottom .v19-summary-line {
+      padding: 7px 10px;
+      font-size: 12px;
+      line-height: 1.34;
+    }
+
+    .bottom.v20-bottom .v19-action-note {
+      padding: 8px 10px;
+      font-size: 11.5px;
+      line-height: 1.38;
+    }
+
+    .footer.v20-footer {
+      height: 32px;
+      padding-top: 0;
+      padding-bottom: 0;
+      opacity: .7;
+    }
+
+    .shell.v21-layout .main {
+      grid-template-columns: minmax(292px, .9fr) minmax(610px, 1.68fr) minmax(314px, .92fr);
+      gap: 7px;
+    }
+
+    .shell.v21-layout .left-stack {
+      grid-template-rows: 158px minmax(0, 1fr);
+      gap: 7px;
+    }
+
+    .shell.v21-layout .decision-copy {
+      padding: 8px 15px 10px;
+    }
+
+    .v21-decision-brief {
+      display: grid;
+      gap: 7px;
+      align-content: center;
+      min-height: 0;
+    }
+
+    .v21-decision-brief .status-line {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #f0d26a;
+      font-size: 20px;
+      line-height: 1.1;
+      font-weight: 950;
+      letter-spacing: .01em;
+    }
+
+    .v21-decision-brief .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--decision);
+      box-shadow: 0 0 13px rgba(227,181,79,.55);
+      flex: 0 0 auto;
+    }
+
+    .v21-decision-brief h4 {
+      color: #f0f6f1;
+      font-size: 14px;
+      line-height: 1.34;
+      font-weight: 900;
+    }
+
+    .v21-decision-brief p {
+      color: #b8cbc4;
+      font-size: 11px;
+      line-height: 1.42;
+      font-weight: 780;
+    }
+
+    .v21-decision-brief .decision-foot {
+      margin-top: 2px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(132,180,170,.14);
+      color: #a9bab3;
+      font-size: 10.5px;
+      font-weight: 780;
+    }
+
+    .shell.v21-layout .confidence-body,
+    .v21-confidence-body {
+      height: calc(100% - 50px);
+      padding: 10px 14px 12px;
+      display: grid;
+      grid-template-rows: 118px minmax(0, 1fr);
+      gap: 10px;
+    }
+
+    .v21-confidence-top {
+      display: grid;
+      grid-template-columns: 112px minmax(0, 1fr);
+      align-items: center;
+      gap: 14px;
+      min-height: 0;
+    }
+
+    .v21-confidence-text h4 {
+      color: #d9f6e8;
+      font-size: 15px;
+      line-height: 1.25;
+      font-weight: 940;
+    }
+
+    .v21-confidence-text p {
+      margin-top: 6px;
+      color: #b5c8c1;
+      font-size: 11px;
+      line-height: 1.45;
+      font-weight: 760;
+    }
+
+    .v21-metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 10px;
+      align-content: center;
+      min-height: 0;
+    }
+
+    .v21-metric {
+      display: grid;
+      grid-template-columns: 54px minmax(0, 1fr) 34px;
+      align-items: center;
+      gap: 7px;
+      color: #c9d9d3;
+      font-size: 10.5px;
+      line-height: 1.1;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .v21-metric .track {
+      height: 4px;
+      background: rgba(132,180,170,.12);
+      overflow: hidden;
+    }
+
+    .v21-metric .track i {
+      display: block;
+      width: var(--v);
+      height: 100%;
+      background: linear-gradient(90deg, rgba(98,224,141,.88), rgba(96,217,190,.56));
+      box-shadow: 0 0 10px rgba(98,224,141,.2);
+    }
+
+    .shell.v21-layout .right-panel.v21-gauge-panel {
+      padding-left: 14px;
+      padding-right: 11px;
+    }
+
+    .shell.v21-layout .v19-gauge-row {
+      grid-template-columns: minmax(114px, 1fr) 88px;
+      gap: 8px;
+      padding-left: 8px;
+      padding-right: 0;
+    }
+
+    .shell.v21-layout .v19-gauge-face {
+      width: 88px;
+      height: 58px;
+    }
+
+    .shell.v21-layout .v19-gauge-meta strong {
+      font-size: 23px;
+    }
+
+    .shell.v22-layout {
+      grid-template-rows: 56px minmax(0, 1fr) 190px 30px;
+      gap: 7px;
+      padding-bottom: 7px;
+    }
+
+    .shell.v22-layout .main {
+      grid-template-columns: minmax(292px, .88fr) minmax(650px, 1.74fr) minmax(292px, .78fr);
+      gap: 7px;
+    }
+
+    .shell.v22-layout .left-stack {
+      grid-template-rows: 142px minmax(0, 1fr);
+      gap: 8px;
+    }
+
+    .shell.v22-layout .section-title {
+      padding-top: 12px;
+      padding-bottom: 7px;
+    }
+
+    .shell.v22-layout .decision-copy {
+      padding: 6px 16px 8px;
+    }
+
+    .shell.v22-layout .v21-decision-brief {
+      gap: 5px;
+      align-content: center;
+    }
+
+    .shell.v22-layout .v21-decision-brief .status-line {
+      font-size: 18px;
+      gap: 9px;
+    }
+
+    .shell.v22-layout .v21-decision-brief h4 {
+      font-size: 13px;
+      line-height: 1.32;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .shell.v22-layout .v21-decision-brief p {
+      display: none;
+    }
+
+    .shell.v22-layout .v21-decision-brief .decision-foot {
+      padding-top: 5px;
+      font-size: 10px;
+    }
+
+    .shell.v22-layout .v21-confidence-body {
+      height: calc(100% - 48px);
+      grid-template-rows: 110px minmax(0, 1fr);
+      gap: 8px;
+      padding: 9px 15px 11px;
+    }
+
+    .shell.v22-layout .v21-confidence-top {
+      grid-template-columns: 108px minmax(0, 1fr);
+      gap: 14px;
+    }
+
+    .shell.v22-layout .confidence-ring {
+      width: 108px;
+    }
+
+    .shell.v22-layout .v21-confidence-text p {
+      font-size: 10.5px;
+      line-height: 1.42;
+    }
+
+    .shell.v22-layout .v21-metric-grid {
+      gap: 7px 12px;
+    }
+
+    .right-panel.v22-gauge-panel {
+      padding-left: 12px !important;
+      padding-right: 10px !important;
+      grid-template-rows: 40px repeat(4, minmax(0, 1fr)) 18px !important;
+    }
+
+    .right-panel.v22-gauge-panel .section-title {
+      padding-top: 12px;
+      padding-bottom: 2px;
+    }
+
+    .right-panel.v22-gauge-panel .v19-gauge-row {
+      grid-template-columns: minmax(128px, 1fr) 74px !important;
+      gap: 5px !important;
+      padding-left: 5px !important;
+      padding-right: 0 !important;
+    }
+
+    .right-panel.v22-gauge-panel .v19-gauge-row::before {
+      left: -12px;
+    }
+
+    .right-panel.v22-gauge-panel .v19-gauge-face {
+      width: 74px !important;
+      height: 50px !important;
+      justify-self: end;
+    }
+
+    .right-panel.v22-gauge-panel .v19-gauge-meta strong {
+      font-size: 22px !important;
+    }
+
+    .right-panel.v22-gauge-panel .v19-gauge-note {
+      display: none;
+    }
+
+    .right-panel.v22-gauge-panel .monitor-note {
+      font-size: 10px;
+    }
+
+    .bottom.v22-bottom {
+      grid-template-columns: .9fr 1.2fr 1.98fr;
+    }
+
+    .bottom.v22-bottom .bottom-panel {
+      padding-bottom: 6px !important;
+    }
+
+    .bottom.v22-bottom .section-title {
+      padding-top: 7px !important;
+      padding-bottom: 2px !important;
+    }
+
+    .bottom.v22-bottom .v19-summary-line {
+      padding: 6px 9px !important;
+      font-size: 11.5px !important;
+      line-height: 1.3 !important;
+    }
+
+    .bottom.v22-bottom .v19-action-note {
+      padding: 7px 9px !important;
+      font-size: 11px !important;
+      line-height: 1.32 !important;
+    }
+
+    .footer.v22-footer {
+      height: 30px;
+      opacity: .62;
+    }
+
+    .right-panel.v23-signal-panel {
+      padding-left: 12px !important;
+      padding-right: 12px !important;
+      grid-template-rows: 40px repeat(4, minmax(0, 1fr)) 18px !important;
+      background:
+        linear-gradient(90deg, rgba(5, 19, 22, .22), rgba(7, 24, 28, .18) 44%, rgba(5, 19, 22, .28)),
+        linear-gradient(180deg, rgba(93,210,190,.018), rgba(0,0,0,.034));
+    }
+
+    .v23-signal-row {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(112px, 1fr) 94px;
+      align-items: center;
+      gap: 9px;
+      min-height: 0;
+      padding: 6px 2px 6px 7px;
+      border-bottom: 1px solid rgba(132,180,170,.095);
+    }
+
+    .v23-signal-row::before {
+      content: "";
+      position: absolute;
+      left: -12px;
+      top: 16px;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--gauge-color, var(--green));
+      box-shadow: 0 0 12px color-mix(in srgb, var(--gauge-color, var(--green)) 62%, transparent);
+    }
+
+    .v23-signal-row::after {
+      content: "";
+      position: absolute;
+      top: 13px;
+      bottom: 13px;
+      right: 98px;
+      width: 1px;
+      background: linear-gradient(180deg, transparent, rgba(132,180,170,.20), transparent);
+    }
+
+    .v23-signal-meta {
+      min-width: 0;
+    }
+
+    .v23-signal-meta h4 {
+      color: #dce9e3;
+      font-size: 12px;
+      line-height: 1.05;
+      font-weight: 930;
+      white-space: nowrap;
+    }
+
+    .v23-signal-meta strong {
+      display: block;
+      margin-top: 4px;
+      color: #f7fbf7;
+      font-size: 23px;
+      line-height: .95;
+      font-weight: 960;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .v23-signal-status {
+      display: inline-block;
+      margin-top: 5px;
+      padding: 2px 7px;
+      border: 1px solid color-mix(in srgb, var(--gauge-color, var(--green)) 46%, transparent);
+      background: color-mix(in srgb, var(--gauge-color, var(--green)) 10%, transparent);
+      color: var(--gauge-color, var(--green));
+      font-size: 10px;
+      line-height: 1.15;
+      font-weight: 900;
+    }
+
+    .v23-signal-note {
+      margin-top: 4px;
+      color: #9fb3ab;
+      font-size: 9.5px;
+      line-height: 1.26;
+      font-weight: 760;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .v23-gauge-box {
+      position: relative;
+      justify-self: end;
+      width: 88px;
+      height: 64px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(180deg, rgba(5, 20, 22, .24), rgba(2, 9, 11, .12));
+      border-left: 1px solid rgba(132,180,170,.08);
+    }
+
+    .v23-risk-strip {
+      position: absolute;
+      left: 0;
+      top: 10px;
+      bottom: 10px;
+      width: 4px;
+      background: linear-gradient(180deg, rgba(98,224,141,.86), rgba(227,181,79,.86), rgba(228,93,98,.78));
+      opacity: .88;
+    }
+
+    .v23-gauge-face {
+      width: 76px;
+      height: 52px;
+      overflow: visible;
+    }
+
+    .v23-gauge-face .base {
+      fill: none;
+      stroke: rgba(132,180,170,.16);
+      stroke-width: 8;
+      stroke-linecap: round;
+    }
+
+    .v23-gauge-face .good,
+    .v23-gauge-face .watch,
+    .v23-gauge-face .risk {
+      fill: none;
+      stroke-width: 8;
+      stroke-linecap: round;
+      opacity: .84;
+    }
+
+    .v23-gauge-face .good { stroke: rgba(98,224,141,.88); }
+    .v23-gauge-face .watch { stroke: rgba(227,181,79,.86); }
+    .v23-gauge-face .risk { stroke: rgba(228,93,98,.80); }
+
+    .v23-gauge-face .needle {
+      stroke: #edf9f3;
+      stroke-width: 2;
+      stroke-linecap: round;
+      transform-origin: 38px 42px;
+      transform: rotate(var(--needle, 0deg));
+      filter: drop-shadow(0 0 5px color-mix(in srgb, var(--gauge-color, var(--green)) 62%, transparent));
+    }
+
+    .v23-gauge-face .hub {
+      fill: #061112;
+      stroke: #dcece5;
+      stroke-width: 1.2;
+    }
+    .right-panel.v24-signal-panel {
+      padding: 0 13px 10px !important;
+      grid-template-rows: 40px repeat(4, minmax(0, 1fr)) 20px !important;
+      background:
+        linear-gradient(90deg, rgba(5, 19, 22, .34), rgba(7, 24, 28, .18)),
+        linear-gradient(180deg, rgba(93, 210, 190, .035), rgba(0, 0, 0, .045));
+    }
+
+    .right-panel.v24-signal-panel .section-title {
+      padding-top: 12px;
+      padding-bottom: 2px;
+    }
+
+    .v24-signal-row {
+      position: relative;
+      display: grid;
+      grid-template-rows: auto 34px auto;
+      align-content: center;
+      gap: 6px;
+      min-height: 0;
+      padding: 8px 4px 7px 11px;
+      border-bottom: 1px solid rgba(132, 180, 170, .095);
+      background: linear-gradient(90deg, color-mix(in srgb, var(--signal-color, var(--green)) 7%, transparent), transparent 72%);
+    }
+
+    .v24-signal-row::before {
+      content: "";
+      position: absolute;
+      left: -12px;
+      top: 17px;
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: var(--signal-color, var(--green));
+      box-shadow: 0 0 12px color-mix(in srgb, var(--signal-color, var(--green)) 62%, transparent);
+      display: none;
+    }
+
+    .v24-row-head {
+      display: grid;
+      grid-template-columns: 16px minmax(66px, .65fr) minmax(82px, .8fr) auto;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .v24-signal-light {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      background: var(--signal-color, var(--green));
+      border: 1px solid rgba(238, 255, 248, .76);
+      box-shadow:
+        0 0 0 3px color-mix(in srgb, var(--signal-color, var(--green)) 18%, transparent),
+        0 0 16px color-mix(in srgb, var(--signal-color, var(--green)) 76%, transparent);
+    }
+
+    .v24-row-head h4 {
+      color: #dce9e3;
+      font-size: 12px;
+      line-height: 1.05;
+      font-weight: 930;
+      white-space: nowrap;
+    }
+
+    .v24-row-head strong {
+      color: #f7fbf7;
+      font-size: 23px;
+      line-height: .95;
+      font-weight: 960;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+
+    .v24-status {
+      justify-self: end;
+      padding: 2px 7px;
+      border: 1px solid color-mix(in srgb, var(--signal-color, var(--green)) 46%, transparent);
+      background: color-mix(in srgb, var(--signal-color, var(--green)) 10%, transparent);
+      color: var(--signal-color, var(--green));
+      font-size: 10px;
+      line-height: 1.15;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .v24-meter {
+      position: relative;
+      height: 34px;
+      border: 1px solid rgba(132, 180, 170, .12);
+      background:
+        linear-gradient(90deg, rgba(98, 224, 141, .18) 0 45%, rgba(227, 181, 79, .18) 45% 72%, rgba(228, 93, 98, .16) 72% 100%),
+        rgba(2, 10, 12, .42);
+      box-shadow: inset 0 0 18px rgba(0, 0, 0, .25);
+      overflow: hidden;
+    }
+
+    .v24-meter::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      border-top: 1px dashed rgba(220, 238, 231, .16);
+    }
+
+    .v24-meter-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: var(--meter);
+      background: linear-gradient(90deg, color-mix(in srgb, var(--signal-color, var(--green)) 30%, transparent), transparent 88%);
+    }
+
+    .v24-needle {
+      position: absolute;
+      top: 4px;
+      bottom: 4px;
+      left: var(--meter);
+      width: 2px;
+      transform: translateX(-1px);
+      background: #edf9f3;
+      box-shadow: 0 0 8px color-mix(in srgb, var(--signal-color, var(--green)) 65%, transparent);
+    }
+
+    .v24-needle::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: -3px;
+      transform: translateX(-50%);
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--signal-color, var(--green));
+      box-shadow: 0 0 9px color-mix(in srgb, var(--signal-color, var(--green)) 70%, transparent);
+    }
+
+    .v24-band-labels {
+      display: flex;
+      justify-content: space-between;
+      color: #8fa69e;
+      font-size: 9px;
+      line-height: 1;
+      font-weight: 800;
+    }
+
+    .v24-note {
+      color: #9fb3ab;
+      font-size: 10px;
+      line-height: 1.26;
+      font-weight: 760;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .shell.v22-layout {
+      grid-template-rows: 56px minmax(0, 1fr) 190px 30px;
+      gap: 7px;
+    }
+
+    .shell.v22-layout .main {
+      padding-top: 0;
+      min-height: 0;
+    }
+
+    .shell.v22-layout .board {
+      background-position: center center;
+      background-size: contain;
+      background-repeat: no-repeat;
+    }
+
+    .shell.v22-layout .chip.fund,
+    .shell.v22-layout .chip.val {
+      top: 11%;
+    }
+
+    .topbar {
+      z-index: 8;
+      isolation: isolate;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(5, 22, 24, .98), rgba(1, 9, 11, .96)),
+        linear-gradient(90deg, rgba(87, 214, 173, .09), rgba(3, 13, 15, .96) 33%, rgba(2, 10, 12, .98));
+      border-color: rgba(132, 180, 170, .18);
+      box-shadow:
+        inset 0 1px 0 rgba(153, 229, 210, .13),
+        inset 0 -1px 0 rgba(25, 239, 173, .10),
+        inset 0 0 42px rgba(0, 0, 0, .58),
+        0 0 24px rgba(0, 0, 0, .42);
+      backdrop-filter: none;
+    }
+
+    .topbar::before {
+      opacity: .11;
+      z-index: 0;
+    }
+
+    .topbar::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, transparent 0, rgba(105, 231, 198, .10) 1px, transparent 2px) 0 0 / 112px 100%,
+        linear-gradient(180deg, rgba(141, 236, 214, .10), transparent 31%, rgba(251, 195, 74, .055) 72%, transparent),
+        linear-gradient(180deg, rgba(2, 16, 18, .98), rgba(1, 8, 10, .93));
+      opacity: 1;
+      filter: none;
+    }
+
+    .topbar > * {
+      z-index: 3;
+    }
+
+    .top-cell,
+    .brand,
+    .tools {
+      background:
+        linear-gradient(180deg, rgba(7, 26, 28, .72), rgba(2, 11, 13, .66));
+      box-shadow:
+        inset 0 0 0 1px rgba(130, 205, 190, .045),
+        inset 0 0 28px rgba(0, 0, 0, .22);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, .92), 0 0 10px rgba(0, 0, 0, .86);
+    }
+
+    .top-cell b {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .top-cell b.ok::before,
+    .top-cell b.warn::before,
+    .top-cell b.red::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      flex: 0 0 8px;
+      background: currentColor;
+      box-shadow:
+        0 0 0 2px rgba(1, 8, 10, .98),
+        0 0 0 3px color-mix(in srgb, currentColor 48%, transparent),
+        0 0 13px color-mix(in srgb, currentColor 86%, transparent);
+    }
+
+    .active-hotspot-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 18;
+      pointer-events: none;
+    }
+
+    .active-hotspot {
+      position: absolute;
+      display: grid;
+      place-items: center;
+      padding: 8px 7px;
+      border: 1px solid color-mix(in srgb, currentColor 24%, rgba(132,180,170,.22));
+      border-radius: 8px;
+      background:
+        linear-gradient(180deg, rgba(20, 35, 37, .92), rgba(5, 13, 15, .96));
+      color: var(--hotspot-color, var(--green));
+      cursor: pointer;
+      pointer-events: auto;
+      opacity: .96;
+      text-align: center;
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,.035),
+        0 16px 24px rgba(0,0,0,.34),
+        0 0 22px color-mix(in srgb, currentColor 8%, transparent);
+      transition: border-color .18s ease, box-shadow .18s ease, background .18s ease, transform .18s ease;
+    }
+
+    .active-hotspot.decision-hotspot {
+      --hotspot-color: var(--decision);
+      border-color: rgba(227, 181, 79, .18);
+      background: transparent;
+      box-shadow: none;
+      color: transparent;
+    }
+
+    .active-hotspot:not(.decision-hotspot)::before {
+      content: "";
+      position: absolute;
+      inset: -4px;
+      border-radius: 10px;
+      background:
+        linear-gradient(90deg, color-mix(in srgb, currentColor 62%, transparent), transparent 12% 88%, color-mix(in srgb, currentColor 62%, transparent)),
+        repeating-linear-gradient(90deg, color-mix(in srgb, currentColor 60%, transparent) 0 2px, transparent 2px 8px);
+      opacity: .30;
+      pointer-events: none;
+      z-index: -1;
+      filter: drop-shadow(0 0 10px color-mix(in srgb, currentColor 30%, transparent));
+    }
+
+    .active-hotspot[data-tone="gray"] {
+      opacity: .82;
+      filter: saturate(.55);
+    }
+
+    .active-hotspot small,
+    .active-hotspot span,
+    .active-hotspot strong,
+    .active-hotspot em {
+      position: relative;
+      z-index: 1;
+      display: block;
+      font-style: normal;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+
+    .active-hotspot small {
+      color: rgba(226, 238, 232, .78);
+      font-size: clamp(8px, .56vw, 10px);
+      font-weight: 800;
+      line-height: 1.05;
+    }
+
+    .active-hotspot em {
+      margin-top: 2px;
+      color: rgba(189, 207, 200, .72);
+      font-size: clamp(7px, .48vw, 9px);
+      line-height: 1.05;
+    }
+
+    .active-hotspot strong {
+      margin-top: 4px;
+      color: currentColor;
+      font-size: clamp(18px, 1.65vw, 28px);
+      font-weight: 950;
+      line-height: .95;
+      text-shadow: 0 0 12px color-mix(in srgb, currentColor 30%, transparent);
+    }
+
+    .active-hotspot span {
+      margin-top: 4px;
+      color: color-mix(in srgb, currentColor 82%, #fff);
+      font-size: clamp(8px, .56vw, 10px);
+      font-weight: 900;
+      line-height: 1.05;
+    }
+
+    .active-hotspot.decision-hotspot::before,
+    .active-hotspot.decision-hotspot::after {
+      content: "";
+      position: absolute;
+      inset: 7px;
+      border-radius: 7px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s ease;
+    }
+
+    .active-hotspot.decision-hotspot::before {
+      border: 1px solid color-mix(in srgb, currentColor 55%, transparent);
+      box-shadow:
+        inset 0 0 22px color-mix(in srgb, currentColor 10%, transparent),
+        0 0 22px color-mix(in srgb, currentColor 18%, transparent);
+    }
+
+    .active-hotspot.decision-hotspot::after {
+      background:
+        linear-gradient(90deg, currentColor 0 18px, transparent 18px calc(100% - 18px), currentColor calc(100% - 18px)),
+        linear-gradient(90deg, currentColor 0 18px, transparent 18px calc(100% - 18px), currentColor calc(100% - 18px));
+      background-position: left top, left bottom;
+      background-size: 100% 1px;
+      background-repeat: no-repeat;
+      filter: drop-shadow(0 0 7px currentColor);
+    }
+
+    .active-hotspot:hover,
+    .active-hotspot:focus-visible,
+    .active-hotspot.is-active {
+      border-color: color-mix(in srgb, currentColor 34%, transparent);
+      background:
+        linear-gradient(180deg, color-mix(in srgb, currentColor 14%, rgba(20,35,37,.92)), rgba(5, 13, 15, .96));
+      box-shadow: 0 0 22px color-mix(in srgb, currentColor 16%, transparent);
+      outline: none;
+    }
+
+    .active-hotspot.decision-hotspot:hover::before,
+    .active-hotspot.decision-hotspot:hover::after,
+    .active-hotspot.decision-hotspot:focus-visible::before,
+    .active-hotspot.decision-hotspot:focus-visible::after,
+    .active-hotspot.decision-hotspot.is-active::before,
+    .active-hotspot.decision-hotspot.is-active::after {
+      opacity: 1;
+    }
+
+    body.active-focus-mode .active-hotspot.decision-hotspot::before,
+    body.active-focus-mode .active-hotspot.decision-hotspot::after {
+      opacity: .34;
+    }
+
+    .board.is-activated .neutral-core-overlay {
+      transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+    }
+
+    .board.is-activated[data-active="ai"] .neutral-core-overlay,
+    .board.is-activated[data-active="val"] .neutral-core-overlay,
+    .board.is-activated[data-active="macro"] .neutral-core-overlay {
+      border-color: color-mix(in srgb, var(--active-color, var(--decision)) 44%, rgba(132,180,170,.28));
+      box-shadow:
+        0 20px 30px rgba(0,0,0,.46),
+        0 0 30px color-mix(in srgb, var(--active-color, var(--decision)) 18%, transparent);
+    }
+
+    .active-summary-line {
+      display: grid;
+      grid-template-columns: 74px minmax(0, 1fr);
+      gap: 10px;
+      padding: 7px 10px;
+      border-left: 2px solid var(--active-color, var(--decision));
+      background: rgba(2, 12, 14, .42);
+      color: #e6f1ec;
+      font-size: 12px;
+      line-height: 1.32;
+      font-weight: 820;
+    }
+
+    .active-summary-line b {
+      color: var(--active-color, var(--decision));
+      white-space: nowrap;
+      font-weight: 950;
+    }
+
+    .v24-signal-row,
+    .review-grid > div:not(.head),
+    .tools span {
+      cursor: pointer;
+    }
+
+    .v24-signal-row.is-active {
+      background:
+        linear-gradient(90deg, color-mix(in srgb, var(--signal-color, var(--green)) 15%, transparent), transparent 74%);
+      box-shadow: inset 2px 0 0 var(--signal-color, var(--green));
+    }
+
+    .review-grid > div.is-row-active {
+      background: rgba(227, 181, 79, .075);
+      color: #f2df9a;
+    }
+
+    .tools span {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 2px;
+      border-bottom: 1px solid transparent;
+    }
+
+    .tools span:hover,
+    .tools span:focus-visible {
+      color: #e6fff6;
+      border-bottom-color: rgba(98,224,141,.52);
+      outline: none;
+    }
+
+    .activation-note-panel {
+      position: absolute;
+      z-index: 30;
+      right: 18px;
+      bottom: 42px;
+      width: min(360px, calc(100% - 36px));
+      padding: 14px 16px;
+      border: 1px solid rgba(227, 181, 79, .24);
+      background:
+        linear-gradient(180deg, rgba(9, 25, 27, .96), rgba(2, 10, 12, .94));
+      box-shadow: 0 20px 38px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.025);
+      color: #eaf3ef;
+      display: none;
+    }
+
+    .activation-note-panel.is-open {
+      display: grid;
+      gap: 8px;
+    }
+
+    .activation-note-panel h3 {
+      color: var(--decision);
+      font-size: 14px;
+      line-height: 1.2;
+      font-weight: 950;
+    }
+
+    .activation-note-panel p {
+      color: #c7d9d2;
+      font-size: 12px;
+      line-height: 1.55;
+      font-weight: 780;
+    }
+    /* v25 readability pass: the page is a dashboard, not a scaled poster. */
+    html {
+      min-height: 100%;
+      background: #02070a;
+    }
+
+    body.live-layer-mode {
+      overflow: auto !important;
+      min-height: 100dvh;
+      background: #02070a !important;
+    }
+
+    body.live-layer-mode .live-background {
+      background:
+        radial-gradient(circle at 50% 18%, rgba(62, 187, 153, .10), transparent 32%),
+        linear-gradient(180deg, #061115 0%, #02070a 100%) !important;
+    }
+
+    body.live-layer-mode .shell {
+      --bottom-row: clamp(250px, 28vh, 320px);
+      --main-row-height: calc(100dvh - 114px - var(--bottom-row));
+      width: 100vw !important;
+      max-width: none !important;
+      height: 100dvh !important;
+      max-height: none !important;
+      margin: 0 !important;
+      padding: 8px 10px 8px !important;
+      gap: 8px !important;
+      grid-template-rows: 50px minmax(0, 1fr) var(--bottom-row) 24px !important;
+      background: linear-gradient(180deg, #061115, #02070a) !important;
+      border: 0 !important;
+    }
+
+    body.live-layer-mode .shell::before,
+    body.live-layer-mode .shell::after,
+    body.live-layer-mode .topbar::before,
+    body.live-layer-mode .topbar::after,
+    body.live-layer-mode .panel::before,
+    body.live-layer-mode .bottom-panel::before,
+    body.live-layer-mode .footer::before {
+      display: none !important;
+    }
+
+    body.live-layer-mode .topbar,
+    body.live-layer-mode .panel,
+    body.live-layer-mode .bottom-panel,
+    body.live-layer-mode .footer {
+      background: #061215 !important;
+      border: 1px solid rgba(96, 139, 133, .28) !important;
+      box-shadow: none !important;
+      backdrop-filter: none !important;
+    }
+
+    body.live-layer-mode .topbar {
+      display: grid !important;
+      grid-template-columns: minmax(188px, 1.2fr) repeat(5, minmax(88px, .66fr)) minmax(300px, auto) !important;
+      gap: 6px !important;
+      align-items: stretch !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+      position: relative !important;
+      z-index: 10 !important;
+    }
+
+    body.live-layer-mode .brand,
+    body.live-layer-mode .top-cell,
+    body.live-layer-mode .tools {
+      background: #07191c !important;
+      border-right: 1px solid rgba(96, 139, 133, .22) !important;
+      box-shadow: none !important;
+      min-width: 0;
+    }
+
+    body.live-layer-mode .brand {
+      padding: 7px 10px !important;
+    }
+
+    body.live-layer-mode .brand h1 {
+      font-size: 14px !important;
+      line-height: 1.1 !important;
+      white-space: nowrap;
+    }
+
+    body.live-layer-mode .brand p,
+    body.live-layer-mode .top-cell span {
+      font-size: 9px !important;
+      color: #8ea8a2 !important;
+    }
+
+    body.live-layer-mode .top-cell {
+      padding: 7px 10px !important;
+      display: grid !important;
+      align-content: center !important;
+      gap: 3px !important;
+    }
+
+    body.live-layer-mode .top-cell b {
+      font-size: 11px !important;
+      line-height: 1.15 !important;
+      white-space: nowrap !important;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    body.live-layer-mode .tools {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: flex-end !important;
+      gap: 6px !important;
+      padding: 7px 8px !important;
+    }
+
+    body.live-layer-mode .tools a,
+    body.live-layer-mode .tools button {
+      min-height: 28px !important;
+      padding: 0 9px !important;
+      border-radius: 5px !important;
+      background: #0b2024 !important;
+      border: 1px solid rgba(119, 164, 156, .34) !important;
+      color: #dcebe5 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      font-size: 11px !important;
+      text-decoration: none !important;
+      white-space: nowrap !important;
+    }
+
+    body.live-layer-mode .tools button[aria-pressed="true"] {
+      border-color: rgba(98, 224, 141, .66) !important;
+      color: #d7fff1 !important;
+      background: rgba(6, 78, 59, .48) !important;
+    }
+
+    body.p1008-focus-mode {
+      background: #020909;
+    }
+
+    body.p1008-focus-mode .shell {
+      min-height: 100vh;
+    }
+
+    body.live-layer-mode .main {
+      grid-template-columns: clamp(248px, 23vw, 320px) minmax(390px, 1fr) clamp(270px, 27vw, 372px) !important;
+      gap: 8px !important;
+      padding: 0 !important;
+      min-height: 0 !important;
+      align-items: stretch !important;
+      position: relative !important;
+      z-index: 1 !important;
+      overflow: hidden !important;
+    }
+
+    body.live-layer-mode .main::before {
+      content: "" !important;
+      grid-column: 2 !important;
+      grid-row: 1 !important;
+      place-self: stretch !important;
+      min-width: 0 !important;
+      min-height: 0 !important;
+      pointer-events: none !important;
+      z-index: 0 !important;
+      border: 1px solid rgba(96, 139, 133, .18) !important;
+      background:
+        radial-gradient(ellipse at center, rgba(30, 64, 58, .20), rgba(2, 8, 10, .92) 72%),
+        linear-gradient(180deg, rgba(2, 8, 10, .92), rgba(2, 8, 10, .98)) !important;
+      opacity: 1 !important;
+    }
+
+    body.live-layer-mode .left-stack {
+      grid-column: 1 !important;
+      grid-row: 1 !important;
+      grid-template-rows: minmax(132px, .48fr) minmax(270px, .9fr) !important;
+      gap: 8px !important;
+      min-height: 0 !important;
+    }
+
+    body.live-layer-mode .left-stack .panel,
+    body.live-layer-mode .right-panel,
+    body.live-layer-mode .bottom-panel {
+      border-radius: 4px !important;
+      overflow: hidden !important;
+      background:
+        linear-gradient(180deg, rgb(9, 25, 28), rgb(3, 12, 14)) !important;
+    }
+
+    body.live-layer-mode .section-title {
+      min-height: 34px !important;
+      padding: 9px 12px 6px !important;
+      border-bottom: 1px solid rgba(96, 139, 133, .22) !important;
+    }
+
+    body.live-layer-mode .section-title h2,
+    body.live-layer-mode .section-title h3 {
+      font-size: 13px !important;
+      line-height: 1.15 !important;
+      color: #ecf8f2 !important;
+    }
+
+    body.live-layer-mode .section-title span {
+      font-size: 8px !important;
+      letter-spacing: .06em !important;
+    }
+
+    body.live-layer-mode .decision-copy {
+      padding: 12px 14px !important;
+    }
+
+    body.live-layer-mode .decision-copy h4 {
+      font-size: 13px !important;
+      line-height: 1.42 !important;
+      color: #f6df8a !important;
+    }
+
+    body.live-layer-mode .decision-copy p,
+    body.live-layer-mode .decision-foot {
+      font-size: 11px !important;
+      line-height: 1.42 !important;
+    }
+
+    body.live-layer-mode .confidence-body.v21-confidence-body {
+      grid-template-rows: auto minmax(0, 1fr) !important;
+      gap: 12px !important;
+      padding: 14px !important;
+      height: calc(100% - 34px) !important;
+    }
+
+    body.live-layer-mode .v21-confidence-top {
+      grid-template-columns: 96px minmax(0, 1fr) !important;
+      gap: 12px !important;
+      align-items: center !important;
+    }
+
+    body.live-layer-mode .confidence-ring {
+      display: none !important;
+    }
+
+    body.live-layer-mode .confidence-score-card {
+      height: 82px;
+      border-radius: 6px;
+      border: 1px solid rgba(97, 226, 151, .34);
+      background:
+        linear-gradient(180deg, rgba(12, 44, 38, .98), rgba(5, 20, 20, .98));
+      display: grid;
+      place-items: center;
+      align-content: center;
+      box-shadow: inset 0 -4px 0 rgba(98, 224, 141, .20);
+    }
+
+    body.live-layer-mode .confidence-score-card strong {
+      font-size: 30px;
+      line-height: 1;
+      color: #ecfff6;
+      font-weight: 950;
+    }
+
+    body.live-layer-mode .confidence-score-card span {
+      margin-top: 5px;
+      color: #8de8bf;
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: .04em;
+    }
+
+    body.live-layer-mode .v21-confidence-text h4 {
+      font-size: 14px !important;
+      color: #ecf8f2 !important;
+    }
+
+    body.live-layer-mode .v21-confidence-text p {
+      font-size: 11px !important;
+      line-height: 1.45 !important;
+      color: #bdd1ca !important;
+    }
+
+    body.live-layer-mode .quality-bars {
+      gap: 8px !important;
+      align-content: start !important;
+    }
+
+    body.live-layer-mode .q-row {
+      grid-template-columns: 70px minmax(0, 1fr) 38px !important;
+      font-size: 10px !important;
+    }
+
+    body.live-layer-mode .board {
+      grid-column: 2 !important;
+      grid-row: 1 !important;
+      background: #061115 !important;
+      background-position: center center !important;
+      background-size: cover !important;
+      background-repeat: no-repeat !important;
+      aspect-ratio: 30 / 9 !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      max-height: 100% !important;
+      height: auto !important;
+      justify-self: center !important;
+      align-self: center !important;
+      position: relative !important;
+      z-index: 1 !important;
+      border: 1px solid rgba(96, 139, 133, .26) !important;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.02) !important;
+    }
+
+    body.live-layer-mode .board::before {
+      z-index: 0 !important;
+      opacity: .94 !important;
+      background:
+        linear-gradient(180deg, rgba(1, 5, 7, .02), rgba(1, 5, 7, .10)),
+        linear-gradient(90deg, rgba(1, 5, 7, .20) 0 14%, rgba(1, 5, 7, .08) 24%, transparent 36% 64%, rgba(1, 5, 7, .08) 76%, rgba(1, 5, 7, .20) 86% 100%),
+        url("assets/p1008_motherboard_ultrawide_30x9_20260706.png") center center / cover no-repeat !important;
+      filter: brightness(1.10) saturate(1.08) contrast(1.04) !important;
+      transform: scale(1.002) !important;
+    }
+
+    body.live-layer-mode .board::after {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      z-index: 1 !important;
+      pointer-events: none !important;
+      background:
+        radial-gradient(circle at 50% 48%, rgba(6, 15, 18, .02), rgba(3, 8, 10, .08) 66%, rgba(2, 5, 7, .15)),
+        linear-gradient(90deg, rgba(2, 7, 9, .16) 0 16%, transparent 30% 70%, rgba(2, 7, 9, .16) 84% 100%),
+        linear-gradient(180deg, rgba(3, 9, 11, .02), rgba(3, 9, 11, .08)) !important;
+    }
+
+    body.live-layer-mode .board > :not(.active-hotspot-layer):not(.neutral-core-overlay) {
+      position: relative;
+      z-index: 2;
+    }
+
+    body.live-layer-mode .neutral-core-overlay {
+      background: rgba(8, 18, 22, .86) !important;
+      border-color: color-mix(in srgb, var(--active-color, var(--decision)) 48%, rgba(132,180,170,.24)) !important;
+    }
+
+    body.live-layer-mode .right-panel.v24-dynamic-panel {
+      grid-column: 3 !important;
+      grid-row: 1 !important;
+      display: grid !important;
+      grid-template-rows: auto repeat(5, minmax(86px, 1fr)) auto !important;
+      gap: 8px !important;
+      padding: 0 10px 10px !important;
+      background: #061215 !important;
+    }
+
+    body.live-layer-mode .v24-signal-row {
+      min-height: 0 !important;
+      grid-template-rows: auto 30px minmax(26px, auto) !important;
+      gap: 6px !important;
+      padding: 8px 9px !important;
+      border-radius: 5px !important;
+      border: 1px solid rgba(117, 156, 150, .24) !important;
+      background: #0a1b1f !important;
+      box-shadow: none !important;
+      overflow: hidden !important;
+    }
+
+    body.live-layer-mode .v24-signal-row.is-active {
+      background: #102328 !important;
+      border-color: color-mix(in srgb, var(--signal-color, var(--green)) 42%, rgba(117,156,150,.25)) !important;
+      box-shadow: inset 3px 0 0 var(--signal-color, var(--green)) !important;
+    }
+
+    body.live-layer-mode .v24-row-head {
+      grid-template-columns: 14px minmax(0, 1fr) auto !important;
+      gap: 7px !important;
+      align-items: center !important;
+    }
+
+    body.live-layer-mode .v24-row-head h4,
+    body.live-layer-mode .v24-row-tag {
+      font-size: 11px !important;
+      line-height: 1.15 !important;
+    }
+
+    body.live-layer-mode .v24-meter {
+      height: 30px !important;
+      border-color: rgba(135, 167, 160, .20) !important;
+      background:
+        linear-gradient(90deg, rgba(61, 190, 120, .22) 0 45%, rgba(218, 172, 70, .20) 45% 72%, rgba(218, 78, 86, .16) 72% 100%),
+        #0e2025 !important;
+    }
+
+    body.live-layer-mode .v24-meter strong {
+      position: relative !important;
+      z-index: 2 !important;
+      display: block !important;
+      padding: 6px 8px !important;
+      font-size: 14px !important;
+      line-height: 1 !important;
+      color: #eaf7f1 !important;
+    }
+
+    body.live-layer-mode .v24-signal-row p {
+      white-space: normal !important;
+      overflow: hidden !important;
+      text-overflow: clip !important;
+      color: #b9ccc5 !important;
+      font-size: 10.5px !important;
+      line-height: 1.35 !important;
+      font-weight: 760 !important;
+    }
+
+    body.live-layer-mode .monitor-note {
+      min-height: 22px !important;
+      font-size: 10px !important;
+      white-space: normal !important;
+      color: #a8beb6 !important;
+    }
+
+    body.live-layer-mode .bottom.v24-dynamic-bottom {
+      grid-template-columns: minmax(300px, .96fr) minmax(300px, .92fr) minmax(440px, 1.58fr) !important;
+      gap: 8px !important;
+      min-height: 0 !important;
+      background: transparent !important;
+      position: relative !important;
+      z-index: 6 !important;
+      border-top: 1px solid rgba(96, 139, 133, .30) !important;
+      padding-top: 0 !important;
+    }
+
+    body.live-layer-mode .bottom-panel {
+      padding: 0 11px 9px !important;
+      min-height: 0 !important;
+      overflow: hidden !important;
+    }
+
+    body.live-layer-mode .table {
+      font-size: 11px !important;
+      line-height: 1.32 !important;
+    }
+
+    body.live-layer-mode .table th,
+    body.live-layer-mode .table td {
+      padding: 4px 5px !important;
+      white-space: nowrap !important;
+    }
+
+    body.live-layer-mode .table td:last-child {
+      display: -webkit-box !important;
+      -webkit-line-clamp: 2 !important;
+      -webkit-box-orient: vertical !important;
+      white-space: normal !important;
+      max-width: 250px !important;
+      max-height: 2.7em !important;
+      overflow: hidden !important;
+      line-height: 1.32 !important;
+    }
+
+    body.live-layer-mode .review-grid {
+      font-size: 11px !important;
+      grid-template-columns: 40px minmax(132px, 1fr) 70px 46px 52px !important;
+    }
+
+    body.live-layer-mode .review-grid div {
+      padding: 4px 3px !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+    }
+
+    body.live-layer-mode .v19-summary-stack {
+      gap: 8px !important;
+      align-content: start !important;
+    }
+
+    body.live-layer-mode .active-summary-line {
+      grid-template-columns: 58px minmax(0, 1fr) !important;
+      padding: 8px 10px !important;
+      background: #0a1b1f !important;
+      font-size: 12px !important;
+      line-height: 1.42 !important;
+    }
+
+    body.live-layer-mode .v19-action-note {
+      background: #101e20 !important;
+      border-color: rgba(227, 181, 79, .35) !important;
+      font-size: 11.6px !important;
+      line-height: 1.42 !important;
+    }
+
+    body.live-layer-mode .footer {
+      display: grid !important;
+      grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+      align-items: center !important;
+      padding: 0 10px !important;
+      font-size: 9.5px !important;
+      color: #86a09a !important;
+    }
+
+    @media (max-width: 860px) {
+      body.live-layer-mode .shell {
+        height: auto !important;
+        min-height: 100dvh !important;
+        grid-template-rows: auto auto auto auto !important;
+      }
+      body.live-layer-mode .topbar,
+      body.live-layer-mode .main,
+      body.live-layer-mode .bottom.v24-dynamic-bottom {
+        grid-template-columns: 1fr !important;
+      }
+      body.live-layer-mode .left-stack,
+      body.live-layer-mode .board,
+      body.live-layer-mode .right-panel.v24-dynamic-panel {
+        grid-column: 1 !important;
+        grid-row: auto !important;
+      }
+      body.live-layer-mode .main::before {
+        display: none !important;
+      }
+      body.live-layer-mode .board {
+        width: 100% !important;
+        min-height: 0 !important;
+      }
+      body.live-layer-mode .right-panel.v24-dynamic-panel {
+        grid-template-rows: auto !important;
+      }
+    }
+  </style>
+</head>
+<body class="live-layer-mode">
+  <!-- Design reference image intentionally not loaded in live mode. -->
+  <div class="live-background" aria-hidden="true"></div>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">H</div>
+        <div>
+          <h1>Hon Hai 戰略決策戰情室</h1>
+          <p>Strategic Decision Command Center</p>
+        </div>
+      </div>
+      <div class="top-cell"><span>報告層級</span><b>六大系統摘要 (L1)</b></div>
+      <div class="top-cell"><span>資料時間</span><b>N/A</b></div>
+      <div class="top-cell"><span>資料新鮮度</span><b>等待資料綁定</b></div>
+      <div class="top-cell"><span>資料狀態</span><b>等待資料綁定</b></div>
+      <div class="top-cell"><span>模型狀態</span><b>等待資料綁定</b></div>
+      <div class="tools">
+        <button id="fullscreen-toggle" type="button" aria-pressed="false">全螢幕</button>
+        <a href="../../launcher.html?stay=1&from=newui">Launcher</a>
+        <a href="../../report_viewer.html?from=newui">最新戰報</a>
+        <a href="../../reports.html?from=newui">研報庫</a>
+        <a href="../../SOP_v4.html?from=newui">SOP</a>
+        <a href="../../index_p1008_v7.html?from=newui">舊 UI 明細</a>
+      </div>
+    </header>
+
+    <main class="main">
+      <aside class="left-stack">
+        <section class="panel">
+          <div class="section-title"><h2>決策輸出</h2><span>Decision Output</span></div>
+          <div class="decision-copy">
+            <small>決策結論</small>
+            <div class="hold-word">HOLD</div>
+            <h4>維持觀察，不構成交易建議。</h4>
+            <p>估值偏高但基本面仍具支撐，維持中立持有；持續觀察匯率、AI 需求與毛利率復甦強度。</p>
+            <div class="decision-foot">僅供決策參考 ｜ actionable:false</div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="section-title"><h3>正式發布可用度</h3><span>Publish Readiness</span></div>
+          <div class="confidence-body">
+            <div class="confidence-top">
+              <div class="confidence-ring"><strong>N/A</strong></div>
+              <div class="confidence-caption">
+                <h4>等待資料綁定</h4>
+                <p>載入正式資料前不顯示沿用分數。</p>
+              </div>
+            </div>
+            <div class="quality-bars">
+              <div class="q-row"><span>完整性</span><span class="q-track"><i style="--v:0%"></i></span><b>N/A</b></div>
+              <div class="q-row"><span>來源覆蓋</span><span class="q-track"><i style="--v:0%"></i></span><b>N/A</b></div>
+              <div class="q-row"><span>驗證分數</span><span class="q-track"><i style="--v:0%"></i></span><b>N/A</b></div>
+              <div class="q-row"><span>候選檔案</span><span class="q-track"><i style="--v:0%"></i></span><b>N/A</b></div>
+              <div class="q-row"><span>事件同步</span><span class="q-track"><i style="--v:0%"></i></span><b>N/A</b></div>
+            </div>
+          </div>
+        </section>
+      </aside>
+
+      <section class="board">
+        <div class="board-title"><h2>六大診斷系統主機板</h2><span>Six Diagnostic ICs</span></div>
+        <div class="component c1"></div><div class="component c2"></div><div class="component c3"></div>
+        <div class="component c4"></div><div class="component c5"></div><div class="component c6"></div>
+
+        <svg class="board-svg" viewBox="0 0 980 680" preserveAspectRatio="none" aria-hidden="true">
+          <path class="trace-bg" d="M40 82H340M40 128H302M70 198H318M640 82H940M680 128H930M672 198H940M46 492H326M72 548H380M654 492H935M612 548H902" />
+          <path class="trace-bg" d="M140 80V248H300M850 80V248H690M118 612V435H312M862 612V435H670" />
+
+          <path class="trace-green" d="M372 157 C415 157 430 220 485 250 C498 257 506 268 510 292" />
+          <circle class="via trace-green" cx="372" cy="157" r="6" />
+          <circle class="via trace-green" cx="510" cy="292" r="6" />
+          <path class="trace-amber" d="M612 157 C575 170 570 230 525 260 C510 270 498 280 492 294" />
+          <circle class="via trace-amber" cx="612" cy="157" r="6" />
+          <circle class="via trace-amber" cx="492" cy="294" r="6" />
+          <path class="trace-green" d="M262 328 C348 334 366 350 424 354 C445 356 458 359 472 365" />
+          <circle class="via trace-green" cx="262" cy="328" r="6" />
+          <circle class="via trace-green" cx="472" cy="365" r="6" />
+          <path class="trace-amber" d="M720 328 C632 334 610 348 558 354 C535 357 520 360 506 368" />
+          <circle class="via trace-amber" cx="720" cy="328" r="6" />
+          <circle class="via trace-amber" cx="506" cy="368" r="6" />
+          <path class="trace-red" d="M366 556 C382 510 420 462 450 430 C464 415 470 398 474 384" />
+          <circle class="via trace-red" cx="366" cy="556" r="6" />
+          <circle class="via trace-red" cx="474" cy="384" r="6" />
+          <path class="trace-amber" d="M616 556 C595 510 560 462 532 428 C518 410 512 397 506 384" />
+          <circle class="via trace-amber" cx="616" cy="556" r="6" />
+          <circle class="via trace-amber" cx="506" cy="384" r="6" />
+
+          <g opacity=".55">
+            <path class="trace-bg" d="M20 262H354M626 262H960M20 390H344M636 390H960M20 606H400M580 606H960" />
+            <path class="trace-bg" d="M226 20V130M754 20V130M226 550V660M754 550V660" />
+          </g>
+        </svg>
+
+        <section class="chip fund"><i class="pin-left"></i><i class="pin-right"></i><small>01</small><h3>基本面 IC</h3><em>Fundamentals</em><b>N/A</b><span>資料不足</span></section>
+        <section class="chip val"><i class="pin-left"></i><i class="pin-right"></i><small>02</small><h3>估值 IC</h3><em>Valuation</em><b>N/A</b><span>資料不足</span></section>
+        <section class="chip quality"><i class="pin-left"></i><i class="pin-right"></i><small>06</small><h3>資料品質 IC</h3><em>Data Quality</em><b>N/A</b><span>資料不足</span></section>
+        <section class="chip cash"><i class="pin-left"></i><i class="pin-right"></i><small>03</small><h3>現金流 IC</h3><em>Cash Flow</em><b>N/A</b><span>資料不足</span></section>
+        <section class="chip ai"><i class="pin-left"></i><i class="pin-right"></i><small>05</small><h3>產業 / AI IC</h3><em>Industry & AI</em><b>N/A</b><span>資料不足</span></section>
+        <section class="chip macro"><i class="pin-left"></i><i class="pin-right"></i><small>04</small><h3>宏觀 / 匯率 IC</h3><em>Macro / FX</em><b>N/A</b><span>資料不足</span></section>
+
+        <section class="decision-core">
+          <small>Decision Core</small>
+          <b>HOLD</b>
+          <span>維持觀察</span>
+          <em>actionable:false</em>
+          <div class="strength">信號強度：中等</div>
+        </section>
+
+        <div class="neutral-core-overlay" aria-label="Decision Core HOLD">
+          <small>Decision Core</small>
+          <strong>HOLD</strong>
+          <span>維持觀察</span>
+          <em>actionable:false</em>
+        </div>
+
+        <div class="risk-pressure">
+          整體風險壓力 / Overall Risk Pressure
+          <div class="risk-track"></div>
+        </div>
+      </section>
+
+      <aside class="panel right-panel">
+        <div class="section-title"><h3>關鍵信號監控</h3><span>Signal Monitors</span></div>
+        <section class="monitor">
+          <div><h4>PB <small>(LTM)</small></h4><strong>N/A</strong><span class="tag">資料不足</span></div>
+          <svg class="spark" viewBox="0 0 220 82"><path class="spark-grid" d="M0 16H220M0 34H220M0 52H220M0 70H220"/><path class="spark-event" d="M148 0H182V82H148Z"/><path class="spark-threshold" d="M0 36H220"/><path class="spark-fill" d="M0 61 L10 60 L20 58 L30 60 L40 57 L50 58 L60 54 L70 55 L80 52 L90 53 L100 49 L110 50 L120 46 L130 47 L140 44 L150 42 L160 40 L170 41 L180 37 L190 35 L200 33 L210 29 L220 27 V82 H0Z"/><path class="spark-line" d="M0 61 L10 60 L20 58 L30 60 L40 57 L50 58 L60 54 L70 55 L80 52 L90 53 L100 49 L110 50 L120 46 L130 47 L140 44 L150 42 L160 40 L170 41 L180 37 L190 35 L200 33 L210 29 L220 27"/><circle class="spark-dot" cx="220" cy="27" r="3.8"/></svg>
+          <div class="scale">2.30<br>2.10<br>1.80<br>1.20</div>
+        </section>
+        <section class="monitor">
+          <div><h4>ROE <small>(LTM)</small></h4><strong>N/A</strong><span class="tag">資料不足</span></div>
+          <svg class="spark" viewBox="0 0 220 82"><path class="spark-grid" d="M0 16H220M0 34H220M0 52H220M0 70H220"/><path class="spark-event" d="M62 0H96V82H62Z"/><path class="spark-threshold" d="M0 44H220"/><path class="spark-fill" d="M0 62 L12 57 L24 52 L36 49 L48 50 L60 45 L72 42 L84 43 L96 41 L108 39 L120 40 L132 38 L144 37 L156 35 L168 36 L180 32 L192 31 L204 27 L220 24 V82 H0Z"/><path class="spark-line" d="M0 62 L12 57 L24 52 L36 49 L48 50 L60 45 L72 42 L84 43 L96 41 L108 39 L120 40 L132 38 L144 37 L156 35 L168 36 L180 32 L192 31 L204 27 L220 24"/><circle class="spark-dot" cx="220" cy="24" r="3.8"/></svg>
+          <div class="scale">15%<br>10%<br>5%<br>0%</div>
+        </section>
+        <section class="monitor">
+          <div><h4>EPS YoY <small>(TTM)</small></h4><strong>N/A</strong><span class="tag">資料不足</span></div>
+          <svg class="spark" viewBox="0 0 220 82"><path class="spark-grid" d="M0 16H220M0 34H220M0 52H220M0 70H220"/><path class="spark-event" d="M92 0H126V82H92Z"/><path class="spark-threshold" d="M0 38H220"/><path class="spark-fill" d="M0 50 L12 49 L24 47 L36 44 L48 41 L60 36 L72 34 L84 38 L96 45 L108 50 L120 54 L132 53 L144 51 L156 47 L168 42 L180 36 L192 31 L204 26 L220 22 V82 H0Z"/><path class="spark-line" d="M0 50 L12 49 L24 47 L36 44 L48 41 L60 36 L72 34 L84 38 L96 45 L108 50 L120 54 L132 53 L144 51 L156 47 L168 42 L180 36 L192 31 L204 26 L220 22"/><circle class="spark-dot" cx="220" cy="22" r="3.8"/></svg>
+          <div class="scale">25%<br>10%<br>0%<br>-20%</div>
+        </section>
+        <section class="monitor amber pulse-alert">
+          <div><h4>USD/TWD</h4><strong>N/A</strong><span class="tag">資料不足</span></div>
+          <svg class="spark amber" viewBox="0 0 220 82"><path class="spark-grid" d="M0 16H220M0 34H220M0 52H220M0 70H220"/><path class="spark-event" d="M164 0H196V82H164Z"/><path class="spark-threshold" d="M0 42H220"/><path class="spark-fill" d="M0 58 L12 56 L24 54 L36 55 L48 52 L60 53 L72 50 L84 51 L96 48 L108 49 L120 47 L132 45 L144 44 L156 42 L168 39 L180 37 L192 34 L204 31 L220 28 V82 H0Z"/><path class="spark-line" d="M0 58 L12 56 L24 54 L36 55 L48 52 L60 53 L72 50 L84 51 L96 48 L108 49 L120 47 L132 45 L144 44 L156 42 L168 39 L180 37 L192 34 L204 31 L220 28"/><circle class="spark-dot" cx="220" cy="28" r="3.8"/></svg>
+          <div class="scale">33.0<br>31.0<br>29.0</div>
+        </section>
+        <div class="monitor-note"><span>註：虛線為門檻區間；實線為中位數</span><span>查看全部信號 &gt;</span></div>
+      </aside>
+    </main>
+
+    <section class="bottom">
+      <section class="bottom-panel pulse-alert">
+        <div class="section-title"><h3>風險熱度排名</h3><span>Risk Heat Ranking</span></div>
+        <table class="table">
+          <thead><tr><th>排名</th><th>系統</th><th>壓力分數</th><th>狀態</th><th>趨勢</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>估值 IC</td><td>N/A <span class="mini-bar"><i style="--v:0%"></i></span></td><td>資料不足</td><td>—</td></tr>
+            <tr><td>2</td><td>現金流 IC</td><td>N/A <span class="mini-bar"><i style="--v:0%"></i></span></td><td>資料不足</td><td>—</td></tr>
+            <tr><td>3</td><td>基本面 IC</td><td>N/A <span class="mini-bar"><i style="--v:0%"></i></span></td><td>資料不足</td><td>—</td></tr>
+            <tr><td>4</td><td>宏觀 / 匯率 IC</td><td>N/A <span class="mini-bar"><i style="--v:0%"></i></span></td><td>資料不足</td><td>—</td></tr>
+            <tr><td>5</td><td>資料品質 IC</td><td>N/A <span class="mini-bar"><i style="--v:0%"></i></span></td><td>資料不足</td><td>—</td></tr>
+            <tr><td>6</td><td>產業 / AI IC</td><td>N/A <span class="mini-bar"><i style="--v:0%"></i></span></td><td>資料不足</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </section>
+      <section class="bottom-panel">
+        <div class="section-title"><h3>Owner 待審清單</h3><span>Owner Review Queue</span></div>
+        <div class="review-grid">
+          <div class="head">優先級</div><div class="head">事項</div><div class="head">負責人</div><div class="head">期限</div><div class="head">狀態</div>
+          <div><span class="pill amber">中</span></div><div>等待 Launcher 審查狀態</div><div>Owner</div><div>N/A</div><div>資料不足</div>
+        </div>
+      </section>
+      <section class="bottom-panel">
+        <div class="section-title"><h3>治理與資料狀態</h3><span>Governance & Data State</span></div>
+        <div class="state-list">
+          <div class="state-row"><b>正式 CSV</b><span>等待資料綁定</span><i class="state-light"></i></div>
+          <div class="state-row"><b>資料新鮮度</b><span>N/A</span><i class="state-light"></i></div>
+          <div class="state-row"><b>資料完整性</b><span>N/A</span><i class="state-light"></i></div>
+          <div class="state-row"><b>缺漏欄位</b><span>N/A</span><i class="state-light"></i></div>
+          <div class="state-row"><b>權限等級</b><span>完整</span><i class="state-light"></i></div>
+          <div class="state-row"><b>可執行性</b><span class="red">actionable:false</span><i class="state-light"></i></div>
+        </div>
+      </section>
+      <section class="bottom-panel">
+        <div class="section-title"><h3>今日決策摘要</h3><span>Executive Summary</span></div>
+        <ul class="summary-list">
+          <li>整體風險壓力：資料不足</li>
+          <li>決策建議：HOLD（維持觀察）</li>
+          <li>主要觀察點：等待正式資料綁定</li>
+          <li>關鍵風險：資料不足時不得沿用歷史判讀</li>
+          <li>下次檢視：由 Launcher runtime 決定</li>
+        </ul>
+      </section>
+    </section>
+
+    <footer class="footer">
+      <span>2317 Hon Hai Precision Industry Co., Ltd.</span>
+      <span>Currency：TWD</span>
+      <span>All indicators for reference only. Not investment advice.</span>
+      <span>Report Engine v3.2.1</span>
+      <span>使用者：warroom_admin</span>
+      <span>Session 00:23:41</span>
+    </footer>
+  </div>
+  <script>
+    (() => {
+      const DESIGN_W = 1600;
+      const DESIGN_H = 900;
+      const fit = () => {
+        const scale = Math.min(window.innerWidth / DESIGN_W, Math.max(320, window.innerHeight - 16) / DESIGN_H);
+        document.documentElement.style.setProperty("--fit-scale", Math.max(0.25, scale).toFixed(4));
+      };
+      window.addEventListener("resize", fit, { passive: true });
+      fit();
+    })();
+  </script>
+  <script>
+    (() => {
+      const gaugeSvg = (needleDeg) => `
+        <svg class="gauge-face" viewBox="0 0 132 86" aria-hidden="true">
+          <path class="gauge-base" d="M18 68 A48 48 0 0 1 114 68" />
+          <path class="gauge-good" d="M18 68 A48 48 0 0 1 48 24" />
+          <path class="gauge-watch" d="M48 24 A48 48 0 0 1 86 24" />
+          <path class="gauge-risk" d="M86 24 A48 48 0 0 1 114 68" />
+          <path class="gauge-tick" d="M18 68L26 64M48 24L52 32M86 24L82 32M114 68L106 64" />
+          <line class="gauge-needle" style="--needle:${needleDeg}deg" x1="66" y1="68" x2="66" y2="30" />
+          <circle class="gauge-hub" cx="66" cy="68" r="4.8" />
+          <text class="gauge-caption" x="18" y="82">低</text>
+          <text class="gauge-caption" x="60" y="16">中</text>
+          <text class="gauge-caption" x="106" y="82">高</text>
+        </svg>`;
+
+      const monitors = [
+        { id: "PB (LTM)", value: "N/A", status: "資料不足", note: "等待正式資料綁定。", color: "var(--gray)", deg: 0 },
+        { id: "ROE (LTM)", value: "N/A", status: "資料不足", note: "等待正式資料綁定。", color: "var(--gray)", deg: 0 },
+        { id: "EPS YoY", value: "N/A", status: "資料不足", note: "等待正式資料綁定。", color: "var(--gray)", deg: 0 },
+        { id: "USD/TWD", value: "N/A", status: "資料不足", note: "等待正式資料綁定。", color: "var(--gray)", deg: 0 },
+      ];
+
+      const rightPanel = document.querySelector(".right-panel");
+      if (rightPanel) {
+        rightPanel.classList.add("v18-gauge-panel");
+        rightPanel.innerHTML = `
+          <div class="section-title"><h3>關鍵信號監控</h3><span>Gauge Monitors</span></div>
+          ${monitors.map((m) => `
+            <section class="gauge-monitor" style="--gauge-color:${m.color}">
+              <div class="gauge-meta">
+                <h4>${m.id}</h4>
+                <strong>${m.value}</strong>
+                <span class="gauge-status">${m.status}</span>
+                <p class="gauge-note">${m.note}</p>
+              </div>
+              ${gaugeSvg(m.deg)}
+            </section>
+          `).join("")}
+          <div class="monitor-note"><span>指針位置代表目前風險區，不代表買賣訊號</span><span>actionable:false</span></div>
+        `;
+      }
+
+      const bottom = document.querySelector(".bottom");
+      if (bottom) {
+        bottom.classList.add("v18-bottom");
+        bottom.innerHTML = `
+          <section class="bottom-panel">
+            <div class="section-title"><h3>風險熱度排名</h3><span>Risk Heat Ranking</span></div>
+            <table class="table">
+              <thead><tr><th>排名</th><th>系統</th><th>壓力</th><th>狀態</th><th>趨勢</th></tr></thead>
+              <tbody>
+                <tr><td>1</td><td>估值 IC</td><td>N/A</td><td>資料不足</td><td>—</td></tr>
+                <tr><td>2</td><td>現金流 IC</td><td>N/A</td><td>資料不足</td><td>—</td></tr>
+                <tr><td>3</td><td>基本面 IC</td><td>N/A</td><td>資料不足</td><td>—</td></tr>
+                <tr><td>4</td><td>產業 / AI IC</td><td>N/A</td><td>資料不足</td><td>—</td></tr>
+              </tbody>
+            </table>
+          </section>
+          <section class="bottom-panel">
+            <div class="section-title"><h3>Owner 待審清單</h3><span>Owner Review Queue</span></div>
+            <div class="review-grid">
+              <div class="head">級別</div><div class="head">事項</div><div class="head">負責</div><div class="head">期限</div><div class="head">狀態</div>
+              <div><span class="pill red">高</span></div><div>AI 伺服器需求追蹤與出貨預期</div><div>Strategy</div><div>05-28</div><div>待審</div>
+              <div><span class="pill red">高</span></div><div>毛利率連續兩季低於財測下緣</div><div>Finance</div><div>05-27</div><div>補件</div>
+              <div><span class="pill amber">中</span></div><div>匯率波動對 EPS 估算影響</div><div>Treasury</div><div>05-29</div><div>待估</div>
+              <div><span class="pill green">低</span></div><div>資料新鮮度是否達正式 CSV 標準</div><div>Data</div><div>05-26</div><div>待核</div>
+            </div>
+          </section>
+          <section class="bottom-panel">
+            <div class="section-title"><h3>治理狀態與決策摘要</h3><span>Governance & Executive Summary</span></div>
+            <div class="audit-stack">
+              <div class="decision-audit">
+                <div class="audit-row" style="--accent:var(--green)"><b>資料狀態</b><span>正式 CSV 已就緒；資料新鮮度為即時延遲 12 分鐘。</span></div>
+                <div class="audit-row" style="--accent:var(--green)"><b>完整性</b><span>資料完整性 92%，缺漏欄位 0 項。</span></div>
+                <div class="audit-row" style="--accent:var(--red)"><b>可執行性</b><span>actionable:false；僅供決策稽核，不產生交易指令。</span></div>
+              </div>
+              <div class="decision-audit">
+                <div class="audit-row" style="--accent:var(--decision)"><b>決策結論</b><span>HOLD，維持觀察；不構成交易建議。</span></div>
+                <div class="audit-row" style="--accent:var(--amber)"><b>主要風險</b><span>估值偏高、AI 需求與毛利率復甦強度需追蹤。</span></div>
+                <div class="audit-note">下次檢視由正式資料日期與 Launcher runtime 決定；戰情室只提醒重審，不輸出買賣指令。</div>
+              </div>
+            </div>
+          </section>
+        `;
+      }
+    })();
+  </script>
+  <script>
+    (() => {
+      document.title = "P1008 Product Warroom PCB v20";
+      document.querySelector(".shell")?.classList.add("v19-layout", "v20-layout");
+      document.querySelector(".footer")?.classList.add("v19-footer", "v20-footer");
+
+      const compactGauge = (needleDeg) => `
+        <svg class="v19-gauge-face" viewBox="0 0 104 66" aria-hidden="true">
+          <path class="base" d="M12 52 A40 40 0 0 1 92 52" />
+          <path class="good" d="M12 52 A40 40 0 0 1 38 17" />
+          <path class="watch" d="M38 17 A40 40 0 0 1 66 17" />
+          <path class="risk" d="M66 17 A40 40 0 0 1 92 52" />
+          <line class="needle" style="--needle:${needleDeg}deg" x1="52" y1="52" x2="52" y2="20" />
+          <circle class="hub" cx="52" cy="52" r="4.2" />
+          <text x="10" y="64">低</text>
+          <text x="48" y="12">中</text>
+          <text x="88" y="64">高</text>
+        </svg>`;
+
+      const monitorRows = [
+        { id: "PB (LTM)", value: "N/A", status: "資料不足", note: "等待正式資料綁定。", color: "var(--gray)", deg: 0 },
+        { id: "ROE (LTM)", value: "N/A", status: "資料不足", note: "等待正式資料綁定。", color: "var(--gray)", deg: 0 },
+        { id: "EPS YoY", value: "N/A", status: "資料不足", note: "等待正式資料綁定。", color: "var(--gray)", deg: 0 },
+        { id: "USD/TWD", value: "N/A", status: "資料不足", note: "等待正式資料綁定。", color: "var(--gray)", deg: 0 },
+      ];
+
+      const rightPanel = document.querySelector(".right-panel");
+      if (rightPanel) {
+        rightPanel.className = "panel right-panel v19-gauge-panel v20-gauge-panel";
+        rightPanel.innerHTML = `
+          <div class="section-title"><h3>關鍵信號監控</h3><span>Gauge Monitors</span></div>
+          ${monitorRows.map((m) => `
+            <section class="v19-gauge-row" style="--gauge-color:${m.color}">
+              <div class="v19-gauge-meta">
+                <h4>${m.id}</h4>
+                <strong>${m.value}</strong>
+                <span class="v19-gauge-status">${m.status}</span>
+                <p class="v19-gauge-note">${m.note}</p>
+              </div>
+              ${compactGauge(m.deg)}
+            </section>
+          `).join("")}
+          <div class="monitor-note"><span>指針只顯示風險區間</span><span>actionable:false</span></div>
+        `;
+      }
+
+      const bottom = document.querySelector(".bottom");
+      if (bottom) {
+        bottom.className = "bottom v19-bottom v20-bottom";
+        bottom.innerHTML = `
+          <section class="bottom-panel">
+            <div class="section-title"><h3>風險熱度排名</h3><span>Risk Heat Ranking</span></div>
+            <table class="table">
+              <thead><tr><th>排名</th><th>系統</th><th>壓力</th><th>狀態</th><th>趨勢</th></tr></thead>
+              <tbody>
+                <tr><td>1</td><td>估值 IC</td><td>N/A</td><td>資料不足</td><td>—</td></tr>
+                <tr><td>2</td><td>現金流 IC</td><td>N/A</td><td>資料不足</td><td>—</td></tr>
+                <tr><td>3</td><td>基本面 IC</td><td>N/A</td><td>資料不足</td><td>—</td></tr>
+                <tr><td>4</td><td>產業 / AI IC</td><td>N/A</td><td>資料不足</td><td>—</td></tr>
+              </tbody>
+            </table>
+          </section>
+          <section class="bottom-panel">
+            <div class="section-title"><h3>Owner 待審清單</h3><span>Owner Review Queue</span></div>
+            <div class="review-grid">
+              <div class="head">級別</div><div class="head">事項</div><div class="head">負責</div><div class="head">期限</div><div class="head">狀態</div>
+              <div><span class="pill red">高</span></div><div>AI 伺服器需求追蹤與出貨預期</div><div>Strategy</div><div>05-28</div><div>待審</div>
+              <div><span class="pill red">高</span></div><div>毛利率連續兩季低於財測下緣</div><div>Finance</div><div>05-27</div><div>補件</div>
+              <div><span class="pill amber">中</span></div><div>匯率波動對 EPS 估算影響</div><div>Treasury</div><div>05-29</div><div>待估</div>
+              <div><span class="pill green">低</span></div><div>資料新鮮度是否達正式 CSV 標準</div><div>Data</div><div>05-26</div><div>待核</div>
+            </div>
+          </section>
+          <section class="bottom-panel">
+            <div class="section-title"><h3>治理狀態與決策摘要</h3><span>Governance & Executive Summary</span></div>
+            <div class="v19-summary-stack">
+              <div class="v19-summary-card">
+                <div class="v19-summary-line" style="--accent:var(--green)"><b>資料狀態</b><span>正式 CSV 已就緒；資料新鮮度為即時延遲 12 分鐘。</span></div>
+                <div class="v19-summary-line" style="--accent:var(--green)"><b>完整性</b><span>資料完整性 92%，缺漏欄位 0 項。</span></div>
+                <div class="v19-summary-line" style="--accent:var(--red)"><b>可執行性</b><span>actionable:false；僅供決策稽核，不產生交易指令。</span></div>
+              </div>
+              <div class="v19-summary-card">
+                <div class="v19-summary-line" style="--accent:var(--decision)"><b>決策結論</b><span>HOLD，維持觀察；不構成交易建議。</span></div>
+                <div class="v19-summary-line" style="--accent:var(--amber)"><b>主要風險</b><span>估值偏高、AI 需求與毛利率復甦強度需追蹤。</span></div>
+                <div class="v19-action-note">下次檢視由正式資料日期與 Launcher runtime 決定；戰情室只提醒重審，不輸出買賣指令。</div>
+              </div>
+            </div>
+          </section>
+        `;
+      }
+    })();
+  </script>
+  <script>
+    (() => {
+      document.title = "P1008 Product Warroom PCB v22";
+      document.querySelector(".shell")?.classList.add("v21-layout", "v22-layout");
+      document.querySelector(".footer")?.classList.add("v22-footer");
+
+      const decisionCopy = document.querySelector(".left-stack .panel:first-child .decision-copy");
+      if (decisionCopy) {
+        decisionCopy.classList.add("v21-decision-brief");
+        decisionCopy.innerHTML = `
+          <div class="status-line"><span class="status-dot"></span><span>維持觀察，不構成交易建議</span></div>
+          <h4>估值偏高但基本面仍具支撐；本期重點是追蹤匯率、AI 需求與毛利率復甦。</h4>
+          <p>目前不觸發重審；下次檢視財報、匯率與 AI 需求變化。</p>
+          <div class="decision-foot">僅供決策參考 ｜ actionable:false</div>
+        `;
+      }
+
+      const confidenceBody = document.querySelector(".left-stack .panel:nth-child(2) .confidence-body");
+      if (confidenceBody) {
+        confidenceBody.className = "confidence-body v21-confidence-body";
+        confidenceBody.innerHTML = `
+          <div class="v21-confidence-top">
+            <div class="confidence-ring"><strong>64%</strong></div>
+            <div class="v21-confidence-text">
+              <h4>中等信心</h4>
+              <p>正式資料鏈完整；部分推論需中文註記。本區只呈現資料可判讀程度，不作交易觸發。</p>
+            </div>
+          </div>
+          <div class="v21-metric-grid">
+            <div class="v21-metric"><span>完整性</span><span class="track"><i style="--v:92%"></i></span><b>92%</b></div>
+            <div class="v21-metric"><span>一致性</span><span class="track"><i style="--v:84%"></i></span><b>84%</b></div>
+            <div class="v21-metric"><span>時效性</span><span class="track"><i style="--v:92%"></i></span><b>92%</b></div>
+            <div class="v21-metric"><span>新鮮度</span><span class="track"><i style="--v:92%"></i></span><b>92%</b></div>
+            <div class="v21-metric"><span>覆蓋度</span><span class="track"><i style="--v:72%"></i></span><b>72%</b></div>
+            <div class="v21-metric"><span>註記</span><span class="track"><i style="--v:0%"></i></span><b>N/A</b></div>
+          </div>
+        `;
+      }
+
+      const rightPanel = document.querySelector(".right-panel");
+      if (rightPanel) rightPanel.classList.add("v21-gauge-panel", "v22-gauge-panel");
+      const bottom = document.querySelector(".bottom");
+      if (bottom) bottom.classList.add("v22-bottom");
+    })();
+  </script>
+  <script>
+    (() => {
+      document.title = "P1008 Product Warroom PCB v23";
+      const gauge = (deg) => `
+        <div class="v23-gauge-box">
+          <i class="v23-risk-strip"></i>
+          <svg class="v23-gauge-face" viewBox="0 0 76 52" aria-hidden="true">
+            <path class="base" d="M8 42 A30 30 0 0 1 68 42" />
+            <path class="good" d="M8 42 A30 30 0 0 1 28 16" />
+            <path class="watch" d="M28 16 A30 30 0 0 1 48 16" />
+            <path class="risk" d="M48 16 A30 30 0 0 1 68 42" />
+            <line class="needle" style="--needle:${deg}deg" x1="38" y1="42" x2="38" y2="18" />
+            <circle class="hub" cx="38" cy="42" r="3.7" />
+          </svg>
+        </div>`;
+
+      const rows = [
+        { id: "PB (LTM)", value: "N/A", status: "資料不足", note: "等待正式資料綁定。", color: "var(--gray)", deg: 0 },
+        { id: "ROE (LTM)", value: "N/A", status: "資料不足", note: "等待正式資料綁定。", color: "var(--gray)", deg: 0 },
+        { id: "EPS YoY", value: "N/A", status: "資料不足", note: "等待正式資料綁定。", color: "var(--gray)", deg: 0 },
+        { id: "USD/TWD", value: "N/A", status: "資料不足", note: "等待正式資料綁定。", color: "var(--gray)", deg: 0 },
+      ];
+
+      const rightPanel = document.querySelector(".right-panel");
+      if (rightPanel) {
+        rightPanel.className = "panel right-panel v23-signal-panel";
+        rightPanel.innerHTML = `
+          <div class="section-title"><h3>關鍵信號監控</h3><span>Gauge Monitors</span></div>
+          ${rows.map((m) => `
+            <section class="v23-signal-row" style="--gauge-color:${m.color}">
+              <div class="v23-signal-meta">
+                <h4>${m.id}</h4>
+                <strong>${m.value}</strong>
+                <span class="v23-signal-status">${m.status}</span>
+                <p class="v23-signal-note">${m.note}</p>
+              </div>
+              ${gauge(m.deg)}
+            </section>
+          `).join("")}
+          <div class="monitor-note"><span>指針只顯示風險區間</span><span>actionable:false</span></div>
+        `;
+      }
+    })();
+  </script>
+  <script>
+    (() => {
+      document.title = "P1008 Product Warroom PCB v24";
+      const rows = [
+        { id: "PB (LTM)", value: "N/A", status: "資料不足", note: "等待正式資料綁定。", color: "var(--gray)", meter: "0%" },
+        { id: "ROE (LTM)", value: "N/A", status: "資料不足", note: "等待正式資料綁定。", color: "var(--gray)", meter: "0%" },
+        { id: "EPS YoY", value: "N/A", status: "資料不足", note: "等待正式資料綁定。", color: "var(--gray)", meter: "0%" },
+        { id: "USD/TWD", value: "N/A", status: "資料不足", note: "等待正式資料綁定。", color: "var(--gray)", meter: "0%" }
+      ];
+      const rightPanel = document.querySelector(".right-panel");
+      if (rightPanel) {
+        rightPanel.className = "panel right-panel v24-signal-panel";
+        rightPanel.innerHTML = `
+          <div class="section-title"><h3>關鍵信號監控</h3><span>Signal Meters</span></div>
+          ${rows.map(m => `
+            <section class="v24-signal-row" style="--signal-color:${m.color};--meter:${m.meter}">
+              <div class="v24-row-head">
+                <span class="v24-signal-light" aria-hidden="true"></span>
+                <h4>${m.id}</h4>
+                <strong>${m.value}</strong>
+                <span class="v24-status">${m.status}</span>
+              </div>
+              <div class="v24-meter"><i class="v24-meter-fill"></i><i class="v24-needle"></i></div>
+              <div class="v24-band-labels"><span>支撐</span><span>觀察</span><span>警戒</span></div>
+              <p class="v24-note">${m.note}</p>
+            </section>
+          `).join("")}
+          <div class="monitor-note"><span>風險條整合數值與區間</span><span>actionable:false</span></div>
+        `;
+      }
+    })();
+  </script>
+  <script>
+    (() => {
+      const systems = {
+        fund: {
+          label: "基本面 IC",
+          en: "Fundamentals",
+          score: null,
+          state: "資料不足",
+          color: "var(--gray)",
+          headline: "等待正式資料綁定。",
+          evidence: "載入失敗時不得沿用歷史基本面數值。",
+          owner: "Owner 動作：回 Launcher 檢查資料狀態。"
+        },
+        val: {
+          label: "估值 IC",
+          en: "Valuation",
+          score: null,
+          state: "資料不足",
+          color: "var(--gray)",
+          headline: "等待正式資料綁定。",
+          evidence: "載入失敗時不得沿用歷史估值數值。",
+          owner: "Owner 動作：回 Launcher 檢查資料狀態。"
+        },
+        cash: {
+          label: "現金流 IC",
+          en: "Cash Flow",
+          score: null,
+          state: "資料不足",
+          color: "var(--gray)",
+          headline: "等待正式資料綁定。",
+          evidence: "載入失敗時不得沿用歷史現金流數值。",
+          owner: "Owner 動作：回 Launcher 檢查資料狀態。"
+        },
+        macro: {
+          label: "宏觀 / 匯率 IC",
+          en: "Macro / FX",
+          score: null,
+          state: "資料不足",
+          color: "var(--gray)",
+          headline: "等待正式資料綁定。",
+          evidence: "載入失敗時不得沿用歷史總經或匯率數值。",
+          owner: "Owner 動作：回 Launcher 檢查資料狀態。"
+        },
+        ai: {
+          label: "產業 / AI IC",
+          en: "Industry & AI",
+          score: null,
+          state: "資料不足",
+          color: "var(--gray)",
+          headline: "等待正式資料綁定。",
+          evidence: "載入失敗時不得沿用歷史產業或 AI 數值。",
+          owner: "Owner 動作：回 Launcher 檢查資料狀態。"
+        },
+        quality: {
+          label: "資料品質 IC",
+          en: "Data Quality",
+          score: null,
+          state: "資料不足",
+          color: "var(--gray)",
+          headline: "等待正式資料綁定。",
+          evidence: "載入失敗時不得沿用歷史資料品質數值。",
+          owner: "Owner 動作：回 Launcher 檢查資料狀態。"
+        }
+      };
+
+      const safeHotspotText = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;",
+        "'": "&#39;"
+      }[char]));
+
+      const deriveInitialTone = (score, state = "") => {
+        const value = Number(String(score ?? "").replace(/[,%x]/g, "").trim());
+        const text = String(state || "").toUpperCase();
+        if (!Number.isFinite(value) || /N\/A|MISSING|CONNECTOR|PENDING|缺資料|缺欄|未取得|無法判定/.test(text)) return { tone: "gray", color: "var(--gray)" };
+        if (value < 50 || /REVIEW_REQUIRED|BLOCKED|FAIL|偏弱|高風險|警戒|阻擋|失敗/.test(text)) return { tone: "red", color: "var(--red)" };
+        if (value < 70 || /WATCH|OBSERVE|REVIEW|中等|偏高|待驗證|觀察|待審|OWNER GATE/.test(text)) return { tone: "amber", color: "var(--amber)" };
+        return { tone: "green", color: "var(--green)" };
+      };
+      Object.values(systems).forEach((item) => {
+        const derived = deriveInitialTone(item.score, item.state);
+        item.tone = derived.tone;
+        item.color = derived.color;
+      });
+
+      const motherboardSize = { width: 3000, height: 900 };
+      const hotspots = [
+        { key: "fund", code: "01", x: 32.5, y: 8.2, w: 6.4, h: 20.2 },
+        { key: "val", code: "02", x: 60.4, y: 8.2, w: 6.4, h: 20.2 },
+        { key: "quality", code: "06", x: 26.9, y: 38.8, w: 6.5, h: 20.6 },
+        { key: "cash", code: "03", x: 65.9, y: 38.8, w: 6.5, h: 20.6 },
+        { key: "ai", code: "05", x: 32.5, y: 67.5, w: 6.4, h: 21.2 },
+        { key: "macro", code: "04", x: 60.4, y: 67.5, w: 6.4, h: 21.2 }
+      ];
+
+      const board = document.querySelector(".board");
+      const shell = document.querySelector(".shell");
+      const decisionBrief = document.querySelector(".v21-decision-brief");
+      const core = document.querySelector(".neutral-core-overlay");
+      const summaryHost = document.querySelector(".bottom .bottom-panel:last-child .v19-summary-stack");
+
+      if (!board || !shell) return;
+      board.classList.add("is-activated");
+
+      const layer = document.createElement("div");
+      layer.className = "active-hotspot-layer";
+      const hotspotButtons = [];
+      hotspots.forEach((spot) => {
+        const item = systems[spot.key];
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "active-hotspot";
+        button.dataset.system = spot.key;
+        button.dataset.x = spot.x;
+        button.dataset.y = spot.y;
+        button.dataset.w = spot.w;
+        button.dataset.h = spot.h;
+        button.dataset.code = spot.code;
+        button.style.setProperty("--hotspot-color", item.color);
+        button.setAttribute("aria-label", `查看${item.label}：${item.state}`);
+        button.title = `${item.label}｜${item.state}｜${item.score}`;
+        button.innerHTML = `
+          <small>${spot.code} ${safeHotspotText(item.label)}</small>
+          <em>${safeHotspotText(item.en || "")}</em>
+          <strong>${safeHotspotText(String(item.score))}</strong>
+          <span>${safeHotspotText(item.state)}</span>
+        `;
+        button.addEventListener("click", () => selectSystem(spot.key, "ic"));
+        button.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            selectSystem(spot.key, "ic");
+          }
+        });
+        hotspotButtons.push(button);
+        layer.appendChild(button);
+      });
+      const decisionButton = document.createElement("a");
+      decisionButton.className = "active-hotspot decision-hotspot";
+      decisionButton.href = "../../index_p1008_v7.html?from=newui#warroom-decision-brief";
+      decisionButton.dataset.system = "decision-core";
+      decisionButton.dataset.x = "43.2";
+      decisionButton.dataset.y = "27.6";
+      decisionButton.dataset.w = "12.2";
+      decisionButton.dataset.h = "44.0";
+      decisionButton.setAttribute("aria-label", "結論主 IC：開啟舊 UI 明細");
+      decisionButton.title = "結論主 IC｜開啟舊 UI 明細";
+      hotspotButtons.push(decisionButton);
+      layer.appendChild(decisionButton);
+      board.appendChild(layer);
+
+      function boardImageFrame() {
+        const rect = board.getBoundingClientRect();
+        const scale = Math.min(rect.width / motherboardSize.width, rect.height / motherboardSize.height);
+        const width = motherboardSize.width * scale;
+        const height = motherboardSize.height * scale;
+        return {
+          left: (rect.width - width) / 2,
+          top: (rect.height - height) / 2,
+          width,
+          height
+        };
+      }
+
+      function layoutHotspots() {
+        const frame = boardImageFrame();
+        hotspotButtons.forEach((button) => {
+          const x = Number(button.dataset.x || 0);
+          const y = Number(button.dataset.y || 0);
+          const w = Number(button.dataset.w || 0);
+          const h = Number(button.dataset.h || 0);
+          button.style.left = `${frame.left + frame.width * x / 100}px`;
+          button.style.top = `${frame.top + frame.height * y / 100}px`;
+          button.style.width = `${frame.width * w / 100}px`;
+          button.style.height = `${frame.height * h / 100}px`;
+        });
+      }
+
+      layoutHotspots();
+      window.addEventListener("resize", layoutHotspots);
+      window.__p1008HotspotQa = () => ({
+        frame: boardImageFrame(),
+        hotspots: hotspotButtons.map((button) => {
+          const rect = button.getBoundingClientRect();
+          return {
+            key: button.dataset.system,
+            left: Math.round(rect.left),
+            top: Math.round(rect.top),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height)
+          };
+        })
+      });
+
+      const notePanel = document.createElement("aside");
+      notePanel.className = "activation-note-panel";
+      notePanel.innerHTML = `
+        <h3>戰情室已激活</h3>
+        <p>可點選六大 IC、右側信號條與 Owner 待審項目。畫面只改變判讀焦點，不修改正式 CSV，也不輸出交易指令。</p>
+      `;
+      shell.appendChild(notePanel);
+
+      const setText = (selector, text) => {
+        const node = document.querySelector(selector);
+        if (node) node.textContent = text;
+      };
+
+      function updateSummary(key, source) {
+        const item = systems[key];
+        if (!summaryHost) return;
+        summaryHost.style.setProperty("--active-color", item.color);
+        summaryHost.innerHTML = `
+          <div>
+            <div class="active-summary-line"><b>目前焦點</b><span>${item.label}｜分數 ${item.score}｜${item.state}</span></div>
+            <div class="active-summary-line"><b>判讀依據</b><span>${item.evidence}</span></div>
+            <div class="active-summary-line"><b>Owner 動作</b><span>${item.owner}</span></div>
+          </div>
+          <div>
+            <div class="active-summary-line"><b>決策結論</b><span>HOLD，維持觀察；本次互動來源：${source}。</span></div>
+            <div class="active-summary-line"><b>主要風險</b><span>${item.headline}</span></div>
+            <div class="v19-action-note">下次檢視由正式資料日期與 Launcher runtime 決定；戰情室只提醒重審，不輸出買賣指令。</div>
+          </div>
+        `;
+      }
+
+      function selectSystem(key, source = "ic") {
+        const item = systems[key];
+        if (!item) return;
+        board.dataset.active = key;
+        board.style.setProperty("--active-color", item.color);
+        document.querySelectorAll(".active-hotspot").forEach((node) => {
+          node.classList.toggle("is-active", node.dataset.system === key);
+        });
+        document.querySelectorAll(".v24-signal-row").forEach((node) => {
+          node.classList.toggle("is-active", node.dataset.system === key);
+        });
+        if (core) {
+          core.style.setProperty("--active-color", item.color);
+          core.querySelector("small").textContent = item.label;
+          core.querySelector("strong").textContent = "HOLD";
+          core.querySelector("span").textContent = item.state;
+          core.querySelector("em").textContent = "actionable:false";
+        }
+        if (decisionBrief) {
+          const status = decisionBrief.querySelector(".status-line span:last-child");
+          const headline = decisionBrief.querySelector("h4");
+          const foot = decisionBrief.querySelector(".decision-foot");
+          if (status) status.textContent = `${item.label}：${item.state}`;
+          if (headline) headline.textContent = item.headline;
+          if (foot) foot.textContent = `互動焦點：${item.evidence} ｜ actionable:false`;
+        }
+        updateSummary(key, source);
+      }
+
+      const signalTargets = ["val", "fund", "fund", "macro"];
+      document.querySelectorAll(".v24-signal-row").forEach((row, index) => {
+        row.dataset.system = signalTargets[index] || "quality";
+        row.tabIndex = 0;
+        row.setAttribute("role", "button");
+        row.setAttribute("aria-label", `切換至${systems[row.dataset.system].label}`);
+        row.addEventListener("click", () => selectSystem(row.dataset.system, "右側信號監控"));
+        row.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            selectSystem(row.dataset.system, "右側信號監控");
+          }
+        });
+      });
+
+      const reviewGrid = document.querySelector(".review-grid");
+      if (reviewGrid) {
+        const reviewTargets = ["ai", "cash", "macro", "quality"];
+        reviewGrid.addEventListener("click", (event) => {
+          const cells = Array.from(reviewGrid.children);
+          const index = cells.indexOf(event.target.closest(".review-grid > div"));
+          if (index < 5) return;
+          const rowIndex = Math.floor((index - 5) / 5);
+          const key = reviewTargets[rowIndex] || "quality";
+          cells.forEach((cell) => cell.classList.remove("is-row-active"));
+          cells.slice(5 + rowIndex * 5, 10 + rowIndex * 5).forEach((cell) => cell.classList.add("is-row-active"));
+          selectSystem(key, "Owner 待審清單");
+        });
+      }
+
+      const exportSnapshot = () => {
+        const activeKey = board.dataset.active || "val";
+        const item = systems[activeKey];
+        const text = [
+          "Hon Hai 戰略決策戰情室互動快照",
+          `目前焦點：${item.label}`,
+          `分數 / 狀態：${item.score} / ${item.state}`,
+          `判讀：${item.headline}`,
+          `依據：${item.evidence}`,
+          `Owner：${item.owner}`,
+          "actionable:false"
+        ].join("\n");
+        const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "P1008_warroom_interactive_snapshot.txt";
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1200);
+      };
+
+      document.querySelectorAll(".tools span").forEach((tool, index) => {
+        tool.tabIndex = 0;
+        tool.setAttribute("role", "button");
+        const actions = [
+          exportSnapshot,
+          () => notePanel.classList.toggle("is-open"),
+          () => document.body.classList.toggle("active-focus-mode"),
+          () => {
+            const next = !document.body.classList.contains("p1008-focus-mode");
+            document.body.classList.toggle("p1008-focus-mode", next);
+            try { localStorage.setItem("p1008_immersive_mode", next ? "1" : "0"); } catch (err) {}
+            document.dispatchEvent(new Event("p1008-immersive-change"));
+          }
+        ];
+        tool.addEventListener("click", () => actions[index]?.());
+        tool.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            actions[index]?.();
+          }
+        });
+      });
+
+      selectSystem("val", "初始載入");
+    })();
+  </script>
+  <script>
+    (() => {
+      const button = document.getElementById("fullscreen-toggle");
+      const immersiveKey = "p1008_immersive_mode";
+      const readImmersivePref = () => {
+        try { return localStorage.getItem(immersiveKey) === "1"; } catch (err) { return false; }
+      };
+      const writeImmersivePref = (active) => {
+        try { localStorage.setItem(immersiveKey, active ? "1" : "0"); } catch (err) {}
+      };
+      const immersiveRequested = () => new URLSearchParams(window.location.search).get("fs") === "1" || readImmersivePref();
+      const immersiveActive = () => document.body.classList.contains("p1008-focus-mode") || immersiveRequested();
+      const withImmersive = (href) => {
+        const url = new URL(href, window.location.href);
+        if (immersiveActive()) url.searchParams.set("fs", "1");
+        else url.searchParams.delete("fs");
+        return url.href;
+      };
+      const applyImmersiveMode = (active, persist = true) => {
+        document.body.classList.toggle("p1008-focus-mode", active);
+        if (persist) writeImmersivePref(active);
+        syncFullscreenButton();
+      };
+      const syncImmersiveLinks = () => {
+        document.querySelectorAll("a[href]").forEach((link) => {
+          const raw = link.getAttribute("href");
+          if (!raw || /^(#|mailto:|tel:|javascript:)/i.test(raw)) return;
+          const url = new URL(raw, window.location.href);
+          if (url.protocol === window.location.protocol && url.host === window.location.host) {
+            link.setAttribute("href", withImmersive(raw));
+          }
+        });
+      };
+      function syncFullscreenButton() {
+        if (!button) return;
+        const active = Boolean(document.body.classList.contains("p1008-focus-mode") || document.fullscreenElement);
+        button.disabled = false;
+        button.textContent = active ? "退出全螢幕" : "全螢幕";
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+        button.title = "切換戰情室沉浸模式；內部跳轉會保持此狀態";
+      }
+      async function toggleFullscreen() {
+        const next = !document.body.classList.contains("p1008-focus-mode");
+        if (!next && document.fullscreenElement) {
+          try { await document.exitFullscreen(); } catch (err) {}
+        }
+        applyImmersiveMode(next, true);
+        syncImmersiveLinks();
+      }
+      if (button) button.addEventListener("click", toggleFullscreen);
+      document.addEventListener("click", (event) => {
+        const link = event.target.closest?.("a[href]");
+        if (!link) return;
+        const raw = link.getAttribute("href");
+        if (!raw || /^(#|mailto:|tel:|javascript:)/i.test(raw)) return;
+        const url = new URL(raw, window.location.href);
+        if (url.protocol === window.location.protocol && url.host === window.location.host) {
+          link.setAttribute("href", withImmersive(raw));
+        }
+      }, true);
+      document.addEventListener("fullscreenchange", syncFullscreenButton);
+      document.addEventListener("p1008-immersive-change", () => {
+        syncImmersiveLinks();
+        syncFullscreenButton();
+      });
+      if (immersiveRequested()) document.body.classList.add("p1008-focus-mode");
+      syncImmersiveLinks();
+      syncFullscreenButton();
+    })();
+  </script>
+  <script>
+    (() => {
+      const root = new URL("../../", window.location.href);
+      const cacheBust = `?v=${Date.now()}`;
+      const board = document.querySelector(".board");
+      const shell = document.querySelector(".shell");
+      const decisionBrief = document.querySelector(".v21-decision-brief") || document.querySelector(".decision-copy");
+      const core = document.querySelector(".neutral-core-overlay");
+      const rightPanel = document.querySelector(".right-panel");
+      const bottom = document.querySelector(".bottom");
+      const footer = document.querySelector(".footer");
+
+      const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+      const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      })[ch]);
+      const toNumber = (...values) => {
+        for (const value of values) {
+          if (value === undefined || value === null || value === "") continue;
+          const n = Number(String(value).replace(/[,%x]/g, "").trim());
+          if (Number.isFinite(n)) return n;
+        }
+        return null;
+      };
+      const pct = (value, digits = 1) => value === null || value === undefined ? "N/A" : `${Number(value).toFixed(digits)}%`;
+      const fixed = (value, digits = 2) => value === null || value === undefined ? "N/A" : Number(value).toFixed(digits);
+      const brief = (value, max = 44) => {
+        const text = String(value ?? "").replace(/\s+/g, " ").trim();
+        return text.length > max ? `${text.slice(0, max - 1)}...` : text;
+      };
+      const dateOnly = (value) => String(value || "").slice(0, 10);
+      const shortDate = (value) => {
+        const s = dateOnly(value);
+        return s ? s.slice(5) : "N/A";
+      };
+      // IC tone is derived from score/state at runtime; the PCB art stays neutral.
+      const deriveIcTone = (score, state = "") => {
+        const value = toNumber(score);
+        const text = String(state || "").toUpperCase();
+        const hasNoData = /N\/A|NO DATA|MISSING|UNAVAILABLE|CONNECTOR|PENDING|缺資料|缺欄|未取得|無法判定/.test(text);
+        const isRed = /REVIEW_REQUIRED|BLOCKED|FAIL|偏弱|高風險|警戒|阻擋|失敗/.test(text);
+        const isAmber = /WATCH|OBSERVE|REVIEW|中等|偏高|待驗證|觀察|待審|OWNER GATE/.test(text);
+        const isGreen = /PASS|READY|正式|已核准|已發布|可用|支撐|強|中等偏佳/.test(text);
+        if (hasNoData || value === null) return { tone: "gray", color: "var(--gray)", label: "資料不足" };
+        if (isRed || value < 50) return { tone: "red", color: "var(--red)", label: "風險警戒" };
+        if (isAmber || value < 70) return { tone: "amber", color: "var(--amber)", label: "觀察 / WATCH" };
+        if (isGreen || value >= 70) return { tone: "green", color: "var(--green)", label: "支撐 / PASS" };
+        return { tone: "gray", color: "var(--gray)", label: "資料不足" };
+      };
+      const applyIcTones = (systems) => {
+        Object.values(systems || {}).forEach((item) => {
+          const derived = deriveIcTone(item.score, item.state);
+          item.tone = derived.tone;
+          item.color = derived.color;
+          item.toneLabel = derived.label;
+        });
+        return systems;
+      };
+      const formatDateTime = (value) => {
+        const s = String(value || "");
+        if (!s) return "N/A";
+        return `${s.slice(0, 10)} ${s.slice(11, 16) || "00:00"} TST`;
+      };
+      const nextBusinessDay = (value) => {
+        const source = dateOnly(value) || dateOnly(new Date().toISOString());
+        const d = new Date(`${source}T00:00:00Z`);
+        if (Number.isNaN(d.getTime())) return source;
+        do {
+          d.setUTCDate(d.getUTCDate() + 1);
+        } while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
+        const year = d.getUTCFullYear();
+        const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+        const day = String(d.getUTCDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+      };
+
+      async function fetchText(path) {
+        const url = new URL(path, root).href + cacheBust;
+        const response = await fetch(url, { cache: "no-store" });
+        if (!response.ok) throw new Error(`${path} ${response.status}`);
+        return response.text();
+      }
+
+      async function fetchJson(path) {
+        try {
+          const text = await fetchText(path);
+          return JSON.parse(text.replace(/^\uFEFF/, ""));
+        } catch (error) {
+          console.warn("P1008 runtime JSON unavailable", path, error);
+          return {};
+        }
+      }
+
+      function parseCsv(text) {
+        const rows = [];
+        const clean = String(text || "").replace(/^\uFEFF/, "");
+        let row = [];
+        let field = "";
+        let inQuote = false;
+        for (let i = 0; i < clean.length; i += 1) {
+          const ch = clean[i];
+          const next = clean[i + 1];
+          if (ch === '"') {
+            if (inQuote && next === '"') {
+              field += '"';
+              i += 1;
+            } else {
+              inQuote = !inQuote;
+            }
+          } else if (ch === "," && !inQuote) {
+            row.push(field);
+            field = "";
+          } else if ((ch === "\n" || ch === "\r") && !inQuote) {
+            if (ch === "\r" && next === "\n") i += 1;
+            row.push(field);
+            if (row.some((cell) => String(cell).trim() !== "")) rows.push(row);
+            row = [];
+            field = "";
+          } else {
+            field += ch;
+          }
+        }
+        if (field || row.length) {
+          row.push(field);
+          if (row.some((cell) => String(cell).trim() !== "")) rows.push(row);
+        }
+        const dataRows = rows.filter((line) => !String(line[0] || "").trim().startsWith("##"));
+        const header = (dataRows.shift() || []).map((cell) => String(cell).trim());
+        return dataRows.map((line) => {
+          const record = {};
+          header.forEach((name, index) => {
+            record[name] = line[index] ?? "";
+          });
+          return record;
+        });
+      }
+
+      async function fetchCsv(path) {
+        try {
+          return parseCsv(await fetchText(path));
+        } catch (error) {
+          console.warn("P1008 CSV unavailable", path, error);
+          return [];
+        }
+      }
+
+      function latestByDate(rows, field = "Date") {
+        return [...rows].filter((row) => row[field]).sort((a, b) => String(a[field]).localeCompare(String(b[field]))).pop() || {};
+      }
+
+      function setTopCell(index, label, value, className = "ok") {
+        const cell = document.querySelectorAll(".topbar .top-cell")[index];
+        if (!cell) return;
+        const span = cell.querySelector("span");
+        const bold = cell.querySelector("b");
+        if (span) span.textContent = label;
+        if (bold) {
+          bold.textContent = value;
+          bold.className = className;
+        }
+      }
+
+      function setChip(selector, item) {
+        const node = document.querySelector(selector);
+        if (!node) return;
+        const h3 = node.querySelector("h3");
+        const em = node.querySelector("em");
+        const b = node.querySelector("b");
+        const span = node.querySelector("span");
+        node.style.setProperty("--chip-color", item.color);
+        node.dataset.tone = item.tone || "";
+        if (h3) h3.textContent = item.label;
+        if (em) em.textContent = item.en;
+        if (b) {
+          b.textContent = item.score;
+          b.className = item.tone;
+        }
+        if (span) {
+          span.textContent = item.state;
+          span.className = item.tone;
+        }
+      }
+
+      function renderConfidence(readiness, news, formalSynced) {
+        const rawScore = toNumber(readiness?.score);
+        const score = rawScore === null ? null : Math.round(rawScore);
+        const body = document.querySelector(".left-stack .panel:nth-child(2) .confidence-body");
+        if (!body) return;
+        const displayScore = (value) => value === null ? "N/A" : `${value}%`;
+        const metricScore = (value) => {
+          const parsed = toNumber(value);
+          return parsed === null ? null : Math.round(parsed);
+        };
+        const completeness = metricScore(readiness?.completenessScore);
+        const sourceCoverage = metricScore(readiness?.sourceCoverageScore);
+        const validation = metricScore(readiness?.validationScore);
+        const candidateScore = metricScore(readiness?.candidateFileScore);
+        const eventRows = toNumber(news?.candidateRowCount) ?? 0;
+        body.className = "confidence-body v21-confidence-body";
+        body.innerHTML = `
+          <div class="v21-confidence-top">
+            <div class="confidence-score-card"><strong>${displayScore(score)}</strong><span>正式發布</span></div>
+            <div class="v21-confidence-text">
+              <h4>${formalSynced ? "正式 CSV 已核准" : "候選資料未達發布門檻"}</h4>
+              <p>${formalSynced ? "此分數代表正式 CSV 與來源稽核狀態，不是買賣建議。" : "此分數是 Owner publish gate 的正式發布門檻；runtime 沿用值可供觀察，但不能升格正式 CSV。"}</p>
+            </div>
+          </div>
+          <div class="quality-bars">
+            <div class="q-row"><span>完整性</span><span class="q-track"><i style="--v:${completeness ?? 0}%"></i></span><b>${displayScore(completeness)}</b></div>
+            <div class="q-row"><span>來源覆蓋</span><span class="q-track"><i style="--v:${sourceCoverage ?? 0}%"></i></span><b>${displayScore(sourceCoverage)}</b></div>
+            <div class="q-row"><span>驗證分數</span><span class="q-track"><i style="--v:${validation ?? 0}%"></i></span><b>${displayScore(validation)}</b></div>
+            <div class="q-row"><span>候選檔案</span><span class="q-track"><i style="--v:${candidateScore ?? 0}%"></i></span><b>${displayScore(candidateScore)}</b></div>
+            <div class="q-row"><span>事件同步</span><span class="q-track"><i style="--v:${formalSynced ? 100 : 0}%"></i></span><b>${eventRows}列</b></div>
+            <div class="q-row"><span>註記</span><span class="q-track"><i style="--v:${formalSynced ? 100 : 0}%"></i></span><b>${formalSynced ? "已發布" : "觀察值"}</b></div>
+          </div>
+        `;
+      }
+
+      function eventThemeSummary(news) {
+        const events = Array.isArray(news?.events) ? news.events.filter((event) => event.accepted !== false) : [];
+        const counts = {};
+        events.forEach((event) => {
+          const tag = event?.candidateRow?.RiskTag || event?.relevanceTag || "OTHER";
+          counts[tag] = (counts[tag] || 0) + 1;
+        });
+        const cspCount = Object.entries(counts)
+          .filter(([tag]) => /CSP|AI|CUSTOMER|SUPPLY/i.test(tag))
+          .reduce((sum, [, count]) => sum + count, 0);
+        return {
+          events,
+          counts,
+          cspCount,
+          officialCount: toNumber(news?.sourceCounts?.OFFICIAL) ?? 0,
+          mediaCount: toNumber(news?.sourceCounts?.MEDIA) ?? 0,
+          reviewRequiredCount: events.filter((event) => event.level === "REVIEW_REQUIRED" || event.rawLevel === "REVIEW_REQUIRED").length
+        };
+      }
+
+      function buildSystems({ appState, eventState, news, daily, master, quarterly, fx, macro }) {
+        const readiness = appState?.reviewPackage?.readiness || {};
+        const published = eventState?.status === "OWNER_PUBLISHED" || news?.formalSynced === true;
+        const close = toNumber(daily.Close);
+        const bvps = toNumber(daily.BVPS_ref);
+        const pb = toNumber(daily.PB_daily);
+        const promoted = quarterly?.canonicalPromotion || {};
+        const roe = promoted?.roe?.period === "2026H1" && promoted?.roe?.annualized === false
+          ? toNumber(promoted.roe.value)
+          : null;
+        const epsYoY = toNumber(master.EPS_YoY_Pct);
+        const epsTtm = toNumber(master.EPS_TTM);
+        const cashDividend = toNumber(master.CashDividend);
+        const dividendYield = cashDividend !== null && close !== null && close !== 0
+          ? cashDividend / close * 100
+          : null;
+        const us10y = toNumber(fx.US_10Y_Yield);
+        const vix = toNumber(macro.VIX);
+        const wti = toNumber(macro.WTI_Oil);
+        const dxy = toNumber(fx.DXY);
+        const twdUsd = toNumber(fx.TWD_USD);
+        const eventSummary = eventThemeSummary(news);
+        const readinessValue = toNumber(readiness.score);
+        const latestDate = daily.Date || fx.Date || appState?.publishDate || dateOnly(appState?.finishedAt);
+        const nextReview = nextBusinessDay(latestDate);
+        const sourceReady = readiness?.sourceAvailable !== undefined && readiness?.sourceTotal !== undefined
+          ? `${readiness.sourceAvailable}/${readiness.sourceTotal}`
+          : "N/A";
+
+        return {
+          published,
+          latestDate,
+          nextReview,
+          metrics: { close, bvps, pb, roe, roePeriod: promoted?.roe?.period || "N/A", roeAnnualized: promoted?.roe?.annualized, epsYoY, epsTtm, dividendYield, us10y, vix, wti, dxy, twdUsd, sourceReady },
+          systems: {
+            val: {
+              label: "估值 IC",
+              en: "Valuation",
+              score: null,
+              state: "未提供正式分數",
+              tone: "derived",
+              color: "",
+              headline: `正式收盤價 ${fixed(close, 1)} 元；PB ${fixed(pb, 3)}x（推算）；BVPS ${fixed(bvps, 2)}。`,
+              evidence: `PB 使用正式 daily price 欄位 PB_daily，公式為 Close / BVPS_ref；資料日期 ${daily.Date || "N/A"}。`,
+              owner: "Owner 動作：依既有戰情室治理規則查核估值證據；本頁不另算 IC 分數。"
+            },
+            fund: {
+              label: "基本面 IC",
+              en: "Fundamentals",
+              score: null,
+              state: "未提供正式分數",
+              tone: "derived",
+              color: "",
+              headline: `ROE ${pct(roe)}（${promoted?.roe?.period || "N/A"}官方值，未年化）、EPS YoY ${pct(epsYoY)}、EPS TTM ${fixed(epsTtm, 2)}。`,
+              evidence: `正式季度 ${master.Quarter || "N/A"}；ROE保留${promoted?.roe?.period || "N/A"}期間，不改稱Q2、TTM或年化值。`,
+              owner: "Owner 動作：依既有戰情室治理規則查核基本面證據。"
+            },
+            cash: {
+              label: "現金流 IC",
+              en: "Cash Flow",
+              score: null,
+              state: "未提供正式分數",
+              tone: "derived",
+              color: "",
+              headline: `現金股利殖利率 ${pct(dividendYield)}（推算）；US10Y ${pct(us10y)}。`,
+              evidence: "殖利率公式為現金股利除以正式收盤價；美國十年期公債殖利率為匯率觀察資料，兩者保留各自期別。",
+              owner: "Owner 動作：查核現金流 authority 與股東回報證據；本頁不另算 IC 分數。"
+            },
+            macro: {
+              label: "宏觀 / 匯率 IC",
+              en: "Macro / FX",
+              score: null,
+              state: "未提供正式分數",
+              tone: "derived",
+              color: "",
+              headline: `USD/TWD ${fixed(twdUsd, 3)}、DXY ${fixed(dxy, 2)}、US10Y ${pct(us10y, 2)}、VIX ${fixed(vix, 2)}、WTI ${fixed(wti, 2)}。`,
+              evidence: `匯率觀察日期 ${fx.Date || "N/A"}；總經觀察日期 ${macro.Date || "N/A"}；不得以一方缺值跨檔補值。`,
+              owner: "Owner 動作：依既有規則查核宏觀與匯率觀察；本頁不另算 IC 分數。"
+            },
+            ai: {
+              label: "產業 / AI IC",
+              en: "Industry & AI",
+              score: null,
+              state: "未提供正式分數",
+              tone: "derived",
+              color: "",
+              headline: `新聞觀察 ${eventSummary.events.length} 列；官方 ${eventSummary.officialCount}、媒體 ${eventSummary.mediaCount}；CSP/供應鏈相關 ${eventSummary.cspCount} 列。`,
+              evidence: "事件資料只保留來源與治理等級；AI 營收占比缺少可核對分母時不作目前權威 KPI。",
+              owner: "Owner 動作：查核權威事件證據；本頁不把事件筆數換算成 IC 分數。"
+            },
+            quality: {
+              label: "資料品質 IC",
+              en: "Data Quality",
+              score: null,
+              state: "未提供正式分數",
+              tone: "derived",
+              color: "",
+              headline: `正式發布 readiness ${readinessValue === null ? "N/A" : `${readinessValue}%`}；來源覆蓋 ${sourceReady}，正式 CSV ${published ? "已發布" : "未發布"}。`,
+              evidence: `資料品質標準：schema、正式來源覆蓋、候選檔案、重複列、Actionable=false、event formal sync。runtime 沿用值只供觀察；新聞事件 ${news?.candidateRowCount ?? 0} 列。`,
+              owner: "Owner 動作：治理 readiness 只在左側正式發布區顯示，不轉換為六 IC 投資分數。"
+            }
+          }
+        };
+      }
+
+      function renderRightPanel(state) {
+        if (!rightPanel) return;
+        const { metrics, systems } = state;
+        const rows = [
+          { id: "PB", value: metrics.pb === null ? "N/A" : `${fixed(metrics.pb, 3)}x`, status: "正式衍生", note: `PB_daily = Close ${fixed(metrics.close, 1)} / BVPS_ref ${fixed(metrics.bvps, 2)}。`, key: "val", color: systems.val.color, meter: 0 },
+          { id: "ROE", value: pct(metrics.roe), status: `${metrics.roePeriod}官方／未年化`, note: `EPS YoY ${pct(metrics.epsYoY)}；ROE不是Q2單季、TTM或年化值，也不轉成IC分數。`, key: "fund", color: systems.fund.color, meter: 0 },
+          { id: "殖利率 / US10Y", value: `${pct(metrics.dividendYield)} / ${pct(metrics.us10y)}`, status: "不同期別", note: "殖利率為正式資料推算；US10Y 是觀察資料，保留各自日期。", key: "cash", color: systems.cash.color, meter: 0 },
+          { id: "USD/TWD", value: fixed(metrics.twdUsd, 3), status: "匯率觀察資料", note: "只顯示匯率趨勢觀察檔的最新列，不跨來源補值。", key: "macro", color: systems.macro.color, meter: 0 },
+          { id: "VIX / DXY", value: `${fixed(metrics.vix, 2)} / ${fixed(metrics.dxy, 2)}`, status: "不同觀察來源", note: "VIX 來自總經觀察；DXY 來自匯率觀察；不換算 IC 分數。", key: "macro", color: systems.macro.color, meter: 0 }
+        ];
+        rightPanel.className = "panel right-panel v24-dynamic-panel";
+        rightPanel.innerHTML = `
+          <div class="section-title"><h3>關鍵信號監控</h3><span>Signal Meters</span></div>
+          ${rows.map((row) => `
+            <section class="v24-signal-row" data-system="${row.key}" data-tone="${systems[row.key]?.tone || ""}" role="button" tabindex="0" style="--signal-color:${row.color};--meter:${row.meter}%">
+              <div class="v24-row-head">
+                <span class="v24-signal-light" aria-hidden="true"></span>
+                <h4>${escapeHtml(row.id)}</h4>
+                <span class="v24-row-tag">${escapeHtml(row.status)}</span>
+              </div>
+              <div class="v24-meter">
+                <strong>${escapeHtml(row.value)}</strong>
+                <div class="v24-meter-bar"><i></i></div>
+              </div>
+              <p>${escapeHtml(row.note)}</p>
+            </section>
+          `).join("")}
+          <div class="monitor-note"><span>匯率與宏觀資料只觸發重審，不改主 IC。</span><span>actionable:false</span></div>
+        `;
+      }
+
+      function renderBottom(state, appState, eventState, news) {
+        if (!bottom) return;
+        const { systems, published, latestDate, nextReview } = state;
+        const rank = ["macro", "ai", "cash", "val", "fund", "quality"]
+          .map((key) => ({ key, ...systems[key] }))
+          .sort((a, b) => {
+            if (a.score === null) return 1;
+            if (b.score === null) return -1;
+            return Number(a.score) - Number(b.score);
+          });
+        const newsRows = news?.candidateRowCount ?? 0;
+        const ownerRows = published ? [
+          ["低", "正式 CSV 發布", "Owner", shortDate(latestDate), "已完成", "green"],
+          ["中", `新聞事件同步 ${newsRows} 列`, "Strategy", shortDate(news?.candidateDate || latestDate), "已同步", "amber"],
+          ["中", "FX sidecar 與宏觀來源", "Treasury", shortDate(latestDate), "觀察", "amber"],
+          ["低", "下一輪重審", "Owner", shortDate(nextReview), "待觀察", "green"]
+        ] : [
+          ["高", "候選 CSV / 事件待核准", "Owner", shortDate(nextReview), "待審", "red"]
+        ];
+        bottom.className = "bottom v19-bottom v20-bottom v24-dynamic-bottom";
+        bottom.innerHTML = `
+          <section class="bottom-panel">
+            <div class="section-title"><h3>六大系統風險排序</h3><span>Risk Heat Ranking</span></div>
+            <table class="table">
+              <thead><tr><th>排序</th><th>系統</th><th>分數</th><th>狀態</th><th>依據</th></tr></thead>
+              <tbody>
+                ${rank.map((item, index) => `
+                  <tr data-system="${item.key}">
+                    <td>${index + 1}</td>
+                    <td>${escapeHtml(item.label)}</td>
+                    <td class="${item.tone}">${item.score === null ? "N/A" : item.score} <span class="mini-bar"><i style="--v:${item.score ?? 0}%"></i></span></td>
+                    <td class="${item.tone}">${escapeHtml(item.state)}</td>
+                    <td>${escapeHtml(brief(item.evidence, 38))}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </section>
+          <section class="bottom-panel">
+            <div class="section-title"><h3>Owner 審查狀態</h3><span>Owner Review State</span></div>
+            <div class="review-grid">
+              <div class="head">級別</div><div class="head">事項</div><div class="head">負責</div><div class="head">期限</div><div class="head">狀態</div>
+              ${ownerRows.map(([level, item, owner, due, status, tone]) => `
+                <div><span class="pill ${tone}">${escapeHtml(level)}</span></div><div>${escapeHtml(item)}</div><div>${escapeHtml(owner)}</div><div>${escapeHtml(due)}</div><div>${escapeHtml(status)}</div>
+              `).join("")}
+            </div>
+            <div class="monitor-note"><span>${published ? "正式 CSV 已核准；此區不再是發布阻擋，只列下一輪觀察責任。" : "仍需回 Launcher 完成 Owner gate。"}</span><span>Launcher 審查入口</span></div>
+          </section>
+          <section class="bottom-panel">
+            <div class="section-title"><h3>決策結論與依據</h3><span>Executive Summary</span></div>
+            <div class="v19-summary-stack"></div>
+          </section>
+        `;
+        bottom.querySelectorAll(".table tbody tr").forEach((row) => {
+          row.addEventListener("click", () => selectSystem(row.dataset.system, "風險排序"));
+        });
+      }
+
+      function renderGovernance(state, appState) {
+        if (!footer) return;
+        const spans = footer.querySelectorAll("span");
+        const values = [
+          "2317 Hon Hai Precision Industry Co., Ltd.",
+          "Currency: TWD",
+          `Formal CSV: ${state.latestDate || "N/A"}`,
+          "All indicators are review aids, not investment advice.",
+          "Report Engine dynamic CSV binding v24.1",
+          `Session ${String(appState?.jobId || "runtime").slice(0, 18)}`
+        ];
+        spans.forEach((span, index) => {
+          span.textContent = values[index] || span.textContent;
+        });
+      }
+
+      function updateDecisionBrief(item, state) {
+        if (!decisionBrief || !item) return;
+        const status = decisionBrief.querySelector(".status-line span:last-child") || decisionBrief.querySelector("small");
+        const heading = decisionBrief.querySelector("h4");
+        const paragraph = decisionBrief.querySelector("p");
+        const foot = decisionBrief.querySelector(".decision-foot");
+        if (status) status.textContent = `${item.label}：${item.state}`;
+        if (heading) heading.textContent = item.headline;
+        if (paragraph) paragraph.textContent = item.evidence;
+        if (foot) foot.textContent = `正式 CSV ${state.published ? "已核准" : "待審"}；${state.latestDate || "N/A"}；actionable:false`;
+      }
+
+      function updateSummary(item, state, source) {
+        const host = document.querySelector(".bottom .bottom-panel:last-child .v19-summary-stack");
+        if (!host || !item) return;
+        host.style.setProperty("--active-color", item.color);
+        host.innerHTML = `
+          <div>
+            <div class="active-summary-line"><b>焦點</b><span>${escapeHtml(item.label)}｜${item.score === null ? "N/A" : item.score}｜${escapeHtml(item.state)}</span></div>
+            <div class="active-summary-line"><b>依據</b><span>${escapeHtml(brief(item.evidence, 56))}</span></div>
+            <div class="active-summary-line"><b>Owner</b><span>${escapeHtml(brief(item.owner, 52))}</span></div>
+          </div>
+          <div>
+            <div class="active-summary-line"><b>結論</b><span>HOLD / 觀察；${escapeHtml(source)} 不改正式結論。</span></div>
+            <div class="active-summary-line"><b>風險</b><span>${escapeHtml(brief(item.headline, 56))}</span></div>
+            <div class="v19-action-note">下次檢視：${escapeHtml(state.nextReview)}；異常只提示重審，不輸出買賣指令。</div>
+          </div>
+        `;
+      }
+
+      function selectSystem(key, source = "六大系統") {
+        const state = window.__p1008DynamicState;
+        const item = state?.systems?.[key];
+        if (!item || !board) return;
+        board.dataset.active = key;
+        board.style.setProperty("--active-color", item.color);
+        document.querySelectorAll(".active-hotspot").forEach((node) => {
+          node.classList.toggle("is-active", node.dataset.system === key);
+        });
+        document.querySelectorAll(".v24-signal-row").forEach((node) => {
+          node.classList.toggle("is-active", node.dataset.system === key);
+        });
+        document.querySelectorAll(".table tbody tr").forEach((node) => {
+          node.classList.toggle("is-row-active", node.dataset.system === key);
+        });
+        if (core) {
+          core.style.setProperty("--active-color", item.color);
+          const small = core.querySelector("small");
+          const strong = core.querySelector("strong");
+          const span = core.querySelector("span");
+          const em = core.querySelector("em");
+          if (small) small.textContent = item.label;
+          if (strong) strong.textContent = "HOLD";
+          if (span) span.textContent = item.state;
+          if (em) em.textContent = "actionable:false";
+        }
+        updateDecisionBrief(item, state);
+        updateSummary(item, state, source);
+      }
+
+      function attachInteractions(state) {
+        const map = {
+          fund: ".chip.fund",
+          val: ".chip.val",
+          quality: ".chip.quality",
+          cash: ".chip.cash",
+          ai: ".chip.ai",
+          macro: ".chip.macro"
+        };
+        Object.entries(map).forEach(([key, selector]) => setChip(selector, state.systems[key]));
+        document.querySelectorAll(".active-hotspot[data-system]").forEach((button) => {
+          const key = button.dataset.system;
+          if (key === "decision-core") {
+            button.setAttribute("aria-label", "結論主 IC：開啟舊 UI 明細");
+            button.title = "結論主 IC：開啟舊 UI 明細";
+            return;
+          }
+          const item = state.systems[key];
+          if (!item) return;
+          button.style.setProperty("--hotspot-color", item.color);
+          button.dataset.tone = item.tone || "";
+          const code = button.dataset.code || "";
+          const small = button.querySelector("small");
+          const em = button.querySelector("em");
+          const strong = button.querySelector("strong");
+          const span = button.querySelector("span");
+          if (small) small.textContent = `${code} ${item.label}`.trim();
+          if (em) em.textContent = item.en || "";
+          if (strong) strong.textContent = item.score;
+          if (span) span.textContent = item.state;
+          button.setAttribute("aria-label", `查看 ${item.label}：${item.state}`);
+          button.title = `查看 ${item.label}：${item.state}`;
+          button.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            selectSystem(key, "IC 名片");
+          }, true);
+          button.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              event.stopImmediatePropagation();
+              selectSystem(key, "IC 名片");
+            }
+          }, true);
+        });
+        document.querySelectorAll(".v24-signal-row").forEach((row) => {
+          row.addEventListener("click", () => selectSystem(row.dataset.system, "右側信號卡"));
+          row.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              selectSystem(row.dataset.system, "右側信號卡");
+            }
+          });
+        });
+      }
+
+      function renderDecisionHeader(state, appState, news) {
+        setTopCell(0, "報告層級", "六大系統摘要 (L1)", "");
+        setTopCell(1, "資料時間", formatDateTime(appState?.finishedAt || news?.generatedAt || `${state.latestDate}T00:00:00`), "ok");
+        setTopCell(2, "資料新鮮度", state.published ? "正式 CSV 已發布" : "Launcher 待審", state.published ? "ok" : "warn");
+        setTopCell(3, "資料狀態", state.published ? "Owner 已核准" : "候選資料", state.published ? "ok" : "warn");
+        setTopCell(4, "模型狀態", "動態讀取 CSV", "ok");
+        const brandTitle = document.querySelector(".brand h1");
+        if (brandTitle) brandTitle.textContent = "Hon Hai 戰略決策戰情室";
+        document.title = "P1008 六大系統新 UI";
+      }
+
+      async function init() {
+        const [appState, eventState, news, dailyRows, masterRows, quarterly, fxRows, macroRows] = await Promise.all([
+          fetchJson("runtime/p1008_app_state.json"),
+          fetchJson("runtime/warroom_event_review_state.json"),
+          fetchJson("runtime/warroom_news_scan_snapshot.json"),
+          fetchCsv("data/2317_daily_price.csv"),
+          fetchCsv("data/2317_master_v9.csv"),
+          fetchJson("modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json"),
+          fetchCsv("data/fx_trend_observations.csv"),
+          fetchCsv("data/macro_snapshot.csv")
+        ]);
+        const daily = latestByDate(dailyRows, "Date");
+        const master = latestByDate(masterRows, "QuarterEndDate");
+        const fx = latestByDate(fxRows, "Date");
+        const macro = latestByDate(macroRows, "Date");
+        const state = buildSystems({ appState, eventState, news, daily, master, quarterly, fx, macro });
+        applyIcTones(state.systems);
+        window.__p1008DynamicState = state;
+        if (shell) shell.classList.add("p1008-runtime-bound");
+        renderDecisionHeader(state, appState, news);
+        renderConfidence(appState?.reviewPackage?.readiness || {}, news, state.published);
+        renderRightPanel(state);
+        renderBottom(state, appState, eventState, news);
+        renderGovernance(state, appState);
+        attachInteractions(state);
+        selectSystem("val", "正式 CSV");
+      }
+
+      init().catch((error) => {
+        console.error("P1008 dynamic binding failed", error);
+        const body = document.querySelector(".left-stack .panel:nth-child(2) .v21-confidence-text p");
+        if (body) body.textContent = "新 UI 讀取 runtime / CSV 失敗，請回 Launcher 重新整理狀態。";
+      });
+    })();
+  </script>
+</body>
+</html>

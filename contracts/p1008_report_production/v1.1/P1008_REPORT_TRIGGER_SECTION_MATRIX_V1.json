@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0.0",
+  "contract_id": "P1008_REPORT_TRIGGER_SECTION_MATRIX_V1",
+  "chapter_ids": ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11"],
+  "modes": ["REQUIRED_UPDATE", "CONDITIONAL_UPDATE", "RETAIN_LATEST_BASELINE", "IMPACT_PATH_UPDATE", "RENDER_UNCHANGED_STATEMENT"],
+  "triggers": {
+    "MONTHLY_REVENUE": {
+      "required_evidence": "OFFICIAL_MONTHLY_REVENUE_PUBLICATION",
+      "chapters": {
+        "s1": "REQUIRED_UPDATE", "s2": "REQUIRED_UPDATE", "s3": "RETAIN_LATEST_BASELINE",
+        "s4": "RETAIN_LATEST_BASELINE", "s5": "CONDITIONAL_UPDATE", "s6": "REQUIRED_UPDATE",
+        "s7": "RETAIN_LATEST_BASELINE", "s8": "REQUIRED_UPDATE", "s9": "REQUIRED_UPDATE",
+        "s10": "REQUIRED_UPDATE", "s11": "REQUIRED_UPDATE"
+      },
+      "required_kpi_families": ["MONTHLY_REVENUE", "REVENUE_TREND", "CURRENT_MARKET_SNAPSHOT", "VALUATION", "DECISION_STATE", "SMART"],
+      "conditional_kpi_families": ["BUSINESS_MODEL", "EXTERNAL_EVIDENCE"],
+      "prohibited_new_quarterly_values": ["CFO", "FCF", "ROIC", "CCC", "BVPS", "BALANCE_SHEET_VALUES"],
+      "quarterly_baseline_policy": "RETAIN_WITH_EXPLICIT_PERIOD_LABEL"
+    },
+    "QUARTERLY_EARNINGS": {
+      "required_evidence": "OFFICIAL_QUARTERLY_FINANCIAL_STATEMENTS_OR_EARNINGS_CALL",
+      "chapters": {
+        "s1": "REQUIRED_UPDATE", "s2": "REQUIRED_UPDATE", "s3": "REQUIRED_UPDATE",
+        "s4": "REQUIRED_UPDATE", "s5": "REQUIRED_UPDATE", "s6": "REQUIRED_UPDATE",
+        "s7": "REQUIRED_UPDATE", "s8": "REQUIRED_UPDATE", "s9": "REQUIRED_UPDATE",
+        "s10": "REQUIRED_UPDATE", "s11": "REQUIRED_UPDATE"
+      },
+      "required_kpi_families": [
+        "REVENUE", "GROSS_PROFIT", "OPERATING_PROFIT", "PRETAX_INCOME", "PARENT_NET_INCOME", "EPS",
+        "GROSS_MARGIN", "OPERATING_MARGIN", "NET_MARGIN", "AR", "INVENTORY", "AP", "WORKING_CAPITAL", "CCC",
+        "NET_CASH_OR_DEBT", "CFO", "CAPEX", "FCF", "ROE", "ROIC", "INCREMENTAL_ROIC", "BVPS", "SHARE_COUNT",
+        "P/S", "P/E", "P/B", "MANAGEMENT_GUIDANCE", "BUSINESS_MODEL", "CAPITAL_ALLOCATION", "3+3+3", "SCENARIOS", "SMART", "DECISION_STATE"
+      ],
+      "chapter_4_required_analyses": ["FCF_CONVERSION", "WORKING_CAPITAL", "BALANCE_SHEET", "PER_SHARE_VALUE"],
+      "missing_data_policy": "MARK_MISSING_SAME_BASIS_VALUE_DO_NOT_SUBSTITUTE"
+    },
+    "MAJOR_EVENT": {
+      "required_evidence": "G1_MATERIAL_EVENT_THRESHOLD_SATISFIED",
+      "chapters": {
+        "s1": "IMPACT_PATH_UPDATE", "s2": "RENDER_UNCHANGED_STATEMENT", "s3": "RENDER_UNCHANGED_STATEMENT",
+        "s4": "IMPACT_PATH_UPDATE", "s5": "IMPACT_PATH_UPDATE", "s6": "IMPACT_PATH_UPDATE",
+        "s7": "IMPACT_PATH_UPDATE", "s8": "IMPACT_PATH_UPDATE", "s9": "IMPACT_PATH_UPDATE",
+        "s10": "IMPACT_PATH_UPDATE", "s11": "REQUIRED_UPDATE"
+      },
+      "required_kpi_families": ["EVENT_EVIDENCE", "IMPACT_PATH", "DECISION_STATE", "SMART"],
+      "impact_path_examples": {
+        "CONSIGNMENT": ["s5", "s4", "s8", "s9", "s10"],
+        "AI_SERVER_OR_ASIC": ["s5", "s6", "s8", "s9", "s10"],
+        "FX_TARIFF_POLICY": ["s6", "s3", "s4", "s8", "s9", "s10"],
+        "CAPITAL_ALLOCATION_OR_TRANSACTION": ["s7", "s4", "s8", "s9", "s10"]
+      },
+      "unaffected_chapter_text": "本次事件未改變原判斷",
+      "render_all_11_chapters": true,
+      "blind_full_rewrite": false
+    }
+  },
+  "no_valid_trigger": {
+    "formal_report_generated": false,
+    "state": "OBSERVATION_ONLY"
+  }
+}

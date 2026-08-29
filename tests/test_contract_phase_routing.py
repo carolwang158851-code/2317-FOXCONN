@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
@@ -15,6 +16,21 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNNER_PATH = ROOT / "contracts" / "p1008_research_plugin" / "conformance" / "v1.1" / "run_contract_tests.py"
 ROUTER_PATH = ROOT / "contracts" / "p1008_research_plugin" / "conformance" / "run_phase_conformance.py"
 RECORD_PATH = ROOT / "contracts" / "p1008_research_plugin" / "acceptance" / "v1.1" / "PHASE_ROUTING_ACCEPTANCE_RECORD.json"
+
+
+def controlled_test_temp_root() -> Path:
+    """Return the user-owned, non-OneDrive root for Windows test scratch."""
+
+    configured = os.environ.get("P1008_TEST_TEMP_ROOT", "").strip()
+    if configured:
+        root = Path(configured)
+    else:
+        local_app_data = os.environ.get("LOCALAPPDATA", "").strip()
+        if not local_app_data:
+            raise RuntimeError("P1008_TEST_TEMP_ROOT_REQUIRED")
+        root = Path(local_app_data) / "P1008" / "pytest-temp"
+    root.mkdir(parents=True, exist_ok=True)
+    return root.resolve()
 
 
 def load_runner():
@@ -45,7 +61,9 @@ class PhaseRoutingConformanceTests(unittest.TestCase):
         cls.record = json.loads(RECORD_PATH.read_text(encoding="utf-8"))
 
     def _tree(self, *, module: bool) -> tempfile.TemporaryDirectory[str]:
-        holder = tempfile.TemporaryDirectory(prefix="p1008-phase-routing-test-")
+        holder = tempfile.TemporaryDirectory(
+            prefix="p1008-phase-routing-test-", dir=controlled_test_temp_root()
+        )
         root = Path(holder.name)
         if module:
             (root / "modules" / "p1008_research_plugin" / "src" / "p1008_research_plugin").mkdir(parents=True)
@@ -113,7 +131,9 @@ class PhaseRoutingConformanceTests(unittest.TestCase):
     def test_frozen_v1_checkout_allows_only_line_ending_materialization(self) -> None:
         relative = "contracts/p1008_research_plugin/conformance/v1.0/frozen.txt"
         manifest_relative = "contracts/p1008_research_plugin/v1.0/contract.manifest.json"
-        with tempfile.TemporaryDirectory(prefix="p1008-frozen-checkout-test-") as root_value:
+        with tempfile.TemporaryDirectory(
+            prefix="p1008-frozen-checkout-test-", dir=controlled_test_temp_root()
+        ) as root_value:
             root = Path(root_value)
             artifact = root / relative
             manifest = root / manifest_relative
@@ -195,7 +215,7 @@ class PhaseRoutingConformanceTests(unittest.TestCase):
         )
         receipt_ref = self.record["authorityBaselineReceipts"]["PHASE_A_CLOSURE_SIX"]
         self.assertEqual(
-            hashlib.sha256((ROOT / receipt_ref["path"]).read_bytes())
+            hashlib.sha256(self.runner.git_blob_bytes(ROOT, receipt_ref["path"]))
             .hexdigest()
             .upper(),
             receipt_ref["sha256"],

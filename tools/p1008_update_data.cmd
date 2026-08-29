@@ -3,7 +3,7 @@ setlocal EnableExtensions
 
 for %%I in ("%~dp0..") do set "ROOT=%%~fI"
 set "FETCHER=%ROOT%\tools\warroom_data_fetcher_v2.py"
-set "PYTHON_EXE="
+set "PYTHON_EXE=%USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
 set "PYTHON_ARG="
 set "EXIT_CODE=0"
 set "LOG_DIR=%ROOT%\logs"
@@ -20,23 +20,16 @@ echo [RULE] Formal CSV files are not modified by this command.
 echo [NEXT] Use 3_OWNER... only when Owner wants to publish formal CSV.
 echo.
 
-for /f "delims=" %%P in ('%SystemRoot%\System32\where.exe py 2^>nul') do (
-  if not defined PYTHON_EXE (
-    set "PYTHON_EXE=%%P"
-    set "PYTHON_ARG=-3"
-  )
-)
-if not defined PYTHON_EXE (
-  for /f "delims=" %%P in ('%SystemRoot%\System32\where.exe python 2^>nul') do (
-    if not defined PYTHON_EXE set "PYTHON_EXE=%%P"
-  )
-)
-if not defined PYTHON_EXE if exist "%LOCALAPPDATA%\Python\pythoncore-3.14-64\python.exe" set "PYTHON_EXE=%LOCALAPPDATA%\Python\pythoncore-3.14-64\python.exe"
-if not defined PYTHON_EXE if exist "%USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe" set "PYTHON_EXE=%USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
-
-if not defined PYTHON_EXE (
-  echo [ERROR] Python 3 was not found. Install Python or add py/python to PATH.
+if not exist "%PYTHON_EXE%" (
+  echo [ERROR] Approved Bundled Python 3.12 was not found.
   set "EXIT_CODE=2"
+  goto Finish
+)
+
+"%PYTHON_EXE%" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)" >nul 2>nul
+if errorlevel 1 (
+  echo [ERROR] Approved runtime must be Python 3.12. System Python fallback is forbidden.
+  set "EXIT_CODE=4"
   goto Finish
 )
 

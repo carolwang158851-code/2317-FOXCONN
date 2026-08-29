@@ -20,11 +20,15 @@ import sys
 import threading
 import time
 import urllib.parse
+import uuid
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import owner_publish_csv_v2 as owner_publish
+import warroom_report_governance as report_governance
+import warroom_report_trigger_runtime as report_trigger_runtime
+import warroom_rolling_brief as rolling_brief
 
 
 UTF8_MIME_TYPES = {
@@ -52,9 +56,12 @@ FORMAL_CSV_FILES = [
 ]
 
 STATE_REL = "runtime/p1008_app_state.json"
+DAILY_PRICE_STATUS_REL = "runtime/daily_price_incremental/latest_status.json"
 MARKET_ACTIVITY_STATUS_REL = "runtime/market_activity_incremental/latest_status.json"
+FRESHNESS_STATUS_REL = "runtime/authority_freshness/latest_status.json"
 SOURCE_MANIFEST_REL = "data/NEWS_SCAN_SOURCE_MANIFEST.json"
-SERVER_VERSION = "P1008_APP_SERVER_20260719_MARKET_ACTIVITY_V1"
+OFFICIAL_IR_STATUS_REL = "runtime/official_ir_evidence/latest_status.json"
+SERVER_VERSION = "P1008_APP_SERVER_20260812_OFFICIAL_IR_PARTIAL_COVERAGE_V1_1"
 
 WEEKDAY_ZH = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"]
 FIELD_LABEL_ZH = {
@@ -132,6 +139,23 @@ def formal_csv_hashes(package_root: Path) -> dict[str, str]:
         path = package_root / rel
         hashes[rel] = sha256_file(path) if path.exists() else "MISSING"
     return hashes
+
+
+def git_head(package_root: Path) -> str:
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(package_root), "rev-parse", "HEAD"],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "UNKNOWN"
+    value = completed.stdout.strip()
+    return value if completed.returncode == 0 and value else "UNKNOWN"
 
 
 def parse_candidate_date(value: str) -> date | None:
@@ -299,7 +323,10 @@ def approved_network_sources(manifest: dict[str, Any]) -> list[dict[str, Any]]:
 
 class P1008JobManager:
     def __init__(self, package_root: Path) -> None:
-        self.package_root = package_root
+        self.package_root = package_root.resolve()
+        self.resolved_package_root = str(self.package_root)
+        self.git_head = git_head(self.package_root)
+        self.server_instance_id = uuid.uuid4().hex
         self.lock = threading.Lock()
         self.active_thread: threading.Thread | None = None
         self.state = self._initial_state()
@@ -333,6 +360,13 @@ class P1008JobManager:
         with self.lock:
             state = dict(self.state)
         state["serverVersion"] = SERVER_VERSION
+        state["resolvedPackageRoot"] = self.resolved_package_root
+        state["gitHead"] = self.git_head
+        authority_manifest = self.package_root / "data/CSV_AUTHORITY_MANIFEST.json"
+        state["authorityManifestSha256"] = (
+            sha256_file(authority_manifest) if authority_manifest.is_file() else "MISSING"
+        )
+        state["serverInstanceId"] = self.server_instance_id
         state["serverContext"] = server_context()
         state["pendingOwnerReview"] = self.pending_owner_review()
         state["sourceManifest"] = self.source_manifest_status()
@@ -340,6 +374,10 @@ class P1008JobManager:
             self.package_root / MARKET_ACTIVITY_STATUS_REL, default={}
         ) or {}
         state["latestReport"] = self.latest_report_status()
+        state["reportTrigger"] = report_trigger_runtime.launcher_status(self.package_root)
+        state["officialIR"] = read_json(
+            self.package_root / OFFICIAL_IR_STATUS_REL, default={}
+        ) or {}
         state["reviewPackage"] = self.review_package()
         state["launcherGate"] = self.launcher_gate_status(state["reviewPackage"], state)
         return state
@@ -387,12 +425,16 @@ class P1008JobManager:
     def latest_report_status(self) -> dict[str, Any]:
         manifest = read_json(self.package_root / "runtime" / "warroom_report_manifest.json", default={}) or {}
         latest = manifest.get("latest", {}) if isinstance(manifest.get("latest", {}), dict) else {}
+        health = rolling_brief.report_library_health(self.package_root)
         return {
             "manifestPath": "runtime/warroom_report_manifest.json",
             "count": len(manifest.get("reports", []) or []),
             "latestDaily": latest.get("daily"),
             "latestWeekly": latest.get("weekly"),
             "latestMonthly": latest.get("monthly"),
+            "latestRollingBriefDate": health.get("latestRollingBriefDate", ""),
+            "latestArchivedReportDate": health.get("latestArchivedReportDate", ""),
+            "health": health,
         }
 
     def _resolve_staging_dir(self, date_str: str | None = None) -> Path:
@@ -489,7 +531,20 @@ class P1008JobManager:
             }
 
     def launcher_gate_status(self, review_package: dict[str, Any], state: dict[str, Any] | None = None) -> dict[str, Any]:
-        state = state or self.state
+        if state is None:
+            state = dict(self.state)
+            state["latestReport"] = self.latest_report_status()
+        latest_report = state.get("latestReport") or {}
+        report_health = latest_report.get("health") or {}
+        if report_health.get("status") != "PASS":
+            return {
+                "code": "REPORT_LIBRARY_FAIL_CLOSED",
+                "zh": (
+                    "Rolling brief／研報庫身分驗證未通過；新 UI 與研報庫入口已停用。"
+                    f" 請依 Launcher health 指示修復：{report_health.get('code', 'UNKNOWN')}。"
+                ),
+                "canEnterNewUi": False,
+            }
         if state.get("status") == "RUNNING":
             return {"code": "PIPELINE_RUNNING", "zh": "更新流程執行中，請留在 Launcher。", "canEnterNewUi": False}
         if state.get("errors"):
@@ -729,38 +784,40 @@ class P1008JobManager:
             self._refresh(before)
             return
 
+        bootstrap_error = self._bootstrap_report_library_step()
+        if bootstrap_error:
+            self._add_error(bootstrap_error)
+            self._refresh(before)
+            return
+
         component_failures: list[str] = []
         if job_type in {"default", "update-data"}:
             daily_before = formal_csv_hashes(self.package_root)
             daily_exit = self._run_bat_step(
-                "update-data",
-                "Daily Price staging/runtime update",
-                self.package_root / "P1008_1_UPDATE_DATA.bat",
-                [],
-                timeout_seconds=420,
+                "daily-price-authority",
+                "TWSE Daily Price incremental authority update",
+                self.package_root / "P1008_1A_UPDATE_DAILY_PRICE.bat",
+                ["--dry-run"],
+                timeout_seconds=180,
             )
             daily_after = formal_csv_hashes(self.package_root)
-            if daily_exit != 0 or daily_after != daily_before:
+            daily_result = read_json(
+                self.package_root / DAILY_PRICE_STATUS_REL, default={}
+            ) or {}
+            daily_status = str(daily_result.get("launcher_status") or "BLOCKED")
+            daily_boundary = self._daily_price_boundary_error(
+                daily_before, daily_after, daily_status, candidate_only=bool(daily_result.get("dry_run"))
+            )
+            if daily_exit != 0 or daily_boundary:
                 daily_status = "FAILED"
-                reason = (
-                    f"Daily Price BAT exit={daily_exit}"
-                    if daily_exit != 0
-                    else "Daily Price BAT changed formal authority unexpectedly"
-                )
+                reason = daily_boundary or f"Daily Price BAT exit={daily_exit}"
                 component_failures.append(reason)
-            else:
-                review = self.review_package()
-                generated = review.get("generatedFiles", []) or []
-                daily_status = (
-                    "UPDATED"
-                    if any("2317_daily_price" in str(item) for item in generated)
-                    else "NO_CHANGE"
-                )
             self._set_component_status(
                 "dailyPrice",
                 daily_status,
                 exitCode=daily_exit,
-                lastSuccessDate=(self.review_package().get("candidateDate") or ""),
+                lastSuccessDate=daily_result.get("last_success_date", ""),
+                receiptPaths=daily_result.get("receipt_paths", []) or [],
             )
 
             if daily_status == "FAILED":
@@ -779,38 +836,122 @@ class P1008JobManager:
                 component_failures.append("Market Activity blocked by failed Daily Price step")
             else:
                 market_before = formal_csv_hashes(self.package_root)
-                market_exit = self._run_bat_step(
-                    "market-activity",
-                    "TWSE market activity incremental update",
-                    self.package_root / "P1008_1B_UPDATE_MARKET_ACTIVITY.bat",
-                    [],
-                    timeout_seconds=180,
-                )
-                market_after = formal_csv_hashes(self.package_root)
-                market_result = read_json(
-                    self.package_root / MARKET_ACTIVITY_STATUS_REL, default={}
-                ) or {}
-                market_status = str(market_result.get("launcher_status") or "STALE")
-                boundary_error = self._market_activity_boundary_error(
-                    market_before, market_after, market_status
-                )
-                if market_exit != 0 or boundary_error:
-                    market_status = (
-                        "BLOCKED"
-                        if market_result.get("status") == "MARKET_ACTIVITY_BLOCKED_BY_DAILY_PRICE"
-                        else "STALE"
-                    )
-                    failure = boundary_error or f"Market Activity BAT exit={market_exit}"
-                    component_failures.append(failure)
+                daily_run_dir = daily_result.get("run_dir")
+                daily_run_id = daily_result.get("run_id")
+                if daily_status == "UPDATED" and (
+                    not isinstance(daily_run_dir, str) or not isinstance(daily_run_id, str)
+                ):
+                    component_failures.append("Daily Price staging lineage is incomplete")
+                    market_status = "BLOCKED"
                     market_result = self._write_launcher_market_status(
-                        (
-                            "MARKET_ACTIVITY_BLOCKED_BY_DAILY_PRICE"
-                            if market_status == "BLOCKED"
-                            else "MARKET_ACTIVITY_STALE"
-                        ),
+                        "MARKET_ACTIVITY_BLOCKED_BY_DAILY_PRICE",
                         market_status,
-                        failure,
+                        "Daily Price staging lineage is incomplete",
                     )
+                    market_exit = 20
+                else:
+                    market_args = ["--dry-run"]
+                    if daily_status == "UPDATED":
+                        market_args.extend([
+                            "--daily-price-run-dir", daily_run_dir,
+                            "--daily-price-run-id", daily_run_id,
+                        ])
+                    market_exit = self._run_bat_step(
+                        "market-activity",
+                        "TWSE market activity incremental update",
+                        self.package_root / "P1008_1B_UPDATE_MARKET_ACTIVITY.bat",
+                        market_args,
+                        timeout_seconds=180,
+                    )
+                    market_after = formal_csv_hashes(self.package_root)
+                    market_result = read_json(
+                        self.package_root / MARKET_ACTIVITY_STATUS_REL, default={}
+                    ) or {}
+                    market_status = str(market_result.get("launcher_status") or "STALE")
+                    boundary_error = self._market_activity_boundary_error(
+                        market_before, market_after, market_status, candidate_only=bool(market_result.get("dry_run"))
+                    )
+                    if market_exit != 0 or boundary_error:
+                        market_status = (
+                            "BLOCKED"
+                            if market_result.get("status") == "MARKET_ACTIVITY_BLOCKED_BY_DAILY_PRICE"
+                            else "STALE"
+                        )
+                        failure = boundary_error or f"Market Activity BAT exit={market_exit}"
+                        component_failures.append(failure)
+                        market_result = self._write_launcher_market_status(
+                            (
+                                "MARKET_ACTIVITY_BLOCKED_BY_DAILY_PRICE"
+                                if market_status == "BLOCKED"
+                                else "MARKET_ACTIVITY_STALE"
+                            ),
+                            market_status,
+                            failure,
+                        )
+                if not component_failures:
+                    receipt_paths = market_result.get("receipt_paths", []) or []
+                    receipt_dir = (
+                        str(Path(receipt_paths[0]).parent) if receipt_paths else ""
+                    )
+                    freshness_args: list[str]
+                    if daily_status == "NO_NEW_DATA" and market_status == "NO_NEW_DATA":
+                        freshness_args = ["--receipt-dir", receipt_dir]
+                    elif daily_status == "UPDATED" and market_status == "UPDATED":
+                        market_run_dir = market_result.get("run_dir")
+                        market_run_id = market_result.get("run_id")
+                        if not all(
+                            isinstance(value, str) and value
+                            for value in (daily_run_dir, daily_run_id, market_run_dir, market_run_id)
+                        ):
+                            component_failures.append(
+                                "Candidate-overlay freshness lineage is incomplete"
+                            )
+                            freshness_args = []
+                        else:
+                            freshness_args = [
+                                "--daily-price-run-dir", daily_run_dir,
+                                "--daily-price-run-id", daily_run_id,
+                                "--market-activity-run-dir", market_run_dir,
+                                "--market-activity-run-id", market_run_id,
+                            ]
+                    else:
+                        component_failures.append(
+                            "Daily Price and Market Activity freshness states disagree"
+                        )
+                        freshness_args = []
+                if not component_failures:
+                    freshness_exit = self._run_bat_step(
+                        "authority-freshness",
+                        "TWSE authority freshness and continuity gate",
+                        self.package_root / "tools/p1008_validate_authority_freshness.cmd",
+                        freshness_args,
+                        timeout_seconds=60,
+                    )
+                    freshness_result = read_json(
+                        self.package_root / FRESHNESS_STATUS_REL, default={}
+                    ) or {}
+                    freshness_status = str(
+                        freshness_result.get("status") or "FAIL_CLOSED"
+                    )
+                    self._set_component_status(
+                        "freshness",
+                        freshness_status,
+                        exitCode=freshness_exit,
+                        twseLatestDate=freshness_result.get(
+                            "twse_latest_validated_trading_date", ""
+                        ),
+                        freshnessScope=freshness_result.get("freshness_scope", ""),
+                        formalAuthorityCurrent=freshness_result.get(
+                            "formal_authority_current", False
+                        ),
+                        ownerPublishRequired=freshness_result.get(
+                            "owner_publish_required", False
+                        ),
+                    )
+                    if freshness_exit != 0:
+                        component_failures.append(
+                            f"Authority Freshness BAT exit={freshness_exit}"
+                        )
             self._set_component_status(
                 "marketActivity",
                 market_status,
@@ -821,7 +962,18 @@ class P1008JobManager:
                 logPath=(market_result.get("run_dir") or "logs/last_market_activity_update.log"),
             )
 
-        if job_type in {"default", "news-scan"}:
+            if not component_failures:
+                other_data_exit = self._run_bat_step(
+                    "update-data",
+                    "Other staging/runtime data update",
+                    self.package_root / "P1008_1_UPDATE_DATA.bat",
+                    [],
+                    timeout_seconds=420,
+                )
+                if other_data_exit != 0:
+                    component_failures.append(f"Other Data BAT exit={other_data_exit}")
+
+        if job_type in {"default", "news-scan"} and not component_failures:
             self._run_news_scan_step()
             news_step = next(
                 (step for step in self.state.get("steps", []) if step.get("id") == "news-scan"),
@@ -838,23 +990,69 @@ class P1008JobManager:
             )
             self._set_component_status("news", news_status, exitCode=news_step.get("exitCode"))
 
-        if job_type == "report":
-            self._run_python_step(
-                "report",
-                "Generate daily report",
-                [
-                    str(self.package_root / "tools" / "warroom_periodic_report_v1.py"),
-                    "--package-root",
-                    str(self.package_root),
-                    "--period",
-                    "daily",
-                    "--date",
-                    date.today().isoformat(),
-                ],
-                timeout_seconds=180,
+        if job_type in {"default", "news-scan", "official-ir-scan"} and not component_failures:
+            self._run_official_ir_step()
+            official_step = next(
+                (step for step in self.state.get("steps", []) if step.get("id") == "official-ir-scan"),
+                {},
             )
+            official = read_json(self.package_root / OFFICIAL_IR_STATUS_REL, default={}) or {}
+            official_status = str(official.get("status") or "FAIL_CLOSED")
+            if official_step.get("status") != "SUCCEEDED":
+                official_status = "FAIL_CLOSED"
+                component_failures.append("REPORT_TRIGGER_EVIDENCE_INCOMPLETE")
+            active = official.get("active_event_evidence") or official.get("validated_event_evidence") or []
+            first = active[0] if active else {}
+            self._set_component_status(
+                "officialIR", official_status,
+                event=official.get("canonical_event_id", ""),
+                fiscalPeriod=official.get("active_fiscal_period", ""),
+                activeCanonicalEventId=official.get("canonical_event_id", ""),
+                activeReportKey=official.get("report_key", ""),
+                activeEvidenceCount=official.get("active_event_evidence_count", len(active)),
+                historicalEvidenceCount=official.get("historical_evidence_count", 0),
+                officialSource=first.get("source_id", "") or (official.get("schedule") or {}).get("source_id", ""),
+                documentType=(first.get("quality_metadata") or {}).get("document_type", ""),
+                retrievedAt=official.get("evaluated_at_utc", ""),
+                sourceScanComplete=official.get("source_scan_complete") is True,
+                scanIntegrityValid=official.get("scan_integrity_valid") is True,
+                coverageComplete=official.get("coverage_complete") is True,
+                successfulSources=official.get("successful_sources") or [],
+                failedSources=official.get("failed_sources") or [],
+                actionable=False,
+            )
+
+        if job_type in {"default", "news-scan", "official-ir-scan"} and not component_failures:
+            self._evaluate_report_trigger_step()
+
+        if job_type == "default" and not component_failures:
+            rolling_error = self._refresh_rolling_brief_step()
+            if rolling_error:
+                component_failures.append(rolling_error)
+
+        if job_type == "report":
+            self._evaluate_report_trigger_step()
         if job_type in {"analysis-candidate", "report-candidate"}:
             is_analysis = job_type == "analysis-candidate"
+            try:
+                trigger = report_trigger_runtime.require_valid_trigger(self.package_root)
+                if not is_analysis:
+                    report_trigger_runtime.require_analysis_candidate(self.package_root, trigger)
+            except report_trigger_runtime.RuntimeTriggerError as exc:
+                code = "REPORT_TRIGGER_REQUIRED" if is_analysis else "ANALYSIS_CANDIDATE_REQUIRED"
+                self._set_step(
+                    job_type,
+                    "Build Phase B1 Analysis candidate" if is_analysis else "Build Phase B1 Report candidate",
+                    "BLOCKED",
+                    code=code,
+                    message=str(exc),
+                    actionable=False,
+                )
+                self._set_component_status(
+                    "phaseB1", "FAIL_CLOSED", code=code, actionable=False
+                )
+                self._refresh(before)
+                return
             bat_name = "P1008_BUILD_ANALYSIS.bat" if is_analysis else "P1008_BUILD_REPORT.bat"
             label = "Build Phase B1 Analysis candidate" if is_analysis else "Build Phase B1 Report candidate"
             exit_code = self._run_bat_step(
@@ -879,20 +1077,57 @@ class P1008JobManager:
                 outputPath=latest.get("outputPath", ""),
                 actionable=False,
             )
-        if job_type in {"default", "update-data"}:
+        if job_type in {"default", "update-data", "official-ir-scan"}:
             if component_failures:
                 for failure in component_failures:
                     self._add_error(failure)
             components = self.state.get("componentStatus", {}) or {}
             partial = any(
                 str((components.get(name) or {}).get("status", ""))
-                in {"FAILED", "STALE", "BLOCKED"}
-                for name in ("dailyPrice", "marketActivity", "news")
+                in {"FAILED", "STALE", "BLOCKED", "FAIL_CLOSED"}
+                for name in ("dailyPrice", "marketActivity", "news", "officialIR", "rollingBrief", "reportLibrary")
             )
             with self.lock:
                 self.state["overallStatus"] = "PARTIAL_FAILURE" if partial else "SUCCEEDED"
                 self._persist_locked()
-        self._refresh(before)
+        self._refresh(
+            before,
+            allow_authority_change=job_type in {"default", "update-data"},
+        )
+
+    def _evaluate_report_trigger_step(self) -> None:
+        """Evaluate and persist G1 state; never start candidate production."""
+        self._set_step(
+            "report-governance", "Reconcile validated evidence and evaluate report trigger", "RUNNING"
+        )
+        try:
+            receipt = report_trigger_runtime.evaluate_and_persist(
+                self.package_root, evaluated_at_utc=now_iso()
+            )
+        except (report_trigger_runtime.RuntimeTriggerError, report_governance.GovernanceValidationError) as exc:
+            self._set_step(
+                "report-governance", "Reconcile validated evidence and evaluate report trigger",
+                "FAIL_CLOSED", message=str(exc), actionable=False,
+            )
+            self._set_component_status(
+                "reportGovernance", "FAIL_CLOSED", reportTriggerValid=False,
+                archiveEligible=False, libraryAppended=False, error=str(exc), actionable=False,
+            )
+            return
+        self._set_step(
+            "report-governance", "Reconcile validated evidence and evaluate report trigger",
+            "SUCCEEDED", decision=receipt["decision"], decisionId=receipt["decision_id"],
+            actionable=False,
+        )
+        self._set_component_status(
+            "reportGovernance", receipt["decision"], reportKey=receipt["report_key"],
+            revision=receipt["revision"], eventType=receipt["event_type"],
+            validationState=receipt["cross_validation"]["validation_status"],
+            reportTriggerValid=receipt["report_trigger_valid"],
+            materialEventConfirmed=receipt["material_event_confirmed"],
+            archiveEligible=False, libraryAppended=False, reportGenerated=False,
+            actionable=False,
+        )
 
     def _set_component_status(self, component: str, status: str, **extra: Any) -> None:
         with self.lock:
@@ -900,6 +1135,123 @@ class P1008JobManager:
             components[component] = {"status": status, **extra}
             self.state["componentStatus"] = components
             self._persist_locked()
+
+    def _refresh_rolling_brief_step(self) -> str:
+        """Refresh the current view and verify archive-index consistency."""
+        self._set_step(
+            "rolling-brief",
+            "Refresh rolling current war-room brief",
+            "RUNNING",
+        )
+        try:
+            result = rolling_brief.refresh_current_brief(self.package_root)
+        except (rolling_brief.RollingBriefError, OSError) as exc:
+            message = str(exc)
+            self._set_step(
+                "rolling-brief",
+                "Refresh rolling current war-room brief",
+                "FAILED",
+                message=message,
+            )
+            self._set_component_status(
+                "rollingBrief", "FAILED", error=message, actionable=False
+            )
+            return f"Rolling brief refresh failed: {message}"
+
+        self._set_step(
+            "rolling-brief",
+            "Refresh rolling current war-room brief",
+            "SUCCEEDED",
+            message=result.get("authorityDate", ""),
+        )
+        self._set_component_status(
+            "rollingBrief",
+            "UPDATED",
+            authorityDate=result.get("authorityDate", ""),
+            dataCutoffs=result.get("dataCutoffs", {}),
+            dataAlignmentStatus=result.get("dataAlignmentStatus", ""),
+            marketActivityFreshness=result.get("marketActivityFreshness", {}),
+            briefContentSha256=result.get("briefContentSha256", ""),
+            briefPath=result.get("briefPath", ""),
+            htmlPath=result.get("htmlPath", ""),
+            archiveAppended=False,
+            actionable=False,
+        )
+        health = rolling_brief.report_library_health(self.package_root)
+        health_status = str(health.get("status") or "FAIL_CLOSED")
+        self._set_component_status(
+            "reportLibrary",
+            health_status,
+            code=health.get("code", ""),
+            latestArchivedReportDate=health.get("latestArchivedReportDate", ""),
+            recoveryInstruction=health.get("recoveryInstruction", ""),
+            actionable=False,
+        )
+        if health_status != "PASS":
+            return (
+                "Report library health check failed: "
+                f"{health.get('code', 'UNKNOWN')} — {health.get('message', '')}"
+            )
+        return ""
+
+    def _bootstrap_report_library_step(self) -> str:
+        """Initialize only a truly empty archive index before the default job.
+
+        Archive history is never recreated when one paired manifest is lost or
+        both manifests disagree.  Those conditions remain fail-closed.
+        """
+        self._set_step(
+            "report-library-bootstrap",
+            "Validate or initialize report-library manifests",
+            "RUNNING",
+        )
+        try:
+            result = rolling_brief.bootstrap_report_library(self.package_root)
+        except (rolling_brief.RollingBriefError, OSError) as exc:
+            message = str(exc)
+            self._set_step(
+                "report-library-bootstrap",
+                "Validate or initialize report-library manifests",
+                "FAILED",
+                message=message,
+            )
+            self._set_component_status(
+                "reportLibrary", "FAIL_CLOSED", error=message, actionable=False
+            )
+            return f"Report library bootstrap failed: {message}"
+        status = str(result.get("status") or "FAIL_CLOSED")
+        if status == "FAIL_CLOSED":
+            message = str(result.get("message") or result.get("code") or "unknown error")
+            self._set_step(
+                "report-library-bootstrap",
+                "Validate or initialize report-library manifests",
+                "FAILED",
+                message=message,
+                code=result.get("code", ""),
+            )
+            self._set_component_status(
+                "reportLibrary",
+                "FAIL_CLOSED",
+                code=result.get("code", ""),
+                recoveryInstruction=result.get("message", ""),
+                actionable=False,
+            )
+            return f"Report library bootstrap failed: {message}"
+        self._set_step(
+            "report-library-bootstrap",
+            "Validate or initialize report-library manifests",
+            "SUCCEEDED",
+            message=status,
+        )
+        self._set_component_status(
+            "reportLibrary",
+            status,
+            code=result.get("classification", ""),
+            archiveReportCount=result.get("archiveReportCount", 0),
+            archiveAppended=False,
+            actionable=False,
+        )
+        return ""
 
     def _market_activity_last_date(self) -> str:
         path = self.package_root / "data/2317_daily_market_activity.csv"
@@ -916,14 +1268,15 @@ class P1008JobManager:
         if root.is_dir():
             for path in root.glob("*/run_manifest.json"):
                 payload = read_json(path, default={}) or {}
-                if payload.get("eventType") == "MONTHLY_REVENUE":
+                if payload.get("eventType") in {"MONTHLY_REVENUE", "QUARTERLY_EARNINGS"}:
                     candidates.append((str(payload.get("generatedAtUtc") or ""), payload, path.parent))
         if not candidates:
             return {"runId": "", "outputPath": ""}
         _timestamp, payload, output_path = sorted(candidates, key=lambda item: (item[0], str(item[2])))[-1]
+        candidate_output = payload.get("reportCandidateOutputPath")
         return {
             "runId": str(payload.get("runId") or ""),
-            "outputPath": str(output_path),
+            "outputPath": str(candidate_output or output_path),
         }
 
     def _write_launcher_market_status(
@@ -945,23 +1298,58 @@ class P1008JobManager:
         return payload
 
     @staticmethod
-    def _market_activity_boundary_error(
-        before: dict[str, str], after: dict[str, str], launcher_status: str
+    def _daily_price_boundary_error(
+        before: dict[str, str], after: dict[str, str], launcher_status: str, *, candidate_only: bool = False
     ) -> str:
+        allowed = {"data/2317_daily_price.csv", "data/CSV_AUTHORITY_MANIFEST.json"}
         changed = {key for key in before if before.get(key) != after.get(key)}
-        if changed:
-            return "Market Activity candidate step changed formal files: " + ", ".join(sorted(changed))
+        unexpected = changed - allowed
+        if unexpected:
+            return "Daily Price changed unauthorized formal files: " + ", ".join(
+                sorted(unexpected)
+            )
+        if candidate_only and changed:
+            return "Daily Price candidate-only run changed formal CSV or manifest"
+        if not candidate_only and launcher_status == "UPDATED" and changed != allowed:
+            return "Daily Price UPDATED did not atomically change CSV and manifest only"
+        if launcher_status != "UPDATED" and changed:
+            return "Daily Price non-update status changed formal CSV or manifest"
+        return ""
+
+    @staticmethod
+    def _market_activity_boundary_error(
+        before: dict[str, str], after: dict[str, str], launcher_status: str, *, candidate_only: bool = False
+    ) -> str:
+        allowed = {
+            "data/2317_daily_market_activity.csv",
+            "data/CSV_AUTHORITY_MANIFEST.json",
+        }
+        changed = {key for key in before if before.get(key) != after.get(key)}
+        unexpected = changed - allowed
+        if unexpected:
+            return "Market Activity changed unauthorized formal files: " + ", ".join(
+                sorted(unexpected)
+            )
+        if candidate_only and changed:
+            return "Market Activity candidate-only run changed formal CSV or manifest"
+        if not candidate_only and launcher_status == "UPDATED" and changed != allowed:
+            return "Market Activity UPDATED did not atomically change CSV and manifest only"
+        if launcher_status != "UPDATED" and changed:
+            return "Market Activity non-update status changed formal CSV or manifest"
         return ""
 
     def _preflight(self) -> dict[str, str]:
         self._set_step("preflight", "Preflight checks", "RUNNING")
         required = [
-            "output/ui-concepts/P1008_WARROOM_COMMAND_CENTER_v24.html",
-            "index_p1008_v7.html",
+            "ui/P1008_WARROOM_COMMAND_CENTER_v24.html",
             "tools/warroom_data_fetcher_v2.py",
+            "tools/warroom_daily_price_updater.py",
             "tools/warroom_market_activity_updater.py",
+            "tools/warroom_authority_freshness.py",
             "P1008_1_UPDATE_DATA.bat",
+            "P1008_1A_UPDATE_DAILY_PRICE.bat",
             "P1008_1B_UPDATE_MARKET_ACTIVITY.bat",
+            "tools/p1008_validate_authority_freshness.cmd",
             "tools/warroom_news_scanner_v2.py",
             "tools/warroom_periodic_report_v1.py",
             SOURCE_MANIFEST_REL,
@@ -1004,6 +1392,18 @@ class P1008JobManager:
             args.append("--no-network")
             self._add_warning("No approved network news connector; news scan ran no-network.")
         self._run_python_step("news-scan", "Observation-only news scan v2", args, timeout_seconds=240)
+
+    def _run_official_ir_step(self) -> None:
+        """Scan fixed authorized Official IR sources; never generate content."""
+        args = [
+            str(self.package_root / "tools" / "warroom_official_ir_ingestion.py"),
+            "--package-root",
+            str(self.package_root),
+        ]
+        self._run_python_step(
+            "official-ir-scan", "Governed Official IR evidence scan", args,
+            timeout_seconds=90,
+        )
 
     def _run_bat_step(
         self,
@@ -1111,16 +1511,31 @@ class P1008JobManager:
         if after != before:
             self._add_error("Formal CSV hash changed during app pipeline; stopping before any further action.")
 
-    def _refresh(self, before: dict[str, str]) -> None:
+    def _refresh(
+        self, before: dict[str, str], *, allow_authority_change: bool = False
+    ) -> None:
         self._set_step("refresh", "Refresh app state", "RUNNING")
         after = formal_csv_hashes(self.package_root)
         latest_date = latest_staging_date(self.package_root)
         with self.lock:
             self.state["formalCsvHashesAfter"] = after
             self.state["formalCsvModified"] = after != before
+            changed = {key for key in before if before.get(key) != after.get(key)}
+            expected_authority_change = (
+                allow_authority_change
+                and bool(changed)
+                and changed.issubset(
+                    {
+                        "data/2317_daily_price.csv",
+                        "data/2317_daily_market_activity.csv",
+                        "data/CSV_AUTHORITY_MANIFEST.json",
+                    }
+                )
+            )
+            self.state["formalCsvModifiedExpected"] = expected_authority_change
             self.state["latestStagingDate"] = latest_date or date.today().isoformat()
             self.state["pendingOwnerReview"] = self.pending_owner_review()
-            if after != before:
+            if after != before and not expected_authority_change:
                 self.state.setdefault("errors", []).append("Formal CSV hash changed; Owner gate boundary violated.")
                 self.state["status"] = "FAILED"
             self._persist_locked()
@@ -1206,6 +1621,7 @@ class P1008AppHandler(http.server.SimpleHTTPRequestHandler):
             "/api/p1008/run/default": "default",
             "/api/p1008/run/update-data": "update-data",
             "/api/p1008/run/news-scan": "news-scan",
+            "/api/p1008/run/official-ir-scan": "official-ir-scan",
             "/api/p1008/run/report": "report",
             "/api/p1008/run/analysis-candidate": "analysis-candidate",
             "/api/p1008/run/report-candidate": "report-candidate",

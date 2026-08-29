@@ -1,0 +1,115 @@
+{
+  "schema_version": "1.1.0",
+  "contract_id": "P1008_FORWARD_ENTERPRISE_VALUE_ANALYTICS_V1",
+  "extends": "P1008_WAR_REPORT_PRODUCTION_V1",
+  "actionable": false,
+  "data_architecture": "EXISTING_LAYERED_HISTORICAL_RESEARCH_BASELINE",
+  "evidence_classes": [
+    "T0_DIRECT_OFFICIAL",
+    "T1_EXACT_DERIVED",
+    "T2_ESTIMATED_DERIVED",
+    "T3_EXTERNAL_CROSSCHECK",
+    "T4_MODEL_SCENARIO"
+  ],
+  "scenario_types": ["BASE", "RESEARCH_STRESS_A", "RESEARCH_STRESS_B"],
+  "scenario_actual_history_policy": "PROHIBITED",
+  "six_axis_framework": [
+    "OPERATING_PROFIT_QUALITY",
+    "FCF_CONVERSION",
+    "CAPITAL_EFFICIENCY",
+    "PER_SHARE_VALUE_COMPOUNDING",
+    "FORWARD_STRESS_AND_SENSITIVITY",
+    "RULE_BASED_DECISION_ENGINE"
+  ],
+  "models": {
+    "roic_sensitivity": {
+      "model_id": "ESTIMATED_INVESTED_CAPITAL_AND_ROIC_V1",
+      "independent_invested_capital_formula": "AR + Inventory + Operating PP&E - AP",
+      "average_invested_capital_formula": "(Q1 endpoint + Q2 endpoint) / 2",
+      "independent_estimate_classification": "T2_ESTIMATED_DERIVED_PARTIAL_OPERATING_IC",
+      "unsupported_line_items_policy": "EXCLUDE_AND_DISCLOSE_NEVER_IMPUTE",
+      "nopat_formula": "Operating Profit * (1 - effective tax rate)",
+      "effective_tax_rate_formula": "Income Tax Expense / Pretax Income",
+      "invested_capital_scenarios": ["LOW_CAPITAL_INTENSITY", "BASE_CAPITAL_INTENSITY", "HIGH_CAPITAL_INTENSITY"],
+      "persistence_sensitivity_model_id": "ROIC_PERSISTENCE_CAPITAL_INTENSITY_SENSITIVITY_V1",
+      "invested_capital_reference_formula": "Annualized quarterly NOPAT / latest governed actual ROIC; anchored persistence sensitivity only",
+      "invested_capital_reference_multipliers": ["0.85", "1.00", "1.15"],
+      "period_outputs": ["QUARTERLY_PARTIAL_OPERATING_IC_ROIC_ESTIMATE", "ANNUALIZED_QUARTERLY_SENSITIVITY", "ANCHORED_PERSISTENCE_SENSITIVITY"],
+      "annualization_rule": "Quarterly NOPAT * 4; scenario only; never TTM",
+      "cash_treatment": "EXCLUDED_FROM_OPERATING_INVESTED_CAPITAL_REFERENCE",
+      "debt_treatment": "FINANCING_SOURCE_NOT_ADDED_TO_OPERATING_ASSET_PROXY",
+      "lease_treatment": "UNAVAILABLE_NOT_IMPUTED",
+      "wacc_spread": "UNAVAILABLE_UNLESS_GOVERNED_WACC_EXISTS"
+    },
+    "working_capital_stress": {
+      "model_id": "WORKING_CAPITAL_STRESS_TEST_V1",
+      "day_basis": "CONFIGURABLE_DEFAULT_90_FOR_QUARTER",
+      "formulas": {
+        "delta_ar": "Revenue * delta_DSO / DAY_BASIS",
+        "delta_inventory": "COGS * delta_DIO / DAY_BASIS",
+        "delta_ap_relief": "COGS * delta_DPO / DAY_BASIS",
+        "net_incremental_working_capital": "delta_AR + delta_Inventory - delta_AP_relief",
+        "stressed_cfo": "baseline_CFO - net_incremental_working_capital",
+        "stressed_fcf": "stressed_CFO - Capex",
+        "funding_need": "max(0, -stressed_FCF)"
+      },
+      "analytical_defaults": {
+        "classification": "T4_MODEL_SCENARIO_NOT_OWNER_POLICY",
+        "BASE": {"delta_dso": "0", "delta_dio": "0", "delta_dpo": "0"},
+        "RESEARCH_STRESS_A": {"delta_dso": "5", "delta_dio": "10", "delta_dpo": "0"},
+        "RESEARCH_STRESS_B": {"delta_dso": "10", "delta_dio": "15", "delta_dpo": "-5"}
+      },
+      "event_overlay_allowed": true,
+      "interest_sensitivity_default": "UNAVAILABLE_NO_GOVERNED_FUNDING_RATE"
+    },
+    "capital_light_proxy": {
+      "model_id": "CAPITAL_LIGHT_PROXY_V1",
+      "indicators": ["CCC", "DIO", "DSO", "DPO", "INVENTORY_TO_REVENUE", "AR_TO_REVENUE", "AP_TO_REVENUE", "NWC_TO_REVENUE", "CFO_TO_REVENUE", "FCF_TO_REVENUE", "CAPEX_TO_REVENUE"],
+      "allowed_states": ["IMPROVING", "NEUTRAL", "DETERIORATING", "INCONCLUSIVE"],
+      "factor_groups": ["RECEIVABLE_EFFICIENCY", "INVENTORY_EFFICIENCY", "SUPPLIER_FINANCING", "CASH_CONVERSION", "CAPITAL_INTENSITY"],
+      "method": "FIVE_NORMALIZED_FACTOR_GROUPS_NO_RAW_METRIC_DOUBLE_COUNTING",
+      "level_and_trend_separate": true,
+      "composite_numeric_score": false,
+      "exact_consignment_percentage_allowed": false,
+      "future_calibration_labels": ["CONSIGNMENT_PERCENT", "ASIC_MIX", "BUY_AND_SELL_MIX"]
+    },
+    "dilution_sensitivity": {
+      "model_id": "DILUTION_SENSITIVITY_V1",
+      "formula": "(1 + numerator growth) / (1 + share growth) - 1",
+      "analytical_default_axes": {
+        "classification": "T4_MODEL_SCENARIO_NOT_OWNER_POLICY",
+        "share_growth_pct": ["0", "0.5", "1", "2", "3"],
+        "numerator_growth_pct": ["0", "5", "10", "15", "20"]
+      },
+      "denominators": {
+        "EPS": "COMPATIBLE_WEIGHTED_AVERAGE_SHARES",
+        "FCF_PER_SHARE": "FCF_PER_SHARE_V1_COMPATIBLE_WEIGHTED_AVERAGE_SHARES",
+        "BVPS": "PERIOD_END_SHARES"
+      },
+      "break_even_formula": "Required numerator growth equals denominator growth",
+      "full_cb_conversion_default": false
+    }
+  },
+  "forward_result_required_fields": [
+    "model_id",
+    "model_version",
+    "input_observation_ids",
+    "input_evidence_classes",
+    "assumptions",
+    "formula",
+    "scenario",
+    "result",
+    "unit",
+    "confidence",
+    "limitations",
+    "actionable"
+  ],
+  "reader_disclosure": {
+    "estimated_roic_label_zh": "部分營運投入資本ROIC估算",
+    "anchored_sensitivity_label_zh": "ROIC持續性／資本強度敏感度",
+    "same_basis_actual_must_remain_separate": true,
+    "internal_tier_codes_in_main_prose": false,
+    "scenario_is_management_guidance": false,
+    "scenario_is_target_price": false
+  }
+}
