@@ -411,7 +411,7 @@ def build_full_history_charts(package_root: Path, analysis: AnalysisPacket, hist
         ChartSeries(label_zh="NWC Proxy", unit="新台幣百萬元", values=[item["value"] for item in nwc_rows]),
     ], sources, ["圖形特徵：Q1至Q2的營運資金代理值增加1,747.38億元。", "為何重要：應收與存貨合計增加3,794.24億元，應付增加2,046.86億元只抵銷部分占用。", "論點含義：供應商融資提供緩衝而非現金消耗；淨占用仍壓低Q2 CFO。"] ))
     charts.extend([
-        _chart("full_history_roic", "ROIC完整歷史與本期待驗", "資本效率是否改善？", labels, [ChartSeries(label_zh="ROIC", unit="%", values=[r["ROIC_Precise_Pct"] for r in rows] + ["INSUFFICIENT_DATA"])], full_sources, ["圖形特徵：歷史同口徑ROIC波動，2026Q1為12.57%；2026Q2不是零，而是條件式候選未通過來源口徑閘門。", "為何重要：16.46%候選值使用的現金口徑無法與官方現金及定期存款總額一致核對，因此不得升格。", "論點含義：新增資本是否提高報酬仍待驗；須補齊同口徑有息負債與現金輸入後重算。"]),
+        _chart("full_history_roic", "ROIC完整歷史與本期核准值", "資本效率目前為何？", labels, [ChartSeries(label_zh="ROIC", unit="%", values=[r["ROIC_Precise_Pct"] for r in rows] + [current_row["ROIC_Precise_Pct"]])], full_sources, ["圖形特徵：2026Q2 ROIC為12.35%（推算），有息負債採正式資產負債表直接組成。", "為何重要：16.46%因NET_CASH_DENOMINATOR_SCOPE_MISMATCH遭拒，未進入正式序列。", "論點含義：Q1未以相同直接有息負債方法重算，因此本圖不得解讀為Q1至Q2惡化或改善趨勢。"]),
         _chart("full_history_bvps", "每股淨值完整歷史", "帳面價值是否持續傳達至每股？", labels, [ChartSeries(label_zh="BVPS", unit="新台幣元", values=[r["BVPS"] for r in rows] + [current_row["BVPS"]])], full_sources, ["圖形特徵：2026Q2官方BVPS為136.02元，高於2026Q1的127.12元。", "為何重要：帳面價值累積仍需連同股利與股數變化解釋，單季上升不等於股東總報酬已完成。", "論點含義：每股帳面價值獲官方資料支持；現金轉化與ROIC仍須分開驗證。"]),
         _chart("full_history_valuation", "歷史季度P/B與TTM P/E（分尺度）", "截至2026Q1的歷史評價如何變化？", periods, [
             ChartSeries(label_zh="P/B", unit="倍", values=[item["value"] for item in observations_for(historical_baseline, "PB")]),
@@ -748,7 +748,7 @@ def _quarterly_research_chapters(
         ("營業利益品質", f"營益率{q.operating_margin.value}%，營業利益年增{a['operatingProfitYoyPct']}%", "營益率維持或提高，且毛利率不再下滑", "毛利率與營益率同步下降", "FY2026 Q3財報／法說"),
         ("營運現金回收", f"2026H1 CFO {_reader_amount_million(a['h1OperatingCashFlowMillionTwd'])}，Q2期末CCC {wc['cashConversionCycleDays'][-1]}天", "後續累計CFO改善只算初步改善；H2、全年或TTM現金轉化恢復才是主要確認", "CFO持續為負，或應收與存貨天數反轉上升", "FY2026 Q3及全年現金流量表"),
         ("自由現金流", f"2026H1 FCF {_reader_amount_million(a['h1FreeCashFlowMillionTwd'])}", "H2、全年或TTM FCF轉正且不依賴一次性營運資金釋放", "2026全年FCF仍為負", "FY2026 Q3／全年現金流量表"),
-        ("資本報酬", "Q2 ROIC候選16.46%未通過現金／負債來源口徑閘門，維持資料不足", "補齊同口徑有息負債、現金、NOPAT與平均投入資本後重算", "來源口徑仍無法對齊或投入資本增幅持續高於NOPAT", "正式Q2補充資料／FY2026 Q3"),
+        ("資本報酬", "Q2 ROIC 12.35%（推算），採直接有息負債組成；不作Q1至Q2趨勢判斷", "後續以相同直接負債方法建立可比期間", "投入資本增幅持續高於NOPAT，或來源組成失去可核對性", "FY2026 Q3"),
         ("每股價值", f"Q2 EPS {q.eps.value}元；官方BVPS 136.02元；2026H1 FCF／相容加權平均股數約{_reader_number(h1_fcf_per_share)}元／股", "EPS、BVPS與FCF／股在相容期間共同改善，且股數未稀釋每股成果", "EPS與BVPS上升但FCF／股轉弱，或股數增幅抵銷分子成長", "FY2026 Q3／全年每股與現金資料"),
         ("估值第二階段", f"事件前P/S、P/E、P/B均處歷史較高位置；ROIC、FCF與每股價值尚未共同確認", "ROIC、正常化FCF與每股價值共同改善，為較高估值提供第二階段證據", "較高歷史位置延續，但ROIC、FCF或每股價值驗證失敗，形成再評價風險", "FY2026 Q3／全年財務及事件後正式行情"),
         ("AI價值轉化", "AI已到營收階段；專屬利潤、ROIC與FCF未揭露", "官方揭露可核對的AI獲利或現金證據", "AI成長伴隨合併毛利、ROIC與FCF惡化", "後續季報／法說"),
@@ -847,7 +847,7 @@ def _quarterly_research_chapters(
         + "<p>以上是既有90日敏感度，不是預測或政策門檻。淨現金提供存量緩衝，但兩個壓力情境顯示營運資金惡化會放大資金需求，因此只能判定韌性仍需現金回收驗證，不能對整體韌性作出確定的類別結論。</p>"
         "<h3>ROIC三層證據必須分開</h3>"
         "<p><strong>ROIC持續性／資本強度敏感度：</strong>以下三層不得混為同一個實際報酬率。</p>"
-        f"<p><strong>官方同口徑：</strong>Q2 ROIC候選16.46%未通過現金／負債來源口徑閘門，維持資料不足；缺口不是零。"
+        f"<p><strong>正式推算口徑：</strong>Q2 ROIC為12.35%，有息負債採正式資產負債表直接組成；16.46%因NET_CASH_DENOMINATOR_SCOPE_MISMATCH遭拒。Q1未以相同方法重算，因此不作Q1至Q2趨勢判斷。"
         f"<strong>部分營運投入資本估算：</strong>以應收、存貨、營運用不動產廠房設備減應付帳款，平均投入資本"
         f"{_reader_amount_million(roic_estimate['average_invested_capital_million_twd'])}，單季估算ROIC "
         f"{_reader_number(roic_estimate['quarterly_roic_pct'])}%；這不是官方同口徑ROIC。"
@@ -899,7 +899,7 @@ def _quarterly_research_chapters(
         + _table([
             {"主題": "AI伺服器成長", "既有說法": "Q3 AI Rack出貨季增高雙位數", "截至本報告結果": "前瞻指引，實現值尚未揭露", "判定": "仍開放驗證"},
             {"主題": "營業利益轉化", "既有說法": "規模與整合有助營運效率", "截至本報告結果": f"Q2營業利益年增{a['operatingProfitYoyPct']}%，營益率升至{q.operating_margin.value}%", "判定": "本季財務結果支持"},
-            {"主題": "ROE／資本效率", "既有說法": "需由正式目標與同口徑資料核對", "截至本報告結果": "官方2026H1 ROE為6.21%（未年化）；Q2 ROIC候選未通過來源口徑閘門", "判定": "部分支持"},
+            {"主題": "ROE／資本效率", "既有說法": "需由正式目標與同口徑資料核對", "截至本報告結果": "官方2026H1 ROE為6.21%（未年化）；Q2 ROIC為12.35%（推算），不作Q1至Q2趨勢判斷", "判定": "部分支持"},
             {"主題": "資本支出", "既有說法": "本地證據沒有可比指引區間", "截至本報告結果": f"2026H1官方Capex {_reader_amount_million(a['h1CapexMillionTwd'])}", "判定": "無法判定超前或落後"},
         ], ("主題", "既有說法", "截至本報告結果", "判定"))
     )

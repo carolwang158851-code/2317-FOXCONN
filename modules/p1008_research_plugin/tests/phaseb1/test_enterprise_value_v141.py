@@ -108,7 +108,7 @@ class EnterpriseValueV141Tests(unittest.TestCase):
         self.assertIn("2026H1", capex["period"])
         self.assertIn("官方累計值", capex["period"])
         roic = self.chart("capital_validation_status")
-        self.assertEqual(roic["series"][0]["values"], ["10.51", "13.16", "7.91", "10.66", "11.77", "14.41", "12.57", "INSUFFICIENT_DATA"])
+        self.assertEqual(roic["series"][0]["values"], ["10.51", "13.16", "7.91", "10.66", "11.77", "14.41", "12.57", "12.35"])
         self.assertNotEqual(roic["series"][0]["values"][-1], "0")
 
     def test_roe_is_first_class_and_dupont_is_partial(self) -> None:

@@ -1,8 +1,8 @@
 {
-  "manifestVersion": "1.4.0",
-  "approvedAt": "2026-08-28",
+  "manifestVersion": "1.4.1",
+  "approvedAt": "2026-08-29",
   "approvedBy": "Owner",
-  "approvalSource": "Owner conversation approvals P1008 items 16-18, 25-29, 75, 77, 80 and approved P2-03B-07 Release Manifest; Owner approval 2026-06-29 for 2317_daily_price.csv PB correction and formal daily CSV authority; Owner approval 2026-06-29 for MARKET INTELLIGENCE observation boundary; Owner approval 2026-06-29 via owner_publish_csv_v2.py; appended 2 row(s); Owner approval 2026-06-29 for macro_snapshot.csv historical format correction and manifest hash update; Owner approval 2026-06-30 via owner_publish_csv_v2.py; appended 2 row(s); 2026-06-30 TWSE official close correction, no new row appended; Owner approval 2026-07-03 for macro_event_observations.csv and fx_trend_observations.csv observation-only sidecar contracts; Owner approval 2026-07-05 via owner_publish_csv_v2.py; appended 48 row(s); Owner approval 2026-07-06 via owner_publish_csv_v2.py; appended 49 row(s); Owner approval 2026-07-07 via owner_publish_csv_v2.py; appended 43 row(s); Owner approval 2026-07-08 via owner_publish_csv_v2.py; appended 50 row(s); Owner approval 2026-07-10 via owner_publish_csv_v2.py; appended 44 row(s); Owner approval 2026-07-16 via owner_publish_csv_v2.py; appended 48 row(s); Owner approval 2026-07-17 via owner_publish_csv_v2.py; appended 45 row(s); Owner-approved 2026-07-18 price authority remediation via owner_publish_csv_v2.py replace mode; Owner-approved 2026-07-18 initial TWSE market-activity authority publish via owner_publish_csv_v2.py; Owner approval 2026-07-19 via owner_publish_csv_v2.py; appended 35 row(s); Owner approval 2026-07-19 for official FCF authority and paper-style cross-references; Owner approval 2026-07-20 via owner_publish_csv_v2.py; appended 38 row(s); Owner approval 2026-07-21 via owner_publish_csv_v2.py; appended 41 row(s); Owner approval 2026-07-23 via owner_publish_csv_v2.py; appended 42 row(s); Owner approval 2026-07-27 via owner_publish_csv_v2.py; appended 46 row(s); Owner-approved removal of invalid daily-price row 2026-07-19 via owner_publish_csv_v2.py; Owner-approved official TWSE daily-price gaps 2026-07-22 and 2026-07-24 via owner_publish_csv_v2.py; Owner-approved P1008 Final Integration Reconciliation adds the previously verified Cash Flow authority without changing Daily Price, Market Activity, Macro, RULE, HOLD, MIDR, or Runtime SQLite; Owner approval 2026-08-27 via owner_publish_csv_v2.py; appended 2 row(s); P1008_FY2026Q2_OWNER_PROMOTION_FINAL_OWNER_APPROVAL_DIRECTIVE",
+  "approvalSource": "Owner conversation approvals P1008 items 16-18, 25-29, 75, 77, 80 and approved P2-03B-07 Release Manifest; Owner approval 2026-06-29 for 2317_daily_price.csv PB correction and formal daily CSV authority; Owner approval 2026-06-29 for MARKET INTELLIGENCE observation boundary; Owner approval 2026-06-29 via owner_publish_csv_v2.py; appended 2 row(s); Owner approval 2026-06-29 for macro_snapshot.csv historical format correction and manifest hash update; Owner approval 2026-06-30 via owner_publish_csv_v2.py; appended 2 row(s); 2026-06-30 TWSE official close correction, no new row appended; Owner approval 2026-07-03 for macro_event_observations.csv and fx_trend_observations.csv observation-only sidecar contracts; Owner approval 2026-07-05 via owner_publish_csv_v2.py; appended 48 row(s); Owner approval 2026-07-06 via owner_publish_csv_v2.py; appended 49 row(s); Owner approval 2026-07-07 via owner_publish_csv_v2.py; appended 43 row(s); Owner approval 2026-07-08 via owner_publish_csv_v2.py; appended 50 row(s); Owner approval 2026-07-10 via owner_publish_csv_v2.py; appended 44 row(s); Owner approval 2026-07-16 via owner_publish_csv_v2.py; appended 48 row(s); Owner approval 2026-07-17 via owner_publish_csv_v2.py; appended 45 row(s); Owner-approved 2026-07-18 price authority remediation via owner_publish_csv_v2.py replace mode; Owner-approved 2026-07-18 initial TWSE market-activity authority publish via owner_publish_csv_v2.py; Owner approval 2026-07-19 via owner_publish_csv_v2.py; appended 35 row(s); Owner approval 2026-07-19 for official FCF authority and paper-style cross-references; Owner approval 2026-07-20 via owner_publish_csv_v2.py; appended 38 row(s); Owner approval 2026-07-21 via owner_publish_csv_v2.py; appended 41 row(s); Owner approval 2026-07-23 via owner_publish_csv_v2.py; appended 42 row(s); Owner approval 2026-07-27 via owner_publish_csv_v2.py; appended 46 row(s); Owner-approved removal of invalid daily-price row 2026-07-19 via owner_publish_csv_v2.py; Owner-approved official TWSE daily-price gaps 2026-07-22 and 2026-07-24 via owner_publish_csv_v2.py; Owner-approved P1008 Final Integration Reconciliation adds the previously verified Cash Flow authority without changing Daily Price, Market Activity, Macro, RULE, HOLD, MIDR, or Runtime SQLite; Owner approval 2026-08-27 via owner_publish_csv_v2.py; appended 2 row(s); P1008_FY2026Q2_OWNER_PROMOTION_FINAL_OWNER_APPROVAL_DIRECTIVE; P1008 FY2026Q2 ROIC FINALIZATION - MINIMAL CLOSEOUT",
   "authorityPolicy": {
     "hashAlgorithm": "SHA-256",
     "hashMismatchStatus": "APPROVAL_EXPIRED",
@@ -17,8 +17,8 @@
       "fileName": "2317_master_v9.csv",
       "fileVersion": "v9.3",
       "schemaVersion": "v9.0-54-columns",
-      "sha256": "4B8996B5B39128E6DB8FA6DA89CF8AF0E2257FFD8124BD295349DBC32E67E7BF",
-      "fileSizeBytes": 13421,
+      "sha256": "B3137F0A94895CCA1B589929F2DE368EFD9BC32BDD6609A375F78BE8610AE0EE",
+      "fileSizeBytes": 13542,
       "rowCount": 22,
       "columnCount": 54,
       "validationStatus": "PASS_WITH_WARNINGS",
@@ -154,11 +154,11 @@
           "classification": "OFFICIAL_REPORTED_WITH_PERIOD_SPECIFIC_FIELDS",
           "bvps": "136.02/2026Q2",
           "roe": "6.21/2026H1/NON_ANNUALIZED",
-          "roic": "OWNER_CONDITIONAL_PENDING",
+          "roic": "12.35/2026Q2/DERIVED_VERIFIED",
           "cashFlow": "2026H1",
           "aiRevenuePct": null,
           "sourceConfig": "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json",
-          "zh": "Q2官方欄位已升格；ROE與現金流保留H1期間，ROIC因淨現金定義未證明而不升格。"
+          "zh": "Q2官方欄位已升格；ROE與現金流保留H1期間；ROIC依正式資產負債表直接有息負債組成推算為12.35%。16.46%因NET_CASH_DENOMINATOR_SCOPE_MISMATCH遭拒絕。"
         }
       },
       "warnings": [
@@ -616,8 +616,13 @@
   "lastQuarterlyPromotion": {
     "quarter": "2026Q2",
     "publishedAt": "2026-08-28T01:14:01Z",
-    "result": "PASS_WITH_ROIC_CONDITIONAL_PENDING",
-    "roicStatus": "OWNER_CONDITIONAL_PENDING",
+    "result": "PASS",
+    "roicStatus": "DERIVED_VERIFIED",
+    "roicCanonicalValue": "12.35",
+    "roicRejectedCandidate": {
+      "value": "16.46",
+      "reasonCode": "NET_CASH_DENOMINATOR_SCOPE_MISMATCH"
+    },
     "actionable": false
   }
 }

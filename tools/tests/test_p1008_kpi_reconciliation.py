@@ -114,8 +114,10 @@ class KpiReconciliationTests(unittest.TestCase):
 
     def test_roic_formula_reproduces_precise_value(self):
         rows = csv_rows(PACKAGE / "data/2317_master_v9.csv")
-        self.assertEqual("N/A", rows[-1]["ROIC_Precise_Pct"])
-        row = next(item for item in reversed(rows) if item["ROIC_Precise_Pct"] not in {"", "N/A"})
+        row = rows[-1]
+        self.assertEqual("2026Q2", row["Quarter"])
+        self.assertEqual("12.35", row["ROIC_Precise_Pct"])
+        self.assertEqual("130453.10", row["InterestBearingDebt_100M"])
         actual = round(float(row["NOPAT_Annual_100M"]) / float(row["InvestedCapital_100M"]) * 100, 2)
         self.assertEqual(float(row["ROIC_Precise_Pct"]), actual)
 
@@ -130,7 +132,14 @@ class KpiReconciliationTests(unittest.TestCase):
         quarters = {row["Quarter"] for row in csv_rows(PACKAGE / "data/2317_master_v9.csv")}
         self.assertEqual("FY2026 Q2", q2["fiscalPeriod"])
         self.assertIn("2026Q2", quarters)
-        self.assertEqual("PASS_WITH_ROIC_CONDITIONAL_PENDING", q2["canonicalPromotion"]["status"])
+        self.assertEqual("PASS", q2["canonicalPromotion"]["status"])
+        self.assertEqual("12.35", q2["canonicalPromotion"]["roic"]["canonicalValue"])
+        self.assertEqual("DERIVED_VERIFIED", q2["canonicalPromotion"]["roic"]["classification"])
+        self.assertEqual("16.46", q2["canonicalPromotion"]["roic"]["rejectedCandidateHistory"][0]["value"])
+        self.assertEqual(
+            "NET_CASH_DENOMINATOR_SCOPE_MISMATCH",
+            q2["canonicalPromotion"]["roic"]["rejectedCandidateHistory"][0]["reasonCode"],
+        )
         self.assertEqual("NOT_DISCLOSED", q2["productMix"]["aiSpecificShareStatus"])
         self.assertIsNone(q2["productMix"]["aiSpecificRevenueSharePct"])
 
@@ -161,13 +170,14 @@ class KpiReconciliationTests(unittest.TestCase):
         classes = {row["value_classification"] for row in rows}
         self.assertTrue({"OFFICIAL_REPORTED", "AUTHORITATIVE_SOURCE_REPORTED", "DERIVED_VERIFIED", "RESEARCH_ESTIMATE", "STALE", "UNVERIFIED", "INVALID"}.issubset(classes))
 
-    def test_q2_inventory_preserves_field_specific_periods_and_pending_states(self):
+    def test_q2_inventory_preserves_field_specific_periods_and_final_roic(self):
         with (self.out / "KPI_INVENTORY.csv").open(encoding="utf-8", newline="") as handle:
             by_id = {row["metric_id"]: row for row in csv.DictReader(handle)}
         self.assertEqual("2026H1_OR_2026Q2_FIELD_SPECIFIC", by_id["FIN.ROE_H1"]["as_of_date"])
         self.assertIn("annualized=false", by_id["FIN.ROE_H1"]["notes"])
-        self.assertEqual("OWNER_CONDITIONAL_PENDING", by_id["FIN.ROIC"]["value_classification"])
-        self.assertEqual("INSUFFICIENT_DATA", by_id["FIN.ROIC"]["status"])
+        self.assertEqual("DERIVED_VERIFIED", by_id["FIN.ROIC"]["value_classification"])
+        self.assertEqual("ACTIVE", by_id["FIN.ROIC"]["status"])
+        self.assertIn("NET_CASH_DENOMINATOR_SCOPE_MISMATCH", by_id["FIN.ROIC"]["notes"])
         self.assertEqual("INSUFFICIENT_DATA", by_id["MODEL5.CHIP"]["status"])
         for metric_id in ("FIN.OCF_H1", "FIN.CAPEX_H1", "FIN.FCF_H1"):
             self.assertEqual("OFFICIAL_REPORTED", by_id[metric_id]["value_classification"])

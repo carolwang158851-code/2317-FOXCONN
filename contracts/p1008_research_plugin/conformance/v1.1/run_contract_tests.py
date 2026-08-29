@@ -38,10 +38,10 @@ V1_CONTRACT_ROOT = PACKAGE_ROOT / "contracts" / "p1008_research_plugin" / "v1.0"
 MODULE_RELATIVE_PATH = Path("modules/p1008_research_plugin")
 CURRENT_AUTHORITY_AMENDMENT_PATH = (
     "contracts/p1008_research_plugin/acceptance/v1.1/"
-    "P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT.json"
+    "P1008_FY2026Q2_ROIC_FINALIZATION_CLOSEOUT.json"
 )
 CURRENT_AUTHORITY_AMENDMENT_SHA256 = (
-    "93176AC4E6E42B034500A27742077990C97B22E70C9BE2C2E1D80DFA85A0A390"
+    "B1D431C6380E2914E40203DA6A077B3414029F100FA14FB0108E63F5D4069050"
 )
 
 
@@ -290,6 +290,7 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                 "PHASE_A_FINAL_INTEGRATION_RECONCILED",
                 "P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT",
                 "P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT",
+                "P1008_FY2026Q2_ROIC_FINALIZED",
             },
             "Phase A authority receipt is not accepted",
         )
@@ -791,7 +792,7 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                 and receipt.get("canvaCalls") == 0,
                 "TWSE remediation governance boundary drifted",
             )
-        else:
+        elif acceptance_status == "P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT":
             require(
                 classification == "INTEGRATED_SEVEN"
                 and receipt.get("baselineId") == "INTEGRATED_SEVEN",
@@ -904,6 +905,77 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                 and receipt.get("webSearchCalls") == 0
                 and receipt.get("canvaCalls") == 0,
                 "FY2026Q2 CI re-anchor governance boundary drifted",
+            )
+        else:
+            require(
+                classification == "INTEGRATED_SEVEN",
+                "FY2026Q2 ROIC closeout is bound to the wrong authority set",
+            )
+            previous = receipt.get("previousReceipt", {})
+            require(
+                previous
+                == {
+                    "path": "contracts/p1008_research_plugin/acceptance/v1.1/P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT.json",
+                    "sha256": "93176AC4E6E42B034500A27742077990C97B22E70C9BE2C2E1D80DFA85A0A390",
+                },
+                "FY2026Q2 ROIC closeout predecessor mismatch",
+            )
+            require(
+                sha256_bytes(git_blob_bytes(root, previous["path"]))
+                == previous["sha256"],
+                "Historical FY2026Q2 CI re-anchor receipt changed",
+            )
+            manifest_reference = receipt.get("authorityManifest", {})
+            require(
+                manifest_reference
+                == {
+                    "path": "data/CSV_AUTHORITY_MANIFEST.json",
+                    "sha256": sha256_bytes(
+                        git_blob_bytes(root, "data/CSV_AUTHORITY_MANIFEST.json")
+                    ),
+                    "manifestVersion": "1.4.1",
+                },
+                "FY2026Q2 ROIC closeout authority manifest mismatch",
+            )
+            q2 = receipt.get("fy2026Q2Roic", {})
+            require(
+                q2.get("canonicalValue") == "12.35"
+                and q2.get("classification") == "DERIVED_VERIFIED"
+                and q2.get("period") == "2026Q2"
+                and q2.get("interestBearingDebtMillionTwd") == "1304531"
+                and q2.get("investedCapitalMillionTwd") == "2249465.607"
+                and q2.get("trendComparableToQ1") is False,
+                "FY2026Q2 ROIC closeout values drifted",
+            )
+            rejected = receipt.get("rejectedCandidateHistory", [])
+            require(
+                rejected
+                and rejected[0].get("value") == "16.46"
+                and rejected[0].get("reasonCode")
+                == "NET_CASH_DENOMINATOR_SCOPE_MISMATCH"
+                and rejected[0].get("canonical") is False,
+                "FY2026Q2 rejected ROIC history is missing",
+            )
+            preserved = receipt.get("preservedKpis", {})
+            require(
+                preserved
+                == {
+                    "bvps": "136.02",
+                    "pb": "1.853",
+                    "roe": "6.21",
+                    "roePeriod": "2026H1",
+                    "roeAnnualized": False,
+                },
+                "FY2026Q2 preserved KPI boundary drifted",
+            )
+            require(
+                receipt.get("formalPublishExecutedByThisReceipt") is False
+                and receipt.get("automaticReportGeneration") is False
+                and receipt.get("automaticPublicReportPublication") is False
+                and receipt.get("ruleHoldMidrModified") is False
+                and receipt.get("runtimeSqliteModified") is False
+                and receipt.get("openAiCalls") == 0,
+                "FY2026Q2 ROIC closeout boundary drifted",
             )
         macro_decision = receipt.get("macroAuthorityDecision", {})
         require(

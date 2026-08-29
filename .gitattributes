@@ -177,6 +177,7 @@ tools/p1008_build_report.py text eol=lf
 contracts/p1008_report_production/v1.1/ENTERPRISE_VALUE_OWNER_POLICY_CANDIDATE_V1.json text eol=lf
 contracts/p1008_report_production/v1.1/templates/HON_HAI_WAR_REPORT_MOTHER_V1.html text eol=lf
 contracts/p1008_research_plugin/acceptance/v1.1/P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT.json text eol=lf
+contracts/p1008_research_plugin/acceptance/v1.1/P1008_FY2026Q2_ROIC_FINALIZATION_CLOSEOUT.json text eol=lf
 contracts/p1008_research_plugin/acceptance/v1.1/P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT.json text eol=lf
 modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/runtime/research_plugin/latest_content_integration.json binary
 modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/runtime/report_trigger/latest_decision.json binary

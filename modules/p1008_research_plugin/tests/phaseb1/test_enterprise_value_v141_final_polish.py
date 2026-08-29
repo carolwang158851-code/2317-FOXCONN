@@ -62,7 +62,7 @@ class EnterpriseValueV141FinalPolishTests(unittest.TestCase):
         self.assertEqual(valuation["ttmPe"]["value"], "16.57")
         self.assertEqual(len(self.formulas), 10)
         self.assertEqual(self.formulas, self.pack["enterpriseValueAnalytics"]["formulaCards"])
-        self.assertEqual(hashlib.sha256(self.pack_bytes).hexdigest().upper(), "80E7FD111ECEA751BCC1DC614A04BC6CADB70C42F87B4D416C3C4BC42FAE001D")
+        self.assertEqual(hashlib.sha256(self.pack_bytes).hexdigest().upper(), "3955E72AFE8B4A8DF077650BB0A9C1E40819F1F9F574A6C65DDAB0E6A8A86CA1")
 
     def test_working_capital_is_index_chart_with_separate_ccc(self) -> None:
         chart = self.chart("working_capital_3period")

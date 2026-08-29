@@ -20,33 +20,40 @@ class Q2KpiCompletionTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.candidate = completion.build_candidate()
 
-    def test_q2_official_kpis_are_completed_while_roic_remains_conditional(self) -> None:
+    def test_q2_official_kpis_and_roic_are_completed(self) -> None:
         self.assertEqual("136.02", self.candidate["kpis"]["bvps"]["value"])
         self.assertEqual("6.21", self.candidate["kpis"]["roe"]["value"])
-        self.assertEqual("16.46", self.candidate["kpis"]["roic"]["candidateValue"])
-        self.assertIsNone(self.candidate["kpis"]["roic"]["canonicalValue"])
-        self.assertEqual("PASS_WITH_ROIC_CONDITIONAL_PENDING", self.candidate["result"])
+        self.assertEqual("12.35", self.candidate["kpis"]["roic"]["candidateValue"])
+        self.assertEqual("12.35", self.candidate["kpis"]["roic"]["canonicalValue"])
+        self.assertEqual("PASS", self.candidate["result"])
 
     def test_classifications_and_periods_are_explicit(self) -> None:
         self.assertEqual("OFFICIAL_REPORTED", self.candidate["kpis"]["bvps"]["classification"])
         self.assertEqual("OFFICIAL_REPORTED", self.candidate["kpis"]["roe"]["classification"])
         self.assertEqual("2026H1", self.candidate["kpis"]["roe"]["period"])
         self.assertFalse(self.candidate["kpis"]["roe"]["annualized"])
-        self.assertEqual("OWNER_CONDITIONAL_PENDING", self.candidate["kpis"]["roic"]["classification"])
+        self.assertEqual("DERIVED_VERIFIED", self.candidate["kpis"]["roic"]["classification"])
 
     def test_roic_release_gate_records_exact_failure(self) -> None:
         gate = self.candidate["kpis"]["roic"]["releaseGate"]
-        self.assertEqual("FAIL", gate["gates"]["A"]["status"])
+        self.assertEqual("PASS", gate["gates"]["A"]["status"])
         self.assertEqual("PASS", gate["gates"]["B"]["status"])
         self.assertEqual("PASS", gate["gates"]["C"]["status"])
         self.assertEqual("PASS", gate["gates"]["D"]["status"])
+        self.assertTrue(gate["allPassed"])
         self.assertFalse(gate["trendComparable"])
 
     def test_roic_reproduces_from_recorded_inputs(self) -> None:
         roic = self.candidate["kpis"]["roic"]
         numerator = Decimal(roic["numerator"]["valueMillionTwd"])
         denominator = Decimal(roic["denominator"]["valueMillionTwd"])
-        self.assertEqual(Decimal("16.46"), (numerator / denominator * 100).quantize(Decimal("0.01")))
+        self.assertEqual(Decimal("12.35"), (numerator / denominator * 100).quantize(Decimal("0.01")))
+        self.assertEqual("1304531.000", roic["denominator"]["interestBearingDebtMillionTwd"])
+        self.assertNotIn("CashAndCashEquivalents - NetCash", json.dumps(roic))
+        rejected = roic["rejectedCandidateHistory"][0]
+        self.assertEqual("16.46", rejected["value"])
+        self.assertEqual("NET_CASH_DENOMINATOR_SCOPE_MISMATCH", rejected["reasonCode"])
+        self.assertFalse(rejected["canonical"])
         self.assertNotIn("ROIC_Approx_Pct", json.dumps(roic))
 
     def test_candidate_cannot_mutate_authority_or_issue_action(self) -> None:
@@ -60,7 +67,10 @@ class Q2KpiCompletionTests(unittest.TestCase):
         self.assertEqual(1, len(q2))
         self.assertEqual("136.02", q2[0]["BVPS"])
         self.assertEqual("N/A", q2[0]["ROE_TTM_Pct"])
-        self.assertEqual("N/A", q2[0]["ROIC_Precise_Pct"])
+        self.assertEqual("12.35", q2[0]["ROIC_Precise_Pct"])
+        self.assertEqual("DERIVED_VERIFIED", q2[0]["ROIC_Status"])
+        self.assertEqual("130453.10", q2[0]["InterestBearingDebt_100M"])
+        self.assertEqual("224946.5607", q2[0]["InvestedCapital_100M"])
         self.assertEqual("N/A", q2[0]["AI_Revenue_Pct"])
         daily = completion._read_csv(PACKAGE / "data/2317_daily_price.csv")[2]
         current = next(row for row in daily if row["Date"] == "2026-08-27")

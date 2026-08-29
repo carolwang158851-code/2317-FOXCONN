@@ -4,7 +4,7 @@
   "rootCause": "The principal score collision was caused by overlapping UI-derived scoring and legacy fallback/hardcoded values. Report generation is downstream and was not the source of War Room KPI truth.",
   "authorityManifest": {
     "path": "data/CSV_AUTHORITY_MANIFEST.json",
-    "sha256": "90870F2CBE5F17F0B0BC1033D056542D2F9DDA96F94BCB81E8BF7018817E86F9"
+    "sha256": "C54056B72AEBF25ED1B2AE106AF86E761CE57D79F1999922E4B6487FE2381191"
   },
   "authorityPaths": [
     "data/2317_cash_flow_authority.csv",
@@ -130,9 +130,9 @@
       "producer": "Owner authority CSV",
       "consumers": "old UI;reports",
       "authority": "CSV_AUTHORITY",
-      "classification": "OWNER_CONDITIONAL_PENDING",
-      "status": "INSUFFICIENT_DATA",
-      "notes": "16.46%候選未通過Gate A；ROIC_Approx_Pct不得替代"
+      "classification": "DERIVED_VERIFIED",
+      "status": "ACTIVE",
+      "notes": "2026Q2=12.35%；直接有息負債組成；16.46%因NET_CASH_DENOMINATOR_SCOPE_MISMATCH遭拒；不得宣稱Q1至Q2趨勢"
     },
     {
       "kpi_id": "FIN.BVPS",
@@ -546,8 +546,8 @@
       1.853
     ],
     "ROIC": [
-      12.57,
-      12.57
+      12.35,
+      12.35
     ],
     "ROIC_CURRENT_PERIOD": [
       null,

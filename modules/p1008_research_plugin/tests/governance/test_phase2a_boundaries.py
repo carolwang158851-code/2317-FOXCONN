@@ -194,6 +194,10 @@ PHASEB1_REANCHOR_HASH_GOVERNED_PATHS = {
     ),
     (
         "contracts/p1008_research_plugin/acceptance/v1.1/"
+        "P1008_FY2026Q2_ROIC_FINALIZATION_CLOSEOUT.json"
+    ),
+    (
+        "contracts/p1008_research_plugin/acceptance/v1.1/"
         "P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT.json"
     ),
     *RAW_BINARY_EVIDENCE_PATHS,
@@ -434,7 +438,7 @@ class Phase2ABoundaryTests(unittest.TestCase):
             entries.append(path)
         self.assertEqual(len(entries), len(set(entries)))
         self.assertEqual(set(entries), expected_hash_governed_paths())
-        self.assertEqual(len(entries), 184)
+        self.assertEqual(len(entries), 185)
 
     def test_crlf_and_mixed_manifest_bytes_are_rejected(self) -> None:
         for rejected in (MANIFEST_CRLF_SHA256, MANIFEST_MIXED_SHA256):

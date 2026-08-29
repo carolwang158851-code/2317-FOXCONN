@@ -106,7 +106,7 @@ class WarReportProductionRuntimeV1Tests(unittest.TestCase):
         self.assertEqual(manifest["reportRuntime"], "ENTERPRISE_VALUE_WAR_REPORT_V1")
         self.assertEqual(manifest["reportChapterCount"], 11)
         self.assertEqual(sum(rendered.count(f'<section id="s{i}"') for i in range(1, 12)), 11)
-        self.assertIn("Q2 ROIC候選16.46%未通過現金／負債來源口徑閘門", rendered)
+        self.assertIn("Q2 ROIC 12.35%（推算）", rendered)
         self.assertTrue(result["protected_state_unchanged"])
 
     def test_r4_quarterly_requires_fcf_conversion(self) -> None:
@@ -150,7 +150,7 @@ class WarReportProductionRuntimeV1Tests(unittest.TestCase):
     def test_r11_q2_same_basis_roic_remains_missing(self) -> None:
         roic = resolve_quarterly_roic(official_same_basis_quarterly=None)
         self.assertIsNone(roic["value"])
-        self.assertIn("Q2 ROIC候選16.46%未通過現金／負債來源口徑閘門", self.html)
+        self.assertIn("Q2 ROIC 12.35%（推算）", self.html)
 
     def test_r12_third_party_ttm_cannot_fill_quarterly_roic(self) -> None:
         self.assertIsNone(resolve_quarterly_roic(official_same_basis_quarterly=None, third_party_ttm=18.2)["value"])

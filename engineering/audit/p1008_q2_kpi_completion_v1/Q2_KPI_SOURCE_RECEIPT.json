@@ -35,6 +35,28 @@
         "bookValuePerShareTwd": "136.02"
       }
     },
+    "mopsDetailedBalanceSheet": {
+      "sourceTier": "PRIMARY_OFFICIAL",
+      "sourceType": "MOPS_OFFICIAL_CONSOLIDATED_BALANCE_SHEET",
+      "sourceLocator": "https://mops.twse.com.tw/mops/web/t164sb03?co_id=2317&year=115&season=02",
+      "sourceDate": "2026-08-13",
+      "rowIdentity": {
+        "yearRoc": "115",
+        "quarter": "2",
+        "companyCode": "2317",
+        "statement": "CONSOLIDATED_BALANCE_SHEET"
+      },
+      "facts": {
+        "shortTermBorrowingsMillionTwd": "845349",
+        "commercialPaperAndAcceptancesMillionTwd": "93459",
+        "currentPortionLongTermLiabilitiesMillionTwd": "64303",
+        "bondsPayableNoncurrentMillionTwd": "294708",
+        "bankBorrowingsNoncurrentMillionTwd": "6712",
+        "interestBearingDebtMillionTwd": "1304531"
+      },
+      "derivation": "845349 + 93459 + 64303 + 294708 + 6712",
+      "excludedFromDebt": "LEASE_LIABILITIES"
+    },
     "honHaiPressRelease": {
       "sourceTier": "PRIMARY_OFFICIAL",
       "sourceType": "OFFICIAL_COMPANY_PRESS_RELEASE",
@@ -54,7 +76,8 @@
         "formula": "ROIC_Precise = NOPAT_Annual / InvestedCapital; NOPAT = OperatingIncome * (1 - AnnualTaxRate) * 4; InvestedCapital = InterestBearingDebt + ParentEquity - Cash",
         "annualTaxRatePct": "26.72",
         "annualTaxRateLineage": "2026Q1 NOPAT_Annual_100M 2216 / (OperatingIncome_Q_100M 756 * 4)",
-        "interestBearingDebtFormula": "CashAndCashEquivalents - NetCash"
+        "interestBearingDebtFormula": "ShortTermBorrowings + CommercialPaperAndAcceptances + CurrentPortionLongTermLiabilities + BondsPayableNoncurrent + BankBorrowingsNoncurrent",
+        "prohibitedDebtFormula": "CashAndCashEquivalents - NetCash"
       }
     }
   },

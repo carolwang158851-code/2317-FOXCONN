@@ -86,14 +86,15 @@ def _verify_manifest_file(root: Path, manifest: dict[str, Any], rel_path: str) -
 
 def _roic_gate_evidence(receipt: dict[str, Any]) -> dict[str, Any]:
     results = receipt["sources"]["honHaiResults"]
+    mops = receipt["sources"]["mopsDetailedBalanceSheet"]
     twse = receipt["sources"]["twseBalanceSheet"]
     method = receipt["sources"]["p1008Methodology"]
     gates = {
         "A": {
-            "status": "FAIL",
-            "labelZh": "未證明淨現金可用現金及約當現金減利息負債反推",
-            "reasonZh": "官方逐字稿揭露現金及定期存款約1.52兆元與淨現金219,809百萬元；候選使用現金及約當現金963,002百萬元。現金口徑不同，官方未明確定義Net Cash為963,002減利息負債。",
-            "sourceLocator": results["sourceLocator"],
+            "status": "PASS",
+            "labelZh": "有息負債採正式資產負債表直接組成",
+            "reasonZh": "有息負債1,304,531百萬元由五項正式負債欄位直接加總，不使用Cash減Net Cash反推。",
+            "sourceLocator": mops["sourceLocator"],
         },
         "B": {
             "status": "PASS", "labelZh": "日期、期間及合併範圍相容",
@@ -113,8 +114,8 @@ def _roic_gate_evidence(receipt: dict[str, Any]) -> dict[str, Any]:
     }
     all_passed = all(item["status"] == "PASS" for item in gates.values())
     return {
-        "gates": gates, "allPassed": all_passed, "trendComparable": all_passed,
-        "trendComparableZh": "公式慣例相同，但Q2候選分母的淨現金口徑未通過Gate A，禁止顯示Q1至Q2數值趨勢。",
+        "gates": gates, "allPassed": all_passed, "trendComparable": False,
+        "trendComparableZh": "Q2已採直接有息負債方法；Q1未獲授權以相同方法重算，因此禁止宣稱Q1至Q2為有效趨勢。",
     }
 
 
@@ -124,6 +125,7 @@ def build_candidate(package_root: Path = PACKAGE_ROOT) -> dict[str, Any]:
     sources = receipt["sources"]
     results = sources["honHaiResults"]
     twse = sources["twseBalanceSheet"]
+    mops = sources["mopsDetailedBalanceSheet"]
     press = sources["honHaiPressRelease"]
     method = sources["p1008Methodology"]
     if config["expectedSourceSha256"] != results["sourceDocumentSha256"]:
@@ -137,10 +139,21 @@ def build_candidate(package_root: Path = PACKAGE_ROOT) -> dict[str, Any]:
 
     operating_income = _d(results["facts"]["operatingIncomeMillionTwd"])
     cash = _d(results["facts"]["cashAndCashEquivalentsMillionTwd"])
-    net_cash = _d(results["facts"]["netCashMillionTwd"])
     equity = _d(twse["facts"]["parentEquityThousandTwd"]) / 1000
     tax_rate = _d(method["facts"]["annualTaxRatePct"]) / 100
-    debt = cash - net_cash
+    debt_components = mops["facts"]
+    debt = sum(
+        _d(debt_components[key])
+        for key in (
+            "shortTermBorrowingsMillionTwd",
+            "commercialPaperAndAcceptancesMillionTwd",
+            "currentPortionLongTermLiabilitiesMillionTwd",
+            "bondsPayableNoncurrentMillionTwd",
+            "bankBorrowingsNoncurrentMillionTwd",
+        )
+    )
+    if debt != _d(debt_components["interestBearingDebtMillionTwd"]):
+        raise ValueError("Q2_DIRECT_INTEREST_BEARING_DEBT_MISMATCH")
     invested_capital = debt + equity - cash
     nopat = operating_income * (1 - tax_rate) * 4
     roic = nopat / invested_capital * 100
@@ -156,10 +169,11 @@ def build_candidate(package_root: Path = PACKAGE_ROOT) -> dict[str, Any]:
             "roic": {
                 "candidateValue": _q(roic, "0.01"), "canonicalValue": _q(roic, "0.01") if release_gate["allPassed"] else None,
                 "unit": "PERCENT", "period": "2026Q2", "classification": "DERIVED_VERIFIED" if release_gate["allPassed"] else "OWNER_CONDITIONAL_PENDING",
-                "displayLabelZh": f"{_q(roic, '0.01')}%（條件式推算，尚未升格）", "formula": "NOPAT_Annual / InvestedCapital * 100",
+                "displayLabelZh": f"{_q(roic, '0.01')}%（推算）", "formula": "NOPAT_Annual / InvestedCapital * 100",
                 "numerator": {"name": "NOPAT_Annual", "valueMillionTwd": _q(nopat, "0.0001"), "formula": "94803 * (1 - 26.72%) * 4"},
-                "denominator": {"name": "InvestedCapital", "valueMillionTwd": _q(invested_capital, "0.001"), "formula": "InterestBearingDebt + ParentEquity - Cash", "interestBearingDebtMillionTwd": _q(debt, "0.001"), "parentEquityMillionTwd": _q(equity, "0.001"), "cashMillionTwd": _q(cash, "0.001")},
-                "methodologyLocator": method["sourceLocator"], "sourceLocators": [results["sourceLocator"], twse["sourceLocator"]], "releaseGate": release_gate,
+                "denominator": {"name": "InvestedCapital", "valueMillionTwd": _q(invested_capital, "0.001"), "formula": "InterestBearingDebt + ParentEquity - Cash", "interestBearingDebtMillionTwd": _q(debt, "0.001"), "parentEquityMillionTwd": _q(equity, "0.001"), "cashMillionTwd": _q(cash, "0.001"), "interestBearingDebtComponents": mops["facts"], "interestBearingDebtFormula": mops["derivation"], "interestBearingDebtSourceLocator": mops["sourceLocator"]},
+                "methodologyLocator": method["sourceLocator"], "sourceLocators": [results["sourceLocator"], twse["sourceLocator"], mops["sourceLocator"]], "releaseGate": release_gate,
+                "rejectedCandidateHistory": [{"value": "16.46", "classification": "REJECTED", "reasonCode": "NET_CASH_DENOMINATOR_SCOPE_MISMATCH", "reasonZh": "16.46%使用Cash減Net Cash反推負債，但兩者現金口徑不同，因此分母不成立。", "canonical": False}],
             },
         },
         "dataGaps": [] if release_gate["allPassed"] else ["ROIC_NET_CASH_DEFINITION_SCOPE_UNRESOLVED"],
@@ -177,10 +191,10 @@ def _q2_master_row(fields: list[str], config: dict[str, Any], candidate: dict[st
         "EPS_Q": f["epsTwd"], "EPS_YoY_Pct": f["epsYoyPct"], "EPS_TTM": "15.21", "BVPS": str(bvps), "QuarterEndClose": str(close), "CloseAdjusted": str(close),
         "ROE_Annual_Pct": "N/A", "ROE_TTM_Pct": "N/A", "PB_QuarterEnd": _q(close / bvps, "0.001"), "PB_Adjusted": _q(close / bvps, "0.001"), "PB_Zone": "DESCRIPTIVE_ONLY", "ROE_Signal": "H1_OFFICIAL_NON_ANNUALIZED_6.21",
         "payoutRatio_Pct": "N/A", "CashDividend": "7.17179227", "DividendYield_Pct": _q(_d("7.17179227") / close * 100, "0.01"), "FCF_Annual_100M": "N/A", "MarketCap_100M": "N/A", "FCFYield_Annual_Pct": "N/A",
-        "ROIC_Approx_Pct": "N/A", "ROIC_Precise_Pct": candidate["kpis"]["roic"]["canonicalValue"] or "N/A", "ROIC_Status": "DERIVED_VERIFIED" if candidate["kpis"]["roic"]["canonicalValue"] else "OWNER_CONDITIONAL_PENDING", "NOPAT_Annual_100M": "N/A", "InvestedCapital_100M": "N/A",
-        "Cash_100M": _q(_d(b["cashAndCashEquivalentsMillionTwd"]) / 10, "0.01"), "InterestBearingDebt_100M": "N/A", "NetDebt_100M": _q(-_d(b["netCashMillionTwd"]) / 10, "0.01"), "NetDebtStatus": "NET_CASH", "EBITDA_Approx_100M": "N/A", "DA_Est_100M": "N/A", "NetDebtToEBITDA_Approx": "N/A", "NetDebtToEBITDA_Status": "N/A",
+        "ROIC_Approx_Pct": "N/A", "ROIC_Precise_Pct": candidate["kpis"]["roic"]["canonicalValue"] or "N/A", "ROIC_Status": "DERIVED_VERIFIED" if candidate["kpis"]["roic"]["canonicalValue"] else "OWNER_CONDITIONAL_PENDING", "NOPAT_Annual_100M": "27788.65536", "InvestedCapital_100M": "224946.5607",
+        "Cash_100M": _q(_d(b["cashAndCashEquivalentsMillionTwd"]) / 10, "0.01"), "InterestBearingDebt_100M": "130453.10", "NetDebt_100M": _q(-_d(b["netCashMillionTwd"]) / 10, "0.01"), "NetDebtStatus": "NET_CASH_BROADER_CASH_SCOPE", "EBITDA_Approx_100M": "N/A", "DA_Est_100M": "N/A", "NetDebtToEBITDA_Approx": "N/A", "NetDebtToEBITDA_Status": "N/A",
         "BalanceSheetDataQuality": "OFFICIAL_Q2_PERIOD_END", "DataSource": "HONHAI_RESULTS_TWSE_OPENAPI_OFFICIAL", "DataSupportLevel": "A1_L1_MIXED_PERIOD", "LookaheadRisk": "LOW",
-        "Notes": "ROE_2026H1_6.21_OFFICIAL_NON_ANNUALIZED;CASH_FLOW_2026H1_OCF_-69122_CAPEX_80886_FCF_-150009;ROIC_OWNER_CONDITIONAL_PENDING_GATE_A;AI_SHARE_NOT_DISCLOSED;CLOUD_NETWORKING_51_NOT_AI_SHARE",
+        "Notes": "ROE_2026H1_6.21_OFFICIAL_NON_ANNUALIZED;CASH_FLOW_2026H1_OCF_-69122_CAPEX_80886_FCF_-150009;ROIC_12.35_DERIVED_VERIFIED_DIRECT_DEBT;ROIC_16.46_REJECTED_NET_CASH_DENOMINATOR_SCOPE_MISMATCH;Q1_Q2_ROIC_TREND_NOT_AUTHORIZED;AI_SHARE_NOT_DISCLOSED;CLOUD_NETWORKING_51_NOT_AI_SHARE",
         "ForeignHoldRatio_Pct": "N/A", "ForeignHoldChange_Pct": "N/A", "ForeignHoldTrend": "N/A", "AI_Revenue_Pct": "N/A",
     }
     if set(fields) != set(values):
@@ -246,12 +260,12 @@ def promote(package_root: Path = PACKAGE_ROOT) -> dict[str, Any]:
     new_manifest = deepcopy(manifest)
     master_entry, daily_entry = _entry(new_manifest, "data/2317_master_v9.csv"), _entry(new_manifest, "data/2317_daily_price.csv")
     master_entry.update({"sha256": _sha_bytes(new_master), "fileSizeBytes": len(new_master), "rowCount": len(master_rows), "latestQuarter": "2026Q2", "lastPublishedAt": published_at})
-    master_entry.setdefault("fieldOverrides", {})["FY2026Q2"] = {"classification": "OFFICIAL_REPORTED_WITH_PERIOD_SPECIFIC_FIELDS", "bvps": "136.02/2026Q2", "roe": "6.21/2026H1/NON_ANNUALIZED", "roic": "OWNER_CONDITIONAL_PENDING", "cashFlow": "2026H1", "aiRevenuePct": None, "sourceConfig": CONFIG_REL.as_posix(), "zh": "Q2官方欄位已升格；ROE與現金流保留H1期間，ROIC因淨現金定義未證明而不升格。"}
+    master_entry.setdefault("fieldOverrides", {})["FY2026Q2"] = {"classification": "OFFICIAL_REPORTED_WITH_PERIOD_SPECIFIC_FIELDS", "bvps": "136.02/2026Q2", "roe": "6.21/2026H1/NON_ANNUALIZED", "roic": "12.35/2026Q2/DERIVED_VERIFIED", "cashFlow": "2026H1", "aiRevenuePct": None, "sourceConfig": CONFIG_REL.as_posix(), "zh": "Q2官方欄位已升格；ROE與現金流保留H1期間；ROIC依直接有息負債組成推算為12.35%。"}
     daily_entry.update({"sha256": _sha_bytes(new_daily), "fileSizeBytes": len(new_daily), "rowCount": len(daily_rows), "lastPublishedAt": published_at})
     daily_entry["lastBvpsRebind"] = {"effectiveDate": Q2_EFFECTIVE_DATE, "quarterKey": "2026Q2", "bvps": "136.02", "currentDate": CURRENT_DATE, "currentClose": "252.0", "currentPb": "1.853", "formula": "round(Close / BVPS_ref, 3)", "classification": "DERIVED_VERIFIED", "actionable": False}
     new_manifest["approvedAt"] = published_at[:10]
     new_manifest["approvalSource"] = str(new_manifest.get("approvalSource", "")) + f"; {OWNER_APPROVAL}"
-    new_manifest["lastQuarterlyPromotion"] = {"quarter": "2026Q2", "publishedAt": published_at, "result": candidate["result"], "roicStatus": "OWNER_CONDITIONAL_PENDING", "actionable": False}
+    new_manifest["lastQuarterlyPromotion"] = {"quarter": "2026Q2", "publishedAt": published_at, "result": candidate["result"], "roicStatus": "DERIVED_VERIFIED", "actionable": False}
     new_manifest_bytes = _json_bytes(new_manifest)
 
     planned = {master_path: new_master, daily_path: new_daily, config_path: new_config, manifest_path: new_manifest_bytes}
@@ -271,7 +285,7 @@ def promote(package_root: Path = PACKAGE_ROOT) -> dict[str, Any]:
 
     report = {
         "schemaVersion": "1.0", "result": candidate["result"], "ownerApprovalReference": OWNER_APPROVAL,
-        "canonicalQuarterBefore": "2026Q1", "canonicalQuarterAfter": "2026Q2", "roicStatus": "OWNER_CONDITIONAL_PENDING",
+        "canonicalQuarterBefore": "2026Q1", "canonicalQuarterAfter": "2026Q2", "roicStatus": "DERIVED_VERIFIED",
         "roicReleaseGate": candidate["kpis"]["roic"]["releaseGate"], "pre": pre,
         "post": {rel: {"sha256": _sha(root / rel), "fileSizeBytes": len((root / rel).read_bytes())} for rel in governed},
         "master": {"rowCountBefore": len(master_rows)-1, "rowCountAfter": len(master_rows), "q2Count": 1, "historicalRowsImmutable": True},
@@ -289,9 +303,9 @@ def write_outputs(candidate: dict[str, Any], package_root: Path = PACKAGE_ROOT) 
     audit.mkdir(parents=True, exist_ok=True)
     (package_root / CANDIDATE_REL).write_text(json.dumps(candidate, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
     roic = candidate["kpis"]["roic"]
-    lines = ["# P1008 FY2026 Q2 KPI Completion Candidate", "", f"狀態：`{candidate['result']}`。不改UI分數，也不形成交易指令。", "", "## 完成結果", "", "- BVPS：136.02元（官方申報）。", "- ROE：6.21%（2026上半年官方值，未年化）；2025H1為5.48%。", f"- ROIC：候選{roic['candidateValue']}%；正式狀態`OWNER_CONDITIONAL_PENDING`。", "", "## ROIC閘門", ""]
+    lines = ["# P1008 FY2026 Q2 KPI Completion Candidate", "", f"狀態：`{candidate['result']}`。不改UI分數，也不形成交易指令。", "", "## 完成結果", "", "- BVPS：136.02元（官方申報）。", "- ROE：6.21%（2026上半年官方值，未年化）；2025H1為5.48%。", f"- ROIC：{roic['canonicalValue']}%（推算）；正式狀態`DERIVED_VERIFIED`。", "", "## ROIC閘門", ""]
     lines.extend(f"- Gate {key}：`{item['status']}`；{item['labelZh']}。" for key, item in roic["releaseGate"]["gates"].items())
-    lines.extend(["", "Gate A未通過，所以16.46%不進正式ROIC欄位；Q2其他官方KPI仍可升格。"])
+    lines.extend(["", "16.46%因`NET_CASH_DENOMINATOR_SCOPE_MISMATCH`遭拒絕；12.35%採正式資產負債表直接有息負債組成。Q1未以相同直接負債方法重算，不得宣稱Q1至Q2為有效趨勢。"])
     (package_root / SUMMARY_REL).write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
 
 

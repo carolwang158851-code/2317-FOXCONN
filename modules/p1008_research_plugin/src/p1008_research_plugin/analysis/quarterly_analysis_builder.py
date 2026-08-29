@@ -204,7 +204,8 @@ class QuarterlyAnalysisBuilder:
                 for row, item in zip(history_rows, historical_opex_proxy)
             ] + [str((q2_opex_proxy / _d(f["revenueMillionTwd"]) * Decimal("100")).quantize(Decimal("0.001")))],
             "epsTwd": [row["EPS_Q"] for row in history_rows] + [f["epsTwd"]],
-            "roicPct": [row["ROIC_Precise_Pct"] for row in history_rows] + ["INSUFFICIENT_DATA"],
+            "roicPct": [row["ROIC_Precise_Pct"] for row in history_rows]
+            + [latest_master["ROIC_Precise_Pct"] if latest_master["ROIC_Precise_Pct"] not in {"", "N/A"} else "INSUFFICIENT_DATA"],
             "bvpsTwd": [row["BVPS"] for row in history_rows] + [latest_master["BVPS"]],
             "roeTtmPct": [row["ROE_TTM_Pct"] for row in history_rows] + ["INSUFFICIENT_DATA"],
             "roeAnnualPct": [row["ROE_Annual_Pct"] for row in history_rows] + ["INSUFFICIENT_DATA"],
@@ -662,7 +663,16 @@ class QuarterlyAnalysisBuilder:
             eps=self._metric(f["epsTwd"], "元", q["fiscalPeriod"], TrendStatus.IMPROVING, official_ids),
             eps_ttm=self._metric(latest_master["EPS_TTM"], "元", f"正式authority至{latest_master['Quarter']}", TrendStatus.STABLE, [authority_ids["master"]], ["TTM EPS已納入FY2026 Q2；估值仍只作描述，不形成交易門檻。"]),
             roe=self._metric("6.21", "%", "2026H1", TrendStatus.IMPROVING, official_ids),
-            roic=self._metric("INSUFFICIENT_DATA", "%", "2026Q2", TrendStatus.WATCH, [authority_ids["master"]], ["16.46%候選因Net Cash定義與現金口徑未通過Owner Gate A，未升格為正式ROIC。"]),
+            roic=self._metric(
+                latest_master["ROIC_Precise_Pct"] if latest_master["ROIC_Precise_Pct"] not in {"", "N/A"} else "INSUFFICIENT_DATA",
+                "%",
+                latest_master["Quarter"],
+                TrendStatus.STABLE if latest_master["ROIC_Precise_Pct"] not in {"", "N/A"} else TrendStatus.WATCH,
+                [authority_ids["master"]],
+                (["DERIVED_VERIFIED；有息負債採正式資產負債表直接組成。16.46%因NET_CASH_DENOMINATOR_SCOPE_MISMATCH遭拒；Q1未以相同方法重算，不作Q1至Q2趨勢判斷。"]
+                 if latest_master["ROIC_Precise_Pct"] not in {"", "N/A"}
+                 else ["本期權威資料未提供可用的同口徑 ROIC。"]),
+            ),
             operating_cash_flow=self._metric(str(h1_cfo), "新台幣百萬元", "2026H1", TrendStatus.WEAKENING, official_ids, ["OFFICIAL_REPORTED; cumulative 2026H1, not standalone Q2."]),
             free_cash_flow=self._metric(str(h1_fcf), "新台幣百萬元", "2026H1", TrendStatus.WEAKENING, official_ids, ["OFFICIAL_REPORTED; cumulative 2026H1, not standalone Q2."]),
             dividend_safety=self._metric(latest_master["CashDividend"], "元／股", latest_master["Quarter"], TrendStatus.WATCH, [authority_ids["master"], result_id], ["H1 negative FCF requires observation but does not prove structural dividend impairment."]),

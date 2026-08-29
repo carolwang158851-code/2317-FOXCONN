@@ -160,7 +160,7 @@
   ],
   "actionable": false,
   "canonicalPromotion": {
-    "status": "PASS_WITH_ROIC_CONDITIONAL_PENDING",
+    "status": "PASS",
     "ownerApprovalReference": "P1008_FY2026Q2_OWNER_PROMOTION_FINAL_OWNER_APPROVAL_DIRECTIVE",
     "canonicalQuarter": "2026Q2",
     "effectiveDate": "2026-08-13",
@@ -186,12 +186,12 @@
       "derivation": null
     },
     "roic": {
-      "candidateValue": "16.46",
-      "canonicalValue": null,
+      "candidateValue": "12.35",
+      "canonicalValue": "12.35",
       "unit": "PERCENT",
       "period": "2026Q2",
-      "classification": "OWNER_CONDITIONAL_PENDING",
-      "displayLabelZh": "16.46%（條件式推算，尚未升格）",
+      "classification": "DERIVED_VERIFIED",
+      "displayLabelZh": "12.35%（推算）",
       "formula": "NOPAT_Annual / InvestedCapital * 100",
       "numerator": {
         "name": "NOPAT_Annual",
@@ -200,24 +200,54 @@
       },
       "denominator": {
         "name": "InvestedCapital",
-        "valueMillionTwd": "1688127.607",
+        "valueMillionTwd": "2249465.607",
         "formula": "InterestBearingDebt + ParentEquity - Cash",
-        "interestBearingDebtMillionTwd": "743193.000",
+        "interestBearingDebtMillionTwd": "1304531.000",
         "parentEquityMillionTwd": "1907936.607",
-        "cashMillionTwd": "963002.000"
+        "cashMillionTwd": "963002.000",
+        "interestBearingDebtComponents": [
+          {
+            "name": "ShortTermBorrowings",
+            "labelZh": "短期借款",
+            "valueMillionTwd": "845349"
+          },
+          {
+            "name": "CommercialPaperAndAcceptances",
+            "labelZh": "應付商業本票／承兌匯票",
+            "valueMillionTwd": "93459"
+          },
+          {
+            "name": "CurrentPortionLongTermLiabilities",
+            "labelZh": "一年內到期長期負債",
+            "valueMillionTwd": "64303"
+          },
+          {
+            "name": "BondsPayableNoncurrent",
+            "labelZh": "應付公司債－非流動",
+            "valueMillionTwd": "294708"
+          },
+          {
+            "name": "BankBorrowingsNoncurrent",
+            "labelZh": "銀行借款－非流動",
+            "valueMillionTwd": "6712"
+          }
+        ],
+        "interestBearingDebtFormula": "845349 + 93459 + 64303 + 294708 + 6712",
+        "interestBearingDebtSourceLocator": "https://mops.twse.com.tw/mops/web/t164sb03?co_id=2317&year=115&season=02"
       },
       "methodologyLocator": "data/2317_master_v9.csv#roicNote",
       "sourceLocators": [
         "https://image.honhai.com/upload/202608/law_talk/Hon_Hai_2Q26_Results_Chinese%28%E6%8A%95%E5%BD%B1%E7%89%88%29_revised%28wp%29_20260818_7900.pdf",
-        "https://openapi.twse.com.tw/v1/opendata/t187ap07_L_ci"
+        "https://openapi.twse.com.tw/v1/opendata/t187ap07_L_ci",
+        "https://mops.twse.com.tw/mops/web/t164sb03?co_id=2317&year=115&season=02"
       ],
       "releaseGate": {
         "gates": {
           "A": {
-            "status": "FAIL",
-            "labelZh": "未證明淨現金可用現金及約當現金減利息負債反推",
-            "reasonZh": "官方逐字稿揭露現金及定期存款約1.52兆元與淨現金219,809百萬元；候選使用現金及約當現金963,002百萬元。現金口徑不同，官方未明確定義Net Cash為963,002減利息負債。",
-            "sourceLocator": "https://image.honhai.com/upload/202608/law_talk/Hon_Hai_2Q26_Results_Chinese%28%E6%8A%95%E5%BD%B1%E7%89%88%29_revised%28wp%29_20260818_7900.pdf"
+            "status": "PASS",
+            "labelZh": "有息負債採正式資產負債表直接組成",
+            "reasonZh": "有息負債1,304,531百萬元由短期借款、商業本票／承兌匯票、一年內到期長期負債、非流動公司債及非流動銀行借款直接加總，不使用Cash減Net Cash反推。",
+            "sourceLocator": "https://mops.twse.com.tw/mops/web/t164sb03?co_id=2317&year=115&season=02"
           },
           "B": {
             "status": "PASS",
@@ -241,10 +271,19 @@
             "sourceLocator": "data/2317_master_v9.csv#roicNote"
           }
         },
-        "allPassed": false,
+        "allPassed": true,
         "trendComparable": false,
-        "trendComparableZh": "公式慣例相同，但Q2候選分母的淨現金口徑未通過Gate A，禁止顯示Q1至Q2數值趨勢。"
-      }
+        "trendComparableZh": "Q2已採直接有息負債方法；Q1未獲授權以相同直接有息負債方法重算，因此禁止宣稱Q1至Q2為有效趨勢。"
+      },
+      "rejectedCandidateHistory": [
+        {
+          "value": "16.46",
+          "classification": "REJECTED",
+          "reasonCode": "NET_CASH_DENOMINATOR_SCOPE_MISMATCH",
+          "reasonZh": "16.46%以現金及約當現金963,002百萬元減淨現金219,809百萬元反推有息負債743,193百萬元；公司淨現金口徑包含現金及定期存款，與現金及約當現金口徑不同，因此分母不成立。",
+          "canonical": false
+        }
+      ]
     },
     "currentPb": {
       "value": "1.853",
