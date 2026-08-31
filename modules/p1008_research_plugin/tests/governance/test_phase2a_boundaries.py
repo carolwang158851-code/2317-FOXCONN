@@ -320,6 +320,7 @@ def expected_hash_governed_paths() -> set[str]:
     for relative_root in (
         "contracts/p1008_research_plugin/v1.0",
         "contracts/p1008_research_plugin/v2.0",
+        "contracts/p1008_research_plugin/v2.1",
     ):
         root = PACKAGE_ROOT / relative_root
         manifest = load_json(root / "contract.manifest.json")
@@ -392,7 +393,7 @@ class Phase2ABoundaryTests(unittest.TestCase):
             entries.append(path)
         self.assertEqual(len(entries), len(set(entries)))
         self.assertEqual(set(entries), expected_hash_governed_paths())
-        self.assertEqual(len(entries), 175)
+        self.assertEqual(len(entries), 185)
 
     def test_crlf_and_mixed_manifest_bytes_are_rejected(self) -> None:
         for rejected in (MANIFEST_CRLF_SHA256, MANIFEST_MIXED_SHA256):
