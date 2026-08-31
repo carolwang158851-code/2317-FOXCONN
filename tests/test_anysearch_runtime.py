@@ -200,9 +200,9 @@ class GovernedAnySearchRuntimeTests(unittest.TestCase):
             envelope["candidates"][0]["source_locator"],
             "https://example.com/hon-hai?kind=news",
         )
-        with mock.patch.object(Path, "mkdir"), mock.patch.object(Path, "write_bytes") as write_bytes:
+        with mock.patch.object(runtime, "atomic_write") as atomic_writer:
             runtime.write_staging_output(envelope, ROOT / "runtime" / "anysearch_staging")
-        staged_bytes = write_bytes.call_args.args[0]
+        staged_bytes = atomic_writer.call_args.args[1]
         self.assertNotIn(b"never-store", staged_bytes)
         self.assertNotIn(b"user:password", staged_bytes)
         self.assertNotIn(b"api_key", staged_bytes.lower())

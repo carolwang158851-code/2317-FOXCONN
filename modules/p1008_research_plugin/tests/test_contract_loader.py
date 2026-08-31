@@ -32,6 +32,16 @@ class ContractLoaderTests(unittest.TestCase):
         references = self.loader.resolve_references()
         self.assertGreater(references["references_checked"], 0)
 
+    def test_filesystem_governance_uses_owner_gated_v2_1_overlay(self) -> None:
+        result = self.loader.verify_selected_overlay("filesystem_governance")
+        self.assertEqual(result["contract_version"], "2.1")
+        self.assertEqual(result["artifact_count"], 7)
+        self.assertEqual(
+            result["root_hash"],
+            "4DEE2788FDF31CA2AB47AC7EBEC1047974D4F289FDA9800CB5756E60B2515969",
+        )
+        self.assertTrue(result["owner_acceptance_required"])
+
     def test_status_contract_subset_accepts_frozen_shape(self) -> None:
         self.assertEqual(self.loader.validate_status(self.status), self.status)
 

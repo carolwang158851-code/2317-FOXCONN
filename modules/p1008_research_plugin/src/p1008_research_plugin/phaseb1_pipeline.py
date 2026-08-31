@@ -10,12 +10,12 @@ from typing import Any
 from .adapters.authority_adapter import AuthorityAdapter
 from .analysis import AnalysisBuilder, AnalysisPacket, AnalysisValidator
 from .contract_loader import ContractLoader
+from .governance import GovernanceBoundary, GovernanceError
 from .phaseb1_common import (
     PhaseB1BoundaryError,
     atomic_write,
     atomic_write_json,
     canonical_json_bytes,
-    ensure_runtime_output,
     protected_state_hashes,
     sha256_bytes,
     sha256_file,
@@ -60,6 +60,7 @@ class PhaseB1Pipeline:
         editorial_authorization: dict[str, Any] | None = None,
         editorial_client: Any | None = None,
         editorial_runtime_config: RuntimeConfig | None = None,
+        output_capability: str = "REPORT_PRODUCTION",
     ) -> None:
         self.package_root = package_root.resolve()
         self.governed_evidence_root = governed_evidence_root.resolve() if governed_evidence_root else None
@@ -73,10 +74,32 @@ class PhaseB1Pipeline:
             / "monthly_revenue_fixture.json"
         )
         self.loader = ContractLoader(self.package_root)
+        self.filesystem_governance = GovernanceBoundary(self.loader)
+        self.output_capability = output_capability
         self.editorial_required = editorial_required
         self.editorial_authorization = editorial_authorization
         self.editorial_client = editorial_client
         self.editorial_runtime_config = editorial_runtime_config
+
+    def _atomic_write(
+        self, path: Path, data: bytes, *, overwrite: bool = False
+    ) -> None:
+        atomic_write(
+            path,
+            data,
+            overwrite=overwrite,
+            capability=self.output_capability,
+        )
+
+    def _atomic_write_json(
+        self, path: Path, value: Any, *, overwrite: bool = False
+    ) -> str:
+        return atomic_write_json(
+            path,
+            value,
+            overwrite=overwrite,
+            capability=self.output_capability,
+        )
 
     def load_inputs(
         self,
@@ -166,7 +189,7 @@ class PhaseB1Pipeline:
         generated = self._utc(generated_at)
         before = protected_state_hashes(self.package_root)
         run_root.mkdir(parents=True, exist_ok=False)
-        atomic_write_json(run_root / "protected_state_hashes_before.json", before)
+        self._atomic_write_json(run_root / "protected_state_hashes_before.json", before)
 
         authority = AuthorityAdapter(self.package_root, self.loader)
         analysis = AnalysisBuilder(self.package_root, authority).build(
@@ -180,19 +203,19 @@ class PhaseB1Pipeline:
         gate = AnalysisValidator.result(analysis, checked_at=generated)
         evidence_manifest = fixture.evidence_manifest() if isinstance(fixture, QuarterlyEarningsPacket) else self._evidence_manifest(evidence)
 
-        analysis_sha = atomic_write_json(
+        analysis_sha = self._atomic_write_json(
             run_root / "analysis_packet.json",
             analysis.model_dump(mode="json", by_alias=True),
         )
-        atomic_write_json(
+        self._atomic_write_json(
             run_root / "analysis_validation.json",
             gate.model_dump(mode="json", by_alias=True),
         )
-        evidence_sha = atomic_write_json(
+        evidence_sha = self._atomic_write_json(
             run_root / "evidence_manifest.json", evidence_manifest
         )
         after = protected_state_hashes(self.package_root)
-        atomic_write_json(run_root / "protected_state_hashes_after.json", after)
+        self._atomic_write_json(run_root / "protected_state_hashes_after.json", after)
         if before != after:
             raise PhaseB1PipelineError("Protected state changed during analysis build")
         manifest = {
@@ -226,7 +249,7 @@ class PhaseB1Pipeline:
         }
         if trigger_lineage is not None:
             manifest["triggerLineage"] = dict(trigger_lineage)
-        atomic_write_json(run_root / "run_manifest.json", manifest)
+        self._atomic_write_json(run_root / "run_manifest.json", manifest)
         return {
             "run_id": run_id,
             "run_root": str(run_root),
@@ -348,14 +371,14 @@ class PhaseB1Pipeline:
         html_preview = formal.html(report, charts, formula_cards)
         pdf_preview = formal.pdf(report, charts, formula_cards)
 
-        report_sha = atomic_write_json(
+        report_sha = self._atomic_write_json(
             run_root / "report_candidate.json",
             report.model_dump(mode="json", by_alias=True),
         )
-        atomic_write(run_root / "report_candidate.md", markdown.encode("utf-8"))
-        atomic_write(run_root / "report_candidate.html", html_preview)
-        atomic_write(run_root / "report_candidate.pdf", pdf_preview)
-        atomic_write_json(
+        self._atomic_write(run_root / "report_candidate.md", markdown.encode("utf-8"))
+        self._atomic_write(run_root / "report_candidate.html", html_preview)
+        self._atomic_write(run_root / "report_candidate.pdf", pdf_preview)
+        self._atomic_write_json(
             run_root / "chart_data.json",
             [item.model_dump(mode="json", by_alias=True) for item in charts],
         )
@@ -364,7 +387,7 @@ class PhaseB1Pipeline:
             if quarterly is None:
                 raise PhaseB1PipelineError("quarterly analysis disappeared before artifact materialization")
             analytics = quarterly.enterprise_value_analytics
-            atomic_write_json(
+            self._atomic_write_json(
                 run_root / "validated_research_pack.json",
                 {
                     "recordType": "P1008_VALIDATED_RESEARCH_PACK",
@@ -378,20 +401,20 @@ class PhaseB1Pipeline:
                     "actionable": False,
                 },
             )
-            atomic_write_json(run_root / "formula_cards.json", analytics["formulaCards"])
-            atomic_write_json(run_root / "strategy_scorecard.json", analytics["strategyScorecard"])
-        atomic_write(run_root / "longform_script_candidate.md", longform.encode("utf-8"))
-        atomic_write(run_root / "shorts_75s_candidate.md", shorts.encode("utf-8"))
-        atomic_write_json(
+            self._atomic_write_json(run_root / "formula_cards.json", analytics["formulaCards"])
+            self._atomic_write_json(run_root / "strategy_scorecard.json", analytics["strategyScorecard"])
+        self._atomic_write(run_root / "longform_script_candidate.md", longform.encode("utf-8"))
+        self._atomic_write(run_root / "shorts_75s_candidate.md", shorts.encode("utf-8"))
+        self._atomic_write_json(
             run_root / "shorts_duration_validation.json",
             duration.model_dump(mode="json", by_alias=True),
         )
-        atomic_write_json(
+        self._atomic_write_json(
             run_root / "editorial_validation.json",
             editorial.model_dump(mode="json", by_alias=True),
         )
         if editorial_envelope is not None:
-            atomic_write_json(
+            self._atomic_write_json(
                 run_root / "editorial_result_envelope.json",
                 editorial_envelope.model_dump(mode="json", by_alias=True),
             )
@@ -411,7 +434,7 @@ class PhaseB1Pipeline:
             "phaseB2Started": False,
             "actionable": False,
         }
-        atomic_write_json(run_root / "owner_review.json", owner_review)
+        self._atomic_write_json(run_root / "owner_review.json", owner_review)
         governance_metadata = self._template_governance_metadata(
             run_id=run_id,
             event_type=event_type,
@@ -426,11 +449,11 @@ class PhaseB1Pipeline:
             editorial_envelope=editorial_envelope,
             run_root=run_root,
         )
-        atomic_write_json(
+        self._atomic_write_json(
             run_root / "skill_execution_summary.json", skill_execution_summary
         )
         after = protected_state_hashes(self.package_root)
-        atomic_write_json(
+        self._atomic_write_json(
             run_root / "protected_state_hashes_after.json", after, overwrite=True
         )
         if before != after:
@@ -485,7 +508,7 @@ class PhaseB1Pipeline:
         }
         if trigger_lineage is not None:
             manifest["triggerLineage"] = dict(trigger_lineage)
-        atomic_write_json(run_root / "run_manifest.json", manifest, overwrite=True)
+        self._atomic_write_json(run_root / "run_manifest.json", manifest, overwrite=True)
         return {
             "run_id": run_id,
             "run_root": str(run_root),
@@ -526,6 +549,7 @@ class PhaseB1Pipeline:
             evidence=evidence,
             trigger_context=trigger_lineage,
             output_root=output_root,
+            output_capability=self.output_capability,
         )
         if result.get("state") != "REPORT_CANDIDATE_READY":
             raise PhaseB1PipelineError("Enterprise Value report runtime did not produce a candidate")
@@ -562,7 +586,7 @@ class PhaseB1Pipeline:
             "externalCalls": self._zero_calls(),
             "actionable": False,
         }
-        atomic_write_json(run_root / "run_manifest.json", manifest, overwrite=True)
+        self._atomic_write_json(run_root / "run_manifest.json", manifest, overwrite=True)
         receipt_path = output_root / "war_report_runtime_receipt.json"
         html_path = Path(result["output_html"])
         return {
@@ -694,9 +718,16 @@ class PhaseB1Pipeline:
         if any(char not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-" for char in run_id):
             raise PhaseB1BoundaryError("Unsafe Run ID")
         base = output_base or self.package_root / "runtime" / "report_production"
-        if output_base is None:
-            ensure_runtime_output(self.package_root, base)
-        return (base.resolve() / run_id).resolve()
+        try:
+            authorized_base = self.filesystem_governance.authorize_write(
+                self.output_capability, base
+            )
+            run_root = authorized_base / run_id
+            return self.filesystem_governance.authorize_write(
+                self.output_capability, run_root
+            )
+        except GovernanceError as exc:
+            raise PhaseB1BoundaryError(f"Phase B1 output denied: {exc}") from exc
 
     @staticmethod
     def _utc(value: str) -> datetime:

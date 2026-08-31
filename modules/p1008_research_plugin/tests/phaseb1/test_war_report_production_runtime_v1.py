@@ -61,10 +61,8 @@ class WarReportProductionRuntimeV1Tests(unittest.TestCase):
             "evidenceIds": trigger["qualifying_evidence_ids"], "authorityCutoffs": trigger["authority_cutoffs"],
             "actionable": False,
         }
-        parent = PACKAGE_ROOT / "runtime" / "phaseb1_test_scratch"
-        parent.mkdir(parents=True, exist_ok=True)
+        parent = PACKAGE_ROOT / "runtime" / "report_production" / "test_scratch"
         cls.output = parent / f"war-report-runtime-v1-{uuid4().hex}"
-        cls.output.mkdir(parents=False, exist_ok=False)
         cls.before = protected_state_hashes(PACKAGE_ROOT)
         cls.result = run_war_report_production(
             package_root=PACKAGE_ROOT, trigger_context=cls.lineage, output_base=cls.output,
@@ -88,9 +86,8 @@ class WarReportProductionRuntimeV1Tests(unittest.TestCase):
         self.assertEqual(sum(self.html.count(f'<section id="s{i}"') for i in range(1, 12)), 11)
 
     def test_r3a_launcher_pipeline_mode_materializes_enterprise_value_candidate(self) -> None:
-        parent = PACKAGE_ROOT / "runtime" / "phaseb1_test_scratch"
+        parent = PACKAGE_ROOT / "runtime" / "report_production" / "test_scratch"
         output = parent / f"launcher-enterprise-value-{uuid4().hex}"
-        output.mkdir(parents=False, exist_ok=False)
         pipeline = PhaseB1Pipeline(PACKAGE_ROOT, governed_evidence_root=EVIDENCE_ROOT)
         analysis = pipeline.build_analysis(output_base=output, trigger_lineage=self.lineage)
         result = pipeline.build_report(

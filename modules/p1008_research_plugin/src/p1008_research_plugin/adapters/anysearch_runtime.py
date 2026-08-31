@@ -20,7 +20,14 @@ from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 from . import research_skill_governance_adapter as governance
-from ..phaseb1_common import canonical_json_bytes, sha256_bytes
+from ..contract_loader import ContractLoader
+from ..governance import GovernanceBoundary, GovernanceError
+from ..phaseb1_common import (
+    PhaseB1BoundaryError,
+    atomic_write,
+    canonical_json_bytes,
+    sha256_bytes,
+)
 
 
 class GovernedAnySearchRuntimeError(RuntimeError):
@@ -268,7 +275,18 @@ def write_staging_output(envelope: Mapping[str, Any], staging_root: Path) -> Pat
         raise GovernedAnySearchRuntimeError("UNAUTHORIZED_WRITE_ATTEMPT")
     if envelope.get("actionable") is not False or envelope.get("authority_writes") != 0:
         raise GovernedAnySearchRuntimeError("UNAUTHORIZED_WRITE_ATTEMPT")
-    root.mkdir(parents=True, exist_ok=True)
-    path = root / "latest_smoke.json"
-    path.write_bytes(canonical_json_bytes(dict(envelope)))
-    return path
+    try:
+        boundary = GovernanceBoundary(ContractLoader(repo_root))
+        authorized_root = boundary.authorize_write("ANYSEARCH_STAGING", root)
+        path = boundary.authorize_write(
+            "ANYSEARCH_STAGING", authorized_root / "latest_smoke.json"
+        )
+        atomic_write(
+            path,
+            canonical_json_bytes(dict(envelope)),
+            overwrite=True,
+            capability="ANYSEARCH_STAGING",
+        )
+        return path
+    except (GovernanceError, PhaseB1BoundaryError) as exc:
+        raise GovernedAnySearchRuntimeError("UNAUTHORIZED_WRITE_ATTEMPT") from exc

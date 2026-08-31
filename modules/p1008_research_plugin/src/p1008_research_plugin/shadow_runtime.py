@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
-import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -126,10 +127,19 @@ def main() -> int:
         print(json.dumps(output, ensure_ascii=False, indent=2))
         return 0
 
-    with tempfile.TemporaryDirectory(
-        prefix=".p1008-phase1b-", dir=package_root.parent
-    ) as temp_dir:
-        components = build_components(package_root, Path(temp_dir))
+    governance = GovernanceBoundary(ContractLoader(package_root))
+    ledger_temp_root = governance.authorize_write(
+        "RESEARCH_PLUGIN_LEDGER",
+        package_root / "runtime" / "research_plugin" / "ledgers",
+    )
+    ledger_temp_root.mkdir(parents=True, exist_ok=True)
+    temp_name = f".p1008-phase1b-{uuid4().hex}"
+    temp_dir = governance.authorize_write(
+        "RESEARCH_PLUGIN_LEDGER", ledger_temp_root / temp_name
+    )
+    temp_dir.mkdir()
+    try:
+        components = build_components(package_root, temp_dir)
         store: LedgerStore = components["store"]
         catalog: EventCatalog = components["catalog"]
         for index, (ledger_id, event_type, aggregate_type, aggregate_id) in enumerate(
@@ -150,6 +160,14 @@ def main() -> int:
             "actionable": False,
         }
         print(json.dumps(output, ensure_ascii=False, indent=2))
+    finally:
+        disposable = governance.authorize_tree_delete(
+            "RESEARCH_PLUGIN_LEDGER",
+            temp_dir,
+            owned_parent=ledger_temp_root,
+            expected_name=temp_name,
+        )
+        shutil.rmtree(disposable, ignore_errors=False)
     return 0
 
 

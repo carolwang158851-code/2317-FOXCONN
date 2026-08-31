@@ -20,6 +20,10 @@ from typing import Any, Callable, Mapping
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
+from ..contract_loader import ContractLoader
+from ..governance import GovernanceBoundary, GovernanceError
+from ..phaseb1_common import PhaseB1BoundaryError, atomic_write
+
 
 AUTHORIZATION_REL = Path("contracts/p1008_report_governance/v1.0/authorizations/P1008_OFFICIAL_IR_EVIDENCE_INGESTION_AUTHORIZATION_V1.json")
 REPORT_MANIFEST_REL = Path("contracts/p1008_report_governance/v1.0/contract.manifest.json")
@@ -148,6 +152,9 @@ def _source_failure_status(error: str) -> str:
 class OfficialIREvidenceAdapter:
     def __init__(self, package_root: Path | str, *, transport: Transport | None = None) -> None:
         self.package_root = Path(package_root).resolve()
+        self.filesystem_governance = GovernanceBoundary(
+            ContractLoader(self.package_root)
+        )
         self.authorization = load_authorization(self.package_root)
         self.transport = transport
         self.origins = self.authorization["allowedOrigins"]
@@ -235,21 +242,33 @@ class OfficialIREvidenceAdapter:
         receipt_id = "IR-RECEIPT-" + _sha256(_canonical(payload))[:20]
         receipt = {**payload, "receipt_id": receipt_id}
         path = run_dir / "receipts" / f"{receipt_id}.json"
-        path.parent.mkdir(parents=True, exist_ok=True)
+        self._authorize_output(path)
         if path.exists():
             if json.loads(path.read_text(encoding="utf-8")) != receipt:
                 raise OfficialIREvidenceError("RECEIPT_COLLISION")
         else:
-            path.write_bytes(_canonical(receipt))
+            atomic_write(path, _canonical(receipt), capability="OFFICIAL_IR_EVIDENCE")
         raw_path = run_dir / "raw" / f"{receipt_id}.bin"
-        raw_path.parent.mkdir(parents=True, exist_ok=True)
+        self._authorize_output(raw_path)
         if raw_path.exists() and _sha256(raw_path.read_bytes()) != raw_hash:
             raise OfficialIREvidenceError("RAW_CACHE_HASH_MISMATCH")
         if not raw_path.exists():
-            raw_path.write_bytes(response.body)
+            atomic_write(
+                raw_path, response.body, capability="OFFICIAL_IR_EVIDENCE"
+            )
         receipt["receipt_path"] = path.relative_to(self.package_root).as_posix()
         receipt["raw_artifact_path"] = raw_path.relative_to(self.package_root).as_posix()
         return receipt
+
+    def _authorize_output(self, target: Path) -> Path:
+        try:
+            return self.filesystem_governance.authorize_write(
+                "OFFICIAL_IR_EVIDENCE", target
+            )
+        except GovernanceError as exc:
+            raise OfficialIREvidenceError(
+                f"FILESYSTEM_AUTHORIZATION_DENIED:{exc}"
+            ) from exc
 
     def _evidence(self, receipt: Mapping[str, Any], period: tuple[int, int], document_type: str) -> dict[str, Any]:
         canonical_id, _ = _identity(period)
@@ -294,7 +313,7 @@ class OfficialIREvidenceAdapter:
         self.retrieved_at = evaluated_at_utc or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         self.event_time = self.retrieved_at
         run_id = "P1008-OFFICIAL-IR-" + self.retrieved_at.replace("-", "").replace(":", "").replace(".", "").replace("+00:00", "Z")
-        run_dir = self.package_root / RUNTIME_REL / run_id
+        run_dir = self._authorize_output(self.package_root / RUNTIME_REL / run_id)
         evidence: list[dict[str, Any]] = []
         receipts: list[dict[str, Any]] = []
         failures: list[dict[str, str]] = []
@@ -400,7 +419,24 @@ class OfficialIREvidenceAdapter:
             "receipt_paths": [item["receipt_path"] for item in receipts], "failures": failures,
             "analysis_generated": False, "report_generated": False, "publication_count": 0, "actionable": False,
         }
-        run_dir.mkdir(parents=True, exist_ok=True)
-        (run_dir / "scan_result.json").write_bytes(_canonical(result))
-        latest = self.package_root / RUNTIME_REL / "latest_status.json"; latest.parent.mkdir(parents=True, exist_ok=True); latest.write_bytes(_canonical(result))
+        try:
+            atomic_write(
+                run_dir / "scan_result.json",
+                _canonical(result),
+                overwrite=True,
+                capability="OFFICIAL_IR_EVIDENCE",
+            )
+            latest = self._authorize_output(
+                self.package_root / RUNTIME_REL / "latest_status.json"
+            )
+            atomic_write(
+                latest,
+                _canonical(result),
+                overwrite=True,
+                capability="OFFICIAL_IR_EVIDENCE",
+            )
+        except PhaseB1BoundaryError as exc:
+            raise OfficialIREvidenceError(
+                f"FILESYSTEM_AUTHORIZATION_DENIED:{exc}"
+            ) from exc
         return result

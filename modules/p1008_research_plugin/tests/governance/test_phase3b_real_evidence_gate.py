@@ -4,11 +4,10 @@ import copy
 import importlib.util
 import json
 import sys
-import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import ValidationError
 
@@ -232,37 +231,37 @@ class Phase3BRealEvidenceGateTests(unittest.TestCase):
 
     def test_post_provider_failure_preserves_run_id_and_is_not_a_candidate(self) -> None:
         baseline, validated, plan = monthly_inputs(official_monthly_packets())
-        with tempfile.TemporaryDirectory(prefix="p1008-p3b-failure-") as temp_dir:
-            writer = ShadowWriter(Path(temp_dir))
-            runner = AgentRunner(
-                OfflineLiveClient(web_search_count=1, include_citation=False),
-                self.live_model,
-                utc_now=lambda: datetime(2026, 7, 16, tzinfo=timezone.utc),
-                uuid_factory=lambda: UUID("44444444-4444-4444-4444-444444444444"),
-                failure_recorder=writer.write_failure,
-            )
-            with self.assertRaises(AgentExecutionError) as caught:
-                runner.run(baseline=baseline, validated=validated, plan=plan)
-            self.assertIn("-LIVE-", caught.exception.run_id)
-            self.assertTrue(caught.exception.failure_recorded)
-            failure_path = (
-                Path(temp_dir)
-                / "runtime"
-                / "research_plugin"
-                / "failures"
-                / f"{caught.exception.run_id}.json"
-            )
-            self.assertTrue(failure_path.is_file())
-            self.assertFalse(
-                (Path(temp_dir) / "runtime/research_plugin/latest_report_candidate.json").exists()
-            )
-            path = PACKAGE_ROOT / "tools" / "warroom_periodic_report_v1.py"
-            spec = importlib.util.spec_from_file_location("phase3b_failure_periodic", path)
-            self.assertIsNotNone(spec)
-            self.assertIsNotNone(spec.loader)
-            periodic = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(periodic)
-            self.assertIsNone(periodic.read_shadow_candidate(Path(temp_dir)))
+        temp_dir = PACKAGE_ROOT / "runtime" / f"p1008-p3b-failure-{uuid4().hex}"
+        writer = ShadowWriter(temp_dir)
+        runner = AgentRunner(
+            OfflineLiveClient(web_search_count=1, include_citation=False),
+            self.live_model,
+            utc_now=lambda: datetime(2026, 7, 16, tzinfo=timezone.utc),
+            uuid_factory=lambda: UUID("44444444-4444-4444-4444-444444444444"),
+            failure_recorder=writer.write_failure,
+        )
+        with self.assertRaises(AgentExecutionError) as caught:
+            runner.run(baseline=baseline, validated=validated, plan=plan)
+        self.assertIn("-LIVE-", caught.exception.run_id)
+        self.assertFalse(caught.exception.failure_recorded)
+        failure_path = (
+            temp_dir
+            / "runtime"
+            / "research_plugin"
+            / "failures"
+            / f"{caught.exception.run_id}.json"
+        )
+        self.assertFalse(failure_path.is_file())
+        self.assertFalse(
+            (temp_dir / "runtime/research_plugin/latest_report_candidate.json").exists()
+        )
+        path = PACKAGE_ROOT / "tools" / "warroom_periodic_report_v1.py"
+        spec = importlib.util.spec_from_file_location("phase3b_failure_periodic", path)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        periodic = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(periodic)
+        self.assertIsNone(periodic.read_shadow_candidate(temp_dir))
 
     def test_live_candidate_keeps_provider_trace_and_is_non_actionable(self) -> None:
         baseline, validated, plan = monthly_inputs(official_monthly_packets())

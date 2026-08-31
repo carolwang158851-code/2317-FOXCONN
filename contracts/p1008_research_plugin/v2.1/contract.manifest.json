@@ -1,0 +1,70 @@
+{
+  "manifestId": "P1008_RESEARCH_GOVERNANCE_V2_1_CANDIDATE_MANIFEST",
+  "contractVersion": "2.1",
+  "generatedAt": "2026-08-30T00:00:00+08:00",
+  "freezeStatus": "OWNER_ACCEPTANCE_REQUIRED",
+  "hashAlgorithm": "SHA-256",
+  "rootHashConstruction": "SHA256(UTF8(join(sorted(path + '|' + sha256), LF)))",
+  "rootHash": "4DEE2788FDF31CA2AB47AC7EBEC1047974D4F289FDA9800CB5756E60B2515969",
+  "artifactCount": 7,
+  "selfExcluded": true,
+  "evidenceExcluded": [
+    "contract.manifest.json",
+    "CONTRACT_FREEZE.md",
+    "../acceptance/v2.1/OWNER_ACCEPTANCE_RECORD.json"
+  ],
+  "normativeDependencies": [
+    {
+      "contractVersion": "1.0",
+      "rootHash": "3370C4DBD6B564E2200D051AC07C8507442C130ADE64D770621107FA09D2924D",
+      "manifestSha256": "5D213CB4360329FCC969164F559952A0F1545BFE8E53D5CFDFF014B9D5619773"
+    },
+    {
+      "contractVersion": "2.0",
+      "rootHash": "E056357A8A63A15BCF9FDC286BEE0BDB56E043AF26F4DDCD5624FDB3707BD782",
+      "manifestSha256": "6A1DFE54BA4FCA749C18FDA747969473A4903CF21001AAACA6078C6CC8FEB75F",
+      "acceptedManifestSha256": "2686D044714E435CB4C1E63CB26B3BB555190F9A5BD21FE2C9439473DA998BE6",
+      "approvedErrata": "contracts/p1008_research_plugin/acceptance/errata/v2.0/OWNER_ACCEPTANCE_HASH_ERRATA.json"
+    }
+  ],
+  "ownerAcceptanceRequired": true,
+  "productionPromotionAuthorized": false,
+  "actionable": false,
+  "artifacts": [
+    {
+      "path": "compatibility/BACKWARD_COMPATIBILITY_REPORT.json",
+      "sha256": "B97AA61EC00528EBCFDD9A9B0424356B4B96734F23B9D63C567AFDD570238807",
+      "sizeBytes": 573
+    },
+    {
+      "path": "contract_index.json",
+      "sha256": "3E185573DA688DE9FCF272957CBDA2034FD3093331FC7916BA629EEADB0E920C",
+      "sizeBytes": 826
+    },
+    {
+      "path": "governance/GOVERNANCE_DIFF.md",
+      "sha256": "EDE19A8873CA353E2CE75F95824C01546E6265901A0E74168F03D60F3CBD19C5",
+      "sizeBytes": 1625
+    },
+    {
+      "path": "migration/MIGRATION_GUIDE.md",
+      "sha256": "E861A9F9CF7045E2171AB56119D21FECBAC5F5934ED47B18620512C147CFE203",
+      "sizeBytes": 661
+    },
+    {
+      "path": "policies/plugin_policy.json",
+      "sha256": "C6578C136506FEAF5D9CA329DAFAC541BE7243B54D8BBB679205FFAD6E630EE0",
+      "sizeBytes": 1952
+    },
+    {
+      "path": "README.md",
+      "sha256": "12E85F36435A1095347BE57A469FF3BA7BC81B2C378B244D7D8931BCD1CBFEC2",
+      "sizeBytes": 1783
+    },
+    {
+      "path": "validation/WRITER_COVERAGE.json",
+      "sha256": "9AEA290EA2B7A901F037134EE685C4C2DC6E319B4C60C214E04A0E33C90D1ABA",
+      "sizeBytes": 2440
+    }
+  ]
+}

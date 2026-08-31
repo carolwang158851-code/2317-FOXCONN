@@ -33,7 +33,7 @@ class PhaseB1ShortsSentenceIntegrityR2Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         with scratch("r2-valid-") as output:
-            result = fixture_pipeline(output).run_all(output_base=output)
+            result = fixture_pipeline(output).run_all()
             cls.analysis = result["analysis"]
             cls.report = result["report"]
         cls.builder = ScriptBuilder()

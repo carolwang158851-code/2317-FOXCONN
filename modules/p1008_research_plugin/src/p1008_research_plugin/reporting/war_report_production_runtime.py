@@ -1153,7 +1153,7 @@ def validate_runtime_candidate(*, rendered_html: str, trigger: str, identity: Ru
             raise WarReportRuntimeError("ARBITRARY_DECISION_SCORE_PRESENT")
 
 
-def compile_existing_phaseb1_result(*, package_root: Path, analysis: AnalysisPacket, evidence: Any, trigger_context: Mapping[str, Any], output_root: Path, previous_state: Mapping[str, Any] | None = None, source_mother: Path | None = None) -> dict[str, Any]:
+def compile_existing_phaseb1_result(*, package_root: Path, analysis: AnalysisPacket, evidence: Any, trigger_context: Mapping[str, Any], output_root: Path, previous_state: Mapping[str, Any] | None = None, source_mother: Path | None = None, output_capability: str = "REPORT_PRODUCTION") -> dict[str, Any]:
     """Adapt a validated Phase B1 analysis into the permanent report candidate."""
     trigger = str(trigger_context.get("eventType") or trigger_context.get("event_type") or "")
     route = plan_trigger(trigger, trigger_context.get("impactedChapters", ()))
@@ -1193,28 +1193,29 @@ def compile_existing_phaseb1_result(*, package_root: Path, analysis: AnalysisPac
         charts=charts, audits=audits, baseline=baseline, decision=decision,
         owner_review=owner_review, forward=forward, rule_result=rule_result,
     )
-    output_root.mkdir(parents=True, exist_ok=False)
+    if output_root.exists():
+        raise WarReportRuntimeError("REPORT_OUTPUT_ALREADY_EXISTS")
     html_path = output_root / "war_report_candidate.html"
-    atomic_write(html_path, rendered.encode("utf-8"))
-    atomic_write_json(output_root / "financial_baseline.json", baseline)
-    atomic_write_json(output_root / "historical_kpi_baseline.json", historical_baseline)
-    atomic_write_json(output_root / "fcf_conversion_state.json", fcf_state)
-    atomic_write_json(output_root / "per_share_value_state.json", per_share_state)
-    atomic_write_json(output_root / "forward_enterprise_value_analytics.json", forward)
-    atomic_write_json(output_root / "forward_model_ledger.json", forward["forward_model_ledger"])
-    atomic_write_json(output_root / "enterprise_value_rule_engine.json", rule_result)
-    atomic_write_json(output_root / "chart_data_full_history.json", [item.model_dump(mode="json", by_alias=True) for item in charts])
-    atomic_write_json(output_root / "chart_audit.json", audits)
-    atomic_write_json(output_root / "decision_state.json", decision)
-    atomic_write_json(output_root / "smart_state.json", smart)
-    atomic_write_json(output_root / "owner_review.json", owner_review)
+    atomic_write(html_path, rendered.encode("utf-8"), capability=output_capability)
+    atomic_write_json(output_root / "financial_baseline.json", baseline, capability=output_capability)
+    atomic_write_json(output_root / "historical_kpi_baseline.json", historical_baseline, capability=output_capability)
+    atomic_write_json(output_root / "fcf_conversion_state.json", fcf_state, capability=output_capability)
+    atomic_write_json(output_root / "per_share_value_state.json", per_share_state, capability=output_capability)
+    atomic_write_json(output_root / "forward_enterprise_value_analytics.json", forward, capability=output_capability)
+    atomic_write_json(output_root / "forward_model_ledger.json", forward["forward_model_ledger"], capability=output_capability)
+    atomic_write_json(output_root / "enterprise_value_rule_engine.json", rule_result, capability=output_capability)
+    atomic_write_json(output_root / "chart_data_full_history.json", [item.model_dump(mode="json", by_alias=True) for item in charts], capability=output_capability)
+    atomic_write_json(output_root / "chart_audit.json", audits, capability=output_capability)
+    atomic_write_json(output_root / "decision_state.json", decision, capability=output_capability)
+    atomic_write_json(output_root / "smart_state.json", smart, capability=output_capability)
+    atomic_write_json(output_root / "owner_review.json", owner_review, capability=output_capability)
     revision_record = {
         "report_key": identity.report_key, "revision": identity.revision,
         "previous_revision": identity.previous_revision, "what_changed": trigger_context.get("whatChanged", "本期正式資料與證據更新"),
         "why": trigger_context.get("why", "有效報告觸發"), "which_data_changed": trigger_context.get("whichDataChanged", []),
         "investment_conclusion_changed": any(item["CHANGE"] != "UNCHANGED" for item in decision["items"]),
     }
-    atomic_write_json(output_root / "revision.json", revision_record)
+    atomic_write_json(output_root / "revision.json", revision_record, capability=output_capability)
     lineage = validate_template_lineage(source_mother)
     receipt = {
         "state": "REPORT_CANDIDATE_READY", "owner_review_state": "OWNER_REVIEW_REQUIRED",
@@ -1229,7 +1230,7 @@ def compile_existing_phaseb1_result(*, package_root: Path, analysis: AnalysisPac
         "external_calls": {"network": 0, "openai_api": 0, "canva": 0},
         "publication": False, "actionable": False,
     }
-    atomic_write_json(output_root / "war_report_runtime_receipt.json", receipt)
+    atomic_write_json(output_root / "war_report_runtime_receipt.json", receipt, capability=output_capability)
     return {**receipt, "output_html": str(html_path), "output_root": str(output_root), "report": report, "analysis": analysis}
 
 

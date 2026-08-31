@@ -4,11 +4,10 @@ import copy
 import importlib.util
 import json
 import sys
-import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 
 MODULE_ROOT = Path(__file__).resolve().parents[2]
@@ -156,30 +155,25 @@ class Phase3BRunIdentityTests(unittest.TestCase):
         self.assertEqual(first.provider_response_id, "resp_offline_trace")
         self.assertEqual(first.executed_at_utc.tzinfo, timezone.utc)
 
-    def test_existing_run_artifact_is_never_overwritten(self) -> None:
+    def test_arbitrary_temp_package_root_is_denied(self) -> None:
         report = self.mock_report()
-        with tempfile.TemporaryDirectory(prefix="p1008-p3b-identity-") as temp_dir:
-            writer = ShadowWriter(Path(temp_dir))
-            artifact = writer.write(report)
-            run_path = Path(temp_dir) / artifact["run"]
-            original = run_path.read_bytes()
-            with self.assertRaises(ShadowWriteError):
-                writer.write(report)
-            self.assertEqual(run_path.read_bytes(), original)
-
-    def test_periodic_reader_accepts_mode_qualified_candidate(self) -> None:
-        report = self.mock_report()
-        with tempfile.TemporaryDirectory(prefix="p1008-p3b-periodic-") as temp_dir:
-            writer = ShadowWriter(Path(temp_dir))
+        temp_dir = PACKAGE_ROOT / "runtime" / f"p1008-p3b-identity-{uuid4().hex}"
+        writer = ShadowWriter(temp_dir)
+        with self.assertRaises(ShadowWriteError):
             writer.write(report)
-            periodic = load_periodic_report_module()
-            candidate = periodic.read_shadow_candidate(
-                Path(temp_dir), self.baseline.as_of_date.isoformat()
-            )
-            self.assertIsNotNone(candidate)
-            markdown = periodic.append_shadow_candidate("# Existing\n", candidate)
-            self.assertIn(report.run_id, markdown)
-            self.assertIn("`MOCK`", markdown)
+        self.assertFalse((temp_dir / "runtime/research_plugin").exists())
+
+    def test_periodic_reader_has_no_candidate_after_denied_temp_write(self) -> None:
+        report = self.mock_report()
+        temp_dir = PACKAGE_ROOT / "runtime" / f"p1008-p3b-periodic-{uuid4().hex}"
+        writer = ShadowWriter(temp_dir)
+        with self.assertRaises(ShadowWriteError):
+            writer.write(report)
+        periodic = load_periodic_report_module()
+        candidate = periodic.read_shadow_candidate(
+            temp_dir, self.baseline.as_of_date.isoformat()
+        )
+        self.assertIsNone(candidate)
 
     def test_mock_and_live_candidates_remain_non_actionable(self) -> None:
         mock_report = self.mock_report()

@@ -12,6 +12,7 @@ from typing import Any
 
 from ..contract_loader import ContractLoader
 from ..events.catalog import EventCatalog
+from ..governance import GovernanceBoundary, GovernanceError
 
 
 class LedgerError(RuntimeError):
@@ -105,10 +106,13 @@ class LedgerStore:
         self.sandbox_root = Path(sandbox_root).resolve()
         self.loader = loader
         self.catalog = catalog
-        if self.sandbox_root == self.package_root or self.sandbox_root.is_relative_to(
-            self.package_root
-        ):
-            raise LedgerError("Phase 1B ledger root must be outside the repository")
+        try:
+            self.governance = GovernanceBoundary(loader)
+            self.sandbox_root = self.governance.authorize_write(
+                "RESEARCH_PLUGIN_LEDGER", self.sandbox_root
+            )
+        except GovernanceError as exc:
+            raise LedgerError(f"Ledger sandbox denied: {exc}") from exc
         formats = loader.load_json("ledgers/ledger_formats.json")
         if not formats["appendOnly"] or formats["inPlaceUpdateAllowed"]:
             raise LedgerError("Frozen ledger policy is not append-only")
@@ -125,8 +129,12 @@ class LedgerStore:
         if relative.is_absolute() or ".." in relative.parts:
             raise LedgerError(f"Unsafe frozen ledger path: {relative}")
         path = (self.sandbox_root / relative).resolve()
+        try:
+            path = self.governance.authorize_write("RESEARCH_PLUGIN_LEDGER", path)
+        except GovernanceError as exc:
+            raise LedgerError(f"Ledger path escapes sandbox: {ledger_id}") from exc
         if not path.is_relative_to(self.sandbox_root):
-            raise LedgerError(f"Ledger path escapes sandbox: {ledger_id}")
+            raise LedgerError(f"Ledger path escapes selected sandbox: {ledger_id}")
         return path
 
     @staticmethod

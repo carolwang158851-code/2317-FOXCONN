@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from uuid import uuid4
 
 
 MODULE_ROOT = Path(__file__).resolve().parents[1]
@@ -179,14 +180,22 @@ class GovernanceBoundaryTests(unittest.TestCase):
         before = {relative: sha256(PACKAGE_ROOT / relative) for relative in BASELINE_HASHES}
         self.assertEqual(before, BASELINE_HASHES)
         catalog = EventCatalog(self.loader)
-        temp_dir = tempfile.mkdtemp(prefix=".p1008-boundary-", dir=PACKAGE_ROOT.parent)
+        parent = PACKAGE_ROOT / "runtime" / "research_plugin" / "ledgers"
+        parent.mkdir(parents=True, exist_ok=True)
+        temp_dir = parent / f".p1008-boundary-{uuid4().hex}"
+        temp_dir.mkdir()
         try:
-            store = LedgerStore(PACKAGE_ROOT, Path(temp_dir), self.loader, catalog)
+            store = LedgerStore(PACKAGE_ROOT, temp_dir, self.loader, catalog)
             self.assertEqual(store.read_all(), {key: [] for key in sorted(store.ledgers)})
         finally:
             # A local synchronization service can retain the directory handle; this
             # cleanup must not obscure the boundary assertion that already passed.
             shutil.rmtree(temp_dir, ignore_errors=True)
+            for candidate in (parent, parent.parent, parent.parent.parent):
+                try:
+                    candidate.rmdir()
+                except OSError:
+                    break
         after = {relative: sha256(PACKAGE_ROOT / relative) for relative in BASELINE_HASHES}
         self.assertEqual(after, before)
 

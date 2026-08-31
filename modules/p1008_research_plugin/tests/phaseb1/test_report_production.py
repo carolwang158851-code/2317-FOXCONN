@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import csv
 import unittest
+from pathlib import Path
 
 from pydantic import ValidationError
 
@@ -21,7 +22,7 @@ class PhaseB1ReportProductionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         with scratch("report-valid-") as output:
-            result = fixture_pipeline(output).run_all(output_base=output)
+            result = fixture_pipeline(output).run_all()
             cls.analysis = result["analysis"]
             cls.report = result["report"]
 
@@ -58,17 +59,19 @@ class PhaseB1ReportProductionTests(unittest.TestCase):
     def test_report_requires_prior_analysis_artifacts(self) -> None:
         with scratch("no-analysis-") as output:
             pipeline = fixture_pipeline(output)
+            governed_output = pipeline.package_root / "runtime" / "report_production"
             with self.assertRaises(PhaseB1PipelineError):
                 pipeline.build_report(
                     run_id=pipeline.deterministic_run_id(fixture()),
-                    output_base=output,
+                    output_base=governed_output,
                 )
 
     def test_report_rejects_drifted_validated_evidence_manifest(self) -> None:
         with scratch("evidence-drift-") as output:
             pipeline = fixture_pipeline(output)
-            result = pipeline.build_analysis(output_base=output)
-            evidence_path = output / result["run_id"] / "evidence_manifest.json"
+            result = pipeline.build_analysis()
+            run_root = Path(result["run_root"])
+            evidence_path = run_root / "evidence_manifest.json"
             payload = json.loads(evidence_path.read_text(encoding="utf-8"))
             payload["sourceLocators"].append("https://www.honhai.com/unapproved-drift")
             evidence_path.write_text(
@@ -77,12 +80,14 @@ class PhaseB1ReportProductionTests(unittest.TestCase):
                 newline="\n",
             )
             with self.assertRaises(PhaseB1PipelineError):
-                pipeline.build_report(run_id=result["run_id"], output_base=output)
+                pipeline.build_report(run_id=result["run_id"])
 
     def test_deterministic_outputs_match_across_fresh_roots(self) -> None:
         with scratch("replay-a-") as first, scratch("replay-b-") as second:
-            first_result = fixture_pipeline(first).run_all(output_base=first)
-            second_result = fixture_pipeline(second).run_all(output_base=second)
+            first_result = fixture_pipeline(first).run_all()
+            second_result = fixture_pipeline(second).run_all()
+            first_root = Path(first_result["run_root"])
+            second_root = Path(second_result["run_root"])
             for name in (
                 "analysis_packet.json",
                 "report_candidate.json",
@@ -90,15 +95,15 @@ class PhaseB1ReportProductionTests(unittest.TestCase):
                 "shorts_75s_candidate.md",
             ):
                 self.assertEqual(
-                    (first / first_result["run_id"] / name).read_bytes(),
-                    (second / second_result["run_id"] / name).read_bytes(),
+                    (first_root / name).read_bytes(),
+                    (second_root / name).read_bytes(),
                 )
 
     def test_fixture_output_hashes_match(self) -> None:
         with scratch("hash-golden-") as output:
             pipeline = fixture_pipeline(output)
-            result = pipeline.run_all(output_base=output)
-            run_root = output / result["run_id"]
+            result = pipeline.run_all()
+            run_root = Path(result["run_root"])
             expected = fixture()["expectedOutputSha256"]
             for name, digest in expected.items():
                 with self.subTest(name=name):
@@ -122,8 +127,12 @@ class PhaseB1ReportProductionTests(unittest.TestCase):
 
     def test_run_manifest_records_zero_external_calls(self) -> None:
         with scratch("zero-calls-") as output:
-            result = fixture_pipeline(output).run_all(output_base=output)
-            manifest = json.loads((output / result["run_id"] / "run_manifest.json").read_text(encoding="utf-8"))
+            result = fixture_pipeline(output).run_all()
+            manifest = json.loads(
+                (Path(result["run_root"]) / "run_manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
             self.assertEqual(set(manifest["externalCalls"].values()), {0})
             self.assertFalse(manifest["actionable"])
 

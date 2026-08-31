@@ -41,6 +41,23 @@ def write_fixture(root: Path, payload: dict[str, object]) -> Path:
     return path
 
 
+def copy_gfs_contract_overlay(package: Path) -> None:
+    contracts = package / "contracts" / "p1008_research_plugin"
+    (contracts / "v2.0").mkdir(parents=True, exist_ok=True)
+    shutil.copy2(
+        PACKAGE_ROOT
+        / "contracts"
+        / "p1008_research_plugin"
+        / "v2.0"
+        / "contract.manifest.json",
+        contracts / "v2.0" / "contract.manifest.json",
+    )
+    shutil.copytree(
+        PACKAGE_ROOT / "contracts" / "p1008_research_plugin" / "v2.1",
+        contracts / "v2.1",
+    )
+
+
 def authority_sandbox(root: Path) -> Path:
     package = root / "package"
     shutil.copytree(PACKAGE_ROOT / "data", package / "data")
@@ -48,6 +65,7 @@ def authority_sandbox(root: Path) -> Path:
         PACKAGE_ROOT / "contracts" / "p1008_research_plugin" / "v1.0",
         package / "contracts" / "p1008_research_plugin" / "v1.0",
     )
+    copy_gfs_contract_overlay(package)
     (package / "rules").mkdir(parents=True)
     shutil.copy2(
         PACKAGE_ROOT / "rules" / "RULE_STATUS_MANIFEST.json",
@@ -64,6 +82,7 @@ def frozen_authority_package(root: Path) -> Path:
         PACKAGE_ROOT / "contracts" / "p1008_research_plugin" / "v1.0",
         package / "contracts" / "p1008_research_plugin" / "v1.0",
     )
+    copy_gfs_contract_overlay(package)
     (package / "rules").mkdir(parents=True)
     shutil.copy2(
         PACKAGE_ROOT / "rules" / "RULE_STATUS_MANIFEST.json",

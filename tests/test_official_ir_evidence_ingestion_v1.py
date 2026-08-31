@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 import shutil
 import sys
-import tempfile
 import unittest
+from uuid import uuid4
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -64,8 +64,10 @@ class FixtureTransport:
 
 class OfficialIREvidenceIngestionTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.temp = tempfile.TemporaryDirectory(prefix="p1008-official-ir-")
-        self.root = Path(self.temp.name)
+        scratch = ROOT / "runtime" / "official_ir_test_scratch"
+        scratch.mkdir(parents=True, exist_ok=True)
+        self.root = scratch / f"p1008-official-ir-{uuid4().hex}"
+        self.root.mkdir()
         shutil.copytree(ROOT / "contracts", self.root / "contracts")
         shutil.copytree(ROOT / "data", self.root / "data")
         shutil.copytree(ROOT / "rules", self.root / "rules")
@@ -73,7 +75,12 @@ class OfficialIREvidenceIngestionTests(unittest.TestCase):
         shutil.copy2(ROOT / "tools" / "warroom_report_governance.py", self.root / "tools")
 
     def tearDown(self) -> None:
-        self.temp.cleanup()
+        shutil.rmtree(self.root, ignore_errors=False)
+        try:
+            self.root.parent.rmdir()
+            self.root.parent.parent.rmdir()
+        except OSError:
+            pass
 
     def mapping(self, *, conference: str = "", quarterly: str = "", press: str = "", mops: str = "", documents: dict[str, bytes] | None = None) -> dict[str, FetchResponse | Exception]:
         values: dict[str, FetchResponse | Exception] = {
