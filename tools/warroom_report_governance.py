@@ -241,7 +241,8 @@ def deduplicate_event_evidence(event_evidence: Iterable[dict[str, Any]]) -> dict
     sources = sorted({item["source_id"] for item in evidence})
     return {
         "canonical_event_id": canonical_event_id, "event_fingerprint": fingerprint,
-        "event_type": event_type, "source_ids": sources,
+        "event_type": event_type, "occurred_at_utc": occurred_at_utc,
+        "source_ids": sources,
         "original_source_ids": sorted({item["source_id"] for item in evidence if item["source_class"] == "AUTHORITY"}),
         "syndicated_or_secondary_source_ids": sorted({item["source_id"] for item in evidence if item["source_class"] != "AUTHORITY"}),
         "duplicate_count": len(evidence) - len(sources), "actionable": False,

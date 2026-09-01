@@ -14,8 +14,10 @@ from pathlib import Path
 from typing import Any
 
 import warroom_report_governance as governance
+import warroom_major_event_baseline as major_event_baseline
 
 MODULE_SRC = Path(__file__).resolve().parents[1] / "modules" / "p1008_research_plugin" / "src"
+CODE_PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 if str(MODULE_SRC) not in os.sys.path:
     os.sys.path.insert(0, str(MODULE_SRC))
 from p1008_research_plugin.reporting import template_governance
@@ -214,7 +216,7 @@ def _report_identity(
 def _receipt(
     *, integration: dict[str, Any] | None, evidence: list[dict[str, Any]],
     decision: dict[str, Any], cross_validation: dict[str, Any],
-    canonical_event: dict[str, Any] | None,
+    canonical_event: dict[str, Any] | None, baseline_binding: dict[str, Any],
 ) -> dict[str, Any]:
     evidence_hashes = sorted({_canonical_hash(item) for item in evidence})
     claim_hash = _canonical_hash({"claims": sorted({item["claim_summary"] for item in evidence})})
@@ -228,25 +230,46 @@ def _receipt(
     # downstream routing vocabulary stays closed to the four governed classes.
     if normalized_event_type not in governance.G1_EVENT_TYPES:
         normalized_event_type = "MAJOR_EVENT"
+    evidence_trigger_valid = decision["report_trigger_valid"] is True
+    baseline_bound = (
+        normalized_event_type != "MAJOR_EVENT"
+        or baseline_binding.get("status") == "BOUND"
+    )
+    effective_trigger_valid = evidence_trigger_valid and baseline_bound
+    if evidence_trigger_valid and normalized_event_type == "MAJOR_EVENT":
+        if baseline_binding.get("status") == "REVIEW_REQUIRED":
+            effective_decision = "REVIEW_REQUIRED_ANALYSIS_BASELINE"
+            effective_reason = str(baseline_binding.get("reason"))
+        elif baseline_binding.get("status") == "FAIL_CLOSED":
+            effective_decision = "FAIL_CLOSED_ANALYSIS_BASELINE"
+            effective_reason = str(baseline_binding.get("reason"))
+        else:
+            effective_decision = decision["decision"]
+            effective_reason = decision["trigger_reason"]
+    else:
+        effective_decision = decision["decision"]
+        effective_reason = decision["trigger_reason"]
     workflow = {
         "trigger": (
             "OBSERVATION_ONLY" if normalized_event_type == "DAILY"
-            else "ELIGIBLE" if decision["report_trigger_valid"] is True
+            else "ELIGIBLE" if effective_trigger_valid
             else "BLOCKED"
         ),
         "analysis_candidate": (
-            "EXISTING_VALIDATED_BASELINE_REQUIRED"
-            if normalized_event_type == "MAJOR_EVENT" and decision["report_trigger_valid"] is True
-            else "ELIGIBLE" if decision["report_trigger_valid"] is True
+            "BOUND_APPROVED_BASELINE"
+            if normalized_event_type == "MAJOR_EVENT" and effective_trigger_valid
+            else baseline_binding.get("status", "NOT_ELIGIBLE")
+            if normalized_event_type == "MAJOR_EVENT" and evidence_trigger_valid
+            else "ELIGIBLE" if effective_trigger_valid
             else "NOT_ELIGIBLE"
         ),
         "report_candidate": (
             "REQUIRES_VALIDATED_ANALYSIS_CANDIDATE"
-            if decision["report_trigger_valid"] is True else "NOT_ELIGIBLE"
+            if effective_trigger_valid else "NOT_ELIGIBLE"
         ),
         "owner_review": (
             "REQUIRED_AFTER_REPORT_CANDIDATE"
-            if decision["report_trigger_valid"] is True else "NOT_ELIGIBLE"
+            if effective_trigger_valid else "NOT_ELIGIBLE"
         ),
         "publication": "DENIED_BY_DEFAULT_OWNER_APPROVAL_REQUIRED",
         "actionable": False,
@@ -267,9 +290,11 @@ def _receipt(
         "claim_set_sha256": claim_hash,
         "authority_cutoffs": decision["authority_cutoffs"],
         "cross_validation": cross_validation,
-        "decision": decision["decision"],
-        "trigger_reason": decision["trigger_reason"],
-        "report_trigger_valid": decision["report_trigger_valid"],
+        "decision": effective_decision,
+        "trigger_reason": effective_reason,
+        "evidence_trigger_decision": decision["decision"],
+        "evidence_trigger_valid": evidence_trigger_valid,
+        "report_trigger_valid": effective_trigger_valid,
         "material_event_confirmed": decision["material_event_confirmed"],
         "evaluated_at_utc": decision["evaluated_at_utc"],
         "previous_decision_id": decision["previous_decision_id"],
@@ -278,6 +303,7 @@ def _receipt(
         "analysis_candidate_valid": False,
         "report_candidate_valid": False,
         "candidate_workflow": workflow,
+        "analysis_baseline_binding": baseline_binding,
         "publication": "DENIED_BY_DEFAULT_OWNER_APPROVAL_REQUIRED",
         "actionable": False,
     }
@@ -299,7 +325,38 @@ def validate_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeTriggerError("CANDIDATE_WORKFLOW_INVALID")
     if workflow.get("publication") != "DENIED_BY_DEFAULT_OWNER_APPROVAL_REQUIRED":
         raise RuntimeTriggerError("PUBLICATION_GOVERNANCE_INVALID")
+    binding = receipt.get("analysis_baseline_binding")
+    if not isinstance(binding, dict) or binding.get("actionable") is not False:
+        raise RuntimeTriggerError("ANALYSIS_BASELINE_BINDING_INVALID")
+    if receipt.get("event_type") == "MAJOR_EVENT" and receipt.get("evidence_trigger_valid") is True:
+        if receipt.get("report_trigger_valid") is True and binding.get("status") != "BOUND":
+            raise RuntimeTriggerError("MAJOR_EVENT_BASELINE_REQUIRED")
+        if binding.get("fallback_used") is not False:
+            raise RuntimeTriggerError("MAJOR_EVENT_BASELINE_FALLBACK_PROHIBITED")
     return receipt
+
+
+def _baseline_binding(
+    decision: dict[str, Any], canonical_event: dict[str, Any] | None,
+) -> dict[str, Any]:
+    normalized = governance.normalize_g1_event_type(str(decision.get("event_type")))
+    if normalized != "MAJOR_EVENT" or decision.get("report_trigger_valid") is not True:
+        return {
+            "status": "NOT_REQUIRED", "reason": "NON_MAJOR_OR_INELIGIBLE_EVENT",
+            "selected_baseline": None, "fallback_used": False,
+            "fallback_event_type": None, "authoritative": False,
+            "publishAuthorized": False, "actionable": False,
+        }
+    if canonical_event is None:
+        return {
+            "status": "FAIL_CLOSED", "reason": "VALIDATED_CANONICAL_EVENT_REQUIRED",
+            "selected_baseline": None, "fallback_used": False,
+            "fallback_event_type": None, "authoritative": False,
+            "publishAuthorized": False, "actionable": False,
+        }
+    return major_event_baseline.select_major_event_baseline(
+        CODE_PACKAGE_ROOT, canonical_event
+    )
 
 
 def evaluate_and_persist(package_root: Path, *, evaluated_at_utc: str | None = None) -> dict[str, Any]:
@@ -328,9 +385,11 @@ def evaluate_and_persist(package_root: Path, *, evaluated_at_utc: str | None = N
         evaluated_at_utc=evaluation_time,
         previous_decision_id=previous_decision_id,
     )
+    baseline_binding = _baseline_binding(decision, canonical_event)
     receipt = _receipt(
         integration=integration, evidence=evidence, decision=decision,
         cross_validation=cross_validation, canonical_event=canonical_event,
+        baseline_binding=baseline_binding,
     )
     immutable = root / RECEIPTS_REL / f"{receipt['decision_id']}.json"
     atomic_write_json(immutable, receipt, overwrite=False)
@@ -353,10 +412,11 @@ def require_valid_trigger(package_root: Path) -> dict[str, Any]:
         event_evidence=unique, evaluated_at_utc=persisted["evaluated_at_utc"],
         previous_decision_id=persisted.get("previous_decision_id"),
     )
+    baseline_binding = _baseline_binding(expected_decision, canonical)
     expected = _receipt(
         integration=integration, evidence=unique, decision=expected_decision,
         cross_validation=governance.evaluate_cross_validation(unique),
-        canonical_event=canonical,
+        canonical_event=canonical, baseline_binding=baseline_binding,
     )
     if expected != persisted:
         raise RuntimeTriggerError("TRIGGER_RECEIPT_LINEAGE_INVALID")
@@ -372,7 +432,7 @@ def require_valid_trigger(package_root: Path) -> dict[str, Any]:
 
 def trigger_lineage(receipt: dict[str, Any]) -> dict[str, Any]:
     validated = validate_receipt(receipt)
-    return {
+    lineage = {
         "reportKey": validated["report_key"],
         "revision": validated["revision"],
         "eventType": validated["event_type"],
@@ -383,6 +443,19 @@ def trigger_lineage(receipt: dict[str, Any]) -> dict[str, Any]:
         "authorityCutoffs": validated["authority_cutoffs"],
         "actionable": False,
     }
+    if validated["event_type"] == "MAJOR_EVENT":
+        binding = validated["analysis_baseline_binding"]
+        if binding.get("status") != "BOUND" or not isinstance(
+            binding.get("selected_baseline"), dict
+        ):
+            raise RuntimeTriggerError("MAJOR_EVENT_BASELINE_REQUIRED")
+        lineage["analysisBaseline"] = dict(binding["selected_baseline"])
+        lineage["analysisBaselineRegistry"] = {
+            "registryId": binding["registry_id"],
+            "registryVersion": binding["registry_version"],
+            "registrySha256": binding["registry_sha256"],
+        }
+    return lineage
 
 
 def template_governance_status(receipt: dict[str, Any] | None) -> dict[str, Any]:

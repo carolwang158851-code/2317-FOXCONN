@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import os
 import shutil
@@ -166,8 +167,136 @@ class RuntimeTriggerTests(RuntimeRootMixin, unittest.TestCase):
         self.assertEqual(receipt["event_type"], "MAJOR_EVENT")
         self.assertEqual(
             receipt["candidate_workflow"]["analysis_candidate"],
-            "EXISTING_VALIDATED_BASELINE_REQUIRED",
+            "BOUND_APPROVED_BASELINE",
         )
+        binding = receipt["analysis_baseline_binding"]
+        self.assertEqual(binding["status"], "BOUND")
+        self.assertEqual(
+            binding["selected_baseline"]["baseline_id"],
+            "P1008_FY2026_Q2_ENTERPRISE_VALUE_ANALYSIS_BASELINE",
+        )
+        self.assertEqual(binding["selected_baseline"]["version"], "1.0")
+        self.assertFalse(binding["fallback_used"])
+        lineage = runtime.trigger_lineage(receipt)
+        self.assertEqual(
+            lineage["analysisBaseline"]["content_sha256"],
+            "EC85CDC0165933529C6478172C47399450903EEF40C0B77674E61694A9D8BF1D",
+        )
+        self.assertEqual(
+            lineage["analysisBaselineRegistry"]["registrySha256"],
+            binding["registry_sha256"],
+        )
+        self.assertEqual(
+            binding["registry_sha256"],
+            runtime.major_event_baseline.APPROVED_REGISTRY_SHA256,
+        )
+
+    def test_major_event_unknown_scope_requires_review_without_fallback(self):
+        material = evidence(
+            event_type="MATERIAL_COMPANY_DISCLOSURE",
+            canonical_event_id="UNKNOWN_SCOPE",
+        )
+        self.write_integration([material], report_key="P1008_MAJOR_EVENT_UNKNOWN")
+        receipt = runtime.evaluate_and_persist(self.root)
+        self.assertEqual(receipt["event_type"], "MAJOR_EVENT")
+        self.assertEqual(receipt["decision"], "REVIEW_REQUIRED_ANALYSIS_BASELINE")
+        self.assertFalse(receipt["report_trigger_valid"])
+        self.assertEqual(
+            receipt["analysis_baseline_binding"]["reason"],
+            "NO_APPROVED_BASELINE_MATCH",
+        )
+        self.assertFalse(receipt["analysis_baseline_binding"]["fallback_used"])
+        self.assertIsNone(receipt["analysis_baseline_binding"]["fallback_event_type"])
+        self.assertNotIn(
+            receipt["event_type"], {"MONTHLY_REVENUE", "QUARTERLY_EARNINGS"}
+        )
+        with self.assertRaisesRegex(runtime.RuntimeTriggerError, "REPORT_TRIGGER_REQUIRED"):
+            runtime.require_valid_trigger(self.root)
+
+    def test_major_event_ambiguous_registry_requires_review(self):
+        registry = runtime.major_event_baseline.load_registry(ROOT)
+        ambiguous = copy.deepcopy(registry)
+        duplicate = copy.deepcopy(ambiguous["baselines"][0])
+        duplicate["baselineId"] = "P1008_FY2026_Q2_SECOND_APPROVED_BASELINE"
+        ambiguous["baselines"].append(duplicate)
+        canonical = governance.deduplicate_event_evidence([
+            evidence(
+                event_type="MATERIAL_COMPANY_DISCLOSURE",
+                canonical_event_id="P1008_MATERIAL_DISCLOSURE_20260812",
+            )
+        ])
+        result = runtime.major_event_baseline.select_major_event_baseline(
+            ROOT, canonical, registry=ambiguous
+        )
+        self.assertEqual(result["status"], "REVIEW_REQUIRED")
+        self.assertEqual(result["reason"], "AMBIGUOUS_APPROVED_BASELINE_MATCH")
+        self.assertFalse(result["fallback_used"])
+
+    def test_major_event_tampered_baseline_fails_closed(self):
+        registry = runtime.major_event_baseline.load_registry(ROOT)
+        tampered = copy.deepcopy(registry)
+        tampered["baselines"][0]["contentSha256"] = "F" * 64
+        canonical = governance.deduplicate_event_evidence([
+            evidence(
+                event_type="MATERIAL_COMPANY_DISCLOSURE",
+                canonical_event_id="P1008_MATERIAL_DISCLOSURE_20260812",
+            )
+        ])
+        result = runtime.major_event_baseline.select_major_event_baseline(
+            ROOT, canonical, registry=tampered
+        )
+        self.assertEqual(result["status"], "FAIL_CLOSED")
+        self.assertIn("BASELINE_HASH_MISMATCH", result["reason"])
+        self.assertFalse(result["fallback_used"])
+
+    def test_major_event_unsupported_baseline_version_fails_closed(self):
+        registry = runtime.major_event_baseline.load_registry(ROOT)
+        unsupported = copy.deepcopy(registry)
+        unsupported["baselines"][0]["version"] = "2.0"
+        canonical = governance.deduplicate_event_evidence([
+            evidence(
+                event_type="MATERIAL_COMPANY_DISCLOSURE",
+                canonical_event_id="P1008_MATERIAL_DISCLOSURE_20260812",
+            )
+        ])
+        result = runtime.major_event_baseline.select_major_event_baseline(
+            ROOT, canonical, registry=unsupported
+        )
+        self.assertEqual(result["status"], "FAIL_CLOSED")
+        self.assertIn("BASELINE_ID_OR_VERSION_INVALID", result["reason"])
+
+    def test_major_event_requires_validated_canonical_event_fingerprint(self):
+        registry = runtime.major_event_baseline.load_registry(ROOT)
+        canonical = governance.deduplicate_event_evidence([
+            evidence(
+                event_type="MATERIAL_COMPANY_DISCLOSURE",
+                canonical_event_id="P1008_MATERIAL_DISCLOSURE_20260812",
+            )
+        ])
+        canonical["event_fingerprint"] = "0" * 64
+        result = runtime.major_event_baseline.select_major_event_baseline(
+            ROOT, canonical, registry=registry
+        )
+        self.assertEqual(result["status"], "FAIL_CLOSED")
+        self.assertIn("CANONICAL_EVENT_FINGERPRINT_INVALID", result["reason"])
+        self.assertFalse(result["fallback_used"])
+
+    def test_monthly_and_quarterly_do_not_require_major_event_baseline(self):
+        monthly = evidence(
+            event_type="MONTHLY_REVENUE",
+            canonical_event_id="P1008_MONTHLY_REVENUE_202607",
+        )
+        self.write_integration([monthly], report_key="P1008_MONTHLY_REVENUE_202607")
+        receipt = runtime.evaluate_and_persist(self.root)
+        self.assertEqual(receipt["event_type"], "MONTHLY_REVENUE")
+        self.assertEqual(receipt["analysis_baseline_binding"]["status"], "NOT_REQUIRED")
+        self.assertTrue(receipt["report_trigger_valid"])
+
+        self.write_integration([evidence()])
+        receipt = runtime.evaluate_and_persist(self.root)
+        self.assertEqual(receipt["event_type"], "QUARTERLY_EARNINGS")
+        self.assertEqual(receipt["analysis_baseline_binding"]["status"], "NOT_REQUIRED")
+        self.assertTrue(receipt["report_trigger_valid"])
 
     def test_two_independent_media_match_frozen_policy(self):
         first = evidence(

@@ -1,0 +1,40 @@
+{
+  "recordType": "P1008_MAJOR_EVENT_ANALYSIS_BASELINE_REGISTRY_V1",
+  "registryVersion": "1.0",
+  "classification": "GOVERNED_ANALYSIS_BASELINE_REGISTRY",
+  "baselines": [
+    {
+      "baselineId": "P1008_FY2026_Q2_ENTERPRISE_VALUE_ANALYSIS_BASELINE",
+      "version": "1.0",
+      "status": "APPROVED",
+      "governedSourceReference": "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json",
+      "contentSha256": "EC85CDC0165933529C6478172C47399450903EEF40C0B77674E61694A9D8BF1D",
+      "analysisContractReference": "contracts/p1008_analysis/v1.0/contract.manifest.json",
+      "analysisContractSha256": "4BA4EEEA250DEB3A3A1886F00CB47AB0977DDDBAE98028B5E867AE226B6C1240",
+      "supportedCanonicalEventScope": {
+        "sourceEventTypes": [
+          "MAJOR_EVENT",
+          "EARNINGS_CALL",
+          "MATERIAL_COMPANY_DISCLOSURE",
+          "APPLE_OFFICIAL_PRODUCT_EVENT",
+          "APPLE_OFFICIAL_GUIDANCE_EVENT",
+          "AI_SERVER_MAJOR_ORDER",
+          "AI_SERVER_MATERIAL_SUPPLY_CHAIN_CHANGE",
+          "MATERIAL_FX_CHANGE",
+          "MATERIAL_TARIFF_OR_POLICY_CHANGE",
+          "APPROVED_PRICE_VOLUME_POSITIONING_ANOMALY"
+        ],
+        "canonicalEventIdPattern": "^(?:P1008|HON_HAI)[-_][A-Z0-9_:-]+$",
+        "effectiveFromUtc": "2026-08-12T00:00:00Z",
+        "effectiveThroughUtc": null
+      },
+      "ownerReviewRequired": true,
+      "authoritative": false,
+      "publishAuthorized": false,
+      "actionable": false
+    }
+  ],
+  "authoritative": false,
+  "publishAuthorized": false,
+  "actionable": false
+}
