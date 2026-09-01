@@ -70,7 +70,15 @@ def validate_policy_revision(revision: Mapping[str, Any]) -> None:
         "canva_calls": 0,
     }:
         raise OwnerPolicyRevisionError("REVISION_EXECUTION_BOUNDARY_INVALID")
-    base_bytes = _BASE_PATH.read_bytes()
+    # The governance receipt pins canonical LF bytes.  Windows worktrees may
+    # materialize the tracked JSON with CRLF, so normalize only line endings
+    # before comparing the immutable content hash.
+    base_bytes = (
+        _BASE_PATH.read_text(encoding="utf-8")
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .encode("utf-8")
+    )
     base_ref = revision.get("original_candidate", {})
     if base_ref.get("policy_id") != "ENTERPRISE_VALUE_OWNER_POLICY_CANDIDATE_V1" or base_ref.get("sha256") != _sha(base_bytes):
         raise OwnerPolicyRevisionError("ORIGINAL_CANDIDATE_REFERENCE_MISMATCH")
