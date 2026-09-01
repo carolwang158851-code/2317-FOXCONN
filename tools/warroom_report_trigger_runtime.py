@@ -103,7 +103,16 @@ def build_integration_artifact(result: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeTriggerError("RESEARCH_INTEGRATION_RECORD_INVALID")
     if result.get("actionable") is not False:
         raise RuntimeTriggerError("RESEARCH_INTEGRATION_ACTIONABLE_INVALID")
-    return _with_hash(dict(result))
+    payload = dict(result)
+    evidence = payload.get("validated_event_evidence")
+    if not isinstance(evidence, list):
+        raise RuntimeTriggerError("VALIDATED_EVENT_EVIDENCE_REQUIRED")
+    expected_ledger = governance.build_validated_evidence_lineage_ledger(evidence)
+    supplied_ledger = payload.get("validated_evidence_lineage_ledger")
+    if supplied_ledger is not None:
+        governance.validate_evidence_lineage_ledger(supplied_ledger, evidence)
+    payload["validated_evidence_lineage_ledger"] = expected_ledger
+    return _with_hash(payload)
 
 
 def persist_integration_result(package_root: Path, result: dict[str, Any]) -> dict[str, Any]:
@@ -136,6 +145,13 @@ def _load_integration(package_root: Path) -> tuple[dict[str, Any] | None, list[d
     if not isinstance(evidence, list):
         raise RuntimeTriggerError("VALIDATED_EVENT_EVIDENCE_REQUIRED")
     validated = [governance.validate_event_evidence(item) for item in evidence]
+    ledger = payload.get("validated_evidence_lineage_ledger")
+    if not isinstance(ledger, dict):
+        raise RuntimeTriggerError("VALIDATED_EVIDENCE_LINEAGE_LEDGER_REQUIRED")
+    try:
+        governance.validate_evidence_lineage_ledger(ledger, validated)
+    except governance.GovernanceValidationError as exc:
+        raise RuntimeTriggerError(f"EVIDENCE_LINEAGE_INVALID: {exc}") from exc
     report_key = payload.get("report_key")
     revision = payload.get("revision")
     evaluated_at = payload.get("evaluated_at_utc")
@@ -202,6 +218,39 @@ def _receipt(
 ) -> dict[str, Any]:
     evidence_hashes = sorted({_canonical_hash(item) for item in evidence})
     claim_hash = _canonical_hash({"claims": sorted({item["claim_summary"] for item in evidence})})
+    source_event_type = decision["event_type"]
+    normalized_event_type = (
+        "DAILY"
+        if source_event_type == "NONE" and decision["report_key"].startswith("P1008_DAILY_")
+        else governance.normalize_g1_event_type(source_event_type)
+    )
+    # Unknown/unapproved source events remain rejected by the decision, but the
+    # downstream routing vocabulary stays closed to the four governed classes.
+    if normalized_event_type not in governance.G1_EVENT_TYPES:
+        normalized_event_type = "MAJOR_EVENT"
+    workflow = {
+        "trigger": (
+            "OBSERVATION_ONLY" if normalized_event_type == "DAILY"
+            else "ELIGIBLE" if decision["report_trigger_valid"] is True
+            else "BLOCKED"
+        ),
+        "analysis_candidate": (
+            "EXISTING_VALIDATED_BASELINE_REQUIRED"
+            if normalized_event_type == "MAJOR_EVENT" and decision["report_trigger_valid"] is True
+            else "ELIGIBLE" if decision["report_trigger_valid"] is True
+            else "NOT_ELIGIBLE"
+        ),
+        "report_candidate": (
+            "REQUIRES_VALIDATED_ANALYSIS_CANDIDATE"
+            if decision["report_trigger_valid"] is True else "NOT_ELIGIBLE"
+        ),
+        "owner_review": (
+            "REQUIRED_AFTER_REPORT_CANDIDATE"
+            if decision["report_trigger_valid"] is True else "NOT_ELIGIBLE"
+        ),
+        "publication": "DENIED_BY_DEFAULT_OWNER_APPROVAL_REQUIRED",
+        "actionable": False,
+    }
     payload = {
         "record_type": RECEIPT_RECORD_TYPE,
         "schema_version": "1.0",
@@ -211,7 +260,8 @@ def _receipt(
         "revision": decision["revision"],
         "canonical_event_id": canonical_event.get("canonical_event_id", "") if canonical_event else "",
         "event_fingerprint": canonical_event.get("event_fingerprint", "") if canonical_event else "",
-        "event_type": decision["event_type"],
+        "event_type": normalized_event_type,
+        "source_event_type": source_event_type,
         "qualifying_evidence_ids": decision["qualifying_evidence_ids"],
         "event_evidence_hashes": evidence_hashes,
         "claim_set_sha256": claim_hash,
@@ -227,6 +277,7 @@ def _receipt(
         "report_generated": False,
         "analysis_candidate_valid": False,
         "report_candidate_valid": False,
+        "candidate_workflow": workflow,
         "publication": "DENIED_BY_DEFAULT_OWNER_APPROVAL_REQUIRED",
         "actionable": False,
     }
@@ -239,6 +290,15 @@ def validate_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeTriggerError("TRIGGER_RECEIPT_INVALID")
     if receipt.get("report_generated") is not False:
         raise RuntimeTriggerError("TRIGGER_RECEIPT_REPORT_STATE_INVALID")
+    if receipt.get("event_type") not in governance.G1_EVENT_TYPES:
+        raise RuntimeTriggerError("G1_EVENT_TYPE_NOT_NORMALIZED")
+    if receipt.get("event_type") == "DAILY" and receipt.get("report_trigger_valid") is not False:
+        raise RuntimeTriggerError("DAILY_FORMAL_REPORT_PROHIBITED")
+    workflow = receipt.get("candidate_workflow")
+    if not isinstance(workflow, dict) or workflow.get("actionable") is not False:
+        raise RuntimeTriggerError("CANDIDATE_WORKFLOW_INVALID")
+    if workflow.get("publication") != "DENIED_BY_DEFAULT_OWNER_APPROVAL_REQUIRED":
+        raise RuntimeTriggerError("PUBLICATION_GOVERNANCE_INVALID")
     return receipt
 
 

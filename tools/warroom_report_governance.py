@@ -33,7 +33,14 @@ APPROVED_EVENT_TYPES = frozenset({
     "MATERIAL_FX_CHANGE",
     "MATERIAL_TARIFF_OR_POLICY_CHANGE",
     "APPROVED_PRICE_VOLUME_POSITIONING_ANOMALY",
+    "MAJOR_EVENT",
 })
+G1_EVENT_TYPES = frozenset({
+    "DAILY", "MONTHLY_REVENUE", "QUARTERLY_EARNINGS", "MAJOR_EVENT",
+})
+MAJOR_EVENT_SOURCE_TYPES = APPROVED_EVENT_TYPES - {
+    "MONTHLY_REVENUE", "QUARTERLY_EARNINGS", "MAJOR_EVENT",
+}
 SOURCE_TYPES = frozenset({
     "OFFICIAL_WEB", "AUTHORITY_DATASET", "COMPANY_FILING", "REGULATORY_FILING",
     "LOCAL_CANONICAL_ARTIFACT", "NEWS_MEDIA", "PLUGIN_EVIDENCE", "OTHER",
@@ -138,6 +145,79 @@ def validate_event_evidence(evidence: dict[str, Any]) -> dict[str, Any]:
     if evidence.get("source_url") is not None and not isinstance(evidence["source_url"], str):
         raise GovernanceValidationError("source_url is optional but must be a string when supplied")
     return dict(evidence)
+
+
+def normalize_g1_event_type(event_type: str) -> str:
+    """Collapse governed source events onto the four report-routing classes."""
+
+    if event_type in G1_EVENT_TYPES:
+        return event_type
+    if event_type in MAJOR_EVENT_SOURCE_TYPES:
+        return "MAJOR_EVENT"
+    return event_type
+
+
+def build_validated_evidence_lineage_ledger(
+    event_evidence: Iterable[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build a sealed, non-authoritative handoff into the G1 ledger interface.
+
+    The returned envelope is embedded in the integration artifact.  It does not
+    promote evidence, write authority, or create a second mutable evidence store.
+    """
+
+    evidence = [validate_event_evidence(item) for item in event_evidence]
+    records: list[dict[str, Any]] = []
+    for sequence, item in enumerate(evidence, start=1):
+        if item["source_class"] == "DISCOVERY":
+            channel = "GOVERNED_ANYSEARCH"
+        elif item["source_class"] == "SECONDARY":
+            channel = "NEWS"
+        elif item["source_type"] in {
+            "OFFICIAL_WEB", "COMPANY_FILING", "REGULATORY_FILING",
+        }:
+            channel = "OFFICIAL_IR"
+        else:
+            channel = "AUTHORITY"
+        body = {
+            "sequence": sequence,
+            "event_id": item["event_id"],
+            "canonical_event_id": item["canonical_event_id"],
+            "source_event_type": item["event_type"],
+            "g1_event_type": normalize_g1_event_type(item["event_type"]),
+            "source_channel": channel,
+            "source_id": item["source_id"],
+            "source_class": item["source_class"],
+            "source_locator": item["source_locator"],
+            "source_hash": item["source_hash"],
+            "originating_chain_id": item["originating_chain_id"],
+            "evidence_ids": item["evidence_ids"],
+            "validation_status": item["validation_status"],
+            "verification_status": item["verification_status"],
+            "actionable": False,
+        }
+        records.append({**body, "record_sha256": sha256_bytes(canonical_json_bytes(body))})
+    payload = {
+        "record_type": "P1008_VALIDATED_EVIDENCE_LINEAGE_LEDGER_HANDOFF_V1",
+        "schema_version": "1.0",
+        "record_count": len(records),
+        "records": records,
+        "authoritative": False,
+        "publishAuthorized": False,
+        "actionable": False,
+    }
+    return {**payload, "ledger_sha256": sha256_bytes(canonical_json_bytes(payload))}
+
+
+def validate_evidence_lineage_ledger(
+    ledger: dict[str, Any], event_evidence: Iterable[dict[str, Any]],
+) -> dict[str, Any]:
+    """Rebuild and compare the ledger handoff; any lineage drift fails closed."""
+
+    expected = build_validated_evidence_lineage_ledger(event_evidence)
+    if ledger != expected:
+        raise GovernanceValidationError("Validated evidence lineage ledger mismatch")
+    return dict(ledger)
 
 
 def canonical_event_fingerprint(*, event_type: str, canonical_event_id: str, occurred_at_utc: str) -> str:

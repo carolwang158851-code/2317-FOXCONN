@@ -21,7 +21,7 @@ sys.path.insert(0, str(SRC_ROOT))
 
 @contextmanager
 def scratch(prefix: str) -> Iterator[Path]:
-    root = PACKAGE_ROOT / "runtime" / "phaseb1_test_scratch"
+    root = PACKAGE_ROOT / "runtime" / "report_production" / "test_scratch"
     root.mkdir(parents=True, exist_ok=True)
     # Do not use tempfile.TemporaryDirectory here. The verified bundled Python
     # can create normal runtime folders on Windows/OneDrive, while inherited

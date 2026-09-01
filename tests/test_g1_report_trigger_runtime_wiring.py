@@ -140,6 +140,34 @@ class RuntimeTriggerTests(RuntimeRootMixin, unittest.TestCase):
         self.assertFalse(runtime.launcher_status(self.root)["reportEligible"])
         self.assertFalse(receipt["report_generated"])
         self.assertEqual(receipt["publication"], "DENIED_BY_DEFAULT_OWNER_APPROVAL_REQUIRED")
+        self.assertEqual(receipt["event_type"], "QUARTERLY_EARNINGS")
+        self.assertEqual(receipt["candidate_workflow"]["analysis_candidate"], "ELIGIBLE")
+        self.assertEqual(
+            receipt["candidate_workflow"]["owner_review"],
+            "REQUIRED_AFTER_REPORT_CANDIDATE",
+        )
+
+    def test_daily_is_observation_only_and_major_events_are_normalized(self):
+        daily = evidence(event_type="DAILY", canonical_event_id="P1008_DAILY_20260812")
+        self.write_integration([daily], report_key="P1008_DAILY_20260812")
+        receipt = runtime.evaluate_and_persist(self.root)
+        self.assertEqual(receipt["event_type"], "DAILY")
+        self.assertEqual(receipt["decision"], "TRIGGER_REJECTED_UNAPPROVED_EVENT_TYPE")
+        self.assertEqual(receipt["candidate_workflow"]["trigger"], "OBSERVATION_ONLY")
+        self.assertFalse(receipt["report_trigger_valid"])
+
+        material = evidence(
+            event_type="MATERIAL_COMPANY_DISCLOSURE",
+            canonical_event_id="P1008_MATERIAL_DISCLOSURE_20260812",
+        )
+        self.write_integration([material], report_key="P1008_MAJOR_EVENT_20260812")
+        receipt = runtime.evaluate_and_persist(self.root)
+        self.assertEqual(receipt["source_event_type"], "MATERIAL_COMPANY_DISCLOSURE")
+        self.assertEqual(receipt["event_type"], "MAJOR_EVENT")
+        self.assertEqual(
+            receipt["candidate_workflow"]["analysis_candidate"],
+            "EXISTING_VALIDATED_BASELINE_REQUIRED",
+        )
 
     def test_two_independent_media_match_frozen_policy(self):
         first = evidence(
@@ -217,6 +245,19 @@ class RuntimeTriggerTests(RuntimeRootMixin, unittest.TestCase):
         runtime.atomic_write_json(self.root / runtime.INTEGRATION_REL, payload)
         with self.assertRaisesRegex(runtime.RuntimeTriggerError, "HASH_INVALID"):
             runtime.require_valid_trigger(self.root)
+
+    def test_lineage_ledger_is_required_and_recomputed_before_sealing(self):
+        item = evidence()
+        artifact = integration([item])
+        ledger = artifact["validated_evidence_lineage_ledger"]
+        self.assertEqual(ledger["record_count"], 1)
+        self.assertEqual(ledger["records"][0]["source_channel"], "OFFICIAL_IR")
+        self.assertFalse(ledger["actionable"])
+        forged = {key: value for key, value in artifact.items() if key != "canonical_sha256"}
+        forged["validated_evidence_lineage_ledger"] = json.loads(json.dumps(ledger))
+        forged["validated_evidence_lineage_ledger"]["records"][0]["source_hash"] = "F" * 64
+        with self.assertRaises(governance.GovernanceValidationError):
+            runtime.build_integration_artifact(forged)
 
 
 class ServerGateTests(RuntimeRootMixin, unittest.TestCase):

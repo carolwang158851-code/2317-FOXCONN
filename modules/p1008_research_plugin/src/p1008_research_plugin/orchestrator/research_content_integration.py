@@ -303,6 +303,11 @@ class ResearchContentOrchestrator:
                 unique[key] = item
         return list(unique.values()), count
 
+    def _lineage_ledger(self, evidence: Iterable[dict[str, Any]]) -> dict[str, Any]:
+        return self.report_governance.build_validated_evidence_lineage_ledger(
+            list(evidence)
+        )
+
     def integrate_official_ir(self, scan_result: Mapping[str, Any]) -> dict[str, Any]:
         """Validate hash-bound Official IR receipts and reuse the existing G1 path.
 
@@ -457,6 +462,7 @@ class ResearchContentOrchestrator:
                 "cross_validation": cross_validation,
             },
             "validated_event_evidence": evidence,
+            "validated_evidence_lineage_ledger": self._lineage_ledger(evidence),
             "research_state": trigger["decision"],
             "display_state": display_state,
             "report_trigger_decision": trigger,
@@ -591,6 +597,7 @@ class ResearchContentOrchestrator:
             # ledger.  The runtime bridge seals the complete integration result
             # before Launcher may consume it.
             "validated_event_evidence": evidence,
+            "validated_evidence_lineage_ledger": self._lineage_ledger(evidence),
             "research_state": trigger["decision"],
             "display_state": display_state,
             "report_trigger_decision": trigger,

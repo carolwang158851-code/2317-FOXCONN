@@ -51,7 +51,7 @@ class ForwardEnterpriseValueAnalyticsV1Tests(unittest.TestCase):
             "evidenceIds": trigger["qualifying_evidence_ids"], "authorityCutoffs": trigger["authority_cutoffs"],
             "actionable": False,
         }
-        parent = PACKAGE_ROOT / "runtime" / "phaseb1_test_scratch"
+        parent = PACKAGE_ROOT / "runtime" / "report_production" / "test_scratch"
         parent.mkdir(parents=True, exist_ok=True)
         cls.output = parent / f"forward-ev-v1-{uuid4().hex}"
         cls.output.mkdir(parents=False, exist_ok=False)

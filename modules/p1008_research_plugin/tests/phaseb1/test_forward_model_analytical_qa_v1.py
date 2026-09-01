@@ -242,7 +242,7 @@ class ForwardModelAnalyticalQAV1Tests(unittest.TestCase):
         self.assertIn("Consignment（客供料）", _reader_text("Consignment交易模式"))
 
     def test_qa34_full_history_count_unchanged(self):
-        artifacts = sorted((PACKAGE_ROOT / "runtime/phaseb1_test_scratch").glob("**/historical_kpi_baseline.json"))
+        artifacts = sorted((PACKAGE_ROOT / "runtime/report_production/test_scratch").glob("**/historical_kpi_baseline.json"))
         self.assertTrue(artifacts)
         baseline = json.loads(artifacts[-1].read_text(encoding="utf-8"))
         self.assertEqual(baseline["observation_count"], 145)
