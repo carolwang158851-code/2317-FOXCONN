@@ -59,17 +59,29 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest().upper()
 
 
+def _verified_template_bytes(raw: bytes, approved_sha256: str) -> bytes:
+    """Verify exact bytes, allowing only Windows CRLF to normalize to LF."""
+
+    if _sha256(raw) == approved_sha256:
+        return raw
+    normalized = raw.replace(b"\r\n", b"\n")
+    if b"\r" in normalized or normalized == raw:
+        raise WarReportContractError("MOTHER_TEMPLATE_HASH_MISMATCH")
+    if _sha256(normalized) != approved_sha256:
+        raise WarReportContractError("MOTHER_TEMPLATE_HASH_MISMATCH")
+    return normalized
+
+
 def resolve_mother_template() -> str:
     contract = load_contract()
     template_contract = contract["template_contract"]
     path = _CONTRACT_DIR / template_contract["template_path"]
     try:
         raw = path.read_bytes()
-        text = raw.decode("utf-8")
+        verified = _verified_template_bytes(raw, template_contract["template_sha256"])
+        text = verified.decode("utf-8")
     except (OSError, UnicodeDecodeError) as exc:
         raise WarReportContractError("MOTHER_TEMPLATE_UNRESOLVED") from exc
-    if _sha256(raw) != template_contract["template_sha256"]:
-        raise WarReportContractError("MOTHER_TEMPLATE_HASH_MISMATCH")
     if '<article class="report"' not in text:
         raise WarReportContractError("MOTHER_TEMPLATE_ROOT_MISSING")
     actual = tuple((item[0], re.sub(r"^\d+｜", "", item[1]).strip()) for item in _SECTION.findall(text))
