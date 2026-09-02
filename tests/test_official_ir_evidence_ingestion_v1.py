@@ -6,6 +6,7 @@ import shutil
 import sys
 import unittest
 from uuid import uuid4
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,6 +20,7 @@ from p1008_research_plugin.adapters.official_ir_evidence_adapter import (  # noq
     FetchResponse,
     OfficialIREvidenceAdapter,
     OfficialIREvidenceError,
+    _ascii_transport_url,
 )
 from p1008_research_plugin.orchestrator.research_content_integration import (  # noqa: E402
     ResearchContentIntegrationError,
@@ -361,6 +363,40 @@ class OfficialIREvidenceIngestionTests(unittest.TestCase):
         adapter = (ROOT / "modules/p1008_research_plugin/src/p1008_research_plugin/adapters/official_ir_evidence_adapter.py").read_text(encoding="utf-8")
         self.assertNotIn("openai", adapter.lower())
         self.assertNotIn("generate_report", adapter)
+
+
+class OfficialIRTransportPortabilityTests(unittest.TestCase):
+    def test_unicode_official_link_is_ascii_encoded_only_for_transport(self) -> None:
+        original = "https://image.honhai.com/lawtalk/鴻海_2Q26_Results.pdf?語言=中文"
+        encoded = _ascii_transport_url(original)
+        self.assertTrue(encoded.isascii())
+        self.assertIn("%E9%B4%BB%E6%B5%B7", encoded)
+        self.assertIn("%E8%AA%9E%E8%A8%80=%E4%B8%AD%E6%96%87", encoded)
+        self.assertEqual(_ascii_transport_url(encoded), encoded)
+
+    def test_live_fetch_builds_request_from_ascii_transport_url(self) -> None:
+        original = "https://image.honhai.com/lawtalk/鴻海_2Q26_Results.pdf"
+        response = mock.MagicMock()
+        response.__enter__.return_value = response
+        response.read.return_value = b"%PDF-1.7\nfixture"
+        response.geturl.return_value = _ascii_transport_url(original)
+        response.status = 200
+        response.headers.get.return_value = "application/pdf"
+        response.headers.items.return_value = []
+        opener = mock.MagicMock()
+        opener.open.return_value = response
+        adapter = OfficialIREvidenceAdapter.__new__(OfficialIREvidenceAdapter)
+        adapter.authorization = {"timeoutSeconds": 12, "maxResponseBytes": 1024}
+        adapter._validate_live_url = mock.MagicMock(side_effect=lambda value: value)
+        with mock.patch(
+            "p1008_research_plugin.adapters.official_ir_evidence_adapter.build_opener",
+            return_value=opener,
+        ):
+            result = adapter._fetch_live(original)
+        request = opener.open.call_args.args[0]
+        self.assertTrue(request.full_url.isascii())
+        self.assertIn("%E9%B4%BB%E6%B5%B7", request.full_url)
+        self.assertEqual(result.body, b"%PDF-1.7\nfixture")
 
 
 if __name__ == "__main__":

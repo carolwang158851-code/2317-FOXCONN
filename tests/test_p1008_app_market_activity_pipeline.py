@@ -210,6 +210,56 @@ class LauncherMarketActivityPipelineTests(unittest.TestCase):
         self.assertEqual(manager.state["componentStatus"]["marketActivity"]["status"], "STALE")
         self.assertEqual(manager.state["overallStatus"], "PARTIAL_FAILURE")
 
+    def test_current_run_failed_child_cannot_be_masked_by_refresh_success(self) -> None:
+        manager = FakeManager(self.root)
+        manager.state["overallStatus"] = "SUCCEEDED"
+        def failed_then_refreshed(_job_type: str) -> None:
+            manager._set_step(
+                "analysis-candidate", "Analysis", "FAILED",
+                message="OFFICIAL_IR_Q2_AUTHORITY_MISMATCH",
+            )
+            manager._set_step("app-state-refresh", "Refresh", "SUCCEEDED")
+
+        manager._run_job_inner = failed_then_refreshed  # type: ignore[method-assign]
+        manager._run_job("analysis-candidate", "CURRENT-RUN")
+        self.assertEqual(manager.state["status"], "FAILED")
+        self.assertEqual(manager.state["overallStatus"], "FAILED")
+        self.assertEqual(
+            manager.state["failureReasons"][0]["reason"],
+            "OFFICIAL_IR_Q2_AUTHORITY_MISMATCH",
+        )
+
+    def test_current_run_blocked_child_is_explicit(self) -> None:
+        manager = FakeManager(self.root)
+        manager.state["steps"] = [
+            {"id": "report-candidate", "status": "BLOCKED", "code": "ANALYSIS_CANDIDATE_REQUIRED"}
+        ]
+        status, reasons = manager._aggregate_current_run_status()
+        self.assertEqual(status, "BLOCKED")
+        self.assertEqual(reasons[0]["reason"], "ANALYSIS_CANDIDATE_REQUIRED")
+
+    def test_official_ir_partial_authority_propagates_to_top_level(self) -> None:
+        manager = FakeManager(self.root)
+        manager.state["componentStatus"] = {
+            "officialIR": {
+                "status": "PARTIAL_FAILURE_WITH_AUTHORITY",
+                "failedSources": [{"source_id": "MOPS", "error": "OFFICIAL_ENDPOINT_ERROR"}],
+            }
+        }
+        status, reasons = manager._aggregate_current_run_status()
+        self.assertEqual(status, "PARTIAL_FAILURE")
+        self.assertIn("OFFICIAL_ENDPOINT_ERROR", reasons[0]["reason"])
+
+    def test_structured_current_run_failure_is_exposed(self) -> None:
+        output = 'diagnostic\n{"status":"FAIL_CLOSED","error":"OFFICIAL_IR_Q2_AUTHORITY_MISMATCH"}\n'
+        self.assertEqual(
+            app_server.command_failure_reason(output, "exit=1"),
+            "OFFICIAL_IR_Q2_AUTHORITY_MISMATCH",
+        )
+        self.assertEqual(
+            app_server.command_failure_reason("plain failure", "exit=7"), "exit=7"
+        )
+
     def test_active_launcher_job_returns_conflict(self) -> None:
         manager = FakeManager(self.root)
 

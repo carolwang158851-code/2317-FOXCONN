@@ -17,7 +17,7 @@ from pathlib import Path
 import re
 import socket
 from typing import Any, Callable, Mapping
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote, urljoin, urlparse, urlsplit, urlunsplit
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 from ..contract_loader import ContractLoader
@@ -78,7 +78,7 @@ class _SafeRedirect(HTTPRedirectHandler):
 
     def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> Any:
         self.validate(newurl)
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
+        return super().redirect_request(req, fp, code, msg, headers, _ascii_transport_url(newurl))
 
 
 def _sha256(data: bytes) -> str:
@@ -87,6 +87,18 @@ def _sha256(data: bytes) -> str:
 
 def _canonical(value: Any) -> bytes:
     return (json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+
+
+def _ascii_transport_url(url: str) -> str:
+    """Encode only non-ASCII URL components for the HTTP transport layer."""
+    parsed = urlsplit(url)
+    return urlunsplit((
+        parsed.scheme,
+        parsed.netloc,
+        quote(parsed.path, safe="/%:@-._~!$&'()*+,;="),
+        quote(parsed.query, safe="=&%:@/?-._~!$'()*+,;"),
+        "",
+    ))
 
 
 def load_authorization(package_root: Path) -> dict[str, Any]:
@@ -192,7 +204,9 @@ class OfficialIREvidenceAdapter:
     def _fetch_live(self, url: str) -> FetchResponse:
         self._validate_live_url(url)
         opener = build_opener(_SafeRedirect(self._validate_live_url))
-        request = Request(url, headers={"User-Agent": "P1008-Official-IR-Evidence/1.0", "Accept": "text/html,application/pdf"})
+        transport_url = _ascii_transport_url(url)
+        self._validate_live_url(transport_url)
+        request = Request(transport_url, headers={"User-Agent": "P1008-Official-IR-Evidence/1.0", "Accept": "text/html,application/pdf"})
         try:
             with opener.open(request, timeout=int(self.authorization["timeoutSeconds"])) as response:
                 maximum = int(self.authorization["maxResponseBytes"])

@@ -223,6 +223,49 @@ class QuarterlyEarningsProductionSliceTests(unittest.TestCase):
                     PACKAGE_ROOT, self.lineage, governed_evidence_root=missing
                 )
 
+    def test_q2_selects_exact_results_authority_among_same_event_evidence(self) -> None:
+        expected = {
+            "expectedSourceSha256": "A" * 64,
+            "expectedDocumentType": "RESULTS_DOCUMENT_CONFIRMED",
+        }
+        press = {
+            "verification_status": "OFFICIAL_VERIFIED",
+            "source_hash": "B" * 64,
+            "quality_metadata": {
+                "document_type": "RESULTS_PRESS_RELEASE_CONFIRMED",
+                "raw_byte_hash_bound": True,
+            },
+        }
+        results = {
+            "verification_status": "OFFICIAL_VERIFIED",
+            "source_hash": "A" * 64,
+            "quality_metadata": {
+                "document_type": "RESULTS_DOCUMENT_CONFIRMED",
+                "raw_byte_hash_bound": True,
+            },
+        }
+        self.assertEqual(
+            QuarterlyEarningsPacket._select_expected_events([press, results], expected),
+            [results],
+        )
+
+    def test_q2_never_substitutes_press_release_for_results_authority(self) -> None:
+        expected = {
+            "expectedSourceSha256": "A" * 64,
+            "expectedDocumentType": "RESULTS_DOCUMENT_CONFIRMED",
+        }
+        press = {
+            "verification_status": "OFFICIAL_VERIFIED",
+            "source_hash": "B" * 64,
+            "quality_metadata": {
+                "document_type": "RESULTS_PRESS_RELEASE_CONFIRMED",
+                "raw_byte_hash_bound": True,
+            },
+        }
+        self.assertEqual(
+            QuarterlyEarningsPacket._select_expected_events([press], expected), []
+        )
+
     def test_raw_pdf_hash_drift_fails_closed(self) -> None:
         with scratch("quarterly-hash-drift-") as root:
             package = root / "package"

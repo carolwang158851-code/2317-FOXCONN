@@ -91,6 +91,18 @@ def now_iso() -> str:
     return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
 
+def command_failure_reason(output: str, fallback: str) -> str:
+    """Extract a structured current-run failure without trusting old state."""
+    for line in reversed(output.splitlines()):
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict) and payload.get("error"):
+            return str(payload["error"])
+    return fallback
+
+
 def server_context() -> dict[str, Any]:
     started_from_codex = any(
         os.environ.get(key)
@@ -665,10 +677,10 @@ class P1008JobManager:
         try:
             self._run_job_inner(job_type)
             with self.lock:
-                requested_status = self.state.get("overallStatus")
-                self.state["status"] = requested_status or (
-                    "FAILED" if self.state.get("errors") else "SUCCEEDED"
-                )
+                status, reasons = self._aggregate_current_run_status()
+                self.state["status"] = status
+                self.state["overallStatus"] = status
+                self.state["failureReasons"] = reasons
                 self.state["finishedAt"] = now_iso()
                 self._persist_locked()
             self._append_log(f"JOB {job_id} finished with status={self.state['status']}")
@@ -678,6 +690,54 @@ class P1008JobManager:
                 self.state["status"] = "FAILED"
                 self.state["finishedAt"] = now_iso()
                 self._persist_locked()
+
+    def _aggregate_current_run_status(self) -> tuple[str, list[dict[str, str]]]:
+        """Derive health only from this run's child states, never prior UI success."""
+        reasons: list[dict[str, str]] = []
+        failed = False
+        blocked = False
+        partial = False
+        for step in self.state.get("steps", []) or []:
+            status = str(step.get("status") or "")
+            if status in {"FAILED", "FAIL_CLOSED"}:
+                failed = True
+            elif status == "BLOCKED":
+                blocked = True
+            if status in {"FAILED", "FAIL_CLOSED", "BLOCKED"}:
+                reasons.append({
+                    "source": str(step.get("id") or "UNKNOWN_STEP"),
+                    "status": status,
+                    "reason": str(step.get("message") or step.get("code") or status),
+                })
+        for name, component in (self.state.get("componentStatus", {}) or {}).items():
+            status = str((component or {}).get("status") or "")
+            if status in {"FAILED", "FAIL_CLOSED"}:
+                failed = True
+            elif status == "BLOCKED":
+                blocked = True
+            elif status == "STALE" or status.startswith("PARTIAL_FAILURE"):
+                partial = True
+            if status in {"FAILED", "FAIL_CLOSED", "BLOCKED", "STALE"} or status.startswith("PARTIAL_FAILURE"):
+                detail = (component or {}).get("error") or (component or {}).get("code")
+                if not detail and (component or {}).get("failedSources"):
+                    detail = json.dumps((component or {})["failedSources"], ensure_ascii=False, sort_keys=True)
+                reasons.append({"source": str(name), "status": status, "reason": str(detail or status)})
+        requested = str(self.state.get("overallStatus") or "")
+        if requested == "FAILED":
+            failed = True
+        elif requested == "BLOCKED":
+            blocked = True
+        elif requested == "PARTIAL_FAILURE":
+            partial = True
+        if failed:
+            return "FAILED", reasons
+        if blocked:
+            return "BLOCKED", reasons
+        if partial:
+            return "PARTIAL_FAILURE", reasons
+        if self.state.get("errors"):
+            return "FAILED", reasons
+        return "SUCCEEDED", reasons
 
     def _run_owner_publish_job(self, job_id: str, date_str: str | None, approval_phrase: str) -> None:
         before = formal_csv_hashes(self.package_root)
@@ -1084,7 +1144,7 @@ class P1008JobManager:
             components = self.state.get("componentStatus", {}) or {}
             partial = any(
                 str((components.get(name) or {}).get("status", ""))
-                in {"FAILED", "STALE", "BLOCKED", "FAIL_CLOSED"}
+                in {"FAILED", "STALE", "BLOCKED", "FAIL_CLOSED", "PARTIAL_FAILURE", "PARTIAL_FAILURE_WITH_AUTHORITY", "PARTIAL_FAILURE_NO_AUTHORITY"}
                 for name in ("dailyPrice", "marketActivity", "news", "officialIR", "rollingBrief", "reportLibrary")
             )
             with self.lock:
@@ -1449,13 +1509,16 @@ class P1008JobManager:
         if output.strip():
             self._append_log(output.rstrip())
         status = "SUCCEEDED" if completed.returncode == 0 else "FAILED"
+        message = f"exit={completed.returncode}"
+        if completed.returncode != 0:
+            message = command_failure_reason(output, message)
         self._set_step(
             step_id,
             label,
             status,
             exitCode=completed.returncode,
             durationSeconds=round(time.monotonic() - started, 2),
-            message=f"exit={completed.returncode}",
+            message=message,
         )
         return completed.returncode
 
