@@ -15,6 +15,7 @@ from typing import Any
 
 import warroom_report_governance as governance
 import warroom_major_event_baseline as major_event_baseline
+import warroom_major_event_materialization as major_event_materialization
 
 MODULE_SRC = Path(__file__).resolve().parents[1] / "modules" / "p1008_research_plugin" / "src"
 CODE_PACKAGE_ROOT = Path(__file__).resolve().parents[1]
@@ -283,6 +284,7 @@ def _receipt(
         "revision": decision["revision"],
         "canonical_event_id": canonical_event.get("canonical_event_id", "") if canonical_event else "",
         "event_fingerprint": canonical_event.get("event_fingerprint", "") if canonical_event else "",
+        "canonical_event_occurred_at_utc": canonical_event.get("occurred_at_utc", "") if canonical_event else "",
         "event_type": normalized_event_type,
         "source_event_type": source_event_type,
         "qualifying_evidence_ids": decision["qualifying_evidence_ids"],
@@ -456,6 +458,17 @@ def trigger_lineage(receipt: dict[str, Any]) -> dict[str, Any]:
             "registrySha256": binding["registry_sha256"],
         }
     return lineage
+
+
+def materialize_major_event_provenance(
+    _runtime_root: Path, receipt: dict[str, Any]
+) -> dict[str, Any]:
+    """Validate the G1 receipt, then materialize non-publishing provenance only."""
+
+    validated = validate_receipt(receipt)
+    return major_event_materialization.materialize_major_event_provenance(
+        CODE_PACKAGE_ROOT, validated
+    )
 
 
 def template_governance_status(receipt: dict[str, Any] | None) -> dict[str, Any]:

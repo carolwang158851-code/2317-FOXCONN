@@ -103,6 +103,14 @@ class RuntimeRootMixin:
 
 class RuntimeTriggerTests(RuntimeRootMixin, unittest.TestCase):
 
+    def bound_major_receipt(self):
+        material = evidence(
+            event_type="MATERIAL_COMPANY_DISCLOSURE",
+            canonical_event_id="P1008_MATERIAL_DISCLOSURE_20260812",
+        )
+        self.write_integration([material], report_key="P1008_MAJOR_EVENT_20260812")
+        return runtime.evaluate_and_persist(self.root)
+
     def test_no_evidence_is_no_material_change_and_analysis_disabled(self):
         receipt = runtime.evaluate_and_persist(self.root, evaluated_at_utc=NOW)
         self.assertEqual(receipt["decision"], "NO_MATERIAL_CHANGE")
@@ -280,6 +288,117 @@ class RuntimeTriggerTests(RuntimeRootMixin, unittest.TestCase):
         self.assertEqual(result["status"], "FAIL_CLOSED")
         self.assertIn("CANONICAL_EVENT_FINGERPRINT_INVALID", result["reason"])
         self.assertFalse(result["fallback_used"])
+
+    def test_bound_major_event_materializes_hash_bound_owner_review_provenance(self):
+        receipt = self.bound_major_receipt()
+        result = runtime.materialize_major_event_provenance(self.root, receipt)
+        self.assertEqual(result["status"], "OWNER_REVIEW_REQUIRED")
+        analysis = result["analysis_candidate"]
+        report = result["report_candidate"]
+        owner = result["owner_review"]
+        self.assertEqual(analysis["state"], "ANALYSIS_CANDIDATE_READY")
+        self.assertEqual(report["state"], "REPORT_PROVENANCE_CANDIDATE_READY")
+        self.assertEqual(owner["status"], "OWNER_REVIEW_REQUIRED")
+        self.assertEqual(
+            analysis["baseline_provenance"], report["baseline_provenance"]
+        )
+        self.assertEqual(
+            report["baseline_provenance"], owner["baseline_provenance"]
+        )
+        self.assertEqual(
+            analysis["baseline_provenance"]["baseline_content_sha256"],
+            receipt["analysis_baseline_binding"]["selected_baseline"]["content_sha256"],
+        )
+        self.assertFalse(result["formal_report_generated"])
+        self.assertFalse(result["publishAuthorized"])
+        self.assertFalse(result["actionable"])
+
+    def test_materialization_scope_mismatch_requires_review_without_fallback(self):
+        receipt = copy.deepcopy(self.bound_major_receipt())
+        receipt["canonical_event_id"] = "UNKNOWN_SCOPE"
+        receipt["event_fingerprint"] = governance.canonical_event_fingerprint(
+            canonical_event_id=receipt["canonical_event_id"],
+            event_type=receipt["source_event_type"],
+            occurred_at_utc=receipt["canonical_event_occurred_at_utc"],
+        )
+        binding = receipt["analysis_baseline_binding"]
+        binding["canonical_event_id"] = receipt["canonical_event_id"]
+        binding["event_fingerprint"] = receipt["event_fingerprint"]
+        receipt = runtime._with_hash(
+            {key: value for key, value in receipt.items() if key != "canonical_sha256"}
+        )
+        result = runtime.materialize_major_event_provenance(self.root, receipt)
+        self.assertEqual(result["status"], "REVIEW_REQUIRED")
+        self.assertEqual(result["reason"], "NO_APPROVED_BASELINE_MATCH")
+        self.assertFalse(result["fallback_used"])
+        self.assertIsNone(result["analysis_candidate"])
+
+    def test_tampered_analysis_or_report_provenance_fails_closed(self):
+        receipt = self.bound_major_receipt()
+        binding = receipt["analysis_baseline_binding"]
+        result = runtime.materialize_major_event_provenance(self.root, receipt)
+        analysis = copy.deepcopy(result["analysis_candidate"])
+        analysis["baseline_provenance"]["baseline_version"] = "2.0"
+        analysis = runtime.major_event_materialization._with_hash(
+            {
+                key: value for key, value in analysis.items()
+                if key != "analysis_candidate_sha256"
+            },
+            "analysis_candidate_sha256",
+        )
+        with self.assertRaisesRegex(
+            runtime.major_event_materialization.MajorEventMaterializationError,
+            "ANALYSIS_CANDIDATE_PROVENANCE_INVALID",
+        ):
+            runtime.major_event_materialization.validate_analysis_candidate(
+                ROOT, analysis, binding, receipt
+            )
+
+        analysis = result["analysis_candidate"]
+        report = copy.deepcopy(result["report_candidate"])
+        report["baseline_provenance"]["event_fingerprint"] = "0" * 64
+        report = runtime.major_event_materialization._with_hash(
+            {
+                key: value for key, value in report.items()
+                if key != "report_candidate_sha256"
+            },
+            "report_candidate_sha256",
+        )
+        with self.assertRaisesRegex(
+            runtime.major_event_materialization.MajorEventMaterializationError,
+            "REPORT_CANDIDATE_PROVENANCE_INVALID",
+        ):
+            runtime.major_event_materialization.validate_report_candidate(
+                ROOT, report, analysis, binding, receipt
+            )
+
+    def test_materialization_revalidates_registry_and_baseline_hash(self):
+        receipt = self.bound_major_receipt()
+        registry = runtime.major_event_baseline.load_registry(ROOT)
+        tampered = copy.deepcopy(registry)
+        tampered["baselines"][0]["contentSha256"] = "F" * 64
+        result = runtime.major_event_materialization.materialize_major_event_provenance(
+            ROOT, receipt, registry=tampered
+        )
+        self.assertEqual(result["status"], "FAIL_CLOSED")
+        self.assertIn("BASELINE_HASH_MISMATCH", result["reason"])
+        self.assertFalse(result["fallback_used"])
+
+    def test_non_major_event_cannot_enter_major_materialization(self):
+        for event_type, canonical_id in (
+            ("DAILY", "P1008_DAILY_20260812"),
+            ("MONTHLY_REVENUE", "P1008_MONTHLY_REVENUE_202607"),
+            ("QUARTERLY_EARNINGS", "P1008_FY2026_Q2_EARNINGS"),
+        ):
+            self.write_integration(
+                [evidence(event_type=event_type, canonical_event_id=canonical_id)],
+                report_key=canonical_id,
+            )
+            receipt = runtime.evaluate_and_persist(self.root)
+            result = runtime.materialize_major_event_provenance(self.root, receipt)
+            self.assertEqual(result["status"], "FAIL_CLOSED")
+            self.assertEqual(result["reason"], "BOUND_MAJOR_EVENT_REQUIRED")
+            self.assertFalse(result["fallback_used"])
 
     def test_monthly_and_quarterly_do_not_require_major_event_baseline(self):
         monthly = evidence(
