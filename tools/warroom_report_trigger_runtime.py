@@ -16,6 +16,7 @@ from typing import Any
 import warroom_report_governance as governance
 import warroom_major_event_baseline as major_event_baseline
 import warroom_major_event_materialization as major_event_materialization
+import warroom_major_event_report_persistence as major_event_report_persistence
 
 MODULE_SRC = Path(__file__).resolve().parents[1] / "modules" / "p1008_research_plugin" / "src"
 CODE_PACKAGE_ROOT = Path(__file__).resolve().parents[1]
@@ -468,6 +469,27 @@ def materialize_major_event_provenance(
     validated = validate_receipt(receipt)
     return major_event_materialization.materialize_major_event_provenance(
         CODE_PACKAGE_ROOT, validated
+    )
+
+
+def persist_major_event_report_candidate(
+    package_root: Path,
+    receipt: dict[str, Any],
+    materialized: dict[str, Any],
+    *,
+    revision: int,
+    persisted_at_utc: str | None = None,
+) -> dict[str, Any]:
+    """Persist a validated provenance candidate without rendering or publishing."""
+
+    validated = validate_receipt(receipt)
+    return major_event_report_persistence.persist_major_event_report_candidate(
+        package_root,
+        CODE_PACKAGE_ROOT,
+        validated,
+        materialized,
+        revision=revision,
+        persisted_at_utc=persisted_at_utc,
     )
 
 
