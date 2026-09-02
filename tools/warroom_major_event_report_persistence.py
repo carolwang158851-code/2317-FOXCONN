@@ -224,16 +224,33 @@ def _validate_existing_lineage(
         owner_unhashed = {
             key: value for key, value in owner.items() if key != "persistence_sha256"
         }
+        decision_state = owner.get("decisionState", "PENDING")
+        valid_decision_state = (
+            decision_state == "PENDING"
+            and owner.get("status") == "OWNER_REVIEW_REQUIRED"
+            and owner.get("ownerApproved") is False
+            and owner.get("publicationEligibility", False) is False
+        ) or (
+            decision_state == "APPROVE"
+            and owner.get("status") == "APPROVED"
+            and owner.get("ownerApproved") is True
+            and owner.get("publicationEligibility") is True
+        ) or (
+            decision_state in {"REJECT", "REVISION_REQUIRED"}
+            and owner.get("status") == decision_state
+            and owner.get("ownerApproved") is False
+            and owner.get("publicationEligibility") is False
+        )
         if not (
             supplied_owner_hash == _sha256(_canonical_bytes(owner_unhashed))
             and owner.get("owner_review_sha256") == lifecycle.get("ownerReviewSha256")
             and isinstance(owner.get("owner_review_envelope"), Mapping)
             and owner["owner_review_envelope"].get("owner_review_sha256")
             == owner.get("owner_review_sha256")
-            and owner.get("status") == "OWNER_REVIEW_REQUIRED"
+            and valid_decision_state
             and owner.get("actionable") is False
             and owner.get("publishAuthorized") is False
-            and owner.get("ownerApproved") is False
+            and owner.get("publication", False) is False
         ):
             raise MajorEventPersistenceError("PERSISTED_OWNER_REVIEW_LINEAGE_INVALID")
     if runtime_entries:

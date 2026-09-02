@@ -17,6 +17,7 @@ import warroom_report_governance as governance
 import warroom_major_event_baseline as major_event_baseline
 import warroom_major_event_materialization as major_event_materialization
 import warroom_major_event_report_persistence as major_event_report_persistence
+import warroom_major_event_owner_workflow as major_event_owner_workflow
 
 MODULE_SRC = Path(__file__).resolve().parents[1] / "modules" / "p1008_research_plugin" / "src"
 CODE_PACKAGE_ROOT = Path(__file__).resolve().parents[1]
@@ -490,6 +491,22 @@ def persist_major_event_report_candidate(
         materialized,
         revision=revision,
         persisted_at_utc=persisted_at_utc,
+    )
+
+
+def render_major_event_revision(
+    package_root: Path, *, report_key: str, revision: int
+) -> dict[str, Any]:
+    return major_event_owner_workflow.render_major_event_revision(
+        package_root, CODE_PACKAGE_ROOT, report_key=report_key, revision=revision
+    )
+
+
+def record_major_event_owner_decision(
+    package_root: Path, **kwargs: Any
+) -> dict[str, Any]:
+    return major_event_owner_workflow.record_owner_decision(
+        package_root, CODE_PACKAGE_ROOT, **kwargs
     )
 
 
