@@ -18,6 +18,8 @@ import warroom_major_event_baseline as major_event_baseline
 import warroom_major_event_materialization as major_event_materialization
 import warroom_major_event_report_persistence as major_event_report_persistence
 import warroom_major_event_owner_workflow as major_event_owner_workflow
+import warroom_integrated_authority as integrated_authority
+import warroom_publication_authorization_gate as publication_authorization_gate
 
 MODULE_SRC = Path(__file__).resolve().parents[1] / "modules" / "p1008_research_plugin" / "src"
 CODE_PACKAGE_ROOT = Path(__file__).resolve().parents[1]
@@ -506,6 +508,30 @@ def record_major_event_owner_decision(
     package_root: Path, **kwargs: Any
 ) -> dict[str, Any]:
     return major_event_owner_workflow.record_owner_decision(
+        package_root, CODE_PACKAGE_ROOT, **kwargs
+    )
+
+
+def integrated_authority_status() -> dict[str, Any]:
+    """Validate the embedded Phase3A candidate without promoting it."""
+
+    return integrated_authority.load_candidate(CODE_PACKAGE_ROOT)
+
+
+def validate_major_event_publication_gate(
+    package_root: Path, *, report_key: str, revision: int
+) -> dict[str, Any]:
+    return publication_authorization_gate.validate_publication_gate(
+        package_root, CODE_PACKAGE_ROOT, report_key=report_key, revision=revision
+    )
+
+
+def authorize_major_event_publication(
+    package_root: Path, **kwargs: Any
+) -> dict[str, Any]:
+    """Record explicit authorization only; this API has no publisher."""
+
+    return publication_authorization_gate.issue_publication_authorization(
         package_root, CODE_PACKAGE_ROOT, **kwargs
     )
 

@@ -177,6 +177,8 @@ def _validate_existing_lineage(
         "analysisCandidateSha256", "reportCandidateSha256", "ownerReviewSha256",
         "governedContentSha256", "previousRevision",
         "previousGovernedContentSha256", "baselineProvenance",
+        "triggerDecisionId", "triggerReceiptSha256", "evidenceIds",
+        "authorityCutoffs",
     )
     for revision in sorted(runtime_by_revision):
         lifecycle = runtime_by_revision[revision]
@@ -188,6 +190,10 @@ def _validate_existing_lineage(
             "reportCandidateSha256": lifecycle.get("reportCandidateSha256"),
             "ownerReviewSha256": lifecycle.get("ownerReviewSha256"),
             "baselineProvenance": lifecycle.get("baselineProvenance"),
+            "triggerDecisionId": lifecycle.get("triggerDecisionId"),
+            "triggerReceiptSha256": lifecycle.get("triggerReceiptSha256"),
+            "evidenceIds": lifecycle.get("evidenceIds"),
+            "authorityCutoffs": lifecycle.get("authorityCutoffs"),
         }))
         if lifecycle.get("governedContentSha256") != expected_content_sha:
             raise MajorEventPersistenceError("GOVERNED_CONTENT_HASH_INVALID")
@@ -268,13 +274,18 @@ def _validate_existing_lineage(
 
 
 def _governed_content_sha(
-    analysis: Mapping[str, Any], report: Mapping[str, Any], owner: Mapping[str, Any]
+    analysis: Mapping[str, Any], report: Mapping[str, Any], owner: Mapping[str, Any],
+    receipt: Mapping[str, Any],
 ) -> str:
     return _sha256(_canonical_bytes({
         "analysisCandidateSha256": analysis["analysis_candidate_sha256"],
         "reportCandidateSha256": report["report_candidate_sha256"],
         "ownerReviewSha256": owner["owner_review_sha256"],
         "baselineProvenance": analysis["baseline_provenance"],
+        "triggerDecisionId": analysis["evidence_trigger_decision_id"],
+        "triggerReceiptSha256": analysis["trigger_receipt_sha256"],
+        "evidenceIds": list(receipt.get("qualifying_evidence_ids") or []),
+        "authorityCutoffs": list(receipt.get("authority_cutoffs") or []),
     }))
 
 
@@ -339,7 +350,7 @@ def persist_major_event_report_candidate(
         runtime = _read_json(runtime_path, "RUNTIME_LIFECYCLE_MANIFEST")
         library = _read_json(library_path, "PRIVATE_LIBRARY_MANIFEST")
         history = _validate_existing_lineage(root, runtime, library, report_key)
-        content_sha = _governed_content_sha(analysis, report, owner)
+        content_sha = _governed_content_sha(analysis, report, owner, receipt)
         same = [item for item in history if item.get("governedContentSha256") == content_sha]
         if same:
             existing = same[0]
@@ -397,6 +408,10 @@ def persist_major_event_report_candidate(
             "previousRevision": previous.get("revision") if previous else None,
             "previousGovernedContentSha256": previous.get("governedContentSha256") if previous else None,
             "baselineProvenance": provenance,
+            "triggerDecisionId": analysis["evidence_trigger_decision_id"],
+            "triggerReceiptSha256": analysis["trigger_receipt_sha256"],
+            "evidenceIds": list(receipt.get("qualifying_evidence_ids") or []),
+            "authorityCutoffs": list(receipt.get("authority_cutoffs") or []),
             "reportCandidateLocator": candidate_rel.as_posix(),
             "ownerReviewLocator": owner_rel.as_posix(),
             "ownerReviewStatus": "OWNER_REVIEW_REQUIRED",

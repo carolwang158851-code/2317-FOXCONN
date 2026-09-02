@@ -1,5 +1,6 @@
 # Phase 3A-R: exact LF policy for reviewed hash-governed text files.
 .gitattributes text eol=lf
+authority_candidates/phase3a_canonical_v1/data/* binary
 contracts/p1008_research_plugin/acceptance/errata/v2.0/OWNER_ACCEPTANCE_HASH_ERRATA.json text eol=lf
 contracts/p1008_research_plugin/acceptance/v2.0/OWNER_ACCEPTANCE_RECORD.json text eol=lf
 contracts/p1008_research_plugin/acceptance/v2.1/OWNER_ACCEPTANCE_RECORD.json text eol=lf

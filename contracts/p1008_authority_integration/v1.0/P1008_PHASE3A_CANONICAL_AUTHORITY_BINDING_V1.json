@@ -1,0 +1,53 @@
+{
+  "recordType": "P1008_PHASE3A_CANONICAL_AUTHORITY_BINDING_V1",
+  "bindingVersion": "1.0",
+  "bindingId": "P1008-INTEGRATED-WARROOM-PHASE3A-CANONICAL-AUTHORITY-V1",
+  "sourcePackage": "P1008_PHASE3A_CANONICAL_AUTHORITY_CANDIDATE",
+  "sourceManifestRelativePath": "data/CSV_AUTHORITY_MANIFEST.json",
+  "embeddedCandidateRoot": "authority_candidates/phase3a_canonical_v1",
+  "candidateId": "P1008-PHASE3A-CANONICAL-AUTHORITY-CANDIDATE-20260901",
+  "candidateManifestVersion": "1.5.0-candidate.1",
+  "candidateManifestSha256": "AACF739D02261CFD70C82B2E97D47C01340FCE344B6D49CAA1F135CDF6285DEF",
+  "files": [
+    {
+      "path": "data/2317_daily_price.csv",
+      "sha256": "0F4B9E41DCD897304F5553A6EC2B45EF2E55DD3AAD74DFF9F7CC8BF3795D8A8C",
+      "sizeBytes": 7989
+    },
+    {
+      "path": "data/2317_daily_market_activity.csv",
+      "sha256": "0F0ED269B1152FB99C401D0B00F9DC53877B938C7AB9827043C4AA895D711661",
+      "sizeBytes": 13290
+    },
+    {
+      "path": "data/fx_trend_observations.csv",
+      "sha256": "49313F36A0BEDD926BEEF6E83D0A4BAD4064011F4C3A3EA8336E09B9D74AC0D1",
+      "sizeBytes": 9939
+    },
+    {
+      "path": "data/macro_event_observations.csv",
+      "sha256": "EE8731996FFE0A711E9C56BF088698518E092CED12D1A21795D2F8E357AB223A",
+      "sizeBytes": 474339
+    },
+    {
+      "path": "data/macro_snapshot.csv",
+      "sha256": "9C34A148ED8BE13872343736C7475F2B2EE1C65BA76A1BA1F0241E3B427EDD0C",
+      "sizeBytes": 14521
+    }
+  ],
+  "governance": {
+    "classification": "CANDIDATE_NON_AUTHORITATIVE",
+    "authoritative": false,
+    "actionable": false,
+    "publishAuthorized": false,
+    "ownerPromotionRequired": true,
+    "promotionStatus": "OWNER_PROMOTION_REQUIRED"
+  },
+  "runtimePolicy": {
+    "readOnly": true,
+    "sourceWorktreeDependency": false,
+    "productionAuthorityReplacement": false,
+    "formalCompositionEligible": true,
+    "publicationAuthorizationImplied": false
+  }
+}

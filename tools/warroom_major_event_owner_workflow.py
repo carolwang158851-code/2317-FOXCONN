@@ -13,6 +13,7 @@ from typing import Any, Mapping
 
 import warroom_major_event_baseline as baseline_registry
 import warroom_major_event_report_persistence as persistence
+import warroom_integrated_report_completion as report_completion
 import warroom_rolling_brief as rolling_brief
 
 
@@ -73,6 +74,7 @@ def _entries(
         "renderingState", "renderedArtifacts", "ownerDecisionState",
         "ownerDecisionSha256", "publicationEligibility", "publication",
         "publicationComplete", "publishAuthorized", "actionable",
+        "formalComposition", "formalCompositionSha256",
     )
     if any(lifecycle.get(field) != private.get(field) for field in workflow_fields):
         raise MajorEventOwnerWorkflowError("OWNER_WORKFLOW_MANIFEST_LINEAGE_MISMATCH")
@@ -150,6 +152,9 @@ def _candidate_and_owner(
         and owner.get("canonical_event_id") == lifecycle.get("canonicalEventId")
         and owner.get("event_fingerprint") == lifecycle.get("eventFingerprint")
         and owner.get("report_candidate_sha256") == lifecycle.get("reportCandidateSha256")
+        and owner.get("rendered_artifacts") == lifecycle.get("renderedArtifacts")
+        and owner.get("formal_composition_sha256")
+        == lifecycle.get("formalCompositionSha256")
     ):
         raise MajorEventOwnerWorkflowError("OWNER_CANDIDATE_LINEAGE_MISMATCH")
     decisions = owner.get("decisions", [])
@@ -184,6 +189,8 @@ def _candidate_and_owner(
             and decision.get("analysis_candidate_sha256") == lifecycle.get("analysisCandidateSha256")
             and decision.get("report_candidate_sha256") == lifecycle.get("reportCandidateSha256")
             and decision.get("baseline_provenance") == lifecycle.get("baselineProvenance")
+            and decision.get("formal_composition_sha256")
+            == lifecycle.get("formalCompositionSha256")
             and decision.get("rendered_artifacts") == lifecycle.get("renderedArtifacts")
             and decision.get("publication") is False
             and decision.get("publicationComplete") is False
@@ -200,7 +207,7 @@ def _artifact_root(root: Path, report_key: str, revision: int) -> tuple[Path, Pa
     return base / "owner_review.html", base / "owner_review.pdf"
 
 
-def _html_bytes(entry: Mapping[str, Any]) -> bytes:
+def _html_bytes(entry: Mapping[str, Any], composition: Mapping[str, Any]) -> bytes:
     provenance = entry["baselineProvenance"]
     rows = [
         ("Report key", entry["report_key"]),
@@ -215,6 +222,10 @@ def _html_bytes(entry: Mapping[str, Any]) -> bytes:
         ("Registry SHA-256", provenance["baseline_registry_sha256"]),
         ("Analysis contract", provenance["analysis_contract_reference"]),
         ("Contract SHA-256", provenance["analysis_contract_sha256"]),
+        ("Authority candidate", composition["authorityContext"]["candidateId"]),
+        ("Authority manifest SHA-256", composition["authorityContext"]["candidateManifestSha256"]),
+        ("Authority context SHA-256", composition["authorityContext"]["contextSha256"]),
+        ("Formal composition SHA-256", composition["compositionSha256"]),
     ]
     table = "".join(
         f"<tr><th>{html.escape(str(label))}</th><td>{html.escape(str(value))}</td></tr>"
@@ -228,13 +239,13 @@ h1{{color:#67e8f9}} .badge{{display:inline-block;padding:6px 10px;background:#71
 table{{width:100%;border-collapse:collapse;margin-top:20px}}th,td{{padding:10px;border-bottom:1px solid #274761;text-align:left;vertical-align:top}}
 th{{width:230px;color:#bae6fd}}td{{word-break:break-all}}footer{{margin-top:24px;color:#94a3b8}}</style></head>
 <body><main><div class="badge">OWNER_REVIEW_REQUIRED - NON-PUBLISHED</div>
-<h1>P1008 MAJOR_EVENT Report Candidate</h1><p>This governed rendering is private review material. It is not publication.</p>
+<h1>P1008 MAJOR_EVENT Report Candidate</h1><p>This governed rendering composes the validated authority, evidence, analysis baseline, and report lineage. It is private review material, not publication.</p>
 <table>{table}</table><footer>actionable=false | publishAuthorized=false | publicationComplete=false</footer>
 </main></body></html>\n"""
     return body.encode("utf-8")
 
 
-def _pdf_bytes(entry: Mapping[str, Any]) -> bytes:
+def _pdf_bytes(entry: Mapping[str, Any], composition: Mapping[str, Any]) -> bytes:
     try:
         from reportlab.lib import colors
         from reportlab.lib.pagesizes import A4
@@ -267,6 +278,10 @@ def _pdf_bytes(entry: Mapping[str, Any]) -> bytes:
         [Paragraph("Registry SHA-256", label), Paragraph(str(provenance["baseline_registry_sha256"]), body)],
         [Paragraph("Analysis contract", label), Paragraph(str(provenance["analysis_contract_reference"]), body)],
         [Paragraph("Contract SHA-256", label), Paragraph(str(provenance["analysis_contract_sha256"]), body)],
+        [Paragraph("Authority candidate", label), Paragraph(str(composition["authorityContext"]["candidateId"]), body)],
+        [Paragraph("Authority manifest SHA-256", label), Paragraph(str(composition["authorityContext"]["candidateManifestSha256"]), body)],
+        [Paragraph("Authority context SHA-256", label), Paragraph(str(composition["authorityContext"]["contextSha256"]), body)],
+        [Paragraph("Formal composition SHA-256", label), Paragraph(str(composition["compositionSha256"]), body)],
     ]
     table = Table(data, colWidths=[52 * mm, 118 * mm], repeatRows=1)
     table.setStyle(TableStyle([
@@ -279,7 +294,7 @@ def _pdf_bytes(entry: Mapping[str, Any]) -> bytes:
     story = [
         Paragraph("P1008 MAJOR_EVENT Owner Review", title), Spacer(1, 5 * mm),
         Paragraph("OWNER_REVIEW_REQUIRED - PRIVATE - NON-PUBLISHED", styles["Heading3"]),
-        Paragraph("This rendering preserves the validated event, analysis baseline, registry, contract, and candidate hashes. Rendering does not authorize or complete publication.", styles["BodyText"]),
+        Paragraph("This rendering preserves the validated authority, evidence, event, analysis baseline, registry, contract, and candidate hashes. Rendering does not authorize or complete publication.", styles["BodyText"]),
         Spacer(1, 5 * mm), table, Spacer(1, 5 * mm),
         Paragraph("actionable=false | publishAuthorized=false | publicationComplete=false", styles["BodyText"]),
     ]
@@ -345,6 +360,14 @@ def render_major_event_revision(
         _validate_baseline_provenance(code, lifecycle)
         _, owner, owner_path = _candidate_and_owner(root, lifecycle, private)
         if lifecycle.get("renderedArtifacts") is not None or private.get("renderedArtifacts") is not None:
+            composition = lifecycle.get("formalComposition")
+            if not isinstance(composition, Mapping) or not (
+                composition == private.get("formalComposition")
+                and composition.get("compositionSha256")
+                == lifecycle.get("formalCompositionSha256")
+            ):
+                raise MajorEventOwnerWorkflowError("FORMAL_COMPOSITION_LINEAGE_MISSING")
+            report_completion.validate_composition(code, lifecycle, composition)
             artifacts = _validate_rendered(root, lifecycle, private)
             return {
                 "status": "IDEMPOTENT_RENDER_REPLAY", "report_key": report_key,
@@ -355,22 +378,32 @@ def render_major_event_revision(
             }
         if owner.get("decisionState", "PENDING") != "PENDING":
             raise MajorEventOwnerWorkflowError("OWNER_DECISION_PRECEDES_RENDERING")
+        composition = report_completion.build_major_event_composition(code, lifecycle)
         html_path, pdf_path = _artifact_root(root, report_key, revision)
         if html_path.exists() or pdf_path.exists():
             raise MajorEventOwnerWorkflowError("UNREGISTERED_RENDERED_ARTIFACT_COLLISION")
-        html_payload = _html_bytes(lifecycle)
-        pdf_payload = _pdf_bytes(lifecycle)
+        html_payload = _html_bytes(lifecycle, composition)
+        pdf_payload = _pdf_bytes(lifecycle, composition)
         artifact_values = [
             {"format": "HTML", "locator": html_path.relative_to(root).as_posix(), "sha256": persistence._sha256(html_payload), "sizeBytes": len(html_payload)},
             {"format": "PDF", "locator": pdf_path.relative_to(root).as_posix(), "sha256": persistence._sha256(pdf_payload), "sizeBytes": len(pdf_payload)},
         ]
-        lifecycle_next = {**lifecycle, "renderingState": "OWNER_REVIEW_REQUIRED", "renderedArtifacts": artifact_values}
-        private_next = {**private, "renderingState": "OWNER_REVIEW_REQUIRED", "renderedArtifacts": artifact_values}
+        lifecycle_next = {
+            **lifecycle, "renderingState": "OWNER_REVIEW_REQUIRED",
+            "renderedArtifacts": artifact_values, "formalComposition": composition,
+            "formalCompositionSha256": composition["compositionSha256"],
+        }
+        private_next = {
+            **private, "renderingState": "OWNER_REVIEW_REQUIRED",
+            "renderedArtifacts": artifact_values, "formalComposition": composition,
+            "formalCompositionSha256": composition["compositionSha256"],
+        }
         owner_unhashed = {
             **{key: value for key, value in owner.items() if key != "persistence_sha256"},
             "analysis_candidate_sha256": lifecycle["analysisCandidateSha256"],
             "baseline_provenance": lifecycle["baselineProvenance"],
             "rendered_artifacts": artifact_values,
+            "formal_composition_sha256": composition["compositionSha256"],
             "decisionState": "PENDING",
             "decisions": [],
             "publicationEligibility": False,
@@ -398,6 +431,7 @@ def render_major_event_revision(
             "analysisCandidateSha256": lifecycle["analysisCandidateSha256"],
             "reportCandidateSha256": lifecycle["reportCandidateSha256"],
             "baselineProvenance": lifecycle["baselineProvenance"],
+            "formalCompositionSha256": composition["compositionSha256"],
             "artifacts": artifact_values,
             "ownerReviewPersistenceSha256": owner_next["persistence_sha256"],
             "rendered": True, "published": False, "publicationComplete": False,
@@ -405,7 +439,8 @@ def render_major_event_revision(
         }
     except (
         MajorEventOwnerWorkflowError, persistence.MajorEventPersistenceError,
-        baseline_registry.MajorEventBaselineError, OSError, ValueError,
+        baseline_registry.MajorEventBaselineError,
+        report_completion.IntegratedReportCompletionError, OSError, ValueError,
     ) as exc:
         return _failure("FAIL_CLOSED", str(exc) or type(exc).__name__)
 
@@ -434,6 +469,14 @@ def record_owner_decision(
         lifecycle, private = _entries(root, runtime, library, report_key, revision)
         _validate_baseline_provenance(code, lifecycle)
         artifacts = _validate_rendered(root, lifecycle, private)
+        composition = lifecycle.get("formalComposition")
+        if not isinstance(composition, Mapping) or not (
+            composition == private.get("formalComposition")
+            and composition.get("compositionSha256")
+            == lifecycle.get("formalCompositionSha256")
+        ):
+            raise MajorEventOwnerWorkflowError("FORMAL_COMPOSITION_LINEAGE_MISSING")
+        report_completion.validate_composition(code, lifecycle, composition)
         _, owner, owner_path = _candidate_and_owner(root, lifecycle, private)
         if not (
             lifecycle.get("reportCandidateSha256") == expected_report_candidate_sha256
@@ -466,6 +509,7 @@ def record_owner_decision(
             "analysis_candidate_sha256": lifecycle["analysisCandidateSha256"],
             "report_candidate_sha256": lifecycle["reportCandidateSha256"],
             "baseline_provenance": lifecycle["baselineProvenance"],
+            "formal_composition_sha256": lifecycle["formalCompositionSha256"],
             "rendered_artifacts": artifacts,
             "publicationEligibility": eligible, "publication": False,
             "publicationComplete": False, "publishAuthorized": False,
@@ -518,6 +562,7 @@ def record_owner_decision(
         }
     except (
         MajorEventOwnerWorkflowError, persistence.MajorEventPersistenceError,
-        baseline_registry.MajorEventBaselineError, OSError, ValueError,
+        baseline_registry.MajorEventBaselineError,
+        report_completion.IntegratedReportCompletionError, OSError, ValueError,
     ) as exc:
         return _failure("FAIL_CLOSED", str(exc) or type(exc).__name__)
