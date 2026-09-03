@@ -9,6 +9,7 @@
   "expectedDocumentType": "RESULTS_DOCUMENT_CONFIRMED",
   "sourcePages": {
     "incomeStatement": "6",
+    "balanceSheet": "8",
     "cashFlow": "9",
     "financialOutlook": "4,12-13",
     "aiCloudNetworking": "20-22,39"

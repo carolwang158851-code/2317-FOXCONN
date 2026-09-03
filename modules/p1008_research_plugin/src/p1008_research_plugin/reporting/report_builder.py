@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from ..analysis.analysis_contracts import AnalysisPacket
+from ..analysis.numeric_claim_lineage import validate_working_capital_qoq_lineage
 from ..phaseb1_common import canonical_json_bytes, sha256_bytes
 from ..plugin_module.contracts import ValidatedEvidence
 from .report_contracts import EvidenceReference, ReportCandidate, ReportSection
@@ -129,6 +130,13 @@ class ReportBuilder:
         invalidations = "；".join(item.invalidation_condition for item in analysis.material_conclusions)
         next_events = "；".join(dict.fromkeys(item.next_validation_event for item in analysis.material_conclusions))
         analytics = q.enterprise_value_analytics
+        working_capital_qoq = validate_working_capital_qoq_lineage(
+            analytics["workingCapitalQoqIncrease"],
+            expected_source_ids=official_ids,
+            expected_source_sha256=q.source_hash,
+            expected_source_page=q.source_pages["balanceSheet"],
+        )
+        working_capital_inputs = working_capital_qoq["inputs"]
         valuation = q.valuation_scenarios
         price_label = valuation["price"]["readerLabel"]
         valuation_context_label = (
@@ -161,7 +169,7 @@ class ReportBuilder:
             self._section("OPERATING_LEVERAGE", "營運槓桿與費用吸收", f"營業利益年增{analytics['operatingProfitYoyPct']}%，比營收快{analytics['operatingLeverageSpreadPct']}個百分點。毛利以下營業費用淨額代理值由毛利減營業利益推導，本季為{analytics['operatingExpenseProxyMillionTwd']}百萬元（597.30億元）、年增{analytics['operatingExpenseProxyYoyPct']}%；占營收比重八季由約3.2%降至2.365%。這與規模吸收及費用紀律一致，但代理值不是公司直接揭露的營業費用科目，更不是營業成本，也不能證明永久結構效率。", "MIXED", official_ids),
             self._section("MARGIN_QUALITY", "利潤率與八季脈絡", f"毛利率{q.gross_margin.value}%、營益率{q.operating_margin.value}%、淨利率{q.net_margin.value}%。自2024Q2至2026Q2，毛利率下降30個基點、營益率提高87個基點；八季背離顯示改善主要發生在毛利以下，支持成本吸收，不支持毛利護城河擴張。", "MIXED", official_ids + [master_id]),
             self._section("EARNINGS_TO_CASH_QUALITY", "Q2獲利轉現金品質", f"Q2 CFO由2026H1減2026Q1推導為{analytics['q2StandaloneCfoMillionTwd']}百萬元，Capex為{analytics['q2StandaloneCapexMillionTwd']}百萬元，FCF為{analytics['q2StandaloneFcfMillionTwd']}百萬元；兩條FCF路徑差{analytics['q2StandaloneFcfRoundingDifferenceMillionTwd']}百萬元。CFO／歸母淨利警示代理值為{analytics['cashConversion']}，只顯示嚴重獲利—現金背離；因合併CFO與歸屬母公司淨利範圍不同，不是同口徑標準現金轉化率。", "MIXED", official_ids + [cash_id]),
-            self._section("WORKING_CAPITAL_CAPITAL_REQUIREMENT", "營運資金與現金循環", "Q2應收帳款1,385,237百萬元、存貨1,370,073百萬元，兩者較Q1增加會吸收現金；應付帳款1,527,523百萬元較Q1增加，則是供應商融資與部分現金抵銷，不是現金吸收。三項淨額仍增加174,738百萬元，與成長期資金占用相容。同時，現金循環週期由2025Q2的48天、2026Q1的44天降至42天，表示週轉效率未同步惡化；但這不等於現金回收已完成。", "MIXED", official_ids),
+            self._section("WORKING_CAPITAL_CAPITAL_REQUIREMENT", "營運資金與現金循環", f"Q2應收帳款{int(working_capital_inputs['q2AccountsReceivableMillionTwd']):,}百萬元、存貨{int(working_capital_inputs['q2InventoryMillionTwd']):,}百萬元，兩者較Q1增加會吸收現金；應付帳款{int(working_capital_inputs['q2AccountsPayableMillionTwd']):,}百萬元較Q1增加，則是供應商融資與部分現金抵銷，不是現金吸收。三項淨額仍增加{int(working_capital_qoq['value']):,}百萬元，與成長期資金占用相容。同時，現金循環週期由2025Q2的48天、2026Q1的44天降至42天，表示週轉效率未同步惡化；但這不等於現金回收已完成。", "MIXED", working_capital_qoq["sourceEvidenceIds"]),
             self._section("CAPITAL_EFFICIENCY", "資本效率與ROIC", f"Q2推導Capex占營收{analytics['capexIntensityRevenuePct']}%、占營業利益{analytics['capexToOperatingProfitPct']}%，只有Q1與Q2兩期可比，維持歷史有限，不稱長期趨勢。受治理ROIC自2024Q3至2026Q1依序為10.51%、13.16%、7.91%、10.66%、11.77%、14.41%、12.57%；FY2026 Q2不是0或下降，而是缺標準化NOPAT與可比平均投入資本的待驗證缺口。", "FACT", official_ids + [master_id]),
             self._section("ROE_DUPONT_INTERPRETATION", "ROE、股東權益與每股淨值複利", f"官方可比H1 ROE由2025H1的5.48%升至2026H1的6.21%，增加0.73個百分點；2025全年受治理ROE基線11.3%僅作全年脈絡，H1不年化。受治理BVPS由2024Q3的115.16元至2026Q1的{valuation['governedBvps']['value']}元中期淨增加，但2025Q2曾降至105.14元，之後回升至117.18元、126.96元及127.12元；下降原因待驗證。這支持股東資本累積與使用效率方向正面，但完整股東複利仍須同時考慮BVPS變化與已分配股利。ROE約等於淨利率乘以資產周轉再乘以財務槓桿，目前只能做部分杜邦分析。", "MIXED", official_ids + [master_id]),
             self._section("PROFIT_PASS_THROUGH", "營業利益至淨利傳導", f"公式怎麼看？官方營業利益{analytics['operatingProfitMillionTwd']}百萬元，加上非營業淨收入63百萬元，形成稅前利益{analytics['pretaxProfitMillionTwd']}百萬元；扣除所得稅費用{analytics['incomeTaxExpenseMillionTwd']}百萬元後，再經非控制權益歸屬形成母公司淨利{q.attributable_profit.value}百萬元。稅前與稅額已補齊，非控制權益細節仍有限。", "MIXED", official_ids),

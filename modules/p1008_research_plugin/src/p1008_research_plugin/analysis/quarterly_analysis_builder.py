@@ -40,6 +40,7 @@ from .analysis_contracts import (
     ValuationAnalysis,
     ValuationStatus,
 )
+from .numeric_claim_lineage import working_capital_qoq_lineage
 
 
 def _d(value: str) -> Decimal:
@@ -343,6 +344,12 @@ class QuarterlyAnalysisBuilder:
             ]
             for key, values in working_capital_amounts.items()
         }
+        working_capital_qoq = working_capital_qoq_lineage(
+            balance,
+            source_evidence_ids=official_ids,
+            source_document_sha256=q["expectedSourceSha256"],
+            source_page=q["sourcePages"]["balanceSheet"],
+        )
         cash_warning_proxy = q2_cfo / _d(f["attributableProfitMillionTwd"]) * 100
         reported_effective_tax_rate = _d(f["incomeTaxExpenseMillionTwd"]) / _d(f["pretaxProfitMillionTwd"])
         q2_nopat = _d(f["operatingIncomeMillionTwd"]) * (Decimal("1") - reported_effective_tax_rate)
@@ -442,6 +449,7 @@ class QuarterlyAnalysisBuilder:
                 "indexedTo2025Q2": working_capital_index,
                 "assessment": "GROWTH_DRIVEN_ABSORPTION_WITH_EFFICIENCY_IMPROVEMENT",
             },
+            "workingCapitalQoqIncrease": working_capital_qoq,
             "balanceSheetEvidence": {
                 "periodEnd": balance["periodEnd"],
                 "cashAndCashEquivalentsMillionTwd": balance["cashAndCashEquivalentsMillionTwd"],
