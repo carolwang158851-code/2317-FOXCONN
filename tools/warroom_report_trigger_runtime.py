@@ -35,6 +35,10 @@ INTEGRATION_RECORD_TYPE = "P1008_RESEARCH_CONTENT_INTEGRATION_V1"
 RECEIPT_RECORD_TYPE = "P1008_G1_RUNTIME_TRIGGER_DECISION"
 PRODUCER_ID = "P1008_G1_REPORT_TRIGGER_RUNTIME_WIRING_V1"
 GOVERNED_EVIDENCE_ROOT_ENV = "P1008_GOVERNED_EVIDENCE_ROOT"
+Q2_COMPATIBILITY_RECORD_TYPE = "P1008_Q2_HISTORICAL_WORKFLOW_COMPATIBILITY_V1"
+Q2_COMPATIBILITY_VERSION = "1.0"
+Q2_CONTRACT_RAW_SHA256 = "F014BE750095543B35ED2D482C0CF7A40B4A448167796F8AC4560AB928E609C5"
+Q2_AUTHORITY_MANIFEST_SHA256 = "FB00A640007F34803A01BBE9C8E11DC4AFF61A8C7B52996B35099B86CA092622"
 
 
 class RuntimeTriggerError(RuntimeError):
@@ -84,6 +88,59 @@ def _validate_hash(payload: dict[str, Any], label: str) -> None:
     unhashed = {key: value for key, value in payload.items() if key != "canonical_sha256"}
     if not isinstance(supplied, str) or supplied != _canonical_hash(unhashed):
         raise RuntimeTriggerError(f"{label}_HASH_INVALID")
+
+
+def validate_historical_workflow_compatibility(payload: dict[str, Any]) -> dict[str, Any]:
+    """Validate the sealed Q2 legacy-to-current workflow translation."""
+
+    if not isinstance(payload, dict):
+        raise RuntimeTriggerError("Q2_COMPATIBILITY_INVALID")
+    supplied = payload.get("materializedWorkflowSha256")
+    unhashed = {key: value for key, value in payload.items() if key != "materializedWorkflowSha256"}
+    if supplied != _canonical_hash(unhashed):
+        raise RuntimeTriggerError("Q2_COMPATIBILITY_HASH_INVALID")
+    required = {
+        "historicalEvidenceIdentity", "originalRawSha256", "originalReceipt",
+        "originalEventIdentity", "originalTriggerLineage", "compatibilitySchema",
+        "compatibilityVersion", "currentAuthority", "q2CloseoutLineage",
+        "analysisContractLineage", "factsAdded", "historicalRawModified",
+        "historicalReceiptModified", "authoritative", "publishAuthorized", "actionable",
+    }
+    if payload.get("recordType") != Q2_COMPATIBILITY_RECORD_TYPE or required - payload.keys():
+        raise RuntimeTriggerError("Q2_COMPATIBILITY_INVALID")
+    if payload.get("compatibilityVersion") != Q2_COMPATIBILITY_VERSION:
+        raise RuntimeTriggerError("Q2_COMPATIBILITY_VERSION_INVALID")
+    if payload.get("originalRawSha256") != Q2_CONTRACT_RAW_SHA256:
+        raise RuntimeTriggerError("OFFICIAL_IR_Q2_AUTHORITY_MISMATCH")
+    authority = payload.get("currentAuthority")
+    if not isinstance(authority, dict) or authority.get("manifestVersion") != "1.6.0" or authority.get("manifestSha256") != Q2_AUTHORITY_MANIFEST_SHA256:
+        raise RuntimeTriggerError("Q2_COMPATIBILITY_AUTHORITY_INVALID")
+    evidence = payload.get("historicalEvidenceIdentity")
+    original_event = payload.get("originalEventIdentity")
+    original_receipt = payload.get("originalReceipt")
+    original_trigger = payload.get("originalTriggerLineage")
+    if not all(isinstance(item, dict) for item in (evidence, original_event, original_receipt, original_trigger)):
+        raise RuntimeTriggerError("Q2_COMPATIBILITY_LINEAGE_INVALID")
+    if not (
+        evidence.get("canonicalEventId") == "HON_HAI_FY2026_Q2_EARNINGS"
+        and evidence.get("documentType") == "RESULTS_DOCUMENT_CONFIRMED"
+        and evidence.get("rawSha256") == Q2_CONTRACT_RAW_SHA256
+        and original_receipt.get("rawSha256") == Q2_CONTRACT_RAW_SHA256
+        and original_event.get("canonicalEventId") == evidence.get("canonicalEventId")
+        and original_event.get("eventId") == evidence.get("eventId")
+        and original_trigger.get("decisionId")
+    ):
+        raise RuntimeTriggerError("Q2_COMPATIBILITY_LINEAGE_INVALID")
+    if not (
+        payload.get("factsAdded") == 0
+        and payload.get("historicalRawModified") is False
+        and payload.get("historicalReceiptModified") is False
+        and payload.get("authoritative") is False
+        and payload.get("publishAuthorized") is False
+        and payload.get("actionable") is False
+    ):
+        raise RuntimeTriggerError("Q2_COMPATIBILITY_GOVERNANCE_INVALID")
+    return dict(payload)
 
 
 def atomic_write_json(path: Path, payload: dict[str, Any], *, overwrite: bool = True) -> None:
@@ -279,6 +336,9 @@ def _receipt(
         "publication": "DENIED_BY_DEFAULT_OWNER_APPROVAL_REQUIRED",
         "actionable": False,
     }
+    compatibility = (integration or {}).get("historical_workflow_compatibility")
+    if compatibility is not None:
+        workflow["historical_compatibility"] = validate_historical_workflow_compatibility(compatibility)
     payload = {
         "record_type": RECEIPT_RECORD_TYPE,
         "schema_version": "1.0",
@@ -331,6 +391,15 @@ def validate_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeTriggerError("CANDIDATE_WORKFLOW_INVALID")
     if workflow.get("publication") != "DENIED_BY_DEFAULT_OWNER_APPROVAL_REQUIRED":
         raise RuntimeTriggerError("PUBLICATION_GOVERNANCE_INVALID")
+    compatibility = workflow.get("historical_compatibility")
+    if compatibility is not None:
+        validate_historical_workflow_compatibility(compatibility)
+        if not (
+            receipt.get("canonical_event_id") == compatibility["historicalEvidenceIdentity"]["canonicalEventId"]
+            and receipt.get("decision_id") == compatibility["originalTriggerLineage"]["decisionId"]
+            and receipt.get("qualifying_evidence_ids") == [compatibility["historicalEvidenceIdentity"]["eventId"]]
+        ):
+            raise RuntimeTriggerError("Q2_COMPATIBILITY_RECEIPT_LINEAGE_INVALID")
     binding = receipt.get("analysis_baseline_binding")
     if not isinstance(binding, dict) or binding.get("actionable") is not False:
         raise RuntimeTriggerError("ANALYSIS_BASELINE_BINDING_INVALID")
