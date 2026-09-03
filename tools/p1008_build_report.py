@@ -45,6 +45,7 @@ def main() -> int:
 
     from p1008_research_plugin.phaseb1_pipeline import PhaseB1Pipeline
     import warroom_report_trigger_runtime as trigger_runtime
+    import warroom_quarterly_report_completion as quarterly_completion
 
     try:
         evidence_root, _evidence_context = trigger_runtime.governed_evidence_root(package_root)
@@ -56,17 +57,36 @@ def main() -> int:
             trigger_lineage=lineage,
             report_runtime=_report_runtime(trigger["event_type"]),
         )
+        completion = None
+        if trigger["event_type"] == "QUARTERLY_EARNINGS":
+            completion = quarterly_completion.complete_quarterly_report(
+                package_root, result
+            )
+            if completion.get("status") not in {
+                "OWNER_REVIEW_REQUIRED", "IDEMPOTENT_REPLAY",
+            }:
+                raise RuntimeError(
+                    "Quarterly governed completion failed: "
+                    + str(completion.get("reason") or completion.get("status"))
+                )
     except Exception as exc:  # noqa: BLE001 - CLI must return a precise fail-closed reason.
         print(json.dumps({"status": "FAIL_CLOSED", "error": str(exc), "actionable": False}, ensure_ascii=False))
         return 1
     print(
         json.dumps(
             {
-                "status": "REPORT_CANDIDATE_READY",
+                "status": (
+                    completion["status"] if completion is not None
+                    else "REPORT_CANDIDATE_READY"
+                ),
                 "runId": result["run_id"],
                 "outputPath": result.get("candidate_output_root", result["run_root"]),
                 "reportRuntime": result.get("report_runtime", "PHASE_B1_LEGACY"),
-                "reportCandidateSha256": result["report_json_sha256"],
+                "reportCandidateSha256": (
+                    completion.get("reportCandidateSha256") if completion is not None
+                    else result["report_json_sha256"]
+                ),
+                "reportCompletion": completion,
                 "externalCalls": 0,
                 "actionable": False,
             },

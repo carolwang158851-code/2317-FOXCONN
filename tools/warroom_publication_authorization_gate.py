@@ -30,6 +30,65 @@ def _failure(status: str, reason: str) -> dict[str, Any]:
     }
 
 
+def validate_absent_authorization(
+    package_root: Path | str,
+    *,
+    report_key: str,
+    revision: int,
+    event_type: str,
+) -> dict[str, Any]:
+    """Prove that a persisted revision has no separate publication receipt.
+
+    This shared denial gate does not grant authorization and deliberately does
+    not broaden the MAJOR_EVENT authorization API.
+    """
+
+    root = Path(package_root).resolve()
+    try:
+        if event_type not in {"MONTHLY_REVENUE", "QUARTERLY_EARNINGS", "MAJOR_EVENT"}:
+            raise PublicationAuthorizationError("FORMAL_REPORT_EVENT_REQUIRED")
+        if isinstance(revision, bool) or not isinstance(revision, int) or revision < 1:
+            raise PublicationAuthorizationError("EXPLICIT_POSITIVE_REVISION_REQUIRED")
+        runtime_path = root / "runtime" / "warroom_report_manifest.json"
+        library_path = root / "reports" / "P1008_REPORT_MANIFEST.json"
+        runtime = persistence._read_json(runtime_path, "RUNTIME_LIFECYCLE_MANIFEST")
+        library = persistence._read_json(library_path, "PRIVATE_LIBRARY_MANIFEST")
+        identities = []
+        for manifest in (runtime, library):
+            matches = [
+                item for item in manifest.get("reports", [])
+                if isinstance(item, Mapping)
+                and item.get("eventType") == event_type
+                and (item.get("report_key") or item.get("reportKey")) == report_key
+                and item.get("revision") == revision
+            ]
+            if len(matches) != 1:
+                raise PublicationAuthorizationError("REPORT_KEY_REVISION_NOT_PERSISTED")
+            entry = matches[0]
+            if not (
+                entry.get("publishAuthorized") is False
+                and entry.get("publication") is False
+                and entry.get("publicationComplete") is False
+                and entry.get("actionable") is False
+            ):
+                raise PublicationAuthorizationError("PUBLICATION_DEFAULT_DENIAL_INVALID")
+            identities.append(entry)
+        common = (
+            "report_key", "revision", "eventType", "canonicalEventId",
+            "analysisCandidateSha256", "reportCandidateSha256",
+            "renderedArtifacts", "ownerReviewLocator", "publishAuthorized",
+            "publication", "publicationComplete", "actionable",
+        )
+        if any(identities[0].get(field) != identities[1].get(field) for field in common):
+            raise PublicationAuthorizationError("PUBLICATION_GATE_LINEAGE_MISMATCH")
+        receipts = list(_authorization_directory(root, report_key, revision).glob("*.json"))
+        if receipts:
+            raise PublicationAuthorizationError("UNVALIDATED_PUBLICATION_AUTHORIZATION_PRESENT")
+        return _failure("DENIED", "EXPLICIT_REVISION_AUTHORIZATION_REQUIRED")
+    except (PublicationAuthorizationError, OSError) as exc:
+        return _failure("FAIL_CLOSED", str(exc) or type(exc).__name__)
+
+
 def _revision_context(
     package_root: Path, code_root: Path, report_key: str, revision: int
 ) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
