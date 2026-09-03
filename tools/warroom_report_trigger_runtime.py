@@ -39,6 +39,7 @@ Q2_COMPATIBILITY_RECORD_TYPE = "P1008_Q2_HISTORICAL_WORKFLOW_COMPATIBILITY_V1"
 Q2_COMPATIBILITY_VERSION = "1.0"
 Q2_CONTRACT_RAW_SHA256 = "F014BE750095543B35ED2D482C0CF7A40B4A448167796F8AC4560AB928E609C5"
 Q2_AUTHORITY_MANIFEST_SHA256 = "FB00A640007F34803A01BBE9C8E11DC4AFF61A8C7B52996B35099B86CA092622"
+Q2_COMPATIBILITY_ROOT_REL = Path("runtime/q2_historical_compatibility")
 
 
 class RuntimeTriggerError(RuntimeError):
@@ -68,11 +69,17 @@ def _sha256_path(path: Path) -> str:
     return governance.sha256_bytes(path.read_bytes())
 
 
-def _evidence_path(package_root: Path, relative: Path) -> Path:
-    evidence_root, _context = governed_evidence_root(package_root)
+def _evidence_path(
+    package_root: Path, relative: Path, *, evidence_root: Path | None = None,
+) -> Path:
+    resolved_root = (
+        evidence_root.resolve()
+        if evidence_root is not None
+        else governed_evidence_root(package_root)[0]
+    )
     if relative.parts[:1] != ("runtime",):
         raise RuntimeTriggerError("UNSAFE_EVIDENCE_RELATIVE_PATH")
-    return evidence_root.joinpath(*relative.parts[1:])
+    return resolved_root.joinpath(*relative.parts[1:])
 
 
 def _canonical_hash(payload: dict[str, Any]) -> str:
@@ -197,8 +204,10 @@ def _read_json(path: Path, label: str) -> dict[str, Any]:
     return payload
 
 
-def _load_integration(package_root: Path) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
-    path = _evidence_path(package_root, INTEGRATION_REL)
+def _load_integration(
+    package_root: Path, *, evidence_root: Path | None = None,
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    path = _evidence_path(package_root, INTEGRATION_REL, evidence_root=evidence_root)
     if not path.is_file():
         return None, []
     payload = _read_json(path, "RESEARCH_INTEGRATION")
@@ -472,11 +481,16 @@ def evaluate_and_persist(package_root: Path, *, evaluated_at_utc: str | None = N
     return receipt
 
 
-def require_valid_trigger(package_root: Path) -> dict[str, Any]:
+def require_valid_trigger(
+    package_root: Path, *, evidence_root: Path | None = None,
+) -> dict[str, Any]:
     root = package_root.resolve()
-    persisted = _read_json(_evidence_path(root, LATEST_REL), "TRIGGER_RECEIPT")
+    persisted = _read_json(
+        _evidence_path(root, LATEST_REL, evidence_root=evidence_root),
+        "TRIGGER_RECEIPT",
+    )
     validate_receipt(persisted)
-    integration, evidence = _load_integration(root)
+    integration, evidence = _load_integration(root, evidence_root=evidence_root)
     if integration is None or not evidence:
         raise RuntimeTriggerError("REPORT_TRIGGER_REQUIRED")
     # Recompute without writing and compare all governed identity inputs.
@@ -531,6 +545,180 @@ def trigger_lineage(receipt: dict[str, Any]) -> dict[str, Any]:
             "registrySha256": binding["registry_sha256"],
         }
     return lineage
+
+
+def resolve_analysis_authority(
+    package_root: Path, *, compatibility_parent: Path | None = None,
+) -> tuple[Path, dict[str, Any], dict[str, Any]]:
+    """Resolve the evidence root from the event's governed analysis contract.
+
+    Live evidence remains the primary ledger.  For QUARTERLY_EARNINGS, the
+    contract-required Results hash is selected before recency.  A sealed
+    historical compatibility root is eligible only when its complete current
+    workflow envelope and all package-bound contract lineages still validate.
+    """
+
+    root = package_root.resolve()
+    primary_root, primary_context = governed_evidence_root(root)
+    primary_trigger = require_valid_trigger(root, evidence_root=primary_root)
+    if primary_trigger.get("event_type") != "QUARTERLY_EARNINGS":
+        return primary_root, primary_trigger, primary_context
+
+    config_path = (
+        root
+        / "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json"
+    )
+    contract = _read_json(config_path, "QUARTERLY_ANALYSIS_AUTHORITY_CONTRACT")
+    expected_sha = str(contract.get("expectedSourceSha256") or "")
+    expected_event = str(contract.get("canonicalEventId") or "")
+    expected_report = str(contract.get("reportKey") or "")
+    if not (
+        expected_sha == Q2_CONTRACT_RAW_SHA256
+        and expected_event == primary_trigger.get("canonical_event_id")
+        and expected_report == primary_trigger.get("report_key")
+    ):
+        raise RuntimeTriggerError("QUARTERLY_ANALYSIS_AUTHORITY_CONTRACT_INVALID")
+
+    from p1008_research_plugin.quarterly_earnings import (
+        QuarterlyEarningsPacket,
+        QuarterlyEarningsPacketError,
+    )
+    import warroom_q2_historical_compatibility as q2_compatibility
+
+    primary_integration, primary_evidence = _load_integration(
+        root, evidence_root=primary_root
+    )
+    exact_current = [
+        item for item in primary_evidence
+        if item.get("canonical_event_id") == expected_event
+        and item.get("event_type") == "QUARTERLY_EARNINGS"
+        and item.get("source_hash") == expected_sha
+    ]
+    if exact_current:
+        try:
+            QuarterlyEarningsPacket(
+                root,
+                trigger_lineage(primary_trigger),
+                governed_evidence_root=primary_root,
+            )
+        except QuarterlyEarningsPacketError as exc:
+            raise RuntimeTriggerError(str(exc)) from exc
+        return primary_root, primary_trigger, {
+            **primary_context,
+            "selection": "EXACT_CURRENT_CONTRACT_AUTHORITY",
+            "selectedRawSha256": expected_sha,
+            "liveIntegrationSha256": str(
+                (primary_integration or {}).get("canonical_sha256") or ""
+            ),
+            "actionable": False,
+        }
+
+    parent = (
+        compatibility_parent.resolve()
+        if compatibility_parent is not None
+        else root / Q2_COMPATIBILITY_ROOT_REL
+    )
+    valid: list[tuple[Path, dict[str, Any], dict[str, Any]]] = []
+    if parent.is_dir():
+        for candidate in sorted(
+            (item for item in parent.iterdir() if item.is_dir()),
+            key=lambda item: item.name,
+        ):
+            manifest_path = candidate / "q2_historical_compatibility_manifest.json"
+            try:
+                manifest = _read_json(manifest_path, "Q2_COMPATIBILITY_MANIFEST")
+                candidate_trigger = require_valid_trigger(
+                    root, evidence_root=candidate
+                )
+                workflow = candidate_trigger.get("candidate_workflow") or {}
+                compatibility = validate_historical_workflow_compatibility(
+                    workflow.get("historical_compatibility")
+                )
+                analysis_lineage = compatibility.get("analysisContractLineage") or {}
+                original_receipt = compatibility.get("originalReceipt") or {}
+                original_event = compatibility.get("originalEventIdentity") or {}
+                original_trigger = compatibility.get("originalTriggerLineage") or {}
+                current_authority = compatibility.get("currentAuthority") or {}
+                q2_closeout = compatibility.get("q2CloseoutLineage") or {}
+                policy = q2_compatibility.PRODUCTION_POLICY
+                if not (
+                    manifest.get("status") == "PASS"
+                    and manifest.get("rawSha256") == expected_sha
+                    and manifest.get("materializedWorkflowSha256")
+                    == compatibility.get("materializedWorkflowSha256")
+                    and manifest.get("integrationCanonicalSha256")
+                    == _read_json(
+                        candidate / "research_plugin/latest_content_integration.json",
+                        "Q2_COMPATIBILITY_INTEGRATION",
+                    ).get("canonical_sha256")
+                    and manifest.get("triggerCanonicalSha256")
+                    == candidate_trigger.get("canonical_sha256")
+                    and candidate_trigger.get("canonical_event_id") == expected_event
+                    and candidate_trigger.get("report_key") == expected_report
+                    and candidate_trigger.get("revision")
+                    == primary_trigger.get("revision")
+                    and compatibility.get("originalRawSha256")
+                    == policy.raw_sha256
+                    and original_receipt.get("receiptId") == policy.receipt_id
+                    and original_receipt.get("receiptSha256")
+                    == policy.receipt_file_sha256
+                    and original_event.get("eventId") == policy.event_id
+                    and original_trigger.get("decisionId") == policy.decision_id
+                    and original_trigger.get("triggerCanonicalSha256")
+                    == policy.trigger_canonical_sha256
+                    and original_trigger.get("triggerFileSha256")
+                    == policy.trigger_file_sha256
+                    and original_trigger.get("integrationCanonicalSha256")
+                    == policy.integration_canonical_sha256
+                    and original_trigger.get("integrationFileSha256")
+                    == policy.integration_file_sha256
+                    and current_authority.get("manifestVersion")
+                    == policy.authority_manifest_version
+                    and current_authority.get("manifestSha256")
+                    == _sha256_path(root / "data/CSV_AUTHORITY_MANIFEST.json")
+                    == policy.authority_manifest_sha256
+                    and current_authority.get("phase3aSourceManifestSha256")
+                    == policy.phase3a_source_manifest_sha256
+                    and q2_closeout.get("receiptSha256")
+                    == policy.q2_closeout_receipt_sha256
+                    and analysis_lineage.get("contractSha256")
+                    == _sha256_path(
+                        root / "contracts/p1008_analysis/v1.0/contract.manifest.json"
+                    )
+                    and analysis_lineage.get("q2PacketSha256")
+                    == _sha256_path(config_path)
+                ):
+                    continue
+                packet = QuarterlyEarningsPacket(
+                    root,
+                    trigger_lineage(candidate_trigger),
+                    governed_evidence_root=candidate,
+                )
+                if packet.event.get("source_hash") != expected_sha:
+                    continue
+                valid.append((candidate, candidate_trigger, manifest))
+            except (OSError, KeyError, RuntimeTriggerError, QuarterlyEarningsPacketError):
+                continue
+
+    if not valid:
+        raise RuntimeTriggerError("Q2_CONTRACT_AUTHORITY_UNAVAILABLE")
+    if len(valid) != 1:
+        raise RuntimeTriggerError("Q2_CONTRACT_AUTHORITY_AMBIGUOUS")
+    selected_root, selected_trigger, selected_manifest = valid[0]
+    return selected_root, selected_trigger, {
+        "mode": "HISTORICAL_COMPATIBILITY_CONTRACT_AUTHORITY",
+        "root": str(selected_root),
+        "selection": "VALIDATED_CURRENT_CANDIDATE_WORKFLOW",
+        "selectedRawSha256": expected_sha,
+        "materializedWorkflowSha256": selected_manifest[
+            "materializedWorkflowSha256"
+        ],
+        "liveEvidenceRetained": True,
+        "liveIntegrationSha256": str(
+            (primary_integration or {}).get("canonical_sha256") or ""
+        ),
+        "actionable": False,
+    }
 
 
 def materialize_major_event_provenance(
@@ -623,6 +811,8 @@ def template_governance_status(receipt: dict[str, Any] | None) -> dict[str, Any]
 def require_analysis_candidate(package_root: Path, trigger: dict[str, Any] | None = None) -> dict[str, Any]:
     root = package_root.resolve()
     receipt = trigger or require_valid_trigger(root)
+    if receipt.get("event_type") == "QUARTERLY_EARNINGS":
+        _selected_root, receipt, _selection = resolve_analysis_authority(root)
     expected = trigger_lineage(receipt)
     production = root / "runtime" / "report_production"
     matches: list[tuple[str, dict[str, Any]]] = []

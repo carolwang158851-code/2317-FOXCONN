@@ -48,8 +48,9 @@ def main() -> int:
     import warroom_quarterly_report_completion as quarterly_completion
 
     try:
-        evidence_root, _evidence_context = trigger_runtime.governed_evidence_root(package_root)
-        trigger = trigger_runtime.require_valid_trigger(package_root)
+        evidence_root, trigger, _evidence_context = (
+            trigger_runtime.resolve_analysis_authority(package_root)
+        )
         lineage = trigger_runtime.trigger_lineage(trigger)
         run_id = args.run_id or _analysis_run_id(package_root, lineage)
         result = PhaseB1Pipeline(package_root, governed_evidence_root=evidence_root).build_report(
