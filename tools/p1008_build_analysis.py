@@ -39,7 +39,7 @@ def main() -> int:
     print(
         json.dumps(
             {
-                "status": "ANALYSIS_CANDIDATE_READY",
+                "status": result.get("status", "ANALYSIS_CANDIDATE_READY"),
                 "runId": result["run_id"],
                 "outputPath": result["run_root"],
                 "analysisPacketSha256": result["analysis_sha256"],

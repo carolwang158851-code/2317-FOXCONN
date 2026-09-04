@@ -184,6 +184,8 @@ class PhaseB1Pipeline:
         run_id = self.deterministic_run_id(fixture)
         run_root = self._run_root(run_id, output_base)
         if run_root.exists():
+            if event_type == "QUARTERLY_EARNINGS":
+                return self._validate_quarterly_checkpoint(run_root, fixture, evidence, trigger_lineage)
             raise PhaseB1BoundaryError(f"Run ID already exists: {run_id}")
         generated_at = fixture.generated_at_utc if isinstance(fixture, QuarterlyEarningsPacket) else fixture["generatedAtUtc"]
         generated = self._utc(generated_at)
@@ -258,6 +260,78 @@ class PhaseB1Pipeline:
             "analysis_sha256": analysis_sha,
         }
 
+    def _validate_quarterly_checkpoint(self, run_root, fixture, evidence, trigger_lineage):
+        """Read-only reconstruction of a deterministic checkpoint; never trust its label."""
+        manifest = json.loads((run_root / "run_manifest.json").read_text(encoding="utf-8"))
+        run_id = self.deterministic_run_id(fixture)
+        states = {"ANALYSIS_CANDIDATE_READY", "REPORT_CANDIDATE_READY", "OWNER_REVIEW_REQUIRED"}
+        if not (
+            manifest.get("runId") == run_id
+            and manifest.get("eventType") == "QUARTERLY_EARNINGS"
+            and manifest.get("state") in states
+            and manifest.get("triggerLineage") == trigger_lineage
+            and manifest.get("governedEvidence") == fixture.evidence_context
+            and manifest.get("actionable") is False
+            and manifest.get("deterministicMode") is True
+            and manifest.get("generatedAtUtc") == fixture.generated_at_utc
+            and manifest.get("externalCalls") == self._zero_calls()
+        ):
+            raise PhaseB1PipelineError("QUARTERLY_CHECKPOINT_IDENTITY_MISMATCH")
+        analysis = AnalysisBuilder(self.package_root, AuthorityAdapter(self.package_root, self.loader)).build(
+            run_id=run_id, generated_at_utc=self._utc(fixture.generated_at_utc),
+            validated_evidence=evidence, event_type="QUARTERLY_EARNINGS", quarterly_packet=fixture,
+        )
+        analysis = AnalysisValidator().validate(analysis, evidence)
+        expected = {
+            "analysis_packet.json": analysis.model_dump(mode="json", by_alias=True),
+            "analysis_validation.json": AnalysisValidator.result(analysis, checked_at=self._utc(fixture.generated_at_utc)).model_dump(mode="json", by_alias=True),
+            "evidence_manifest.json": fixture.evidence_manifest(),
+            "protected_state_hashes_before.json": protected_state_hashes(self.package_root),
+            "protected_state_hashes_after.json": protected_state_hashes(self.package_root),
+        }
+        artifacts = manifest.get("artifacts")
+        if not isinstance(artifacts, dict) or not set(expected).issubset(artifacts):
+            raise PhaseB1PipelineError("QUARTERLY_CHECKPOINT_ARTIFACTS_MISSING")
+        for name, value in expected.items():
+            if (run_root / name).read_bytes() != canonical_json_bytes(value):
+                raise PhaseB1PipelineError(f"QUARTERLY_CHECKPOINT_CONTENT_MISMATCH: {name}")
+        for name, digest in artifacts.items():
+            path = (run_root / name).resolve()
+            if not path.is_relative_to(run_root.resolve()) or not path.is_file() or sha256_file(path) != digest:
+                raise PhaseB1PipelineError(f"QUARTERLY_CHECKPOINT_HASH_MISMATCH: {name}")
+        actual = {p.relative_to(run_root).as_posix() for p in run_root.rglob("*") if p.is_file()}
+        if actual != set(artifacts) | {"run_manifest.json"}:
+            raise PhaseB1PipelineError("QUARTERLY_CHECKPOINT_UNRECORDED_ARTIFACT")
+        if manifest.get("templateGovernance") != self._template_governance_metadata(
+            run_id=run_id, event_type="QUARTERLY_EARNINGS", fixture=fixture,
+            authority_cutoff=self._authority_cutoff(analysis),
+        ):
+            raise PhaseB1PipelineError("QUARTERLY_CHECKPOINT_TEMPLATE_MISMATCH")
+        if manifest["state"] != "ANALYSIS_CANDIDATE_READY":
+            if (manifest.get("reportRuntime") != "ENTERPRISE_VALUE_WAR_REPORT_V1"
+                    or manifest.get("reportChapterCount") != 11
+                    or Path(str(manifest.get("reportCandidateOutputPath") or "")).resolve()
+                    != (run_root / "enterprise_value_war_report/war_report_candidate.html").resolve()):
+                raise PhaseB1PipelineError("QUARTERLY_CHECKPOINT_REPORT_IDENTITY_MISMATCH")
+            from .reporting.war_report_production_runtime import compile_existing_phaseb1_result
+            compile_existing_phaseb1_result(
+                package_root=self.package_root, analysis=analysis, evidence=evidence,
+                trigger_context=trigger_lineage, output_root=run_root / "enterprise_value_war_report",
+                validate_existing=True,
+            )
+            if manifest["state"] == "OWNER_REVIEW_REQUIRED":
+                completed = manifest.get("reportCompletion") or {}
+                if not (completed.get("reportKey") == trigger_lineage["reportKey"]
+                        and completed.get("revision") == trigger_lineage["revision"]
+                        and completed.get("editorialValidationSha256") == artifacts.get("enterprise_value_war_report/editorial_validation.json")
+                        and all(completed.get(flag) is False for flag in ("actionable", "publishAuthorized", "publication", "publicationComplete"))):
+                    raise PhaseB1PipelineError("QUARTERLY_CHECKPOINT_COMPLETION_MISMATCH")
+        elif set(artifacts) != set(expected):
+            raise PhaseB1PipelineError("QUARTERLY_CHECKPOINT_STATE_MISMATCH")
+        return {"status": "EXISTING_VALIDATED_RUN", "run_id": run_id, "run_root": str(run_root),
+                "analysis": analysis, "evidence": evidence,
+                "analysis_sha256": sha256_file(run_root / "analysis_packet.json")}
+
     def build_report(
         self, *, run_id: str, output_base: Path | None = None,
         trigger_lineage: dict[str, Any] | None = None,
@@ -271,6 +345,8 @@ class PhaseB1Pipeline:
         if run_id != expected_run_id:
             raise PhaseB1PipelineError("Run ID does not match governed deterministic inputs")
         run_root = self._run_root(run_id, output_base)
+        if event_type == "QUARTERLY_EARNINGS":
+            self._validate_quarterly_checkpoint(run_root, fixture, evidence, trigger_lineage)
         analysis_path = run_root / "analysis_packet.json"
         gate_path = run_root / "analysis_validation.json"
         evidence_manifest_path = run_root / "evidence_manifest.json"
@@ -303,8 +379,9 @@ class PhaseB1Pipeline:
             ),
         }
         if (
-            stored_run_manifest.get("state") != "ANALYSIS_CANDIDATE_READY"
-            or stored_run_manifest.get("artifacts") != expected_analysis_artifacts
+            (event_type != "QUARTERLY_EARNINGS" and stored_run_manifest.get("state") != "ANALYSIS_CANDIDATE_READY")
+            or any(stored_run_manifest.get("artifacts", {}).get(k) != v for k, v in expected_analysis_artifacts.items())
+            or (event_type != "QUARTERLY_EARNINGS" and stored_run_manifest.get("artifacts") != expected_analysis_artifacts)
         ):
             raise PhaseB1PipelineError("Analysis run manifest is missing or stale")
         stored_evidence_manifest = json.loads(
@@ -543,6 +620,7 @@ class PhaseB1Pipeline:
 
         before = protected_state_hashes(self.package_root)
         output_root = run_root / "enterprise_value_war_report"
+        replay = stored_run_manifest.get("state") in {"REPORT_CANDIDATE_READY", "OWNER_REVIEW_REQUIRED"}
         result = compile_existing_phaseb1_result(
             package_root=self.package_root,
             analysis=analysis,
@@ -550,6 +628,7 @@ class PhaseB1Pipeline:
             trigger_context=trigger_lineage,
             output_root=output_root,
             output_capability=self.output_capability,
+            validate_existing=replay,
         )
         if result.get("state") != "REPORT_CANDIDATE_READY":
             raise PhaseB1PipelineError("Enterprise Value report runtime did not produce a candidate")
@@ -586,7 +665,8 @@ class PhaseB1Pipeline:
             "externalCalls": self._zero_calls(),
             "actionable": False,
         }
-        self._atomic_write_json(run_root / "run_manifest.json", manifest, overwrite=True)
+        if not replay:
+            self._atomic_write_json(run_root / "run_manifest.json", manifest, overwrite=True)
         receipt_path = output_root / "war_report_runtime_receipt.json"
         html_path = Path(result["output_html"])
         return {

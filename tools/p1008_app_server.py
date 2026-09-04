@@ -422,19 +422,25 @@ class P1008JobManager:
         }
 
     def pending_owner_review(self) -> dict[str, Any]:
+        from warroom_quarterly_report_completion import quarterly_report_status
+        quarterly = quarterly_report_status(self.package_root)
         runtime = read_json(self.package_root / "runtime" / "warroom_realtime_snapshot.json", default={}) or {}
         news = read_json(self.package_root / "runtime" / "warroom_news_scan_snapshot.json", default={}) or {}
         review = read_json(self.package_root / "runtime" / "warroom_event_review_state.json", default={}) or {}
         pending = bool(runtime.get("ownerConfirmationRequired") or news.get("ownerConfirmationRequired") or review.get("ownerAckRequired"))
         return {
-            "pending": pending,
+            "pending": pending or bool(quarterly["pendingOwnerReviews"]),
+            "quarterlyStatus": quarterly["status"],
+            "quarterlyReviews": quarterly["pendingOwnerReviews"],
             "runtimeCandidateDate": runtime.get("candidateDate", ""),
             "newsCandidateDate": news.get("candidateDate", ""),
             "reviewStatus": review.get("status", ""),
-            "pendingReviewCount": len(review.get("pendingReviews", []) or []),
+            "pendingReviewCount": len(review.get("pendingReviews", []) or []) + len(quarterly["pendingOwnerReviews"]),
         }
 
     def latest_report_status(self) -> dict[str, Any]:
+        from warroom_quarterly_report_completion import quarterly_report_status
+        quarterly = quarterly_report_status(self.package_root)
         manifest = read_json(self.package_root / "runtime" / "warroom_report_manifest.json", default={}) or {}
         latest = manifest.get("latest", {}) if isinstance(manifest.get("latest", {}), dict) else {}
         health = rolling_brief.report_library_health(self.package_root)
@@ -444,6 +450,11 @@ class P1008JobManager:
             "latestDaily": latest.get("daily"),
             "latestWeekly": latest.get("weekly"),
             "latestMonthly": latest.get("monthly"),
+            "latestQuarterly": quarterly["latestQuarterly"],
+            "quarterlyStatus": quarterly["status"],
+            "reportGenerated": quarterly["reportGenerated"],
+            "reportEligible": quarterly["reportEligible"],
+            "quarterlyError": quarterly.get("reason", ""),
             "latestRollingBriefDate": health.get("latestRollingBriefDate", ""),
             "latestArchivedReportDate": health.get("latestArchivedReportDate", ""),
             "health": health,
@@ -1122,19 +1133,28 @@ class P1008JobManager:
                 [],
                 timeout_seconds=180,
             )
-            latest = self._latest_phaseb1_status()
-            status = (
-                "ANALYSIS_CANDIDATE_READY"
-                if is_analysis and exit_code == 0
-                else "REPORT_CANDIDATE_READY"
-                if not is_analysis and exit_code == 0
-                else "FAIL_CLOSED"
-            )
+            step = next((item for item in self.state.get("steps", []) if item.get("id") == job_type), {})
+            latest = step.get("runtimeResult") or {}
+            allowed = ({"ANALYSIS_CANDIDATE_READY", "EXISTING_VALIDATED_RUN"} if is_analysis
+                       else {"REPORT_CANDIDATE_READY", "OWNER_REVIEW_REQUIRED", "IDEMPOTENT_REPLAY"})
+            status = latest.get("status") if exit_code == 0 and latest.get("status") in allowed else "FAIL_CLOSED"
+            if not is_analysis and trigger.get("event_type") == "QUARTERLY_EARNINGS":
+                from warroom_quarterly_report_completion import quarterly_report_status
+                governed = quarterly_report_status(self.package_root)
+                completed = latest.get("reportCompletion") or {}
+                persisted = governed.get("latestQuarterly") or {}
+                if not (governed["reportGenerated"] and completed.get("report_key") == persisted.get("report_key")
+                        and completed.get("revision") == persisted.get("revision")
+                        and status in {"OWNER_REVIEW_REQUIRED", "IDEMPOTENT_REPLAY"}):
+                    status = "FAIL_CLOSED"
+            if status == "FAIL_CLOSED":
+                self._add_error("CURRENT_RUN_REPORT_CHECKPOINT_NOT_VALIDATED")
             self._set_component_status(
                 "phaseB1",
                 status,
                 runId=latest.get("runId", ""),
                 outputPath=latest.get("outputPath", ""),
+                reportCompletion=latest.get("reportCompletion"),
                 actionable=False,
             )
         if job_type in {"default", "update-data", "official-ir-scan"}:
@@ -1512,6 +1532,15 @@ class P1008JobManager:
         message = f"exit={completed.returncode}"
         if completed.returncode != 0:
             message = command_failure_reason(output, message)
+        runtime_result = None
+        if step_id in {"analysis-candidate", "report-candidate"}:
+            for line in (completed.stdout or "").splitlines():
+                try:
+                    value = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(value, dict) and "status" in value:
+                    runtime_result = value
         self._set_step(
             step_id,
             label,
@@ -1519,6 +1548,7 @@ class P1008JobManager:
             exitCode=completed.returncode,
             durationSeconds=round(time.monotonic() - started, 2),
             message=message,
+            runtimeResult=runtime_result,
         )
         return completed.returncode
 

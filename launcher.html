@@ -603,7 +603,7 @@
         if (id === 'owner-publish') el.disabled = disabled || !canPublish();
         else if (id === 'copy-approval-phrase') el.disabled = disabled || !(state.review || {}).ownerApprovalPhrase;
         else if (id === 'run-analysis-candidate') el.disabled = disabled || trigger.analysisEligible !== true;
-        else if (id === 'run-report-candidate') el.disabled = disabled || trigger.reportEligible !== true;
+        else if (id === 'run-report-candidate') el.disabled = disabled || (trigger.reportCompletionEligible !== true && trigger.reportEligible !== true);
         else el.disabled = disabled;
       });
     }
@@ -635,7 +635,8 @@
       const networkSummary = news.networkSummary || sourceManifest.networkSummary || {};
       const sourceHealth = news.sourceHealth || sourceManifest.sourceHealth || [];
       const latest = app.latestReport || review.latestReport || {};
-      const latestDaily = latest.latestDaily || {};
+      const latestQuarterly = latest.latestQuarterly || {};
+      const latestReport = latest.latestQuarterly || latest.latestMonthly || latest.latestWeekly || latest.latestDaily || {};
       const steps = Array.isArray(app.steps) ? app.steps : [];
       const components = app.componentStatus || {};
       const dailyComponent = components.dailyPrice || {};
@@ -686,8 +687,10 @@
       $('trigger-validation').textContent = trigger.validationState || trigger.error || 'NO_EVIDENCE';
       $('trigger-report-key').textContent = trigger.reportKey || 'N/A';
       $('trigger-revision').textContent = trigger.revision || 'N/A';
-      $('trigger-next-action').textContent = trigger.analysisEligible
-        ? (trigger.reportEligible ? 'Owner 可手動產生戰報候選' : 'Owner 可手動產生分析候選')
+      $('trigger-next-action').textContent = trigger.reportGenerated
+        ? '季度戰報已完成，等待本修訂版 Owner 審查；尚未發布'
+        : trigger.analysisEligible
+        ? (trigger.reportCompletionEligible || trigger.reportEligible ? 'Owner 可手動產生戰報候選' : 'Owner 可手動產生分析候選')
         : '尚未取得有效治理觸發；不產生正式戰報';
       const receiptPaths = marketComponent.receiptPaths || marketComponent.receipt_paths || [];
       $('market-activity-log').textContent = `Receipt／log：${receiptPaths[0] || marketComponent.logPath || marketComponent.run_dir || 'N/A'}`;
@@ -700,7 +703,11 @@
       const successCount = networkSummary.succeeded ?? 0;
       const checkedCount = networkSummary.checked ?? sourceHealth.length;
       $('connector-status').textContent = `${successCount}/${checkedCount || approvedCount} success`;
-      $('latest-report').textContent = latestDaily?.date || latestDaily?.title || 'N/A';
+      $('latest-report').textContent = latest.quarterlyStatus === 'FAIL_CLOSED'
+        ? `FAIL_CLOSED: ${latest.quarterlyError || 'Quarterly lineage 驗證失敗'}`
+        : latestQuarterly.report_key
+        ? `${latestQuarterly.report_key} / r${latestQuarterly.revision} / ${latestQuarterly.lifecycleState}`
+        : latestReport.date || latestReport.title || 'N/A';
       $('served-package-root').textContent = app.resolvedPackageRoot || 'N/A';
       $('served-git-head').textContent = app.gitHead || 'N/A';
       $('latest-rolling-brief-date').textContent = latest.latestRollingBriefDate || 'N/A';

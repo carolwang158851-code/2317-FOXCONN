@@ -26,7 +26,10 @@ def _analysis_run_id(package_root: Path, trigger_lineage: dict[str, object]) -> 
             except (OSError, json.JSONDecodeError):
                 continue
             if (
-                payload.get("state") == "ANALYSIS_CANDIDATE_READY"
+                (payload.get("state") == "ANALYSIS_CANDIDATE_READY" or (
+                    trigger_lineage.get("eventType") == "QUARTERLY_EARNINGS"
+                    and payload.get("state") in {"REPORT_CANDIDATE_READY", "OWNER_REVIEW_REQUIRED"}
+                ))
                 and payload.get("triggerLineage") == trigger_lineage
             ):
                 matches.append((str(payload.get("generatedAtUtc") or ""), str(payload.get("runId") or "")))

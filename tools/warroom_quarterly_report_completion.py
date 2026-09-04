@@ -286,6 +286,16 @@ def _validate_history(
     )
     for revision in sorted(left_by):
         lifecycle, private = left_by[revision], right_by[revision]
+        if not (
+            lifecycle.get("lifecycleState") == "OWNER_REVIEW_REQUIRED"
+            and lifecycle.get("privateLibraryOwned") is False
+            and private.get("status") == "OWNER_REVIEW_REQUIRED"
+            and private.get("lifecycleOwned") is False
+            and private.get("privateLibraryEligible") is True
+            and len(lifecycle.get("renderedArtifacts") or []) == 2
+            and {item.get("format") for item in lifecycle.get("renderedArtifacts", [])} == {"HTML", "PDF"}
+        ):
+            raise QuarterlyReportCompletionError("QUARTERLY_OWNERSHIP_OR_ARTIFACT_SET_INVALID")
         if any(lifecycle.get(field) != private.get(field) for field in shared_fields):
             raise QuarterlyReportCompletionError("QUARTERLY_LIFECYCLE_LIBRARY_DIVERGED")
         if revision == 1:
@@ -364,9 +374,42 @@ def _validate_history(
         slot = _latest_slot(report_key)
         for manifest in (runtime, library):
             pointer = (manifest.get("latest") or {}).get(slot)
-            if not isinstance(pointer, Mapping) or int(pointer.get("revision", 0)) != latest_revision:
+            expected_pointer = left_by[latest_revision] if manifest is runtime else right_by[latest_revision]
+            if not isinstance(pointer, Mapping) or pointer != expected_pointer:
                 raise QuarterlyReportCompletionError("QUARTERLY_LATEST_STATE_STALE")
     return [left_by[key] for key in sorted(left_by)]
+
+
+def quarterly_report_status(package_root: Path | str) -> dict[str, Any]:
+    """Read-only API projection; persisted labels alone never establish success."""
+    root = Path(package_root).resolve()
+    empty = {"reportGenerated": False, "reportEligible": False, "latestQuarterly": None,
+             "pendingOwnerReviews": [], "publication": False, "publishAuthorized": False}
+    runtime_path = root / rolling_brief.RUNTIME_MANIFEST_REL
+    library_path = root / rolling_brief.REPORT_MANIFEST_REL
+    if not runtime_path.exists() and not library_path.exists():
+        return {**empty, "status": "NO_QUARTERLY_REPORT"}
+    try:
+        runtime = _read_json(runtime_path, "RUNTIME_LIFECYCLE_MANIFEST")
+        library = _read_json(library_path, "PRIVATE_LIBRARY_MANIFEST")
+        rolling_brief._validate_manifest_relationship(runtime, library)
+        keys = {str(item.get("report_key") or item.get("reportKey") or "")
+                for manifest in (runtime, library) for item in manifest.get("reports", [])
+                if item.get("eventType") == EVENT_TYPE}
+        reports = []
+        for key in sorted(keys):
+            history = _validate_history(root, runtime, library, key)
+            reports.append(history[-1])
+        for item in reports:
+            if (item.get("lifecycleState") != "OWNER_REVIEW_REQUIRED"
+                    or any(item.get(flag) is not False for flag in ("actionable", "publishAuthorized", "publication", "publicationComplete"))):
+                raise QuarterlyReportCompletionError("QUARTERLY_STATE_INVALID")
+        latest = sorted(reports, key=lambda item: (str(item.get("canonicalEventId")), item["revision"]))[-1] if reports else None
+        return {**empty, "status": "OWNER_REVIEW_REQUIRED" if latest else "NO_QUARTERLY_REPORT",
+                "reportGenerated": bool(latest), "reportEligible": bool(latest),
+                "latestQuarterly": latest, "pendingOwnerReviews": reports}
+    except Exception as exc:  # Read-only status boundary must never expose unvalidated success.
+        return {**empty, "status": "FAIL_CLOSED", "reason": str(exc)}
 
 
 def complete_quarterly_report(
@@ -440,6 +483,19 @@ def complete_quarterly_report(
         same = [item for item in history if item.get("governedContentSha256") == content_sha]
         if same:
             existing = same[0]
+            checkpoint = _read_json(run_root / "run_manifest.json", "Q2_RUN_MANIFEST")
+            expected_completion = {
+                "reportKey": report_key, "revision": existing["revision"],
+                "editorialValidationSha256": editorial_sha,
+                "renderedArtifacts": existing["renderedArtifacts"],
+                "runtimeManifestPath": rolling_brief.RUNTIME_MANIFEST_REL,
+                "privateLibraryManifestPath": rolling_brief.REPORT_MANIFEST_REL,
+                "ownerReviewLocator": existing["ownerReviewLocator"],
+                "publishAuthorized": False, "publication": False,
+                "publicationComplete": False, "actionable": False,
+            }
+            if checkpoint.get("state") != "OWNER_REVIEW_REQUIRED" or checkpoint.get("reportCompletion") != expected_completion:
+                raise QuarterlyReportCompletionError("QUARTERLY_COMPLETION_CHECKPOINT_MISMATCH")
             gate = publication_gate.validate_absent_authorization(
                 state, report_key=report_key, revision=existing["revision"],
                 event_type=EVENT_TYPE,
@@ -455,6 +511,8 @@ def complete_quarterly_report(
                 "publicationComplete": False, "actionable": False,
             }
         expected_revision = len(history) + 1
+        if _read_json(run_root / "run_manifest.json", "Q2_RUN_MANIFEST").get("state") == "OWNER_REVIEW_REQUIRED":
+            raise QuarterlyReportCompletionError("QUARTERLY_PERSISTED_HISTORY_MISSING")
         if requested_revision != expected_revision:
             return {
                 "status": "REVIEW_REQUIRED",

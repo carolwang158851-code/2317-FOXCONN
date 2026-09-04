@@ -188,7 +188,7 @@ class RuntimeTriggerTests(RuntimeRootMixin, unittest.TestCase):
         lineage = runtime.trigger_lineage(receipt)
         self.assertEqual(
             lineage["analysisBaseline"]["content_sha256"],
-            "EC85CDC0165933529C6478172C47399450903EEF40C0B77674E61694A9D8BF1D",
+            "2762F84E35849706B383E6FDEDDFE42F195AC11377139328869A295BE8B9C49B",
         )
         self.assertEqual(
             lineage["analysisBaselineRegistry"]["registrySha256"],
@@ -539,7 +539,14 @@ class ServerGateTests(RuntimeRootMixin, unittest.TestCase):
         trigger = runtime.evaluate_and_persist(self.root)
         calls = []
         manager = self.manager()
-        manager._run_bat_step = lambda *args, **kwargs: calls.append(args[0]) or 0  # type: ignore[method-assign]
+        def completed_analysis(*args, **kwargs):
+            calls.append(args[0])
+            manager._set_step(args[0], "Analysis", "SUCCEEDED", runtimeResult={
+                "status": "ANALYSIS_CANDIDATE_READY", "runId": "RUN-1",
+                "outputPath": "runtime/report_production/RUN-1",
+            })
+            return 0
+        manager._run_bat_step = completed_analysis  # type: ignore[method-assign]
         manager._run_job_inner("analysis-candidate")
         self.assertEqual(calls, ["analysis-candidate"])
 
@@ -567,7 +574,10 @@ class ServerGateTests(RuntimeRootMixin, unittest.TestCase):
         manager = self.manager()
         manager._run_bat_step = lambda *args, **kwargs: calls.append(args[0]) or 0  # type: ignore[method-assign]
         manager._run_job_inner("report-candidate")
-        self.assertEqual(calls, ["report-candidate"])
+        # A matching label/lineage is not a validated persisted Q2 checkpoint.
+        # Real artifact-backed acceptance is exercised by persistent restart E2E.
+        self.assertEqual(calls, [])
+        self.assertEqual(manager.state["componentStatus"]["phaseB1"]["code"], "ANALYSIS_CANDIDATE_REQUIRED")
 
     def test_latest_candidate_status_includes_quarterly_enterprise_value_output(self):
         run = self.root / "runtime/report_production/Q2-RUN"

@@ -822,7 +822,17 @@ def require_analysis_candidate(package_root: Path, trigger: dict[str, Any] | Non
                 manifest = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 continue
-            if manifest.get("state") == "ANALYSIS_CANDIDATE_READY" and manifest.get("triggerLineage") == expected:
+            progressed_quarterly = (receipt.get("event_type") == "QUARTERLY_EARNINGS"
+                                    and manifest.get("state") in {"REPORT_CANDIDATE_READY", "OWNER_REVIEW_REQUIRED"})
+            if (manifest.get("state") == "ANALYSIS_CANDIDATE_READY" or progressed_quarterly) and manifest.get("triggerLineage") == expected:
+                if receipt.get("event_type") == "QUARTERLY_EARNINGS":
+                    try:
+                        from p1008_research_plugin.phaseb1_pipeline import PhaseB1Pipeline
+                        pipeline = PhaseB1Pipeline(root, governed_evidence_root=_selected_root)
+                        fixture, evidence = pipeline.load_inputs("QUARTERLY_EARNINGS", expected)
+                        pipeline._validate_quarterly_checkpoint(path.parent, fixture, evidence, expected)
+                    except Exception as exc:
+                        raise RuntimeTriggerError(f"ANALYSIS_CHECKPOINT_INVALID: {exc}") from exc
                 matches.append((str(manifest.get("generatedAtUtc") or ""), manifest))
     if not matches:
         raise RuntimeTriggerError("ANALYSIS_CANDIDATE_REQUIRED")
@@ -849,8 +859,14 @@ def launcher_status(package_root: Path) -> dict[str, Any]:
                 analysis_valid = True
             except RuntimeTriggerError:
                 pass
+        from warroom_quarterly_report_completion import quarterly_report_status
+        quarterly = quarterly_report_status(package_root)
+        current = quarterly.get("latestQuarterly") or {}
+        current_matches = (valid and analysis_valid and receipt.get("event_type") == "QUARTERLY_EARNINGS"
+                           and current.get("report_key") == receipt.get("report_key")
+                           and current.get("revision") == receipt.get("revision"))
         return {
-            "status": receipt["decision"],
+            "status": quarterly["status"] if current_matches or quarterly["status"] == "FAIL_CLOSED" else receipt["decision"],
             "event": receipt["canonical_event_id"],
             "eventType": receipt["event_type"],
             "validationState": receipt["cross_validation"]["validation_status"],
@@ -859,8 +875,11 @@ def launcher_status(package_root: Path) -> dict[str, Any]:
             "decisionId": receipt["decision_id"],
             "reportTriggerValid": valid,
             "analysisEligible": valid,
-            "reportEligible": valid and analysis_valid,
-            "reportGenerated": False,
+            "reportEligible": bool(current_matches and quarterly["reportEligible"]) if receipt.get("event_type") == "QUARTERLY_EARNINGS" else valid and analysis_valid,
+            "reportGenerated": bool(current_matches and quarterly["reportGenerated"]),
+            "reportCompletionEligible": valid and analysis_valid,
+            "latestQuarterly": current if current_matches else None,
+            "publishAuthorized": False,
             "publication": receipt["publication"],
             "templateGovernance": template_governance_status(receipt),
             "governedEvidence": evidence_context,

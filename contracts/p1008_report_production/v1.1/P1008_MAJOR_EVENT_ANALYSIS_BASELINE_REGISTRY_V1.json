@@ -8,7 +8,7 @@
       "version": "1.0",
       "status": "APPROVED",
       "governedSourceReference": "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json",
-      "contentSha256": "EC85CDC0165933529C6478172C47399450903EEF40C0B77674E61694A9D8BF1D",
+      "contentSha256": "2762F84E35849706B383E6FDEDDFE42F195AC11377139328869A295BE8B9C49B",
       "analysisContractReference": "contracts/p1008_analysis/v1.0/contract.manifest.json",
       "analysisContractSha256": "4BA4EEEA250DEB3A3A1886F00CB47AB0977DDDBAE98028B5E867AE226B6C1240",
       "supportedCanonicalEventScope": {
