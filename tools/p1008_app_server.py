@@ -1742,10 +1742,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Serve P1008 local app and whitelisted control API.")
     parser.add_argument("port", type=int)
     parser.add_argument("--bind", default="127.0.0.1")
-    parser.add_argument("--directory", type=Path, default=Path.cwd())
+    parser.add_argument("--directory", type=Path, default=None)
     args = parser.parse_args()
 
-    package_root = args.directory.resolve()
+    from p1008_canonical_warroom import CanonicalWarroomError, resolve_canonical
+    try:
+        canonical = resolve_canonical(args.directory)
+    except CanonicalWarroomError as exc:
+        print(f"[FAIL_CLOSED] {exc}")
+        return 6
+    print("[CANONICAL] " + json.dumps(canonical, ensure_ascii=False))
+    package_root = Path(canonical["resolvedPackageRoot"])
     manager = P1008JobManager(package_root)
 
     handler = lambda *h_args, **h_kwargs: P1008AppHandler(
