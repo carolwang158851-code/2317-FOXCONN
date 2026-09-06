@@ -8,8 +8,10 @@ from uuid import uuid4
 
 try:
     from .helpers import PACKAGE_ROOT
+    from .legacy_q2_authority_harness import legacy_q2_authority_overlay
 except ImportError:
     from helpers import PACKAGE_ROOT
+    from legacy_q2_authority_harness import legacy_q2_authority_overlay
 
 from p1008_research_plugin.phaseb1_common import protected_state_hashes
 from p1008_research_plugin.reporting.enterprise_value_rule_engine import (
@@ -32,9 +34,10 @@ from p1008_research_plugin.reporting.war_report_production_runtime import run_wa
 EVIDENCE_ROOT = Path(
     os.environ.get(
         "P1008_GOVERNED_EVIDENCE_ROOT",
-        r"C:\Users\a2231\OneDrive\foxconn_dashboard\foxconn-system\P1008_QUARTERLY_EARNINGS_PHASE_B1_PRODUCTION_SLICE_V1\runtime",
+        str(PACKAGE_ROOT / "test_fixtures/q2_legacy_v1/evidence"),
     )
 ).resolve()
+AUTHORITY_ROOT = PACKAGE_ROOT / "test_fixtures/q2_legacy_v1/authority"
 SOURCE_MOTHER = Path.home() / "Downloads" / "HON_HAI_FY2026_Q2_ENTERPRISE_VALUE_WAR_REPORT.html"
 
 
@@ -56,10 +59,11 @@ class ForwardEnterpriseValueAnalyticsV1Tests(unittest.TestCase):
         cls.output = parent / f"forward-ev-v1-{uuid4().hex}"
         cls.output.mkdir(parents=False, exist_ok=False)
         cls.before = protected_state_hashes(PACKAGE_ROOT)
-        cls.result = run_war_report_production(
-            package_root=PACKAGE_ROOT, trigger_context=lineage, output_base=cls.output,
-            governed_evidence_root=EVIDENCE_ROOT, source_mother=SOURCE_MOTHER,
-        )
+        with legacy_q2_authority_overlay(PACKAGE_ROOT, AUTHORITY_ROOT):
+            cls.result = run_war_report_production(
+                package_root=PACKAGE_ROOT, trigger_context=lineage, output_base=cls.output,
+                governed_evidence_root=EVIDENCE_ROOT, source_mother=SOURCE_MOTHER,
+            )
         cls.after = protected_state_hashes(PACKAGE_ROOT)
         cls.root = Path(cls.result["output_root"])
         cls.forward = json.loads((cls.root / "forward_enterprise_value_analytics.json").read_text(encoding="utf-8"))
