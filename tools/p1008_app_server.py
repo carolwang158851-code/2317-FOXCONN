@@ -13,16 +13,20 @@ import argparse
 import csv
 import hashlib
 import http.server
+import io
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
 import time
 import urllib.parse
 import uuid
+import zipfile
 from datetime import date, datetime, timezone
-from pathlib import Path
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import owner_publish_csv_v2 as owner_publish
@@ -64,6 +68,20 @@ OFFICIAL_IR_STATUS_REL = "runtime/official_ir_evidence/latest_status.json"
 SERVER_VERSION = "P1008_APP_SERVER_20260812_OFFICIAL_IR_PARTIAL_COVERAGE_V1_1"
 CURRENT_WAR_BRIEF_ROUTE = "/" + rolling_brief.LATEST_REPORT_REL
 WAR_BRIEF_NAVIGATION_ID = "p1008-war-brief-navigation"
+Q2_OWNER_REVIEW_EXPORT_ROUTE = "/api/p1008/export/q2-owner-review"
+Q2_REPORT_KEY = "P1008_FY2026_Q2_EARNINGS"
+Q2_REPORT_LATEST_KEY = f"quarterly:{Q2_REPORT_KEY}"
+Q2_OWNER_REVIEW_ARTIFACTS = {
+    f"reports/private_candidates/quarterly/{Q2_REPORT_KEY}/r1/report_candidate.json",
+    f"reports/private_candidates/quarterly/{Q2_REPORT_KEY}/r1/editorial_validation.json",
+    f"reports/private_candidates/quarterly/{Q2_REPORT_KEY}/r1/rendered/owner_review.html",
+    f"reports/private_candidates/quarterly/{Q2_REPORT_KEY}/r1/rendered/owner_review.pdf",
+    f"runtime/report_production/quarterly_owner_reviews/{Q2_REPORT_KEY}/r1/owner_review.json",
+}
+Q2_OWNER_REVIEW_MANIFESTS = {
+    "runtime/warroom_report_manifest.json",
+    "reports/P1008_REPORT_MANIFEST.json",
+}
 
 WEEKDAY_ZH = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"]
 FIELD_LABEL_ZH = {
@@ -93,8 +111,37 @@ def now_iso() -> str:
     return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
 
+def format_war_brief_market_numbers(document: str) -> str:
+    """Format market KPIs for display without changing governed source bytes."""
+    specifications = {
+        "成交股數": (Decimal("10000"), "股", "萬股"),
+        "成交金額": (Decimal("100000000"), "元", "億元"),
+        "成交筆數": (None, "筆", None),
+    }
+    for label, (scale, unit, scale_unit) in specifications.items():
+        label_pattern = re.escape(label) + (r"(?:（[^<]+）)?" if label == "成交金額" else "")
+        pattern = re.compile(
+            rf"(<div class=\"kpi\">{label_pattern}<br><strong>)([0-9]+)(</strong>)"
+        )
+
+        def replacement(match: re.Match[str]) -> str:
+            try:
+                value = Decimal(match.group(2))
+            except InvalidOperation:
+                return match.group(0)
+            primary = f"{int(value):,} {unit}"
+            if scale is not None and scale_unit is not None:
+                secondary = (value / scale).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                primary += f"（約 {secondary:,.2f} {scale_unit}）"
+            return f"{match.group(1)}{primary}{match.group(3)}"
+
+        document = pattern.sub(replacement, document, count=1)
+    return document
+
+
 def add_war_brief_navigation(document: str) -> str:
     """Add local-server navigation without mutating the governed artifact."""
+    document = format_war_brief_market_numbers(document)
     if WAR_BRIEF_NAVIGATION_ID in document:
         return document
     body_marker = "<body>"
@@ -109,6 +156,103 @@ def add_war_brief_navigation(document: str) -> str:
         body_marker + navigation + '<div aria-hidden="true" style="height:64px"></div>',
         1,
     )
+
+
+def _strict_json(path: Path) -> dict[str, Any]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Governed JSON must be an object: {path}")
+    return payload
+
+
+def _safe_governed_path(package_root: Path, relative_path: str) -> Path:
+    logical = PurePosixPath(relative_path)
+    if logical.is_absolute() or ".." in logical.parts:
+        raise ValueError(f"Unsafe governed artifact path: {relative_path}")
+    resolved_root = package_root.resolve()
+    resolved = (package_root / Path(*logical.parts)).resolve()
+    if resolved != resolved_root and resolved_root not in resolved.parents:
+        raise ValueError(f"Governed artifact escaped package root: {relative_path}")
+    return resolved
+
+
+def build_q2_owner_review_export(package_root: Path) -> tuple[bytes, str]:
+    """Package the existing validated Q2 r1 Owner-review artifacts only."""
+    manifest_paths = {
+        relative: _safe_governed_path(package_root, relative)
+        for relative in Q2_OWNER_REVIEW_MANIFESTS
+    }
+    manifests = {relative: _strict_json(path) for relative, path in manifest_paths.items()}
+    lifecycle = manifests["runtime/warroom_report_manifest.json"].get("latest", {}).get(
+        Q2_REPORT_LATEST_KEY
+    )
+    library = manifests["reports/P1008_REPORT_MANIFEST.json"].get("latest", {}).get(
+        Q2_REPORT_LATEST_KEY
+    )
+    if not isinstance(lifecycle, dict) or not isinstance(library, dict):
+        raise ValueError("Governed Q2 r1 lifecycle/private-library entry is missing")
+
+    for name, entry in (("lifecycle", lifecycle), ("private library", library)):
+        expected = {
+            "report_key": Q2_REPORT_KEY,
+            "revision": 1,
+            "ownerReviewStatus": "OWNER_REVIEW_REQUIRED",
+            "publication": False,
+            "publicationComplete": False,
+            "publishAuthorized": False,
+        }
+        for field, value in expected.items():
+            if entry.get(field) != value:
+                raise ValueError(f"Q2 {name} state mismatch: {field}")
+    if lifecycle.get("lifecycleState") != "OWNER_REVIEW_REQUIRED":
+        raise ValueError("Q2 lifecycle state mismatch: lifecycleState")
+    if library.get("status") != "OWNER_REVIEW_REQUIRED":
+        raise ValueError("Q2 private library state mismatch: status")
+
+    def artifact_map(entry: dict[str, Any]) -> dict[str, str]:
+        artifacts = entry.get("pluginArtifacts")
+        if not isinstance(artifacts, list):
+            raise ValueError("Q2 pluginArtifacts is missing")
+        result: dict[str, str] = {}
+        for artifact in artifacts:
+            if not isinstance(artifact, dict):
+                raise ValueError("Invalid Q2 plugin artifact record")
+            relative = str(artifact.get("path") or "")
+            digest = str(artifact.get("sha256") or "").upper()
+            if not relative or len(digest) != 64 or relative in result:
+                raise ValueError("Invalid or duplicate Q2 plugin artifact identity")
+            result[relative] = digest
+        return result
+
+    lifecycle_artifacts = artifact_map(lifecycle)
+    library_artifacts = artifact_map(library)
+    if lifecycle_artifacts != library_artifacts:
+        raise ValueError("Q2 lifecycle/private-library artifact lineage mismatch")
+    if set(lifecycle_artifacts) != Q2_OWNER_REVIEW_ARTIFACTS:
+        raise ValueError("Q2 governed artifact set is not the approved r1 export set")
+
+    archive_entries: dict[str, bytes] = {}
+    for relative, expected_sha in lifecycle_artifacts.items():
+        path = _safe_governed_path(package_root, relative)
+        if not path.is_file():
+            raise ValueError(f"Q2 governed artifact is missing: {relative}")
+        data = path.read_bytes()
+        actual_sha = hashlib.sha256(data).hexdigest().upper()
+        if actual_sha != expected_sha:
+            raise ValueError(f"Q2 governed artifact hash mismatch: {relative}")
+        archive_entries[relative] = data
+    for relative, path in manifest_paths.items():
+        archive_entries[relative] = path.read_bytes()
+
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for relative in sorted(archive_entries):
+            info = zipfile.ZipInfo(relative, date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o100644 << 16
+            archive.writestr(info, archive_entries[relative])
+    filename = f"{Q2_REPORT_KEY}_r1_OWNER_REVIEW.zip"
+    return output.getvalue(), filename
 
 
 def command_failure_reason(output: str, fallback: str) -> str:
@@ -1719,6 +1863,20 @@ class P1008AppHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_q2_owner_review_export(self) -> None:
+        try:
+            body, filename = build_q2_owner_review_export(self.manager.package_root)
+        except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
+            self.send_error(409, str(error))
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "application/zip")
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def _read_json_body(self) -> dict[str, Any]:
         length = int(self.headers.get("Content-Length") or "0")
         if length <= 0:
@@ -1736,6 +1894,9 @@ class P1008AppHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == CURRENT_WAR_BRIEF_ROUTE:
             self._send_current_war_brief()
+            return
+        if parsed.path == Q2_OWNER_REVIEW_EXPORT_ROUTE:
+            self._send_q2_owner_review_export()
             return
         if parsed.path == "/api/p1008/status":
             self._send_json(200, self.manager.snapshot())

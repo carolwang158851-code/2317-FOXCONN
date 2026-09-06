@@ -55,6 +55,9 @@ class WarBriefNavigationTests(unittest.TestCase):
             )
             self.assertIn("返回 Launcher", rendered)
             self.assertIn("進入新 UI", rendered)
+            self.assertIn("35,223,300 股（約 3,522.33 萬股）", rendered)
+            self.assertIn("8,776,917,438 元（約 87.77 億元）", rendered)
+            self.assertIn("30,653 筆", rendered)
             self.assertNotIn("file://", rendered)
             for route in (
                 "/launcher.html?stay=1&from=war_brief",
