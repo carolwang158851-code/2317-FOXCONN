@@ -62,6 +62,8 @@ FRESHNESS_STATUS_REL = "runtime/authority_freshness/latest_status.json"
 SOURCE_MANIFEST_REL = "data/NEWS_SCAN_SOURCE_MANIFEST.json"
 OFFICIAL_IR_STATUS_REL = "runtime/official_ir_evidence/latest_status.json"
 SERVER_VERSION = "P1008_APP_SERVER_20260812_OFFICIAL_IR_PARTIAL_COVERAGE_V1_1"
+CURRENT_WAR_BRIEF_ROUTE = "/" + rolling_brief.LATEST_REPORT_REL
+WAR_BRIEF_NAVIGATION_ID = "p1008-war-brief-navigation"
 
 WEEKDAY_ZH = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"]
 FIELD_LABEL_ZH = {
@@ -89,6 +91,24 @@ SOURCE_LABEL_ZH = {
 
 def now_iso() -> str:
     return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def add_war_brief_navigation(document: str) -> str:
+    """Add local-server navigation without mutating the governed artifact."""
+    if WAR_BRIEF_NAVIGATION_ID in document:
+        return document
+    body_marker = "<body>"
+    if body_marker not in document:
+        raise ValueError("Current war brief HTML has no supported body element")
+    navigation = f"""<nav id="{WAR_BRIEF_NAVIGATION_ID}" aria-label="P1008 戰報導覽" style="position:fixed;inset:0 0 auto 0;z-index:9999;display:flex;gap:10px;align-items:center;padding:12px 18px;background:rgba(7,17,31,.97);border-bottom:1px solid #274761;box-shadow:0 6px 18px rgba(0,0,0,.28)">
+  <a href="/launcher.html?stay=1&amp;from=war_brief" target="_self" style="display:inline-block;padding:9px 14px;border:1px solid #67e8f9;border-radius:9px;color:#cffafe;text-decoration:none;font-weight:700">返回 Launcher</a>
+  <a href="/ui/P1008_WARROOM_COMMAND_CENTER_v24.html?from=war_brief" target="_self" style="display:inline-block;padding:9px 14px;border:1px solid #34d399;border-radius:9px;color:#d1fae5;text-decoration:none;font-weight:700">進入新 UI</a>
+</nav>"""
+    return document.replace(
+        body_marker,
+        body_marker + navigation + '<div aria-hidden="true" style="height:64px"></div>',
+        1,
+    )
 
 
 def command_failure_reason(output: str, fallback: str) -> str:
@@ -1681,6 +1701,24 @@ class P1008AppHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_current_war_brief(self) -> None:
+        brief_path = self.manager.package_root / rolling_brief.LATEST_REPORT_REL
+        if not brief_path.is_file():
+            self.send_error(404, "Current war brief not found")
+            return
+        try:
+            document = brief_path.read_text(encoding="utf-8")
+            body = add_war_brief_navigation(document).encode("utf-8")
+        except (OSError, UnicodeError, ValueError) as error:
+            self.send_error(500, str(error))
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def _read_json_body(self) -> dict[str, Any]:
         length = int(self.headers.get("Content-Length") or "0")
         if length <= 0:
@@ -1696,6 +1734,9 @@ class P1008AppHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib handler hook.
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == CURRENT_WAR_BRIEF_ROUTE:
+            self._send_current_war_brief()
+            return
         if parsed.path == "/api/p1008/status":
             self._send_json(200, self.manager.snapshot())
             return
