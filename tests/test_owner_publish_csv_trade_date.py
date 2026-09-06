@@ -4,6 +4,8 @@ import csv
 import hashlib
 import importlib.util
 import json
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -212,6 +214,121 @@ class OwnerPublishTradeDateTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         self.assertIn("READY FOR OWNER REVIEW", completed.stdout)
         self.assertEqual(before, (sha256(self.root / PUBLISHER.DAILY_TARGET), sha256(self.root / PUBLISHER.MARKET_ACTIVITY_TARGET)))
+
+    def test_isolated_byte_copy_full_publish_and_duplicate_guard(self) -> None:
+        """Exercise the real --publish path without touching production authority."""
+        authority_paths = [
+            PUBLISHER.DAILY_TARGET,
+            PUBLISHER.MARKET_ACTIVITY_TARGET,
+            PUBLISHER.MACRO_TARGET,
+            PUBLISHER.FX_TREND_TARGET,
+            PUBLISHER.MACRO_EVENT_TARGET,
+            PUBLISHER.MANIFEST_PATH,
+        ]
+        source_hashes = {rel: sha256(PACKAGE_ROOT / rel) for rel in authority_paths}
+        for rel in authority_paths:
+            destination = self.root / rel
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(PACKAGE_ROOT / rel, destination)
+            self.assertEqual(sha256(destination), source_hashes[rel])
+
+        source_staging = PACKAGE_ROOT / "staging" / "2026-09-06"
+        isolated_staging = self.root / "staging" / "2026-09-06"
+        source_dry_run = json.loads((source_staging / "DRY_RUN.json").read_text(encoding="utf-8"))
+        for generated in source_dry_run["generatedFiles"]:
+            relative = Path(generated.replace("\\", "/"))
+            destination = self.root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(PACKAGE_ROOT / relative, destination)
+        isolated_dry_run_path = isolated_staging / "DRY_RUN.json"
+        shutil.copy2(source_staging / "DRY_RUN.json", isolated_dry_run_path)
+        original_isolated_dry_run = isolated_dry_run_path.read_bytes()
+
+        for status_rel, runtime_rel in (
+            (PUBLISHER.DAILY_PRICE_STATUS_PATH, "runtime/daily_price_incremental"),
+            (PUBLISHER.MARKET_ACTIVITY_STATUS_PATH, "runtime/market_activity_incremental"),
+        ):
+            status = json.loads((PACKAGE_ROOT / status_rel).read_text(encoding="utf-8"))
+            source_candidate = Path(status["candidate_path"])
+            source_run = source_candidate.parent
+            isolated_run = self.root / runtime_rel / status["run_id"]
+            shutil.copytree(source_run, isolated_run)
+            status["candidate_path"] = str(isolated_run / source_candidate.name)
+            isolated_receipts: list[str] = []
+            for receipt_value in status.get("receipt_paths", []):
+                source_receipt = Path(receipt_value)
+                isolated_receipt = isolated_run / source_receipt.relative_to(source_run)
+                receipt = json.loads(isolated_receipt.read_text(encoding="utf-8"))
+                source_raw = Path(receipt["raw_artifact_path"])
+                receipt["raw_artifact_path"] = str(
+                    isolated_run / source_raw.relative_to(source_run)
+                )
+                isolated_receipt.write_text(json.dumps(receipt), encoding="utf-8")
+                isolated_receipts.append(str(isolated_receipt))
+            status["receipt_paths"] = isolated_receipts
+            isolated_status = self.root / status_rel
+            isolated_status.parent.mkdir(parents=True, exist_ok=True)
+            isolated_status.write_text(json.dumps(status), encoding="utf-8")
+
+        before_counts = {
+            rel: PUBLISHER.row_count(self.root / rel)
+            for rel in (PUBLISHER.DAILY_TARGET, PUBLISHER.MARKET_ACTIVITY_TARGET)
+        }
+        environment = dict(
+            os.environ,
+            PYTHONDONTWRITEBYTECODE="1",
+            PYTHONIOENCODING="utf-8",
+        )
+        command = [
+            sys.executable,
+            str(PUBLISHER_PATH),
+            "--package-root",
+            str(self.root),
+            "--date",
+            "2026-09-06",
+            "--publish",
+        ]
+        published = subprocess.run(
+            command,
+            input="APPROVE 2026-09-04\n",
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=False,
+            env=environment,
+        )
+        self.assertEqual(published.returncode, 0, published.stdout + published.stderr)
+        self.assertIn("Formal CSV append completed", published.stdout)
+        for rel in (PUBLISHER.DAILY_TARGET, PUBLISHER.MARKET_ACTIVITY_TARGET):
+            header, rows, _ = PUBLISHER.read_csv_header_and_rows(self.root / rel)
+            date_field = "Date" if rel == PUBLISHER.DAILY_TARGET else "date"
+            dates = [row[header.index(date_field)] for row in rows]
+            self.assertEqual(dates.count("2026-09-04"), 1)
+            self.assertEqual(len(rows), before_counts[rel] + 4)
+
+        manifest = json.loads((self.root / PUBLISHER.MANIFEST_PATH).read_text(encoding="utf-8"))
+        entries = manifest["authoritativeFiles"] + manifest.get("nonAuthoritativeFiles", [])
+        by_path = {entry["path"]: entry for entry in entries}
+        for rel in authority_paths[:-1]:
+            self.assertEqual(by_path[rel]["sha256"], sha256(self.root / rel))
+
+        # A second publish request for the identical candidate must not append
+        # another formal row. Restoring only the request envelope exercises the
+        # full gate against the already-updated isolated authority.
+        isolated_dry_run_path.write_bytes(original_isolated_dry_run)
+        duplicate = subprocess.run(
+            command,
+            input="APPROVE 2026-09-04\n",
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=False,
+            env=environment,
+        )
+        self.assertEqual(duplicate.returncode, 3, duplicate.stdout + duplicate.stderr)
+        self.assertIn("contains no reconciled new trading rows", duplicate.stdout)
+        for rel, expected in source_hashes.items():
+            self.assertEqual(sha256(PACKAGE_ROOT / rel), expected)
 
 
 if __name__ == "__main__":

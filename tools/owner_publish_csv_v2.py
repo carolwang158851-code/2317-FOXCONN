@@ -536,8 +536,6 @@ def append_candidate(candidate: Path, target: Path, target_rel: str) -> int:
     if not candidate_rows:
         raise ValueError(f"{candidate} contains no candidate rows.")
     candidate_rows = normalize_candidate_rows_for_publish(target_rel, candidate_header, candidate_rows)
-    if target_rel == DAILY_TARGET:
-        validate_daily_price_publish_rows(candidate_header, candidate_rows)
     if target_rel in OBSERVATION_ONLY_TARGETS:
         actionable_errors = actionability_violations(candidate_header, candidate_rows)
         if actionable_errors:
@@ -551,10 +549,14 @@ def append_candidate(candidate: Path, target: Path, target_rel: str) -> int:
     }
     rows_to_append: list[list[str]] = []
     conflicting_keys: list[str] = []
+    seen_keys: set[str] = set()
     for row in candidate_rows:
         if not row:
             continue
         key = row_key(target_rel, candidate_header, row)
+        if not key or key in seen_keys:
+            raise ValueError(f"Candidate has missing/repeated Date/Key: {key!r}")
+        seen_keys.add(key)
         existing = existing_by_key.get(key)
         if existing is None:
             rows_to_append.append(row)
@@ -564,6 +566,11 @@ def append_candidate(candidate: Path, target: Path, target_rel: str) -> int:
         raise ValueError(
             f"Append refused: target already contains conflicting Date/Key {conflicting_keys}."
         )
+    if target_rel == DAILY_TARGET:
+        # An incremental candidate includes the already-governed formal prefix.
+        # Exact existing rows are proven above; trading-day/source validation
+        # applies to the rows that this publish operation will actually append.
+        validate_daily_price_publish_rows(candidate_header, rows_to_append)
     if not rows_to_append:
         return 0
 
