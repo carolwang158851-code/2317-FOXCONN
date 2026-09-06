@@ -479,18 +479,24 @@ class P1008JobManager:
             dry_run_path = staging_dir / "DRY_RUN.json"
             dry_run = owner_publish.read_json(dry_run_path)
             readiness = owner_publish.build_publish_readiness(self.package_root, dry_run)
-            candidate_date = str(dry_run.get("candidateDate") or staging_dir.name)
-            explanations = readiness_explanation_zh(readiness, candidate_date)
+            staging_candidate_date = str(dry_run.get("candidateDate") or staging_dir.name)
+            execution_date = str(readiness.get("executionDate") or date.today().isoformat())
+            formal_target_date = str(readiness.get("formalTargetDate") or staging_candidate_date)
+            explanations = readiness_explanation_zh(readiness, formal_target_date)
             generated_files = dry_run.get("generatedFiles", []) or []
             pending_owner = self.pending_owner_review()
             news = read_json(self.package_root / "runtime" / "warroom_news_scan_snapshot.json", default={}) or {}
             event_review = read_json(self.package_root / "runtime" / "warroom_event_review_state.json", default={}) or {}
             latest_report = self.latest_report_status()
-            approval_phrase = f"OWNER_APPROVE_PUBLISH_{candidate_date}"
+            approval_phrase = f"OWNER_APPROVE_PUBLISH_{formal_target_date}"
             return {
                 "status": "READY",
                 "stagingDate": staging_dir.name,
-                "candidateDate": candidate_date,
+                "candidateDate": staging_candidate_date,
+                "candidateTradingDate": readiness.get("candidateTradingDate"),
+                "formalTargetDate": formal_target_date,
+                "ownerApprovalDate": readiness.get("ownerApprovalDate"),
+                "executionDate": execution_date,
                 "dryRunPath": str(dry_run_path.relative_to(self.package_root)).replace("/", "\\"),
                 "generatedFiles": generated_files,
                 "candidatePending": bool(generated_files),
@@ -500,7 +506,7 @@ class P1008JobManager:
                 "marketProxyManifest": dry_run.get("marketProxyManifest", []) or [],
                 "readiness": readiness,
                 "readinessExplanation": explanations,
-                "marketContext": market_context(candidate_date),
+                "marketContext": market_context(formal_target_date),
                 "ownerApprovalPhrase": approval_phrase,
                 "pendingOwnerReview": pending_owner,
                 "newsScan": {
@@ -780,8 +786,9 @@ class P1008JobManager:
             self._add_error(message)
             return
 
-        candidate_date = str(review.get("candidateDate") or date_str or "")
-        expected_web_phrase = f"OWNER_APPROVE_PUBLISH_{candidate_date}"
+        staging_date = str(review.get("stagingDate") or date_str or "")
+        formal_target_date = str(review.get("formalTargetDate") or "")
+        expected_web_phrase = f"OWNER_APPROVE_PUBLISH_{formal_target_date}"
         if approval_phrase.strip() != expected_web_phrase:
             message = f"Owner approval phrase mismatch. Expected {expected_web_phrase}."
             self._set_step("owner-review", "Build Owner review package", "FAILED", message=message)
@@ -793,7 +800,15 @@ class P1008JobManager:
             self._set_step("owner-review", "Build Owner review package", "FAILED", message=message)
             self._add_error(message)
             return
-        self._set_step("owner-review", "Build Owner review package", "SUCCEEDED", message=f"candidateDate={candidate_date}")
+        self._set_step(
+            "owner-review",
+            "Build Owner review package",
+            "SUCCEEDED",
+            message=(
+                f"executionDate={review.get('executionDate')}; "
+                f"formalTargetDate={formal_target_date}"
+            ),
+        )
 
         self._set_step("owner-publish", "Owner formal CSV publish", "RUNNING")
         args = [
@@ -801,7 +816,7 @@ class P1008JobManager:
             "--package-root",
             str(self.package_root),
             "--date",
-            candidate_date,
+            staging_date,
             "--publish",
         ]
         started = time.monotonic()
@@ -812,7 +827,7 @@ class P1008JobManager:
             completed = subprocess.run(
                 [sys.executable, *args],
                 cwd=str(self.package_root),
-                input=f"APPROVE {candidate_date}\n",
+                input=f"APPROVE {formal_target_date}\n",
                 text=True,
                 encoding="utf-8",
                 errors="replace",
