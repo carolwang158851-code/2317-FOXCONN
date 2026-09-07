@@ -35,7 +35,7 @@ CONFERENCE = "https://www.honhai.com/zh-tw/investor-relations/investor-relations
 QUARTERLY = "https://www.honhai.com/zh-tw/investor-relations/financial-information/reports?category=quarterly"
 OBSOLETE_QUARTERLY = "https://www.honhai.com/zh-tw/investor-relations/financial-information/reports?section=quarterly"
 PRESS = "https://www.honhai.com/zh-tw/press-center/press-releases/latest-news"
-MOPS = "https://mops.twse.com.tw/mops/web/t05st02"
+MOPS = "https://mops.twse.com.tw/mops/api/t164sb03"
 RESULTS = "https://image.honhai.com/lawtalk/Hon_Hai_2Q26_Results_Chinese.pdf"
 TRANSCRIPT = "https://image.honhai.com/lawtalk/Hon_Hai_2Q26_Results_Transcript_Chinese.pdf"
 REPORT = "https://image.honhai.com/financial/Hon_Hai_2026_Q2_Financial_Report.pdf"
@@ -282,6 +282,41 @@ class OfficialIREvidenceIngestionTests(unittest.TestCase):
         integration = ResearchContentOrchestrator(self.root).integrate_official_ir(result)
         self.assertEqual(len(integration["validated_event_evidence"]), 1)
 
+    def test_current_mops_financial_api_response_is_period_bound_authority(self) -> None:
+        values = self.mapping()
+        values[MOPS] = FetchResponse(
+            json.dumps({"code": 200, "result": {"year": "115", "season": "2", "reportList": [["official"]]}}).encode(),
+            MOPS,
+            200,
+            "application/json;charset=UTF-8",
+            request_method="POST",
+            request_body_sha256="A" * 64,
+        )
+        result = self.scan(values)
+        mops = next(item for item in result["validated_event_evidence"] if item["source_id"] == "MOPS_OFFICIAL_DISCLOSURE")
+        self.assertEqual(mops["canonical_event_id"], "HON_HAI_FY2026_Q2_EARNINGS")
+        self.assertEqual(mops["quality_metadata"]["document_type"], "MOPS_RESULTS_DISCLOSURE_CONFIRMED")
+        self.assertEqual(next(item for item in result["source_statuses"] if item["source_id"] == "MOPS_OFFICIAL_DISCLOSURE")["status"], "SUCCESS")
+
+    def test_mops_financial_api_rejects_wrong_period_and_empty_report(self) -> None:
+        for result_payload in (
+            {"year": "115", "season": "1", "reportList": [["wrong-quarter"]]},
+            {"year": "115", "season": "2", "reportList": []},
+        ):
+            with self.subTest(result=result_payload):
+                values = self.mapping()
+                values[MOPS] = FetchResponse(
+                    json.dumps({"code": 200, "result": result_payload}).encode(),
+                    MOPS,
+                    200,
+                    "application/json;charset=UTF-8",
+                    request_method="POST",
+                    request_body_sha256="A" * 64,
+                )
+                result = self.scan(values)
+                failure = next(item for item in result["failed_sources"] if item["source_id"] == "MOPS_OFFICIAL_DISCLOSURE")
+                self.assertEqual(failure["error"], "MOPS_RESPONSE_SCHEMA_INVALID")
+
     def test_invalid_results_hash_does_not_block_independent_mops_evidence(self) -> None:
         values = self.mapping(
             conference=f'<a href="{RESULTS}">2Q26 Results</a>',
@@ -404,6 +439,33 @@ class OfficialIRTransportPortabilityTests(unittest.TestCase):
         self.assertTrue(request.full_url.isascii())
         self.assertIn("%E9%B4%BB%E6%B5%B7", request.full_url)
         self.assertEqual(result.body, b"%PDF-1.7\nfixture")
+
+    def test_live_mops_fetch_uses_exact_post_profile_and_records_lineage(self) -> None:
+        body = json.dumps({"code": 200, "result": {"year": "115", "season": "2", "reportList": [["official"]]}}).encode()
+        response = mock.MagicMock()
+        response.__enter__.return_value = response
+        response.read.return_value = body
+        response.geturl.return_value = MOPS
+        response.status = 200
+        response.headers.get.return_value = "application/json;charset=UTF-8"
+        response.headers.items.return_value = []
+        opener = mock.MagicMock()
+        opener.open.return_value = response
+        adapter = OfficialIREvidenceAdapter.__new__(OfficialIREvidenceAdapter)
+        adapter.authorization = {"timeoutSeconds": 12, "maxResponseBytes": 1024, "issuer": {"stockId": "2317"}}
+        adapter._validate_live_url = mock.MagicMock(side_effect=lambda value: value)
+        adapter.validate_url = mock.MagicMock(side_effect=lambda value, **_: value)
+        source = {"url": MOPS, "requestMethod": "POST", "requestProfile": "MOPS_T164SB03_FINANCIAL_STATEMENT_V1"}
+        with mock.patch(
+            "p1008_research_plugin.adapters.official_ir_evidence_adapter.build_opener",
+            return_value=opener,
+        ):
+            result = adapter._fetch_live_mops(source, (2026, 2))
+        request = opener.open.call_args.args[0]
+        self.assertEqual(request.method, "POST")
+        self.assertEqual(json.loads(request.data), {"companyId": "2317", "dataType": "2", "year": "115", "season": "2", "subsidiaryCompanyId": ""})
+        self.assertEqual(result.request_method, "POST")
+        self.assertRegex(result.request_body_sha256 or "", r"^[A-F0-9]{64}$")
 
 
 if __name__ == "__main__":

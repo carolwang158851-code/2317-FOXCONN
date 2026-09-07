@@ -43,6 +43,9 @@ class FetchResponse:
     status: int = 200
     content_type: str = "text/html; charset=utf-8"
     headers: Mapping[str, str] | None = None
+    request_method: str = "GET"
+    request_body_sha256: str | None = None
+    redirect_chain: tuple[Mapping[str, Any], ...] = ()
 
 
 Transport = Callable[[str], FetchResponse]
@@ -72,12 +75,20 @@ class _Links(HTMLParser):
 
 
 class _SafeRedirect(HTTPRedirectHandler):
-    def __init__(self, validate: Callable[[str], str]) -> None:
+    def __init__(self, validate: Callable[[str], str], redirects: list[dict[str, Any]] | None = None) -> None:
         super().__init__()
         self.validate = validate
+        self.redirects = redirects
 
     def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> Any:
         self.validate(newurl)
+        if self.redirects is not None:
+            self.redirects.append({
+                "source_url": req.full_url,
+                "status": code,
+                "location": headers.get("Location"),
+                "target_url": newurl,
+            })
         return super().redirect_request(req, fp, code, msg, headers, _ascii_transport_url(newurl))
 
 
@@ -179,7 +190,14 @@ class OfficialIREvidenceAdapter:
         host = parsed.hostname.lower().rstrip(".")
         if host in {"localhost", "localhost.localdomain"}:
             raise OfficialIREvidenceError("PRIVATE_NETWORK_REJECTED")
-        allowed = any(host == item["host"] and any(parsed.path.startswith(prefix) for prefix in item["pathPrefixes"]) for item in self.origins)
+        allowed = any(
+            host == item["host"]
+            and (
+                parsed.path in item.get("exactPaths", [])
+                or any(parsed.path.startswith(prefix) for prefix in item.get("pathPrefixes", []))
+            )
+            for item in self.origins
+        )
         if not allowed or (fixed_page and url not in self.fixed_sources):
             raise OfficialIREvidenceError("OFF_DOMAIN_URL_REJECTED")
         try:
@@ -203,7 +221,8 @@ class OfficialIREvidenceAdapter:
 
     def _fetch_live(self, url: str) -> FetchResponse:
         self._validate_live_url(url)
-        opener = build_opener(_SafeRedirect(self._validate_live_url))
+        redirects: list[dict[str, Any]] = []
+        opener = build_opener(_SafeRedirect(self._validate_live_url, redirects))
         transport_url = _ascii_transport_url(url)
         self._validate_live_url(transport_url)
         request = Request(transport_url, headers={"User-Agent": "P1008-Official-IR-Evidence/1.0", "Accept": "text/html,application/pdf"})
@@ -213,7 +232,63 @@ class OfficialIREvidenceAdapter:
                 body = response.read(maximum + 1)
                 if len(body) > maximum:
                     raise OfficialIREvidenceError("RESPONSE_TOO_LARGE")
-                return FetchResponse(body, response.geturl(), int(response.status), response.headers.get("Content-Type", ""), dict(response.headers.items()))
+                return FetchResponse(body, response.geturl(), int(response.status), response.headers.get("Content-Type", ""), dict(response.headers.items()), redirect_chain=tuple(redirects))
+        except OfficialIREvidenceError:
+            raise
+        except Exception as exc:
+            raise OfficialIREvidenceError(f"NETWORK_FETCH_FAILED:{type(exc).__name__}") from exc
+
+    def _fetch_live_mops(self, source: Mapping[str, Any], target_period: tuple[int, int] | None) -> FetchResponse:
+        if target_period is None:
+            raise OfficialIREvidenceError("MOPS_TARGET_PERIOD_REQUIRED")
+        if source.get("requestMethod") != "POST" or source.get("requestProfile") != "MOPS_T164SB03_FINANCIAL_STATEMENT_V1":
+            raise OfficialIREvidenceError("MOPS_REQUEST_PROFILE_INVALID")
+        url = source["url"]
+        self.validate_url(url, fixed_page=True)
+        self._validate_live_url(url)
+        year, quarter = target_period
+        request_payload = {
+            "companyId": self.authorization["issuer"]["stockId"],
+            "dataType": "2",
+            "year": str(year - 1911),
+            "season": str(quarter),
+            "subsidiaryCompanyId": "",
+        }
+        request_body = json.dumps(request_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        redirects: list[dict[str, Any]] = []
+        opener = build_opener(_SafeRedirect(self._validate_live_url, redirects))
+        request = Request(
+            _ascii_transport_url(url),
+            data=request_body,
+            headers={
+                "User-Agent": "P1008-Official-IR-Evidence/1.0",
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with opener.open(request, timeout=int(self.authorization["timeoutSeconds"])) as response:
+                maximum = int(self.authorization["maxResponseBytes"])
+                body = response.read(maximum + 1)
+                if len(body) > maximum:
+                    raise OfficialIREvidenceError("RESPONSE_TOO_LARGE")
+                final_url = response.geturl()
+                self.validate_url(final_url)
+                if urlparse(final_url).path.startswith("/mops/error/"):
+                    raise OfficialIREvidenceError("OFFICIAL_ENDPOINT_ERROR")
+                if int(response.status) != 200:
+                    raise OfficialIREvidenceError(f"HTTP_{response.status}")
+                return FetchResponse(
+                    body,
+                    final_url,
+                    int(response.status),
+                    response.headers.get("Content-Type", ""),
+                    dict(response.headers.items()),
+                    request_method="POST",
+                    request_body_sha256=_sha256(request_body),
+                    redirect_chain=tuple(redirects),
+                )
         except OfficialIREvidenceError:
             raise
         except Exception as exc:
@@ -232,6 +307,28 @@ class OfficialIREvidenceAdapter:
         if response.status != 200:
             raise OfficialIREvidenceError(f"HTTP_{response.status}")
         return response
+
+    def _mops_period(self, response: FetchResponse, target_period: tuple[int, int] | None) -> tuple[int, int]:
+        if target_period is None or "application/json" not in response.content_type.lower():
+            raise OfficialIREvidenceError("MOPS_RESPONSE_SCHEMA_INVALID")
+        try:
+            payload = json.loads(response.body.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise OfficialIREvidenceError("MOPS_RESPONSE_SCHEMA_INVALID") from exc
+        if not isinstance(payload, dict):
+            raise OfficialIREvidenceError("MOPS_RESPONSE_SCHEMA_INVALID")
+        result = payload.get("result")
+        year, quarter = target_period
+        if (
+            payload.get("code") != 200
+            or not isinstance(result, dict)
+            or str(result.get("year")) != str(year - 1911)
+            or str(result.get("season")) != str(quarter)
+            or not isinstance(result.get("reportList"), list)
+            or not result["reportList"]
+        ):
+            raise OfficialIREvidenceError("MOPS_RESPONSE_SCHEMA_INVALID")
+        return target_period
 
     @staticmethod
     def _links(response: FetchResponse) -> tuple[str, list[tuple[str, str]]]:
@@ -253,6 +350,12 @@ class OfficialIREvidenceAdapter:
             "originating_chain_id": f"OFFICIAL-IR-{source['sourceId']}", "document_type": document_type,
             "fiscal_period": f"FY{period[0]} Q{period[1]}" if period else None, "actionable": False,
         }
+        if response.request_method != "GET" or response.redirect_chain:
+            payload.update({
+                "request_method": response.request_method,
+                "request_body_sha256": response.request_body_sha256,
+                "redirect_chain": list(response.redirect_chain),
+            })
         receipt_id = "IR-RECEIPT-" + _sha256(_canonical(payload))[:20]
         receipt = {**payload, "receipt_id": receipt_id}
         path = run_dir / "receipts" / f"{receipt_id}.json"
@@ -338,8 +441,17 @@ class OfficialIREvidenceAdapter:
             source_evidence: list[dict[str, Any]] = []
             receipt_count_before = len(receipts)
             try:
-                page = self._fetch(source["url"], fixed_page=True)
-                text, links = self._links(page)
+                page = (
+                    self._fetch_live_mops(source, target_period)
+                    if source["role"] == "MOPS_OFFICIAL_DISCLOSURE" and self.transport is None
+                    else self._fetch(source["url"], fixed_page=True)
+                )
+                if source["role"] == "MOPS_OFFICIAL_DISCLOSURE" and "application/json" in page.content_type.lower():
+                    mops_period = self._mops_period(page, target_period)
+                    text, links = "", []
+                else:
+                    mops_period = None
+                    text, links = self._links(page)
                 page_receipt = self._receipt(source=source, response=page, document_type="SOURCE_PAGE", period=None, run_dir=run_dir)
                 receipts.append(page_receipt)
                 if source["role"] == "HON_HAI_EVENT_CALENDAR":
@@ -351,7 +463,11 @@ class OfficialIREvidenceAdapter:
                     source_statuses.append({"source_id": source["sourceId"], "status": "SUCCESS" if selected else "NO_CHANGE", "evidence_count": 0, "receipt_count": len(receipts) - receipt_count_before})
                     continue
                 candidates = list(links)
-                if source["role"] == "MOPS_OFFICIAL_DISCLOSURE":
+                if mops_period is not None:
+                    receipt = self._receipt(source=source, response=page, document_type="MOPS_RESULTS_DISCLOSURE_CONFIRMED", period=mops_period, run_dir=run_dir)
+                    receipts.append(receipt)
+                    source_evidence.append(self._evidence(receipt, mops_period, "MOPS_RESULTS_DISCLOSURE_CONFIRMED"))
+                elif source["role"] == "MOPS_OFFICIAL_DISCLOSURE":
                     candidates.append((page.final_url, text))
                 for document_url, label in candidates:
                     classified = self._document_type(source["role"], label, document_url, text)
