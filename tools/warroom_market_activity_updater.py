@@ -19,7 +19,7 @@ from contextlib import contextmanager
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Iterator
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit
 
 import owner_publish_csv_v2 as publisher
 
@@ -99,6 +99,27 @@ def source_url(month: str) -> str:
     return f"https://{TWSE_HOST}{TWSE_PATH}?{query}"
 
 
+def approved_redirect_url(location: str, request_url: str) -> str:
+    """Allow one redirect only when it preserves the governed TWSE request."""
+    if not location:
+        raise UpdateFailure("TWSE redirect has no Location header")
+    target = urlsplit(urljoin(request_url, location))
+    requested = urlsplit(request_url)
+    if (
+        target.scheme != "https"
+        or target.hostname != TWSE_HOST
+        or target.port not in (None, 443)
+        or target.username is not None
+        or target.password is not None
+        or target.fragment
+        or target.path != TWSE_PATH
+        or parse_qsl(target.query, keep_blank_values=True)
+        != parse_qsl(requested.query, keep_blank_values=True)
+    ):
+        raise UpdateFailure(f"TWSE redirect target is not approved: {location}")
+    return target.geturl()
+
+
 def parse_twse_month(content: bytes, month: str) -> dict[str, dict[str, Any]]:
     try:
         text = content.decode("cp950", errors="strict")
@@ -146,34 +167,54 @@ def parse_twse_month(content: bytes, month: str) -> dict[str, dict[str, Any]]:
 
 
 def fetch_twse_month(month: str, timeout_seconds: int = 30) -> tuple[bytes, dict[str, Any]]:
-    """Perform exactly one verified HTTPS GET with zero application retries."""
+    """Perform a verified HTTPS GET with at most one governed redirect."""
 
     context = ssl.create_default_context()
     path = f"{TWSE_PATH}?{urlencode({'date': month.replace('-', '') + '01', 'stockNo': '2317', 'response': 'csv'})}"
+    request_url = source_url(month)
     connection: http.client.HTTPSConnection | None = None
     try:
-        connection = http.client.HTTPSConnection(
-            TWSE_HOST, timeout=timeout_seconds, context=context
-        )
-        connection.request(
-            "GET",
-            path,
-            headers={"Accept": "text/csv", "User-Agent": "P1008-Market-Activity/1.0"},
-        )
-        response = connection.getresponse()
-        sock = connection.sock
-        tls_version = sock.version() if sock else "NOT_AVAILABLE"
-        certificate = sock.getpeercert() if sock else {}
-        content = response.read()
+        def request_once(request_path: str) -> tuple[Any, bytes, str, dict[str, Any]]:
+            nonlocal connection
+            connection = http.client.HTTPSConnection(
+                TWSE_HOST, timeout=timeout_seconds, context=context
+            )
+            connection.request(
+                "GET",
+                request_path,
+                headers={"Accept": "text/csv", "User-Agent": "P1008-Market-Activity/1.0"},
+            )
+            response = connection.getresponse()
+            sock = connection.sock
+            tls = sock.version() if sock else "NOT_AVAILABLE"
+            cert = sock.getpeercert() if sock else {}
+            return response, response.read(), tls, cert
+
+        response, content, tls_version, certificate = request_once(path)
+        final_url = request_url
+        redirect_status: int | None = None
+        redirect_location: str | None = None
+        if response.status == 307:
+            redirect_status = response.status
+            redirect_location = response.getheader("Location")
+            final_url = approved_redirect_url(str(redirect_location or ""), request_url)
+            connection.close()
+            connection = None
+            target = urlsplit(final_url)
+            redirected_path = target.path + (f"?{target.query}" if target.query else "")
+            response, content, tls_version, certificate = request_once(redirected_path)
         if response.status != 200:
             raise UpdateFailure(f"TWSE {month} HTTP status {response.status}")
         issuer = ", ".join("=".join(item) for group in certificate.get("issuer", ()) for item in group)
         subject = ", ".join("=".join(item) for group in certificate.get("subject", ()) for item in group)
         metadata = {
             "month": month,
-            "request_url": source_url(month),
+            "request_url": request_url,
+            "final_url": final_url,
             "http_status": response.status,
-            "https_get_count": 1,
+            "https_get_count": 2 if redirect_status is not None else 1,
+            "redirect_status": redirect_status,
+            "redirect_location": redirect_location,
             "max_retries": 0,
             "tls_version": tls_version,
             "certificate_issuer": issuer,
