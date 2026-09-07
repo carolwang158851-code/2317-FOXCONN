@@ -601,6 +601,113 @@ class PhaseB1OpsLauncherReportRecoveryTests(unittest.TestCase):
         self.assertIn("資料截止：2026-07-24", rendered)
         self.assertIn("市場活動資料未與價格資料同日", rendered)
 
+    def test_rolling_brief_prefers_revalidated_same_run_candidate_overlay(self) -> None:
+        self._write_matching_manifests()
+        daily_id = "P1008-DAILY-PRICE-VALIDATED"
+        market_id = "P1008-MARKET-ACTIVITY-VALIDATED"
+        daily_dir = self.root / "runtime/daily_price_incremental" / daily_id
+        market_dir = self.root / "runtime/market_activity_incremental" / market_id
+        daily_dir.mkdir(parents=True)
+        market_dir.mkdir(parents=True)
+        daily_candidate = daily_dir / "2317_daily_price.incremental.candidate.csv"
+        market_candidate = market_dir / "2317_daily_market_activity.incremental.candidate.csv"
+        daily_candidate.write_text(
+            "Date,Close,QuarterKey,BVPS_ref,PB_daily,DataSupportLevel,Status\n"
+            "2026-07-28,255.0,2026Q1,127.12,2.006,OFFICIAL_TWSE_A1,OK\n",
+            encoding="utf-8",
+        )
+        market_candidate.write_text(
+            "date,stock_id,trade_volume,trade_value,transaction_count,source_url,source_month\n"
+            "2026-07-28,2317,200,51000,20,https://www.twse.com.tw/source,2026-07\n",
+            encoding="utf-8",
+        )
+        (daily_dir / "RESULT.json").write_text(
+            json.dumps({"candidate_path": str(daily_candidate)}), encoding="utf-8"
+        )
+        (market_dir / "RESULT.json").write_text(
+            json.dumps({"candidate_path": str(market_candidate)}), encoding="utf-8"
+        )
+        status_path = self.root / rolling_brief.FRESHNESS_STATUS_REL
+        status_path.parent.mkdir(parents=True, exist_ok=True)
+        status_path.write_text(
+            json.dumps(
+                {
+                    "status": "PASS_CANDIDATE_OVERLAY",
+                    "freshness_scope": "CANDIDATE_OVERLAY",
+                    "candidate_validated_through": "2026-07-28",
+                    "daily_price_run_id": daily_id,
+                    "market_activity_run_id": market_id,
+                    "actionable": False,
+                }
+            ),
+            encoding="utf-8",
+        )
+        validated = {
+            "status": "PASS_CANDIDATE_OVERLAY",
+            "candidate_validated_through": "2026-07-28",
+            "daily_price_run_id": daily_id,
+            "market_activity_run_id": market_id,
+            "receipt_paths": ["daily.receipt.json", "market.receipt.json"],
+            "actionable": False,
+        }
+        with mock.patch.object(
+            rolling_brief.authority_freshness,
+            "validate_candidate_overlay",
+            return_value=validated,
+        ):
+            rolling_brief.refresh_current_brief(self.root)
+        brief = json.loads(
+            (self.root / rolling_brief.CURRENT_BRIEF_REL).read_text(encoding="utf-8")
+        )
+        rendered = (self.root / rolling_brief.LATEST_REPORT_REL).read_text(encoding="utf-8")
+        self.assertEqual(brief["authorityDate"], "2026-07-28")
+        self.assertEqual(brief["formalAuthorityDate"], "2026-07-27")
+        self.assertEqual(brief["dataLevel"], "候選已驗證")
+        self.assertFalse(brief["actionable"])
+        self.assertIn("市場資料截止：2026-07-28", rendered)
+        self.assertIn("正式 Authority 截止：2026-07-27", rendered)
+        self.assertIn("候選並非正式 Authority", rendered)
+
+    def test_rolling_brief_falls_back_explicitly_when_candidate_revalidation_fails(self) -> None:
+        self._write_matching_manifests()
+        status_path = self.root / rolling_brief.FRESHNESS_STATUS_REL
+        status_path.parent.mkdir(parents=True, exist_ok=True)
+        status_path.write_text(
+            json.dumps(
+                {
+                    "status": "PASS_CANDIDATE_OVERLAY",
+                    "freshness_scope": "CANDIDATE_OVERLAY",
+                    "candidate_validated_through": "2026-07-28",
+                    "daily_price_run_id": "missing-daily",
+                    "market_activity_run_id": "missing-market",
+                    "actionable": False,
+                }
+            ),
+            encoding="utf-8",
+        )
+        rolling_brief.refresh_current_brief(self.root)
+        brief = json.loads(
+            (self.root / rolling_brief.CURRENT_BRIEF_REL).read_text(encoding="utf-8")
+        )
+        rendered = (self.root / rolling_brief.LATEST_REPORT_REL).read_text(encoding="utf-8")
+        self.assertEqual(brief["authorityDate"], "2026-07-27")
+        self.assertEqual(brief["formalAuthorityDate"], "2026-07-27")
+        self.assertEqual(brief["dataLevel"], "正式資料")
+        self.assertIsNone(brief["candidateLineage"])
+        self.assertIn("已明確退回正式 Authority", rendered)
+
+    def test_governed_ui_keeps_existing_circuit_board_asset(self) -> None:
+        ui = (PACKAGE_ROOT / "ui/P1008_WARROOM_COMMAND_CENTER_v24.html").read_text(
+            encoding="utf-8"
+        )
+        asset = PACKAGE_ROOT / "ui/assets/p1008_motherboard_ultrawide_30x9_20260706.png"
+        self.assertIn("assets/p1008_motherboard_ultrawide_30x9_20260706.png", ui)
+        self.assertTrue(asset.is_file())
+        self.assertEqual(
+            sha256(asset),
+            "FCF904BCF42319B5EB96C0C181A42EC2D2E3006100A0857D8802B14616060439",
+        )
+
     def test_html_kpi_mutation_with_unchanged_identity_fails_closed(self) -> None:
         self._write_matching_manifests()
         rolling_brief.refresh_current_brief(self.root)
