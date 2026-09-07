@@ -9,7 +9,7 @@
   "sources": [
     {"sourceId": "HON_HAI_EVENT_CALENDAR", "role": "HON_HAI_EVENT_CALENDAR", "url": "https://www.honhai.com/zh-tw/investor-relations/investor-relations-activities/event-calendar", "authorityScope": "SCHEDULE_ONLY"},
     {"sourceId": "HON_HAI_INVESTOR_CONFERENCE", "role": "HON_HAI_INVESTOR_CONFERENCE", "url": "https://www.honhai.com/zh-tw/investor-relations/investor-relations-activities/investor-conference", "authorityScope": "OFFICIAL_DOCUMENT_DISCOVERY"},
-    {"sourceId": "HON_HAI_QUARTERLY_REPORTS", "role": "HON_HAI_QUARTERLY_REPORTS", "url": "https://www.honhai.com/zh-tw/investor-relations/financial-information/reports?section=quarterly", "authorityScope": "OFFICIAL_DOCUMENT_DISCOVERY"},
+    {"sourceId": "HON_HAI_QUARTERLY_REPORTS", "role": "HON_HAI_QUARTERLY_REPORTS", "url": "https://www.honhai.com/zh-tw/investor-relations/financial-information/reports?category=quarterly", "authorityScope": "OFFICIAL_DOCUMENT_DISCOVERY"},
     {"sourceId": "HON_HAI_PRESS_RELEASES", "role": "HON_HAI_PRESS_RELEASES", "url": "https://www.honhai.com/zh-tw/press-center/press-releases/latest-news", "authorityScope": "RESULTS_RELEASE_ONLY"},
     {"sourceId": "MOPS_OFFICIAL_DISCLOSURE", "role": "MOPS_OFFICIAL_DISCLOSURE", "url": "https://mops.twse.com.tw/mops/web/t05st02", "authorityScope": "MATCHING_2317_PERIOD_DISCLOSURE_ONLY"}
   ],

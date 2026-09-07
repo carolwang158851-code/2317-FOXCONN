@@ -32,7 +32,8 @@ import warroom_report_trigger_runtime as trigger_runtime  # noqa: E402
 NOW = "2026-08-12T12:30:00Z"
 CALENDAR = "https://www.honhai.com/zh-tw/investor-relations/investor-relations-activities/event-calendar"
 CONFERENCE = "https://www.honhai.com/zh-tw/investor-relations/investor-relations-activities/investor-conference"
-QUARTERLY = "https://www.honhai.com/zh-tw/investor-relations/financial-information/reports?section=quarterly"
+QUARTERLY = "https://www.honhai.com/zh-tw/investor-relations/financial-information/reports?category=quarterly"
+OBSOLETE_QUARTERLY = "https://www.honhai.com/zh-tw/investor-relations/financial-information/reports?section=quarterly"
 PRESS = "https://www.honhai.com/zh-tw/press-center/press-releases/latest-news"
 MOPS = "https://mops.twse.com.tw/mops/web/t05st02"
 RESULTS = "https://image.honhai.com/lawtalk/Hon_Hai_2Q26_Results_Chinese.pdf"
@@ -340,6 +341,12 @@ class OfficialIREvidenceIngestionTests(unittest.TestCase):
             adapter.validate_url("https://example.com/user-controlled")
         with self.assertRaises(OfficialIREvidenceError):
             adapter.validate_url("http://127.0.0.1/internal")
+
+    def test_quarterly_discovery_uses_only_the_current_fixed_official_source(self) -> None:
+        adapter = OfficialIREvidenceAdapter(self.root, transport=FixtureTransport(self.mapping()))
+        self.assertEqual(adapter.validate_url(QUARTERLY, fixed_page=True), QUARTERLY)
+        with self.assertRaisesRegex(OfficialIREvidenceError, "OFF_DOMAIN_URL_REJECTED"):
+            adapter.validate_url(OBSOLETE_QUARTERLY, fixed_page=True)
 
     def test_hash_mismatch_is_rejected(self) -> None:
         result = self.scan(self.mapping(conference=f'<a href="{RESULTS}">2Q26 Results</a>', documents={RESULTS: b"genuine"}))
