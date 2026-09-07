@@ -58,6 +58,13 @@ def copy_gfs_contract_overlay(package: Path) -> None:
     )
 
 
+def copy_quarterly_authority_contract(package: Path) -> None:
+    shutil.copytree(
+        PACKAGE_ROOT / "contracts" / "p1008_quarterly_authority",
+        package / "contracts" / "p1008_quarterly_authority",
+    )
+
+
 def authority_sandbox(root: Path) -> Path:
     package = root / "package"
     shutil.copytree(PACKAGE_ROOT / "data", package / "data")
@@ -66,6 +73,7 @@ def authority_sandbox(root: Path) -> Path:
         package / "contracts" / "p1008_research_plugin" / "v1.0",
     )
     copy_gfs_contract_overlay(package)
+    copy_quarterly_authority_contract(package)
     (package / "rules").mkdir(parents=True)
     shutil.copy2(
         PACKAGE_ROOT / "rules" / "RULE_STATUS_MANIFEST.json",
@@ -83,6 +91,7 @@ def frozen_authority_package(root: Path) -> Path:
         package / "contracts" / "p1008_research_plugin" / "v1.0",
     )
     copy_gfs_contract_overlay(package)
+    copy_quarterly_authority_contract(package)
     (package / "rules").mkdir(parents=True)
     shutil.copy2(
         PACKAGE_ROOT / "rules" / "RULE_STATUS_MANIFEST.json",

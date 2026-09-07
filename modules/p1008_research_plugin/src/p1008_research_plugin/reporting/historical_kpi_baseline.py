@@ -346,7 +346,7 @@ def build_historical_kpi_baseline(package_root: Path, analysis: Any) -> dict[str
         revenue_window.append(_dec(row["Revenue_Q_100M"]))
         if len(revenue_window) > 4:
             revenue_window.pop(0)
-        if len(revenue_window) == 4 and sum(revenue_window) != 0:
+        if len(revenue_window) == 4 and sum(revenue_window) != 0 and row.get("MarketCap_100M"):
             ps_common = dict(common)
             ps_common.update({
                 "source_id": f"AUTH-MASTER-{master.actual_sha256[:16]}",

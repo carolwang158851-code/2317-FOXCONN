@@ -10,6 +10,7 @@ from pathlib import Path
 from ..adapters.authority_adapter import AuthorityAdapter
 from ..phaseb1_common import canonical_json_bytes, sha256_bytes, sha256_file
 from ..plugin_module.contracts import ValidatedEvidence
+from ..quarterly_authority import latest_available_roic_row, quarterly_metric_availability
 from ..quarterly_earnings import QuarterlyEarningsPacket
 from .analysis_contracts import (
     AnalysisPacket,
@@ -170,7 +171,9 @@ class QuarterlyAnalysisBuilder:
         q2_fcf_rounding_tolerance = Decimal("1")
         if q2_fcf_rounding_difference > q2_fcf_rounding_tolerance:
             raise ValueError("Q2 FCF derivations do not reconcile within rounding tolerance")
-        history_rows = list(master.rows[-7:])
+        qperiod = q["fiscalPeriod"].replace("FY", "").replace(" ", "")
+        qperiod_is_formal = any(row["Quarter"] == qperiod for row in master.rows)
+        history_rows = list(master.rows[-8:] if qperiod_is_formal else master.rows[-7:])
         q4_2025_rows = [row for row in master.rows if row["Quarter"] == "2025Q4"]
         if len(q4_2025_rows) != 1 or not q4_2025_rows[0].get("EPS_Q"):
             raise ValueError("2025Q4 master EPS is not uniquely available")
@@ -186,32 +189,69 @@ class QuarterlyAnalysisBuilder:
             for row, gross_profit in zip(history_rows, historical_gross_profit)
         ]
         q2_opex_proxy = _d(f["grossProfitMillionTwd"]) - _d(f["operatingIncomeMillionTwd"])
+        def with_current(field: str, current: str) -> list[str]:
+            values = [row[field] for row in history_rows]
+            return values if qperiod_is_formal else values + [current]
+
+        def append_current(values: list[str], current: str) -> list[str]:
+            return values if qperiod_is_formal else values + [current]
+
         history = {
-            "periods": [row["Quarter"] for row in history_rows] + [q["fiscalPeriod"].replace("FY", "").replace(" ", "")],
-            "revenue100mTwd": [row["Revenue_Q_100M"] for row in history_rows]
-            + [str((_d(f["revenueMillionTwd"]) / Decimal("100")).quantize(Decimal("0.01")))],
-            "grossProfit100mTwd": [str(item.quantize(Decimal("0.01"))) for item in historical_gross_profit]
-            + [str((_d(f["grossProfitMillionTwd"]) / Decimal("100")).quantize(Decimal("0.01")))],
-            "grossProfitOrigin": ["DERIVED_FROM_GOVERNED_AUTHORITY"] * len(history_rows) + ["OFFICIAL"],
-            "operatingProfitOrigin": ["GOVERNED_AUTHORITY"] * len(history_rows) + ["OFFICIAL"],
-            "grossMarginPct": [row["GrossMarginPct"] for row in history_rows] + [f["grossMarginPct"]],
-            "operatingIncome100mTwd": [row["OperatingIncome_Q_100M"] for row in history_rows]
-            + [str((_d(f["operatingIncomeMillionTwd"]) / Decimal("100")).quantize(Decimal("0.01")))],
-            "operatingMarginPct": [row["OperatingMarginPct"] for row in history_rows] + [f["operatingMarginPct"]],
-            "opexProxy100mTwd": [str(item.quantize(Decimal("0.01"))) for item in historical_opex_proxy]
-            + [str((q2_opex_proxy / Decimal("100")).quantize(Decimal("0.01")))],
-            "opexProxyRevenuePct": [
-                str((item / _d(row["Revenue_Q_100M"]) * Decimal("100")).quantize(Decimal("0.001")))
-                for row, item in zip(history_rows, historical_opex_proxy)
-            ] + [str((q2_opex_proxy / _d(f["revenueMillionTwd"]) * Decimal("100")).quantize(Decimal("0.001")))],
-            "epsTwd": [row["EPS_Q"] for row in history_rows] + [f["epsTwd"]],
-            "roicPct": [row["ROIC_Precise_Pct"] for row in history_rows] + ["INSUFFICIENT_DATA"],
-            "bvpsTwd": [row["BVPS"] for row in history_rows] + ["INSUFFICIENT_DATA"],
-            "roeTtmPct": [row["ROE_TTM_Pct"] for row in history_rows] + ["INSUFFICIENT_DATA"],
-            "roeAnnualPct": [row["ROE_Annual_Pct"] for row in history_rows] + ["INSUFFICIENT_DATA"],
+            "periods": [row["Quarter"] for row in history_rows] + ([] if qperiod_is_formal else [qperiod]),
+            "revenue100mTwd": append_current(
+                [row["Revenue_Q_100M"] for row in history_rows],
+                str((_d(f["revenueMillionTwd"]) / Decimal("100")).quantize(Decimal("0.01"))),
+            ),
+            "grossProfit100mTwd": append_current(
+                [str(item.quantize(Decimal("0.01"))) for item in historical_gross_profit],
+                str((_d(f["grossProfitMillionTwd"]) / Decimal("100")).quantize(Decimal("0.01"))),
+            ),
+            "grossProfitOrigin": append_current(
+                ["DERIVED_FROM_GOVERNED_AUTHORITY"] * len(history_rows), "OFFICIAL"
+            ),
+            "operatingProfitOrigin": append_current(
+                ["GOVERNED_AUTHORITY"] * len(history_rows), "OFFICIAL"
+            ),
+            "grossMarginPct": append_current(
+                [row["GrossMarginPct"] for row in history_rows], f["grossMarginPct"]
+            ),
+            "operatingIncome100mTwd": append_current(
+                [row["OperatingIncome_Q_100M"] for row in history_rows],
+                str((_d(f["operatingIncomeMillionTwd"]) / Decimal("100")).quantize(Decimal("0.01"))),
+            ),
+            "operatingMarginPct": append_current(
+                [row["OperatingMarginPct"] for row in history_rows], f["operatingMarginPct"]
+            ),
+            "opexProxy100mTwd": append_current(
+                [str(item.quantize(Decimal("0.01"))) for item in historical_opex_proxy],
+                str((q2_opex_proxy / Decimal("100")).quantize(Decimal("0.01"))),
+            ),
+            "opexProxyRevenuePct": append_current(
+                [
+                    str((item / _d(row["Revenue_Q_100M"]) * Decimal("100")).quantize(Decimal("0.001")))
+                    for row, item in zip(history_rows, historical_opex_proxy)
+                ],
+                str((q2_opex_proxy / _d(f["revenueMillionTwd"]) * Decimal("100")).quantize(Decimal("0.001"))),
+            ),
+            "epsTwd": with_current("EPS_Q", f["epsTwd"]),
+            "roicPct": [
+                row["ROIC_Precise_Pct"] if row.get("ROIC_Status") != "INSUFFICIENT_DATA" else "INSUFFICIENT_DATA"
+                for row in history_rows
+            ] + ([] if qperiod_is_formal else ["INSUFFICIENT_DATA"]),
+            "bvpsTwd": with_current("BVPS", "INSUFFICIENT_DATA"),
+            "roeTtmPct": with_current("ROE_TTM_Pct", "INSUFFICIENT_DATA"),
+            "roeAnnualPct": with_current("ROE_Annual_Pct", "INSUFFICIENT_DATA"),
             "sourceEvidenceIds": [authority_ids["master"], *official_ids],
             "historyStatus": "EIGHT_QUARTERS_AVAILABLE",
         }
+        availability = quarterly_metric_availability(master.rows)
+        history.update(
+            {
+                "latestValidRoeQuarter": availability["latestValidRoeQuarter"],
+                "latestValidRoicQuarter": availability["latestValidRoicQuarter"],
+                "unavailableRoicQuarters": availability["unavailableRoicQuarters"],
+            }
+        )
         price_value = _d(latest_price["Close"])
         pb_value = _d(latest_price["PB_daily"])
         ttm_components = [Decimal("4.15"), q4_2025_eps, Decimal("3.56"), _d(f["epsTwd"])]
@@ -219,6 +259,7 @@ class QuarterlyAnalysisBuilder:
         ttm_eps = valuation_arithmetic["ttm_eps"]
         implied_bvps = price_value / pb_value
         governed_bvps = _d(latest_master["BVPS"])
+        latest_roic_master = latest_available_roic_row(master.rows)
         dividend = Decimal("7.2")
         h2_2025_eps = valuation_arithmetic["h2_2025_eps"]
         ttm_revenue_periods = ("2025Q3", "2025Q4", "2026Q1")
@@ -663,7 +704,7 @@ class QuarterlyAnalysisBuilder:
             eps=self._metric(f["epsTwd"], "元", q["fiscalPeriod"], TrendStatus.IMPROVING, official_ids),
             eps_ttm=self._metric(latest_master["EPS_TTM"], "元", f"正式authority至{latest_master['Quarter']}", TrendStatus.STABLE, [authority_ids["master"]], ["尚未把FY2026 Q2換入TTM，P/E只可作舊基線。"]),
             roe=self._metric("6.21", "%", "2026H1", TrendStatus.IMPROVING, official_ids),
-            roic=self._metric(latest_master["ROIC_Precise_Pct"], "%", latest_master["Quarter"], TrendStatus.STABLE, [authority_ids["master"]]),
+            roic=self._metric(latest_roic_master["ROIC_Precise_Pct"], "%", str(latest_roic_master["Quarter"]), TrendStatus.STABLE, [authority_ids["master"]], [f"最新正式ROIC季度為{latest_roic_master['Quarter']}；較新季度若為INSUFFICIENT_DATA不得外推。"]),
             operating_cash_flow=self._metric(str(q2_cfo), "新台幣百萬元", q["fiscalPeriod"], TrendStatus.WEAKENING, official_ids + [authority_ids["cash"]], ["DERIVED_FROM_OFFICIAL: 2026H1 CFO minus 2026Q1 CFO under the same consolidated TWD scope."]),
             free_cash_flow=self._metric(str(q2_fcf_direct), "新台幣百萬元", q["fiscalPeriod"], TrendStatus.WEAKENING, official_ids + [authority_ids["cash"]], [f"DERIVED_FROM_OFFICIAL; cumulative-path reconciliation difference {q2_fcf_rounding_difference} million TWD within documented rounding tolerance."]),
             dividend_safety=self._metric(latest_master["CashDividend"], "元／股", latest_master["Quarter"], TrendStatus.WATCH, [authority_ids["master"], result_id], ["H1 negative FCF requires observation but does not prove structural dividend impairment."]),

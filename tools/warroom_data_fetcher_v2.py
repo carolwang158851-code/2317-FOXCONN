@@ -19,6 +19,7 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -26,6 +27,17 @@ import urllib.request
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+
+PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+PLUGIN_SRC = PACKAGE_ROOT / "modules" / "p1008_research_plugin" / "src"
+if str(PLUGIN_SRC) not in sys.path:
+    sys.path.insert(0, str(PLUGIN_SRC))
+
+from p1008_research_plugin.quarterly_authority import (
+    load_quarterly_authority_contract,
+    validate_quarterly_authority_row,
+)
 
 
 DAILY_COLUMNS = [
@@ -319,6 +331,11 @@ def verify_master_authority(package_root: Path) -> dict[str, Any]:
         raise ValueError("SCHEMA_HEADER_MISMATCH: 2317_master_v9.csv 欄位與 manifest 不一致")
     if len(rows) != entry.get("rowCount"):
         raise ValueError("ROW_COUNT_MISMATCH: 2317_master_v9.csv 筆數與 manifest 不一致")
+    quarterly_contract = load_quarterly_authority_contract(package_root)
+    for row in rows:
+        validate_quarterly_authority_row(
+            row, allowed_statuses=quarterly_contract["roicStatusEnum"]
+        )
     latest = sorted(rows, key=lambda row: row["Quarter"])[-1]
     for field in ("Quarter", "BVPS", "CashDividend"):
         if not latest.get(field):

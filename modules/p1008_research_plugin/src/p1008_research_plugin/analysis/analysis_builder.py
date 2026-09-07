@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Iterable, Mapping
 if TYPE_CHECKING:
     from ..quarterly_earnings import QuarterlyEarningsPacket
 
+from ..quarterly_authority import latest_available_roic_row
+
 from .analysis_contracts import (
     AnalysisPacket,
     AudienceLens,
@@ -140,6 +142,7 @@ class AnalysisBuilder:
         cash = self.authority.read_csv("data/2317_cash_flow_authority.csv")
 
         latest_master = master.rows[-1]
+        latest_roic_master = latest_available_roic_row(master.rows)
         latest_price = price.rows[-1]
         latest_activity = activity.rows[-1]
         latest_cash = cash.rows[-1]
@@ -231,7 +234,7 @@ class AnalysisBuilder:
             eps=self._metric(latest_master["EPS_Q"], "元", master_period, _trend(_decimal(latest_master["EPS_YoY_Pct"])), [authority_ids["master"]]),
             eps_ttm=self._metric(latest_master["EPS_TTM"], "元", f"TTM至{master_period}", TrendStatus.STABLE, [authority_ids["master"]]),
             roe=self._metric(latest_master["ROE_TTM_Pct"], "%", f"TTM至{master_period}", TrendStatus.STABLE, [authority_ids["master"]]),
-            roic=self._metric(latest_master["ROIC_Precise_Pct"], "%", master_period, TrendStatus.STABLE, [authority_ids["master"]]),
+            roic=self._metric(latest_roic_master["ROIC_Precise_Pct"], "%", str(latest_roic_master["Quarter"]), TrendStatus.STABLE, [authority_ids["master"]]),
             operating_cash_flow=self._metric(latest_cash["operating_cash_flow_thousand_ntd"], "新台幣千元", cash_period, TrendStatus.IMPROVING, [authority_ids["cash"]]),
             free_cash_flow=self._metric(fcf_value, "新台幣億元", cash_period, fcf_status, [authority_ids["cash"]], [f"單季FCF受營運資金與資本支出時點影響，需由{next_financial_period}及TTM確認。"]),
             dividend_safety=self._metric(latest_master["CashDividend"], "元／股", f"{master_period}列股利基線", TrendStatus.WATCH, [authority_ids["master"], authority_ids["cash"]], ["負的單季FCF不足以單獨證明結構性股利風險。"]),

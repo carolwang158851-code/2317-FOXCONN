@@ -22,6 +22,7 @@ from ..analysis.analysis_contracts import AnalysisPacket
 from ..contract_loader import ContractLoader
 from ..phaseb1_common import atomic_write, atomic_write_json, canonical_json_bytes, sha256_bytes, sha256_file
 from ..phaseb1_pipeline import PhaseB1Pipeline
+from ..quarterly_authority import quarterly_metric_availability
 from .chart_data_builder import ChartDataBuilder
 from .enterprise_value_rule_engine import (
     build_decision_state,
@@ -348,18 +349,17 @@ def build_full_history_charts(package_root: Path, analysis: AnalysisPacket, hist
         raise WarReportRuntimeError("FULL_HISTORY_NOT_UNIQUE_CHRONOLOGICAL")
     q = analysis.quarterly_earnings
     qperiod = q.fiscal_period.replace("FY", "").replace(" ", "")
-    if qperiod in periods:
-        raise WarReportRuntimeError("FULL_HISTORY_PERIOD_COLLISION")
-    labels = periods + [qperiod]
+    append_current = qperiod not in periods
+    labels = periods + ([qperiod] if append_current else [])
     a = q.enterprise_value_analytics
     sources = list(q.revenue.evidence_ids)
     master_source = next(item for item in analysis.source_evidence_ids if item.startswith("AUTH-MASTER-"))
     cash_source = next(item for item in analysis.source_evidence_ids if item.startswith("AUTH-CASHFLOW-"))
     full_sources = [master_source, *sources]
     gp = [str((_dec(r["Revenue_Q_100M"]) * _dec(r["GrossMarginPct"]) / Decimal("100"))) for r in rows]
-    revenue_values = [r["Revenue_Q_100M"] for r in rows] + [str(_dec(q.revenue.value) / 100)]
-    gross_profit_values = gp + [str(_dec(a["grossProfitMillionTwd"]) / 100)]
-    operating_profit_values = [r["OperatingIncome_Q_100M"] for r in rows] + [str(_dec(a["operatingProfitMillionTwd"]) / 100)]
+    revenue_values = [r["Revenue_Q_100M"] for r in rows] + ([str(_dec(q.revenue.value) / 100)] if append_current else [])
+    gross_profit_values = gp + ([str(_dec(a["grossProfitMillionTwd"]) / 100)] if append_current else [])
+    operating_profit_values = [r["OperatingIncome_Q_100M"] for r in rows] + ([str(_dec(a["operatingProfitMillionTwd"]) / 100)] if append_current else [])
     charts = [
         _chart("full_history_profit_chain", "營收、毛利與營業利益成長指數", "規模成長是否持續轉為營業利益？", labels, [
             ChartSeries(label_zh="營收指數", unit="首期=100", values=_indexed(revenue_values)),
@@ -367,11 +367,11 @@ def build_full_history_charts(package_root: Path, analysis: AnalysisPacket, hist
             ChartSeries(label_zh="營業利益指數", unit="首期=100", values=_indexed(operating_profit_values)),
         ], full_sources, ["圖形特徵：2026Q2營業利益指數明顯領先營收與毛利指數，營運槓桿差擴大。", "為何重要：營收年增41%時，營業利益年增67.51%，表示新增規模已跨過毛利以下費用吸收門檻。", "論點含義：第一階段價值轉化獲支持；若後續營益率回落，這項支持即減弱。"]),
         _chart("full_history_margin", "毛利率與營益率完整歷史", "毛利與費用吸收是否出現結構背離？", labels, [
-            ChartSeries(label_zh="毛利率", unit="%", values=[r["GrossMarginPct"] for r in rows] + [q.gross_margin.value]),
-            ChartSeries(label_zh="營益率", unit="%", values=[r["OperatingMarginPct"] for r in rows] + [q.operating_margin.value]),
+            ChartSeries(label_zh="毛利率", unit="%", values=[r["GrossMarginPct"] for r in rows] + ([q.gross_margin.value] if append_current else [])),
+            ChartSeries(label_zh="營益率", unit="%", values=[r["OperatingMarginPct"] for r in rows] + ([q.operating_margin.value] if append_current else [])),
         ], full_sources, ["圖形特徵：2026Q2毛利率降至6.12%，營益率卻升至3.75%，兩條利潤率走勢背離。", "為何重要：改善發生在毛利以下，較符合費用吸收與規模效率，而不是產品毛利率擴張。", "論點含義：營運槓桿成立，但高價值產品組合提高毛利率的假說尚未獲證。"]),
         _chart("full_history_eps", "每股盈餘完整歷史", "企業獲利是否持續傳達至每股？", labels, [
-            ChartSeries(label_zh="EPS", unit="新台幣元", values=[r["EPS_Q"] for r in rows] + [q.eps.value]),
+            ChartSeries(label_zh="EPS", unit="新台幣元", values=[r["EPS_Q"] for r in rows] + ([q.eps.value] if append_current else [])),
         ], full_sources, ["圖形特徵：2026Q2 EPS升至4.27元，年增34%，每股獲利延續上升。", "為何重要：每股成長確認獲利沒有只停留在公司總額，但增幅仍低於營業利益。", "論點含義：每股價值獲部分支持；仍須由股數、BVPS與FCF交叉驗證。"]),
     ]
     historical_baseline = historical_baseline or build_historical_kpi_baseline(package_root, analysis)
@@ -407,9 +407,10 @@ def build_full_history_charts(package_root: Path, analysis: AnalysisPacket, hist
     charts.append(_chart("full_history_nwc_proxy", "季末營運資金代理值", "應收與存貨增加造成多少資金占用？", [item["period"] for item in nwc_rows], [
         ChartSeries(label_zh="NWC Proxy", unit="新台幣百萬元", values=[item["value"] for item in nwc_rows]),
     ], sources, ["圖形特徵：Q1至Q2的營運資金代理值增加1,747.38億元。", "為何重要：應收與存貨合計增加3,794.24億元，應付增加2,046.86億元只抵銷部分占用。", "論點含義：供應商融資提供緩衝而非現金消耗；淨占用仍壓低Q2 CFO。"] ))
+    availability = quarterly_metric_availability(rows)
     charts.extend([
-        _chart("full_history_roic", "ROIC完整歷史與本期待驗", "資本效率是否改善？", labels, [ChartSeries(label_zh="ROIC", unit="%", values=[r["ROIC_Precise_Pct"] for r in rows] + ["INSUFFICIENT_DATA"])], full_sources, ["圖形特徵：歷史同口徑ROIC波動，2026Q1為12.57%；2026Q2不是零，而是資料待補。", "為何重要：本期可計算部分營運投入資本估算，但無法取代完整同口徑實際ROIC。", "論點含義：新增資本是否提高報酬仍待驗；下一季須補標準化NOPAT與完整平均投入資本。"]),
-        _chart("full_history_bvps", "每股淨值完整歷史與本期待驗", "帳面價值是否持續傳達至每股？", labels, [ChartSeries(label_zh="BVPS", unit="新台幣元", values=[r["BVPS"] for r in rows] + ["INSUFFICIENT_DATA"])], full_sources, ["圖形特徵：BVPS中期上升至2026Q1的127.12元，但2025Q2曾出現明顯回落。", "為何重要：帳面價值累積並非直線，需連同股利與股數變化解釋。", "論點含義：股東資本複利方向正面；2026Q2直接BVPS與完整股東總報酬仍待補。"]),
+        _chart("full_history_roic", "ROIC完整歷史與本期待驗", "資本效率是否改善？", availability["roic"]["labels"], [ChartSeries(label_zh="ROIC", unit="%", values=availability["roic"]["values"])], full_sources, [f"最新有效ROIC季度為{availability['latestValidRoicQuarter']}；2026Q2資料不足。", "為何重要：本期可計算部分營運投入資本估算，但無法取代完整同口徑實際ROIC。", "論點含義：新增資本是否提高報酬仍待驗；下一季須補標準化NOPAT與完整平均投入資本。"]),
+        _chart("full_history_bvps", "每股淨值完整歷史", "帳面價值是否持續傳達至每股？", periods, [ChartSeries(label_zh="BVPS", unit="新台幣元", values=[r["BVPS"] for r in rows])], full_sources, [f"最新有效ROE季度為{availability['latestValidRoeQuarter']}。", "為何重要：帳面價值累積並非直線，需連同股利與股數變化解釋。", "論點含義：股東資本複利方向須與ROE共同判讀。"]),
         _chart("full_history_valuation", "歷史季度P/B與TTM P/E（分尺度）", "截至2026Q1的歷史評價如何變化？", periods, [
             ChartSeries(label_zh="P/B", unit="倍", values=[item["value"] for item in observations_for(historical_baseline, "PB")]),
             ChartSeries(label_zh="TTM P/E", unit="倍", values=[item["value"] for item in observations_for(historical_baseline, "PE_TTM")]),
