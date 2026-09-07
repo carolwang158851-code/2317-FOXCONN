@@ -4,6 +4,7 @@ import inspect
 import json
 import unittest
 from copy import deepcopy
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -13,6 +14,8 @@ except ImportError:
     from helpers import PACKAGE_ROOT
 
 from p1008_research_plugin.phaseb1_common import sha256_file
+from p1008_research_plugin.analysis.quarterly_analysis_builder import normalized_q4_eps
+from p1008_research_plugin.quarterly_authority import quarterly_metric_availability
 from p1008_research_plugin.reporting.historical_kpi_baseline import (
     HistoricalKPIBaselineError,
     ObservationStore,
@@ -135,7 +138,14 @@ class HistoricalKPIBackfillV1Tests(unittest.TestCase):
 
     def test_h13_pe_uses_ttm_eps(self) -> None:
         rows = observations_for(self.baseline, "PE_TTM")
-        self.assertEqual(len(rows), 21)
+        expected = [
+            f"{year}Q{quarter}"
+            for year in range(2021, 2027)
+            for quarter in range(1, 5)
+            if (year, quarter) <= (2026, 2)
+        ]
+        self.assertEqual([row["period"] for row in rows], expected)
+        self.assertEqual(len({row["period"] for row in rows}), len(rows))
         self.assertEqual({x["formula_version"] for x in rows}, {"QUARTER_END_PRICE_DIVIDED_BY_TTM_EPS_V1"})
 
     def test_h14_ps_uses_ttm_revenue(self) -> None:
@@ -146,12 +156,48 @@ class HistoricalKPIBackfillV1Tests(unittest.TestCase):
 
     def test_h15_pb_uses_period_end_bvps_basis(self) -> None:
         rows = observations_for(self.baseline, "PB")
-        self.assertEqual(len(rows), 21)
+        expected = [
+            f"{year}Q{quarter}"
+            for year in range(2021, 2027)
+            for quarter in range(1, 5)
+            if (year, quarter) <= (2026, 2)
+        ]
+        self.assertEqual([row["period"] for row in rows], expected)
+        self.assertEqual(len({row["period"] for row in rows}), len(rows))
         self.assertEqual({x["basis"] for x in rows}, {"QUARTER_END_LAST_VALID_TRADING_DAY"})
         self.assertTrue(all(abs(float(x["price"]) / float(next(row["BVPS"] for row in self._master_rows() if row["Quarter"] == x["period"])) - float(x["value"])) <= 0.01 for x in rows))
         q1 = next(x for x in rows if x["period"] == "2026Q1")
         self.assertEqual((q1["valuation_date"], q1["price"]), ("2026-03-31", "187.5"))
         self.assertIn("daily_price", q1["component_source_hashes"])
+
+    def test_h15a_q4_eps_accepts_promoted_and_historical_lineage_only(self) -> None:
+        config = json.loads(
+            (
+                PACKAGE_ROOT
+                / "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json"
+            ).read_text(encoding="utf-8")
+        )
+        correction = config["historicalEpsCorrections"]["2025Q4"]
+        notes = (
+            "EPS_Q_OFFICIAL_CORRECTION_3.25_TO_3.23;"
+            "EPS_SOURCE_CORRECTION_NOT_STANDALONE_EARNINGS_DETERIORATION"
+        )
+        self.assertEqual(normalized_q4_eps("3.23", correction, master_notes=notes), Decimal("3.23"))
+        self.assertEqual(normalized_q4_eps("3.25", correction), Decimal("3.23"))
+        with self.assertRaisesRegex(ValueError, "neither the governed historical nor promoted value"):
+            normalized_q4_eps("3.24", correction, master_notes=notes)
+        with self.assertRaisesRegex(ValueError, "missing governed correction lineage"):
+            normalized_q4_eps("3.23", correction)
+
+    def test_h15b_current_formal_roe_and_roic_availability_is_explicit(self) -> None:
+        rows = self._master_rows()
+        availability = quarterly_metric_availability(rows)
+        self.assertEqual(rows[-1]["Quarter"], "2026Q2")
+        self.assertEqual(availability["latestValidRoeQuarter"], "2026Q2")
+        self.assertEqual(availability["roe"]["values"][-1], "12.61")
+        self.assertEqual(availability["latestValidRoicQuarter"], "2026Q1")
+        self.assertEqual(availability["roic"]["values"][-1], "12.57")
+        self.assertEqual(availability["unavailableRoicQuarters"], ["2026Q2"])
 
     @staticmethod
     def _master_rows() -> list[dict[str, str]]:

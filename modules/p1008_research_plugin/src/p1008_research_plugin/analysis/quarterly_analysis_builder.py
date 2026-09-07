@@ -52,14 +52,32 @@ def _pct(current: Decimal, prior: Decimal) -> str:
     return f"{((current / prior) - 1) * 100:.2f}%" if prior else "INSUFFICIENT_DATA"
 
 
-def normalized_q4_eps(master_value: str, correction: dict[str, object]) -> Decimal:
-    """Select official Q4 basic EPS in research normalization, never by mutation."""
+def normalized_q4_eps(
+    master_value: str,
+    correction: dict[str, object],
+    *,
+    master_notes: str = "",
+) -> Decimal:
+    """Select official Q4 basic EPS without re-normalizing promoted authority."""
     if correction.get("sourceDocumentSha256") != "91E4994341856DF0E1985DD87704DBE17E1E35CA66FF730CE8CA833CA7766EC0":
         raise ValueError("2025Q4 official EPS normalization evidence is unavailable or hash-invalid")
     corrected = _d(str(correction.get("basicEpsTwd", "")))
-    if corrected != Decimal("3.23") or _d(master_value) == corrected:
+    if corrected != Decimal("3.23"):
         raise ValueError("2025Q4 EPS normalization lineage is not the expected official-over-L3 correction")
-    return corrected
+
+    observed = _d(master_value)
+    if observed == corrected:
+        required_notes = {
+            "EPS_Q_OFFICIAL_CORRECTION_3.25_TO_3.23",
+            "EPS_SOURCE_CORRECTION_NOT_STANDALONE_EARNINGS_DETERIORATION",
+        }
+        notes = {item.strip() for item in master_notes.split(";") if item.strip()}
+        if not required_notes.issubset(notes):
+            raise ValueError("2025Q4 promoted official EPS is missing governed correction lineage")
+        return corrected
+    if observed == Decimal("3.25"):
+        return corrected
+    raise ValueError("2025Q4 EPS authority is neither the governed historical nor promoted value")
 
 
 def ttm_eps_valuation(*, price: Decimal, q3_2025: Decimal, q4_2025: Decimal, q1_2026: Decimal, q2_2026: Decimal) -> dict[str, Decimal]:
@@ -179,7 +197,11 @@ class QuarterlyAnalysisBuilder:
             raise ValueError("2025Q4 master EPS is not uniquely available")
         master_q4_2025_eps = _d(q4_2025_rows[0]["EPS_Q"])
         q4_correction = q.get("historicalEpsCorrections", {}).get("2025Q4", {})
-        q4_2025_eps = normalized_q4_eps(q4_2025_rows[0]["EPS_Q"], q4_correction)
+        q4_2025_eps = normalized_q4_eps(
+            q4_2025_rows[0]["EPS_Q"],
+            q4_correction,
+            master_notes=q4_2025_rows[0].get("Notes", ""),
+        )
         historical_gross_profit = [
             (_d(row["Revenue_Q_100M"]) * _d(row["GrossMarginPct"]) / Decimal("100"))
             for row in history_rows
