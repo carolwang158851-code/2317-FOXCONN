@@ -554,6 +554,47 @@ def trigger_lineage(receipt: dict[str, Any]) -> dict[str, Any]:
     return lineage
 
 
+def _sealed_stale_pointer_for_current_quarterly(
+    package_root: Path,
+    integration: dict[str, Any],
+    evidence: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Accept an older latest pointer only as a sealed same-Q2 selector.
+
+    The returned receipt is never used as the current run receipt.  It merely
+    proves that the lagging pointer is an immutable receipt for the same
+    report/event/revision while historical contract selection validates and
+    returns its own complete receipt.
+    """
+
+    root = package_root.resolve()
+    latest_path = root / LATEST_REL
+    persisted = _read_json(latest_path, "TRIGGER_RECEIPT")
+    validate_receipt(persisted)
+    decision = integration.get("report_trigger_decision")
+    canonical = governance.deduplicate_event_evidence(_unique_evidence(evidence))
+    immutable = root / RECEIPTS_REL / f"{persisted.get('decision_id')}.json"
+    if not immutable.is_file():
+        raise RuntimeTriggerError("TRIGGER_RECEIPT_IMMUTABLE_COPY_MISSING")
+    immutable_receipt = _read_json(immutable, "IMMUTABLE_TRIGGER_RECEIPT")
+    validate_receipt(immutable_receipt)
+    if not (
+        immutable_receipt == persisted
+        and isinstance(decision, dict)
+        and persisted.get("integration_receipt_sha256")
+        != integration.get("canonical_sha256")
+        and persisted.get("report_key") == decision.get("report_key")
+        and persisted.get("revision") == decision.get("revision")
+        and persisted.get("event_type") == decision.get("event_type")
+        == "QUARTERLY_EARNINGS"
+        and persisted.get("canonical_event_id")
+        == (canonical or {}).get("canonical_event_id")
+        and persisted.get("actionable") is False
+    ):
+        raise RuntimeTriggerError("TRIGGER_RECEIPT_STALE_POINTER_IDENTITY_INVALID")
+    return persisted
+
+
 def resolve_analysis_authority(
     package_root: Path, *, compatibility_parent: Path | None = None,
 ) -> tuple[Path, dict[str, Any], dict[str, Any]]:
@@ -567,8 +608,24 @@ def resolve_analysis_authority(
 
     root = package_root.resolve()
     primary_root, primary_context = governed_evidence_root(root)
-    primary_trigger = require_valid_trigger(root, evidence_root=primary_root)
-    if primary_trigger.get("event_type") != "QUARTERLY_EARNINGS":
+    primary_integration, primary_evidence = _load_integration(
+        root, evidence_root=primary_root
+    )
+    if primary_integration is None or not primary_evidence:
+        raise RuntimeTriggerError("REPORT_TRIGGER_REQUIRED")
+    primary_decision = primary_integration.get("report_trigger_decision") or {}
+    try:
+        primary_trigger = require_valid_trigger(root, evidence_root=primary_root)
+    except RuntimeTriggerError as exc:
+        if str(exc) != "TRIGGER_RECEIPT_LINEAGE_INVALID":
+            raise
+        _sealed_stale_pointer_for_current_quarterly(
+            root, primary_integration, primary_evidence
+        )
+        primary_trigger = None
+    if primary_decision.get("event_type") != "QUARTERLY_EARNINGS":
+        if primary_trigger is None:
+            raise RuntimeTriggerError("TRIGGER_RECEIPT_LINEAGE_INVALID")
         return primary_root, primary_trigger, primary_context
 
     config_path = (
@@ -579,10 +636,13 @@ def resolve_analysis_authority(
     expected_sha = str(contract.get("expectedSourceSha256") or "")
     expected_event = str(contract.get("canonicalEventId") or "")
     expected_report = str(contract.get("reportKey") or "")
+    primary_events = {
+        item.get("canonical_event_id") for item in primary_evidence
+    }
     if not (
         expected_sha == Q2_CONTRACT_RAW_SHA256
-        and expected_event == primary_trigger.get("canonical_event_id")
-        and expected_report == primary_trigger.get("report_key")
+        and primary_events == {expected_event}
+        and expected_report == primary_decision.get("report_key")
     ):
         raise RuntimeTriggerError("QUARTERLY_ANALYSIS_AUTHORITY_CONTRACT_INVALID")
 
@@ -598,9 +658,6 @@ def resolve_analysis_authority(
     )
     import warroom_q2_historical_compatibility as q2_compatibility
 
-    primary_integration, primary_evidence = _load_integration(
-        root, evidence_root=primary_root
-    )
     exact_current = [
         item for item in primary_evidence
         if item.get("canonical_event_id") == expected_event
@@ -608,6 +665,8 @@ def resolve_analysis_authority(
         and item.get("source_hash") == expected_sha
     ]
     if exact_current:
+        if primary_trigger is None:
+            raise RuntimeTriggerError("TRIGGER_RECEIPT_LINEAGE_INVALID")
         try:
             QuarterlyEarningsPacket(
                 root,
@@ -669,7 +728,7 @@ def resolve_analysis_authority(
                     and candidate_trigger.get("canonical_event_id") == expected_event
                     and candidate_trigger.get("report_key") == expected_report
                     and candidate_trigger.get("revision")
-                    == primary_trigger.get("revision")
+                    == primary_decision.get("revision")
                     and compatibility.get("originalRawSha256")
                     == policy.raw_sha256
                     and original_receipt.get("receiptId") == policy.receipt_id

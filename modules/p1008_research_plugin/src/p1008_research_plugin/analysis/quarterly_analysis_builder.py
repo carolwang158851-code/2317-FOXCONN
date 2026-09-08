@@ -468,6 +468,7 @@ class QuarterlyAnalysisBuilder:
             "grossProfitLagPct": f"{revenue_yoy - gross_profit_yoy:.2f}",
             "profitGrowthPassThroughGapPct": f"{operating_profit_yoy - Decimal('35'):.2f}",
             "operatingExpenseProxyMillionTwd": str(q2_opex_proxy),
+            "operatingExpenseProxy100mTwd": f"{q2_opex_proxy / Decimal('100'):.2f}",
             "operatingExpenseProxyOrigin": "DERIVED_FROM_OFFICIAL",
             "operatingExpenseProxyYoyPct": f"{opex_proxy_yoy:.2f}",
             "operatingExpenseProxyRevenuePct": f"{q2_opex_proxy / _d(f['revenueMillionTwd']) * 100:.3f}",

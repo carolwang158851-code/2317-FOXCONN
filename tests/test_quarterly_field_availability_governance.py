@@ -51,6 +51,25 @@ class QuarterlyFieldAvailabilityGovernanceTests(unittest.TestCase):
         shutil.copyfile(ROOT / PROMOTION.MASTER_RELATIVE, self.root / PROMOTION.MASTER_RELATIVE)
         shutil.copyfile(ROOT / PROMOTION.MANIFEST_RELATIVE, self.root / PROMOTION.MANIFEST_RELATIVE)
         shutil.copyfile(ROOT / PROMOTION.CONTRACT_RELATIVE_PATH, contract_target)
+        # This suite exercises the one-time Q2 promotion transition.  Build its
+        # historical pre-promotion input explicitly instead of depending on the
+        # live Master, which now correctly contains the promoted Q2 authority.
+        master_path = self.root / PROMOTION.MASTER_RELATIVE
+        prefix, fields, rows = PROMOTION.read_master(master_path.read_bytes())
+        rows = [row for row in rows if row["Quarter"] != "2026Q2"]
+        q4 = next(row for row in rows if row["Quarter"] == "2025Q4")
+        q4["EPS_Q"] = "3.25"
+        q4_notes = [
+            note
+            for note in q4.get("Notes", "").split(";")
+            if note
+            not in {
+                "EPS_Q_OFFICIAL_CORRECTION_3.25_TO_3.23",
+                "EPS_SOURCE_CORRECTION_NOT_STANDALONE_EARNINGS_DETERIORATION",
+            }
+        ]
+        q4["Notes"] = ";".join(q4_notes)
+        master_path.write_bytes(PROMOTION.render_master(prefix, fields, rows))
 
     def tearDown(self) -> None:
         # OneDrive may set directory ReadOnly attributes during the test. The

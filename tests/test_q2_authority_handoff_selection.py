@@ -66,6 +66,92 @@ class Q2AuthorityHandoffSelectionTests(unittest.TestCase):
         self.assertEqual(context["selection"], "EXACT_CURRENT_CONTRACT_AUTHORITY")
         self.assertEqual(context["selectedRawSha256"], EXPECTED)
 
+    def _stale_pointer_fixture(self, parent: Path) -> tuple[Path, dict, list]:
+        package = parent / "package"
+        latest_source = ROOT / runtime.LATEST_REL
+        latest = json.loads(latest_source.read_text(encoding="utf-8"))
+        latest_target = package / runtime.LATEST_REL
+        immutable_target = (
+            package / runtime.RECEIPTS_REL / f"{latest['decision_id']}.json"
+        )
+        latest_target.parent.mkdir(parents=True)
+        immutable_target.parent.mkdir(parents=True)
+        shutil.copyfile(latest_source, latest_target)
+        shutil.copyfile(
+            ROOT / runtime.RECEIPTS_REL / f"{latest['decision_id']}.json",
+            immutable_target,
+        )
+        integration, evidence = runtime._load_integration(
+            ROOT, evidence_root=ROOT / "runtime"
+        )
+        self.assertIsNotNone(integration)
+        return package, integration, evidence
+
+    def test_sealed_stale_pointer_requires_immutable_receipt(self):
+        controlled = Path(os.environ["LOCALAPPDATA"]) / "P1008" / "pytest-temp"
+        controlled.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=controlled, prefix="q2-trigger-missing-") as temp:
+            package, integration, evidence = self._stale_pointer_fixture(Path(temp))
+            latest = json.loads((package / runtime.LATEST_REL).read_text(encoding="utf-8"))
+            (package / runtime.RECEIPTS_REL / f"{latest['decision_id']}.json").unlink()
+            with self.assertRaisesRegex(
+                runtime.RuntimeTriggerError, "TRIGGER_RECEIPT_IMMUTABLE_COPY_MISSING"
+            ):
+                runtime._sealed_stale_pointer_for_current_quarterly(
+                    package, integration, evidence
+                )
+
+    def test_sealed_stale_pointer_rejects_tampered_receipt(self):
+        controlled = Path(os.environ["LOCALAPPDATA"]) / "P1008" / "pytest-temp"
+        controlled.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=controlled, prefix="q2-trigger-tamper-") as temp:
+            package, integration, evidence = self._stale_pointer_fixture(Path(temp))
+            latest_path = package / runtime.LATEST_REL
+            latest = json.loads(latest_path.read_text(encoding="utf-8"))
+            latest["report_key"] = "TAMPERED"
+            latest_path.write_text(json.dumps(latest), encoding="utf-8")
+            with self.assertRaisesRegex(
+                runtime.RuntimeTriggerError, "TRIGGER_RECEIPT_HASH_INVALID"
+            ):
+                runtime._sealed_stale_pointer_for_current_quarterly(
+                    package, integration, evidence
+                )
+
+    def test_sealed_stale_pointer_rejects_wrong_report_lineage(self):
+        controlled = Path(os.environ["LOCALAPPDATA"]) / "P1008" / "pytest-temp"
+        controlled.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=controlled, prefix="q2-trigger-wrong-run-") as temp:
+            package, integration, evidence = self._stale_pointer_fixture(Path(temp))
+            latest_path = package / runtime.LATEST_REL
+            latest = json.loads(latest_path.read_text(encoding="utf-8"))
+            wrong_lineage = runtime._with_hash(
+                {
+                    **{
+                        key: value
+                        for key, value in latest.items()
+                        if key != "canonical_sha256"
+                    },
+                    "report_key": "P1008_WRONG_QUARTERLY_RUN",
+                }
+            )
+            immutable_path = (
+                package
+                / runtime.RECEIPTS_REL
+                / f"{wrong_lineage['decision_id']}.json"
+            )
+            for path in (latest_path, immutable_path):
+                path.write_text(
+                    json.dumps(wrong_lineage, ensure_ascii=False, sort_keys=True),
+                    encoding="utf-8",
+                )
+            with self.assertRaisesRegex(
+                runtime.RuntimeTriggerError,
+                "TRIGGER_RECEIPT_STALE_POINTER_IDENTITY_INVALID",
+            ):
+                runtime._sealed_stale_pointer_for_current_quarterly(
+                    package, integration, evidence
+                )
+
     def test_missing_compatibility_fails_closed(self):
         controlled = Path(os.environ["LOCALAPPDATA"]) / "P1008" / "pytest-temp"
         controlled.mkdir(parents=True, exist_ok=True)

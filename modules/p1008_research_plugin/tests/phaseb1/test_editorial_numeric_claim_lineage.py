@@ -98,6 +98,19 @@ class EditorialNumericClaimLineageTests(unittest.TestCase):
             {"174739"},
         )
 
+    def test_decimal_display_scale_is_numeric_formatting_only(self):
+        self.assertEqual(
+            ReportValidator._numbers("代理值597.3億元"),
+            ReportValidator._numbers("代理值597.30億元"),
+        )
+
+    def test_actual_decimal_difference_remains_unsupported(self):
+        self.assertEqual(
+            ReportValidator._numbers("代理值597.31億元")
+            - ReportValidator._numbers("代理值597.30億元"),
+            {"597.31"},
+        )
+
     def test_deterministic_q2_report_editorial_validation(self):
         configured = os.environ.get("P1008_GOVERNED_EVIDENCE_ROOT", "").strip()
         if not configured:
