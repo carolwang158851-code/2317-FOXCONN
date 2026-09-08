@@ -314,9 +314,24 @@ class PhaseB1OpsLauncherReportRecoveryTests(unittest.TestCase):
                 "/ui/P1008_WARROOM_COMMAND_CENTER_v24.html",
                 "/reports.html",
                 "/report_viewer.html",
+                "/SOP_v4.html",
             ):
                 with urllib.request.urlopen(base + rel, timeout=5) as response:
                     self.assertEqual(response.status, 200, rel)
+            formal_before = app_server.formal_csv_hashes(PACKAGE_ROOT)
+            sop = (PACKAGE_ROOT / "SOP_v4.html").read_text(encoding="utf-8")
+            self.assertIn(
+                'href="./launcher.html?stay=1&amp;from=sop_v4#review-panel"', sop
+            )
+            with urllib.request.urlopen(
+                base + "/api/p1008/review-package", timeout=5
+            ) as response:
+                self.assertEqual(response.status, 200)
+                self.assertIn("application/json", response.headers["Content-Type"])
+                review = json.loads(response.read().decode("utf-8"))
+            self.assertEqual(review["status"], "READY")
+            self.assertTrue(review["dryRunPath"].endswith("DRY_RUN.json"))
+            self.assertEqual(app_server.formal_csv_hashes(PACKAGE_ROOT), formal_before)
         finally:
             server.shutdown()
             thread.join(timeout=5)
