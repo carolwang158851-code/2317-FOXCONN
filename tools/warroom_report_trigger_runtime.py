@@ -38,7 +38,9 @@ GOVERNED_EVIDENCE_ROOT_ENV = "P1008_GOVERNED_EVIDENCE_ROOT"
 Q2_COMPATIBILITY_RECORD_TYPE = "P1008_Q2_HISTORICAL_WORKFLOW_COMPATIBILITY_V1"
 Q2_COMPATIBILITY_VERSION = "1.0"
 Q2_CONTRACT_RAW_SHA256 = "F014BE750095543B35ED2D482C0CF7A40B4A448167796F8AC4560AB928E609C5"
-Q2_AUTHORITY_MANIFEST_SHA256 = "FB00A640007F34803A01BBE9C8E11DC4AFF61A8C7B52996B35099B86CA092622"
+Q2_HISTORICAL_COMPATIBILITY_AUTHORITY_MANIFEST_SHA256 = (
+    "FB00A640007F34803A01BBE9C8E11DC4AFF61A8C7B52996B35099B86CA092622"
+)
 Q2_COMPATIBILITY_ROOT_REL = Path("runtime/q2_historical_compatibility")
 
 
@@ -120,7 +122,12 @@ def validate_historical_workflow_compatibility(payload: dict[str, Any]) -> dict[
     if payload.get("originalRawSha256") != Q2_CONTRACT_RAW_SHA256:
         raise RuntimeTriggerError("OFFICIAL_IR_Q2_AUTHORITY_MISMATCH")
     authority = payload.get("currentAuthority")
-    if not isinstance(authority, dict) or authority.get("manifestVersion") != "1.6.0" or authority.get("manifestSha256") != Q2_AUTHORITY_MANIFEST_SHA256:
+    if not (
+        isinstance(authority, dict)
+        and authority.get("manifestVersion") == "1.6.0"
+        and authority.get("manifestSha256")
+        == Q2_HISTORICAL_COMPATIBILITY_AUTHORITY_MANIFEST_SHA256
+    ):
         raise RuntimeTriggerError("Q2_COMPATIBILITY_AUTHORITY_INVALID")
     evidence = payload.get("historicalEvidenceIdentity")
     original_event = payload.get("originalEventIdentity")
@@ -579,6 +586,12 @@ def resolve_analysis_authority(
     ):
         raise RuntimeTriggerError("QUARTERLY_ANALYSIS_AUTHORITY_CONTRACT_INVALID")
 
+    import warroom_quarterly_report_completion as quarterly_completion
+    try:
+        quarterly_completion.validate_promoted_quarterly_authority(root)
+    except quarterly_completion.QuarterlyReportCompletionError as exc:
+        raise RuntimeTriggerError(f"Q2_PROMOTED_AUTHORITY_INVALID: {exc}") from exc
+
     from p1008_research_plugin.quarterly_earnings import (
         QuarterlyEarningsPacket,
         QuarterlyEarningsPacketError,
@@ -675,7 +688,6 @@ def resolve_analysis_authority(
                     and current_authority.get("manifestVersion")
                     == policy.authority_manifest_version
                     and current_authority.get("manifestSha256")
-                    == _sha256_path(root / "data/CSV_AUTHORITY_MANIFEST.json")
                     == policy.authority_manifest_sha256
                     and current_authority.get("phase3aSourceManifestSha256")
                     == policy.phase3a_source_manifest_sha256

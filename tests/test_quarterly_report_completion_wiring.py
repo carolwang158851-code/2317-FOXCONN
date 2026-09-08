@@ -99,6 +99,53 @@ class QuarterlyReportCompletionWiringTests(unittest.TestCase):
             completed_at_utc="2026-09-03T04:00:00Z",
         )
 
+    def provenance_package(self) -> Path:
+        package = self.case / "provenance-package"
+        for relative in (
+            completion.QUARTERLY_MASTER_REL,
+            completion.AUTHORITY_MANIFEST_REL,
+            completion.PROMOTION_RECEIPT_REL,
+        ):
+            target = package / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ROOT / relative, target)
+        return package
+
+    def test_live_manifest_evolution_keeps_promoted_quarterly_master_valid(self):
+        authority = completion.validate_promoted_quarterly_authority(ROOT)
+        receipt = json.loads(
+            (ROOT / completion.PROMOTION_RECEIPT_REL).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            authority["masterSha256"],
+            receipt["authority"]["master"]["afterSha256"],
+        )
+        self.assertNotEqual(
+            authority["manifestSha256"],
+            receipt["authority"]["manifest"]["afterSha256"],
+        )
+
+    def test_promoted_quarterly_authority_tamper_fails_closed(self):
+        cases = (
+            (completion.QUARTERLY_MASTER_REL, lambda path: path.write_bytes(path.read_bytes() + b"tamper")),
+            (completion.AUTHORITY_MANIFEST_REL, lambda path: path.write_text(
+                path.read_text(encoding="utf-8").replace(
+                    "E623CA082F2A080613C33F4155BA8006646E30D6A517DE926AF6108062F84D48",
+                    "0" * 64,
+                    1,
+                ),
+                encoding="utf-8",
+            )),
+            (completion.PROMOTION_RECEIPT_REL, lambda path: path.write_bytes(path.read_bytes() + b"tamper")),
+        )
+        for relative, tamper in cases:
+            with self.subTest(relative=relative.as_posix()):
+                package = self.provenance_package()
+                tamper(package / relative)
+                with self.assertRaises(completion.QuarterlyReportCompletionError):
+                    completion.validate_promoted_quarterly_authority(package)
+                _remove_tree(package)
+
     def test_q2_editorial_html_pdf_lifecycle_library_and_owner_are_persisted(self):
         result = self.complete()
         self.assertEqual(result["status"], "OWNER_REVIEW_REQUIRED")

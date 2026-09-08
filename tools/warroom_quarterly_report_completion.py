@@ -35,9 +35,17 @@ EXPECTED_Q2_RAW_SHA256 = (
     "F014BE750095543B35ED2D482C0CF7A40B4A448167796F8AC4560AB928E609C5"
 )
 EXPECTED_AUTHORITY_MANIFEST_VERSION = "1.6.0"
-EXPECTED_AUTHORITY_MANIFEST_SHA256 = (
-    "FB00A640007F34803A01BBE9C8E11DC4AFF61A8C7B52996B35099B86CA092622"
+EXPECTED_PROMOTION_RECEIPT_SHA256 = (
+    "A2656A441102231405989E45BEFAAFD7AAF7DBAF91E6A2351EDF022620ED6A25"
 )
+PROMOTION_REVIEW_ID = "P1008-2026Q2-QUARTERLY-FIELD-AVAILABILITY-OWNER-REVIEW"
+PROMOTION_APPROVAL_TOKEN = "OWNER_APPROVE_P1008_2026Q2_QUARTERLY_FIELD_AVAILABILITY"
+PROMOTION_RECEIPT_REL = Path(
+    "runtime/quarterly_authority_promotion/"
+    f"{PROMOTION_REVIEW_ID}/promotion_receipt.json"
+)
+AUTHORITY_MANIFEST_REL = Path("data/CSV_AUTHORITY_MANIFEST.json")
+QUARTERLY_MASTER_REL = Path("data/2317_master_v9.csv")
 OWNER_REVIEW_ROOT = Path("runtime/report_production/quarterly_owner_reviews")
 LIBRARY_CANDIDATE_ROOT = Path("reports/private_candidates/quarterly")
 
@@ -74,6 +82,110 @@ def _file_record(root: Path, path: Path, kind: str) -> dict[str, Any]:
 
 def _candidate_sha(report: ReportCandidate) -> str:
     return sha256_bytes(canonical_json_bytes(report.model_dump(mode="json", by_alias=True)))
+
+
+def validate_promoted_quarterly_authority(package_root: Path | str) -> dict[str, str]:
+    """Bind Q2 production to its immutable promotion receipt and live Master entry.
+
+    The global authority manifest can legitimately evolve after the quarterly
+    promotion.  Its whole-file hash is therefore not the stable Q2 identity;
+    the promoted Master bytes and the manifest's unique authoritative Master
+    entry are.
+    """
+
+    root = Path(package_root).resolve()
+    receipt_path = root / PROMOTION_RECEIPT_REL
+    master_path = root / QUARTERLY_MASTER_REL
+    manifest_path = root / AUTHORITY_MANIFEST_REL
+    if not all(path.is_file() for path in (receipt_path, master_path, manifest_path)):
+        raise QuarterlyReportCompletionError("Q2_PROMOTED_AUTHORITY_ARTIFACT_MISSING")
+    receipt_bytes = receipt_path.read_bytes()
+    receipt_sha = persistence._sha256(receipt_bytes)
+    if receipt_sha != EXPECTED_PROMOTION_RECEIPT_SHA256:
+        raise QuarterlyReportCompletionError("Q2_PROMOTION_RECEIPT_HASH_MISMATCH")
+    receipt = _read_json(receipt_path, "Q2_PROMOTION_RECEIPT")
+    receipt_authority = receipt.get("authority")
+    receipt_master = (
+        receipt_authority.get("master")
+        if isinstance(receipt_authority, Mapping)
+        else None
+    )
+    receipt_manifest = (
+        receipt_authority.get("manifest")
+        if isinstance(receipt_authority, Mapping)
+        else None
+    )
+    if not (
+        receipt.get("schemaVersion") == "P1008_QUARTERLY_OWNER_PROMOTION_RECEIPT_V1"
+        and receipt.get("reviewId") == PROMOTION_REVIEW_ID
+        and receipt.get("status") == "PROMOTED"
+        and receipt.get("ownerApproval") is True
+        and receipt.get("approvalTokenRequired") == PROMOTION_APPROVAL_TOKEN
+        and receipt.get("ownerApprovalToken") == PROMOTION_APPROVAL_TOKEN
+        and receipt.get("actionable") is False
+        and receipt.get("publishAuthorized") is False
+        and isinstance(receipt_master, Mapping)
+        and receipt_master.get("path") == QUARTERLY_MASTER_REL.as_posix()
+        and receipt_master.get("candidateSha256") == receipt_master.get("afterSha256")
+        and isinstance(receipt_manifest, Mapping)
+        and receipt_manifest.get("path") == AUTHORITY_MANIFEST_REL.as_posix()
+        and receipt_manifest.get("candidateSha256") == receipt_manifest.get("afterSha256")
+    ):
+        raise QuarterlyReportCompletionError("Q2_PROMOTION_RECEIPT_GOVERNANCE_INVALID")
+
+    master_sha = persistence._sha256(master_path.read_bytes())
+    if receipt_master.get("afterSha256") != master_sha:
+        raise QuarterlyReportCompletionError("Q2_PROMOTED_MASTER_HASH_MISMATCH")
+    manifest = _read_json(manifest_path, "Q2_LIVE_AUTHORITY_MANIFEST")
+    entries = [
+        item for item in manifest.get("authoritativeFiles", [])
+        if isinstance(item, Mapping)
+        and item.get("path") == QUARTERLY_MASTER_REL.as_posix()
+    ]
+    if len(entries) != 1:
+        raise QuarterlyReportCompletionError("Q2_MASTER_AUTHORITY_ENTRY_INVALID")
+    entry = entries[0]
+    field_overrides = entry.get("fieldOverrides")
+    receipt_lineage = receipt.get("fieldLineage")
+    availability = receipt.get("availability")
+    if not all(isinstance(item, Mapping) for item in (
+        field_overrides, receipt_lineage, availability,
+    )):
+        raise QuarterlyReportCompletionError("Q2_QUARTERLY_LINEAGE_INVALID")
+    roe = field_overrides.get("ROE_TTM_Pct")
+    roic = field_overrides.get("ROIC_Status")
+    receipt_roe = receipt_lineage.get("2026Q2.ROE_TTM_Pct")
+    receipt_roic = receipt_lineage.get("2026Q2.ROIC")
+    if not (
+        manifest.get("manifestVersion") == EXPECTED_AUTHORITY_MANIFEST_VERSION
+        and manifest.get("approvedBy") == "Owner"
+        and manifest.get("authoritative") is True
+        and manifest.get("actionable") is False
+        and manifest.get("publishAuthorized") is False
+        and entry.get("fileName") == QUARTERLY_MASTER_REL.name
+        and entry.get("fileAuthority") == "CSV_AUTHORITY"
+        and entry.get("sha256") == master_sha
+        and entry.get("fieldAvailabilityContract")
+        == "contracts/p1008_quarterly_authority/v1.0/"
+        "P1008_QUARTERLY_FIELD_AVAILABILITY_CONTRACT_V1.json"
+        and isinstance(roe, Mapping)
+        and roe.get("latestValidQuarter") == availability.get("latestValidRoeQuarter")
+        == "2026Q2"
+        and str(roe.get("2026Q2Value")) == str(receipt_roe.get("value")) == "12.61"
+        and isinstance(roic, Mapping)
+        and roic.get("latestValidQuarter") == availability.get("latestValidRoicQuarter")
+        == "2026Q1"
+        and roic.get("2026Q2Value") == receipt_roic.get("availability")
+        == "INSUFFICIENT_DATA"
+        and availability.get("unavailableRoicQuarters") == ["2026Q2"]
+    ):
+        raise QuarterlyReportCompletionError("Q2_QUARTERLY_LINEAGE_INVALID")
+    return {
+        "manifestVersion": str(manifest["manifestVersion"]),
+        "manifestSha256": persistence._sha256(manifest_path.read_bytes()),
+        "masterSha256": master_sha,
+        "promotionReceiptSha256": receipt_sha,
+    }
 
 
 def stable_report_key(trigger_lineage: Mapping[str, Any]) -> str:
@@ -123,8 +235,8 @@ def _validate_q2_inputs(
     evidence_governed = evidence_manifest.get("governedEvidence")
     if not all(isinstance(item, Mapping) for item in (trigger, governed, evidence_governed)):
         raise QuarterlyReportCompletionError("Q2_GOVERNED_LINEAGE_MISSING")
-    authority_path = code_root / "data" / "CSV_AUTHORITY_MANIFEST.json"
-    authority_sha = persistence._sha256(authority_path.read_bytes()) if authority_path.is_file() else ""
+    authority = validate_promoted_quarterly_authority(code_root)
+    authority_sha = authority["manifestSha256"]
     if not (
         manifest.get("eventType") == EVENT_TYPE
         and manifest.get("reportRuntime") == REPORT_RUNTIME
@@ -146,12 +258,11 @@ def _validate_q2_inputs(
         and evidence_manifest.get("sourceHash") == EXPECTED_Q2_RAW_SHA256
         and analysis.quarterly_earnings is not None
         and analysis.quarterly_earnings.source_hash == EXPECTED_Q2_RAW_SHA256
-        and analysis.authority_manifest_sha256 == EXPECTED_AUTHORITY_MANIFEST_SHA256
+        and analysis.authority_manifest_sha256 == authority_sha
         and governed.get("authority_manifest_version")
-        == EXPECTED_AUTHORITY_MANIFEST_VERSION
+        == authority["manifestVersion"]
         and governed.get("authority_manifest_sha256")
-        == EXPECTED_AUTHORITY_MANIFEST_SHA256
-        and authority_sha == EXPECTED_AUTHORITY_MANIFEST_SHA256
+        == authority_sha
         and trigger.get("eventType") == EVENT_TYPE
         and trigger.get("canonicalEventId") == "HON_HAI_FY2026_Q2_EARNINGS"
         and trigger.get("actionable") is False

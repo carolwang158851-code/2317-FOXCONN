@@ -121,7 +121,11 @@ class Q2HistoricalWorkflowCompatibilityTests(unittest.TestCase):
 
     def materialize(self):
         with mock.patch.object(runtime, "Q2_CONTRACT_RAW_SHA256", self.policy.raw_sha256), \
-             mock.patch.object(runtime, "Q2_AUTHORITY_MANIFEST_SHA256", self.policy.authority_manifest_sha256):
+             mock.patch.object(
+                 runtime,
+                 "Q2_HISTORICAL_COMPATIBILITY_AUTHORITY_MANIFEST_SHA256",
+                 self.policy.authority_manifest_sha256,
+             ):
             return compat._materialize(self.package, self.historical, self.output, self.policy)
 
     def test_valid_materialization_and_current_candidate_workflow_validation(self):
@@ -131,7 +135,11 @@ class Q2HistoricalWorkflowCompatibilityTests(unittest.TestCase):
         try:
             os.environ[runtime.GOVERNED_EVIDENCE_ROOT_ENV] = str(self.output)
             with mock.patch.object(runtime, "Q2_CONTRACT_RAW_SHA256", self.policy.raw_sha256), \
-                 mock.patch.object(runtime, "Q2_AUTHORITY_MANIFEST_SHA256", self.policy.authority_manifest_sha256):
+                 mock.patch.object(
+                     runtime,
+                     "Q2_HISTORICAL_COMPATIBILITY_AUTHORITY_MANIFEST_SHA256",
+                     self.policy.authority_manifest_sha256,
+                 ):
                 trigger = runtime.require_valid_trigger(self.package)
             self.assertEqual(trigger["candidate_workflow"]["historical_compatibility"]["factsAdded"], 0)
         finally:
