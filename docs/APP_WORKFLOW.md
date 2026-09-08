@@ -44,7 +44,7 @@ POST /api/p1008/run/default
 6. `news-scan`：只有 authority chain 全部成功後，才產生新聞／事件 candidate 與逐來源 `networkSummary` / `sourceHealth`。
 7. `validation/readiness`：重新整理 review package；只有上述 TWSE authority updater 可變更其限定的正式 CSV 與 manifest，其餘正式 authority 仍受 hash boundary 保護。
 
-任一 Daily Price、Market Activity 或 freshness gate 失敗時，後續資料、新聞與 rolling brief 均不執行。`POST /api/p1008/run/report` 是分離的手動入口，不屬於 default job。
+任一 Daily Price、Market Activity 或 freshness gate 失敗時，後續資料、新聞與 Rolling Current Brief 均不執行。default job 通過後只更新 Rolling Current Brief；它不是每日正式報告，亦不追加正式研報庫。`POST /api/p1008/run/report` 是分離的手動入口，不屬於 default job。
 
 ## Phase B1 手動分析／戰報候選
 
@@ -68,6 +68,7 @@ calls 均為 0，且所有候選 `actionable=false`。
 ## Phase A Authority Data Closure
 
 - `warroom_daily_price_updater.py` 與 `warroom_market_activity_updater.py` 是限定範圍的正式 TWSE authority updater：只接受已驗證 receipt，並透過 `owner_publish_csv_v2.py` 原子更新對應 CSV 與 manifest。一般 staging candidate 仍須經 Owner gate。
+- 正式 CSV 發布必須使用最新一次 Price→Market 同一 run 的 publish-ready 狀態；最新 run 失敗時，不得改採較早成功 candidate。Formal Authority promotion 仍須 Owner Approval。
 - 日價 publisher 在最終寫入前會再次拒絕週六／週日、非
   `OFFICIAL_TWSE_*` 或 `OWNER_APPROVED` 來源、無效／零值 Close、PB 不一致及衝突
   Date。相同 Date 且完整列一致時視為 idempotent，不重複追加。
@@ -129,7 +130,7 @@ Launcher 的 crawler 成功率只計算 `requiresNetwork=true` 的網路來源�
 | `POST /api/p1008/run/update-data` | 只補跑資料更新 | 不 publish |
 | `POST /api/p1008/run/news-scan` | 只補跑新聞掃描 v2，更新 source health | 未核准來源不連網 |
 | `POST /api/p1008/run/official-ir-scan` | 只掃描固定核准的鴻海 IR／MOPS 官方來源並重評 G1 | 不更新 TWSE CSV、不產生 Analysis/Report、不發布 |
-| `POST /api/p1008/run/report` | 只產生日報 | 不改正式 CSV |
+| `POST /api/p1008/run/report` | 重新評估受治理的 MONTHLY／QUARTERLY／MAJOR_EVENT material trigger | 無合格觸發時不建立正式報告 lineage；`DAILY` 不是正式觸發，Rolling Current Brief 只供觀察且不進正式研報庫 |
 | `POST /api/p1008/run/analysis-candidate` | 手動產生 Phase B1 MONTHLY_REVENUE Analysis 候選 | 不連網、不呼叫模型、runtime-only |
 | `POST /api/p1008/run/report-candidate` | 從已驗證 Analysis 產生 Report 與腳本候選 | 不可繞過 Analysis gate、不發布 |
 | `POST /api/p1008/publish/formal` | Owner 強確認後 append 正式 CSV | 只能呼叫既有 publish gate |

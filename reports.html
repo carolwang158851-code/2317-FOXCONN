@@ -125,6 +125,21 @@ body.p1008-focus-mode>div{max-width:none!important;min-height:100vh}
       </div>
     </div>
 
+    <section class="mb-8 glass p-6 border border-cyan-500/30">
+      <div class="text-xs font-black tracking-wider text-cyan-300 mb-2">ROLLING CURRENT BRIEF｜獨立觀察面</div>
+      <a class="block border border-slate-700 bg-slate-950/40 p-5 hover:border-cyan-500/50 transition-all"
+         href="./reports/generated/latest_report.html">
+        <div class="text-xl font-black text-white mb-2">Rolling Current Brief</div>
+        <div class="text-sm text-slate-300 mb-3">預設 Launcher 更新的滾動簡報；僅供觀察、非歸檔、非正式 Authority，不建立或追加正式報告 lineage。</div>
+        <div class="flex flex-wrap gap-2">
+          <span class="text-[11px] font-black px-2 py-1 rounded-full border border-cyan-700 bg-cyan-950/40 text-cyan-200">observation-only</span>
+          <span class="text-[11px] font-black px-2 py-1 rounded-full border border-cyan-700 bg-cyan-950/40 text-cyan-200">non-archival</span>
+          <span class="text-[11px] font-black px-2 py-1 rounded-full border border-cyan-700 bg-cyan-950/40 text-cyan-200">actionable=false</span>
+        </div>
+      </a>
+    </section>
+
+    <div class="text-xs font-black tracking-wider text-emerald-300 mb-4">正式／核准報告目錄</div>
     <div id="list" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"></div>
 
     <div id="fileModeNotice" class="hidden mt-6 glass p-5 border border-amber-500/40 bg-amber-950/20">
@@ -182,17 +197,6 @@ body.p1008-focus-mode>div{max-width:none!important;min-height:100vh}
         title: "戰情室日報 2026-06-17",
         tags: ["日報", "資料快照", "actionable:false"],
         md: "戰情室日報_2026-06-17.md"
-      }
-    ];
-    const DIRECT_FILE_REPORT_CATALOG = [
-      {
-        id: "P1008_LATEST_GENERATED_REPORT_DIRECT",
-        date: "最新",
-        title: "最新本機定期戰報（資料夾雙擊可開）",
-        tags: ["最新戰報", "HTML直開", "actionable:false"],
-        directHref: "./reports/generated/latest_report.html",
-        generated: true,
-        status: "GENERATED"
       }
     ];
     function escapeHtml(value) {
@@ -271,7 +275,6 @@ body.p1008-focus-mode>div{max-width:none!important;min-height:100vh}
   </script>
 </body>
 </html>
-
 
 
 

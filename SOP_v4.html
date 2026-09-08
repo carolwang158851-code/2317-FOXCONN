@@ -462,16 +462,17 @@
         <thead><tr><th>API / 動作</th><th>用途</th><th>安全邊界</th></tr></thead>
         <tbody>
           <tr><td><code>GET /api/p1008/review-package</code></td><td>讀取候選 CSV、readiness、總經/新聞/FX 待決、Owner 強確認字串。</td><td>只讀審查包。</td></tr>
-          <tr><td><code>POST /api/p1008/run/default</code></td><td>依序執行 preflight、update data、news scan、daily report、refresh。</td><td>不呼叫 Owner publish，不修改 HOLD。</td></tr>
+          <tr><td><code>POST /api/p1008/run/default</code></td><td>依序執行 preflight、update data、news scan、Rolling Current Brief、refresh。</td><td>Current Brief 只供觀察，不是每日正式報告，也不追加正式研報庫；不呼叫 Owner publish，不修改 HOLD。</td></tr>
           <tr><td><code>POST /api/p1008/run/update-data</code></td><td>只補跑 staging/runtime 資料更新。</td><td>正式 CSV 不應改變；若 hash 改變，App 標示錯誤。</td></tr>
           <tr><td><code>POST /api/p1008/run/news-scan</code></td><td>只補跑 v2 觀察型新聞掃描，並回寫 <code>networkSummary</code> / <code>sourceHealth</code> 給 Launcher。</td><td>只有來源 manifest 中 <code>enabled=true</code> 且 <code>connectorStatus=APPROVED</code> 的網路來源可連網；其餘來源一律跳過。</td></tr>
-          <tr><td><code>POST /api/p1008/run/report</code></td><td>只產生日報與最新本機戰報 HTML。</td><td>只讀正式 CSV 與 runtime / sidecar，不 append CSV。</td></tr>
+          <tr><td><code>POST /api/p1008/run/report</code></td><td>重新評估受治理的 MONTHLY／QUARTERLY／MAJOR_EVENT material trigger。</td><td>沒有合格觸發時不得建立正式報告 lineage；<code>DAILY</code> 不是正式報告觸發類型。Rolling Current Brief 維持 observation-only、non-archival、<code>actionable=false</code>。</td></tr>
           <tr><td><code>POST /api/p1008/publish/formal</code></td><td>Owner 在 Launcher 輸入 <code>OWNER_APPROVE_PUBLISH_YYYY-MM-DD</code> 後 append 正式 CSV。</td><td>只能呼叫既有 <code>owner_publish_csv_v2.py</code> gate；一鍵資料流程不得觸發。</td></tr>
           <tr><td><code>GET /api/p1008/status</code></td><td>回傳目前 job、步驟、Owner review 狀態、來源 manifest 與正式 CSV hash 檢查。</td><td>只讀狀態。</td></tr>
         </tbody>
       </table>
       <div class="ok">Launcher gate 通過後才進入新 UI。若存在 CSV candidate、總經/FX 缺欄、新聞 <code>WATCH / REVIEW_REQUIRED</code>、Owner ack 未完成或 readiness blocked，決策者應停留在 Launcher 審查。</div>
       <div class="warn">一鍵資料流程不是正式資料發布工具。正式 CSV append 只能由 Launcher 的 <code>Owner Formal Publish Gate</code> 或備援 <code>P1008_3_OWNER_PUBLISH_CSV.bat</code> 完成。</div>
+      <div class="warn">正式 CSV 發布必須以最新一次 Price→Market 同一 run 的 publish-ready 狀態為準；最新 run 失敗時，不得改用較早成功 candidate 繞過失敗。Formal Authority promotion 必須另有 Owner Approval。</div>
     </section>
 
     <section>
