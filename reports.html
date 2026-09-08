@@ -230,15 +230,22 @@ body.p1008-focus-mode>div{max-width:none!important;min-height:100vh}
           return [];
         }
         const manifest = await res.json();
-        const generated = (manifest.reports || []).map(r => ({
+        const generated = await Promise.all((manifest.reports || []).map(async r => ({
           id: r.id,
           date: r.date,
           title: r.title,
           tags: [...(r.tags || []), r.period ? periodLabel(r.period) : "產生戰報"],
           md: r.md,
           generated: true,
-          status: r.status || "GENERATED"
-        }));
+          status: r.status || "GENERATED",
+          reportKey: r.report_key || r.reportKey,
+          revision: r.revision,
+          eventType: r.eventType,
+          currentEditorialVersion: r.currentEditorialVersion || "e0",
+          editorialVersions: r.editorialHistoryLocator
+            ? await fetch(`./${r.editorialHistoryLocator}`, {cache:"no-store"}).then(v => v.ok ? v.json() : null).then(v => v?.versions || []).catch(() => [])
+            : []
+        })));
         const seen = new Set();
         const merged = [...generated, ...LOCAL_REPORT_CATALOG];
         return merged
@@ -267,6 +274,10 @@ body.p1008-focus-mode>div{max-width:none!important;min-height:100vh}
         <div class="flex flex-wrap gap-2">
           ${(r.tags || []).map(t=>`<span class="text-[11px] font-black px-2 py-1 rounded-full border border-slate-700 bg-slate-900 text-slate-300">${escapeHtml(t)}</span>`).join("")}
         </div>
+        ${r.eventType === "QUARTERLY_EARNINGS" ? `<div class="mt-4 pt-3 border-t border-slate-700 text-xs text-slate-300">
+          <div class="font-black text-cyan-300 mb-1">版本歷史｜${escapeHtml(r.reportKey)} / r${escapeHtml(r.revision)}</div>
+          ${(r.editorialVersions.length ? r.editorialVersions : [{editorialVersion:"e0", status:"ORIGINAL_GOVERNED_OWNER_REVIEW"}]).map(v => `<div>${escapeHtml(v.editorialVersion)} ${v.editorialVersion === "e0" ? "原始稿" : v.ownerApplied ? "Owner Applied" : "潤稿版"}${v.editorialVersion === r.currentEditorialVersion ? " ← current" : ""}</div>`).join("")}
+        </div>` : ""}
       </a>
       `).join("");
     }
@@ -275,7 +286,6 @@ body.p1008-focus-mode>div{max-width:none!important;min-height:100vh}
   </script>
 </body>
 </html>
-
 
 
 

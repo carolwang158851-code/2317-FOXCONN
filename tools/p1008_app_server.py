@@ -33,6 +33,7 @@ import owner_publish_csv_v2 as owner_publish
 import warroom_report_governance as report_governance
 import warroom_report_trigger_runtime as report_trigger_runtime
 import warroom_rolling_brief as rolling_brief
+import warroom_quarterly_editorial_return as quarterly_editorial
 
 
 UTF8_MIME_TYPES = {
@@ -1909,6 +1910,29 @@ class P1008AppHandler(http.server.SimpleHTTPRequestHandler):
             payload["launcherGate"] = self.manager.launcher_gate_status(review)
             self._send_json(200, payload)
             return
+        if parsed.path == "/api/p1008/quarterly-editorial/catalog":
+            try:
+                payload = quarterly_editorial.quarterly_editorial_catalog(
+                    self.manager.package_root
+                )
+            except Exception as error:  # fail-closed read boundary
+                self._send_json(409, {"status": "FAIL_CLOSED", "reason": str(error)})
+                return
+            self._send_json(200, payload)
+            return
+        if parsed.path == "/api/p1008/quarterly-editorial/history":
+            query = urllib.parse.parse_qs(parsed.query)
+            report_key = str((query.get("report_key") or [""])[0])
+            try:
+                revision = int((query.get("revision") or ["0"])[0])
+                payload = quarterly_editorial.editorial_history(
+                    self.manager.package_root, report_key, revision
+                )
+            except Exception as error:  # fail-closed read boundary
+                self._send_json(409, {"status": "FAIL_CLOSED", "reason": str(error)})
+                return
+            self._send_json(200, payload)
+            return
         if parsed.path == "/api/p1008/log":
             query = urllib.parse.parse_qs(parsed.query)
             job_id = (query.get("jobId") or [""])[0]
@@ -1946,6 +1970,42 @@ class P1008AppHandler(http.server.SimpleHTTPRequestHandler):
             approval_phrase = str(body.get("approvalPhrase") or "").strip()
             status, payload = self.manager.start_owner_publish(date_str, approval_phrase)
             self._send_json(status, payload)
+            return
+        if parsed.path == "/api/p1008/quarterly-editorial/import":
+            try:
+                request = self._read_json_body()
+                selected_key = str(request.get("selectedReportKey") or "")
+                selected_revision = int(request.get("selectedRevision") or 0)
+                editorial_return = request.get("editorialReturn")
+                if not isinstance(editorial_return, dict) or not (
+                    editorial_return.get("report_key") == selected_key
+                    and editorial_return.get("revision") == selected_revision
+                ):
+                    raise ValueError("EDITORIAL_SELECTED_REPORT_IDENTITY_MISMATCH")
+                payload = quarterly_editorial.import_editorial_return(
+                    self.manager.package_root, editorial_return
+                )
+            except (TypeError, ValueError) as error:
+                self._send_json(400, {"status": "FAIL_CLOSED", "reason": str(error)})
+                return
+            self._send_json(200 if payload.get("status") == "PENDING" else 409, payload)
+            return
+        if parsed.path == "/api/p1008/quarterly-editorial/apply":
+            try:
+                body = self._read_json_body()
+                payload = quarterly_editorial.apply_editorial_return(
+                    self.manager.package_root,
+                    str(body.get("report_key") or ""),
+                    int(body.get("revision") or 0),
+                    str(body.get("editorialVersion") or ""),
+                )
+            except (TypeError, ValueError) as error:
+                self._send_json(400, {"status": "FAIL_CLOSED", "reason": str(error)})
+                return
+            self._send_json(
+                200 if payload.get("status") == "OWNER_REVIEW_REQUIRED" else 409,
+                payload,
+            )
             return
         job_type = routes.get(parsed.path)
         if not job_type:

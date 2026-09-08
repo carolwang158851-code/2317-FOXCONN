@@ -263,6 +263,33 @@
         <div class="stat"><div class="label">Latest rolling brief date</div><div id="latest-rolling-brief-date" class="value">N/A</div></div>
         <div class="stat"><div class="label">Latest archived report date</div><div id="latest-archived-report-date" class="value">N/A</div><div id="report-library-health" class="small">CHECKING</div></div>
       </div>
+      <div id="quarterly-editorial-panel" class="notice blue" style="margin-top:12px">
+        <div class="between">
+          <div>
+            <strong>季度 Owner Review｜版本歷史</strong>
+            <div class="small">潤稿版本留在所選 report_key / revision 內；匯入只建立 PENDING，套用後仍不發布。</div>
+          </div>
+          <span id="editorial-status" class="badge blue">READ ONLY</span>
+        </div>
+        <div class="grid two" style="margin-top:10px">
+          <div class="stat">
+            <div class="label">治理報告</div>
+            <select id="editorial-report-select" style="width:100%;margin-top:6px"></select>
+            <div id="editorial-current" class="small" style="margin-top:6px">current: N/A</div>
+          </div>
+          <div class="stat">
+            <div class="label">匯入格式</div>
+            <input id="editorial-file" type="file" accept="application/json,.json" style="width:100%;margin-top:6px" />
+            <div class="small" style="margin-top:6px">JSON：report_key、revision、parentEditorialVersion、reportCandidate</div>
+          </div>
+        </div>
+        <div class="buttons" style="margin-top:10px">
+          <button id="import-editorial" type="button">匯入潤稿版</button>
+          <button id="apply-editorial" type="button" disabled>套用潤稿版</button>
+        </div>
+        <div id="editorial-message" class="small" style="margin-top:8px">讀取季度版本歷史中。</div>
+        <div id="editorial-history" class="small" style="margin-top:8px"></div>
+      </div>
       <div class="notice blue" style="margin-top:12px">
         <div class="between">
           <div>
@@ -811,12 +838,14 @@
 
     async function refreshAll() {
       try {
-        const [app, review] = await Promise.all([
+        const [app, review, editorial] = await Promise.all([
           fetchJson(`/api/p1008/status?t=${Date.now()}`),
           fetchJson(`/api/p1008/review-package?t=${Date.now()}`),
+          fetchJson(`/api/p1008/quarterly-editorial/catalog?t=${Date.now()}`),
         ]);
         state.app = app;
         state.review = review;
+        state.editorial = editorial;
         if (app.jobId) {
           try {
             const response = await fetch(`/api/p1008/log?jobId=${encodeURIComponent(app.jobId)}&t=${Date.now()}`, { cache: 'no-store' });
@@ -830,6 +859,70 @@
         state.review = { launcherGate: { code: 'APP_API_UNAVAILABLE', zh: 'App API 未啟動，請使用 P1008_APP.bat 開啟。', canEnterNewUi: false }, readiness: { blockers: [error.message] } };
       }
       renderStatus();
+      renderEditorial();
+    }
+
+    function selectedEditorialReport() {
+      const value = $('editorial-report-select').value || '';
+      const split = value.lastIndexOf('|');
+      if (split < 1) return null;
+      return { report_key: value.slice(0, split), revision: Number(value.slice(split + 1)) };
+    }
+
+    function renderEditorial() {
+      const catalog = state.editorial || {};
+      const reports = Array.isArray(catalog.reports) ? catalog.reports : [];
+      const select = $('editorial-report-select');
+      const prior = select.value;
+      select.innerHTML = reports.map((item) => `<option value="${safe(item.report_key)}|${safe(item.revision)}">${safe(item.report_key)} / r${safe(item.revision)}</option>`).join('');
+      if ([...select.options].some((option) => option.value === prior)) select.value = prior;
+      const chosen = selectedEditorialReport();
+      const report = chosen ? reports.find((item) => item.report_key === chosen.report_key && item.revision === chosen.revision) : null;
+      const versions = report?.versions || [];
+      const pending = versions.find((item) => item.status === 'PENDING');
+      $('editorial-status').className = badgeClass(pending ? 'PENDING' : reports.length ? 'PASS' : 'NO_REPORT');
+      $('editorial-status').textContent = pending ? 'PENDING' : reports.length ? 'READY' : 'NO REPORT';
+      $('editorial-current').textContent = report ? `current: ${report.currentEditorialVersion} / ${report.state}` : 'current: N/A';
+      $('editorial-history').innerHTML = report ? versions.map((item) => {
+        const label = item.editorialVersion === 'e0' ? '原始稿' : item.ownerApplied ? 'Owner Applied' : '潤稿版待套用';
+        const current = item.editorialVersion === report.currentEditorialVersion ? ' ← current' : '';
+        return `<div>${safe(item.editorialVersion)} ${safe(label + current)}</div>`;
+      }).join('') : '尚無季度 Owner Review。';
+      $('import-editorial').disabled = !report || Boolean(pending);
+      $('apply-editorial').disabled = !pending;
+      $('apply-editorial').dataset.version = pending?.editorialVersion || '';
+    }
+
+    async function importEditorial() {
+      const file = $('editorial-file').files?.[0];
+      if (!file) { $('editorial-message').textContent = '請先選擇潤稿回傳 JSON。'; return; }
+      try {
+        const body = JSON.parse(await file.text());
+        const selected = selectedEditorialReport();
+        if (!selected) throw new Error('尚未選擇治理報告。');
+        const result = await fetchJson('/api/p1008/quarterly-editorial/import', {method: 'POST', body: JSON.stringify({
+          selectedReportKey: selected.report_key,
+          selectedRevision: selected.revision,
+          editorialReturn: body,
+        })});
+        $('editorial-message').textContent = `${result.report_key} / r${result.revision} / ${result.editorialVersion} 已驗證為 PENDING；尚未覆寫 Owner Review。`;
+      } catch (error) {
+        $('editorial-message').textContent = `FAIL_CLOSED：${error.payload?.reason || error.message}`;
+      }
+      await refreshAll();
+    }
+
+    async function applyEditorial() {
+      const selected = selectedEditorialReport();
+      const version = $('apply-editorial').dataset.version;
+      if (!selected || !version || !confirm(`套用 ${selected.report_key} / r${selected.revision} / ${version}？此動作不會發布。`)) return;
+      try {
+        const result = await fetchJson('/api/p1008/quarterly-editorial/apply', {method: 'POST', body: JSON.stringify({...selected, editorialVersion: version})});
+        $('editorial-message').textContent = `${result.report_key} / r${result.revision} 已套用 ${result.currentEditorialVersion}，仍為 OWNER_REVIEW_REQUIRED。`;
+      } catch (error) {
+        $('editorial-message').textContent = `FAIL_CLOSED：${error.payload?.reason || error.message}`;
+      }
+      await refreshAll();
     }
 
     async function runJob(route) {
@@ -905,6 +998,9 @@
     $('owner-publish').addEventListener('click', ownerPublish);
     $('copy-approval-phrase').addEventListener('click', copyApprovalPhrase);
     $('approval-phrase').addEventListener('input', renderStatus);
+    $('editorial-report-select').addEventListener('change', renderEditorial);
+    $('import-editorial').addEventListener('click', importEditorial);
+    $('apply-editorial').addEventListener('click', applyEditorial);
 
     refreshAll();
     setInterval(refreshAll, 5000);
