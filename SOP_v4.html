@@ -568,6 +568,47 @@
       </div>
     </section>
 
+    <section>
+      <h2>17. 季度戰報 Editorial Return 與版本歷史</h2>
+      <p>季度潤稿沿用既有 <code>report_key + revision</code> 報告治理，不建立第二套報告系統。每一會計季度都是獨立且不可互相覆寫的 report lineage：新季度使用自己的 <code>report_key</code>，並從 <code>r1</code> 開始。</p>
+      <table>
+        <thead><tr><th>層級</th><th>治理規則</th><th>例子</th></tr></thead>
+        <tbody>
+          <tr><td>季度身分</td><td>Q2、Q3、Q4 各自使用獨立 <code>report_key</code>；不得重新命名、共用路徑或用新季度覆寫舊季度。</td><td><code>P1008_FY2026_Q2_EARNINGS</code> 與 <code>P1008_FY2026_Q3_EARNINGS</code> 是兩條不同 lineage。</td></tr>
+          <tr><td>報告 revision</td><td><code>r2</code> 只代表同一季度的正式內容 revision。新季度從 <code>r1</code> 開始；純潤稿不得建立 <code>r2</code>。</td><td>Q2 正式 revision 才能由 r1 前進 r2；Q3 不得沿用 Q2 revision。</td></tr>
+          <tr><td>潤稿版本</td><td>同一 <code>report_key / revision</code> 內，<code>e0</code> 是原始 governed Owner Review；<code>e1</code>、<code>e2</code>……是後續 Editorial Return。系統必須且只能維持一個 <code>currentEditorialVersion</code>。</td><td><code>P1008_FY2026_Q2_EARNINGS / r1 / e1</code> 仍是 Q2 r1，不是 r2。</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Owner 操作流程</h3>
+      <ol>
+        <li>確認季度報告仍為 <code>OWNER_REVIEW_REQUIRED</code>，並匯出既有審查包。</li>
+        <li>在外部完成文字潤稿；不得改動治理數值、Authority 或來源 lineage。</li>
+        <li>回到 Launcher 選取正確的 <code>report_key / revision</code>，按「匯入潤稿版」。</li>
+        <li>匯入只建立 <code>PENDING</code> editorial version；此時不得覆寫 active Owner Review。</li>
+        <li>系統驗證 report key、revision、父 editorial version、數值與 Authority／provenance lineage。</li>
+        <li>只有 validation PASS 時，Owner 才可按「套用潤稿版」。</li>
+        <li>Owner Apply 重新產生同一 <code>report_key / revision</code> 的 HTML、PDF、editorial validation 與相依 hashes，並把 <code>currentEditorialVersion</code> 前進至該 e-version。</li>
+        <li>套用後仍維持 <code>OWNER_REVIEW_REQUIRED</code>；不得自動發布。</li>
+      </ol>
+
+      <div class="warn">
+        匯入與套用是兩個不同治理動作。Import 本身不得改寫 active report；若 <code>report_key</code>、<code>revision</code>、<code>parentEditorialVersion</code>、numeric claims 或 Authority／provenance lineage 不一致，或出現不受支持的真實數值變更，必須 <code>FAIL_CLOSED</code>。僅格式不同但 Decimal 數值相等的表示可通過數值等值檢核。
+      </div>
+
+      <h3>發布邊界與保存</h3>
+      <ul>
+        <li>Editorial Import 與 Owner Apply 都不得發布、不得設定 <code>publishAuthorized</code>、不得改變 Formal Authority，也不得修改 quarterly Master。</li>
+        <li><code>e0</code> 永久保留；已由 Owner 套用的 e-version 不可變且永久保留。diff、validation 與 provenance lineage 必須隨版本保存。</li>
+        <li>季度與重大事件報告適用永久保存規則；被拒絕、尚未套用的暫存匯入可依既有 scratch retention policy 處理。</li>
+        <li>同一 <code>report_key / revision</code> 的所有 editorial versions 顯示在同一張報告卡片下，不得為每個 e-version 建立新卡片。</li>
+      </ul>
+
+      <div class="ok">
+        <code>P1008_FY2026_Q2_EARNINGS / r1 / eN</code> 與 <code>P1008_FY2026_Q3_EARNINGS / r1 / eN</code> 是互相隔離的 lineage。latest-quarter pointer 可在 Q3 成為最新 governed report 時移至 Q3，但它只是導覽 metadata；Q2 的檔案、e0/eN 歷史與 report card 必須保持不變、可回查且不得被刪除或覆寫。
+      </div>
+    </section>
+
   </main>
 
   <script>
