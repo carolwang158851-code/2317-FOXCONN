@@ -415,6 +415,89 @@ class MarketActivityIncrementalUpdaterTests(unittest.TestCase):
         self.assertEqual(metadata["final_url"], requested)
         self.assertEqual(metadata["redirect_status"], 307)
         self.assertEqual(metadata["https_get_count"], 2)
+        self.assertFalse(metadata["canonical_direct_fallback"])
+
+    def test_fetch_uses_only_canonical_direct_path_when_3xx_has_no_location(self) -> None:
+        requested = updater.source_url("2026-07")
+
+        class Response:
+            def __init__(self, status: int, body: bytes, location: str | None = None) -> None:
+                self.status = status
+                self.body = body
+                self.location = location
+
+            def read(self) -> bytes:
+                return self.body
+
+            def getheader(self, name: str) -> str | None:
+                return self.location if name == "Location" else None
+
+        class Socket:
+            def version(self) -> str:
+                return "TLSv1.3"
+
+            def getpeercert(self) -> dict[str, object]:
+                return {}
+
+        class Connection:
+            def __init__(self, response: Response) -> None:
+                self.response = response
+                self.sock = Socket()
+                self.requested_path = ""
+
+            def request(self, _method: str, path: str, headers: dict[str, str]) -> None:
+                self.requested_path = path
+                self.headers = headers
+
+            def getresponse(self) -> Response:
+                return self.response
+
+            def close(self) -> None:
+                return
+
+        first = Connection(Response(302, b"unexpected-redirect-body", None))
+        direct = Connection(Response(200, b"governed-csv"))
+        with mock.patch.object(
+            updater.http.client,
+            "HTTPSConnection",
+            side_effect=[first, direct],
+        ):
+            body, metadata = updater.fetch_twse_month("2026-07")
+        expected_path = "/rwd/zh/afterTrading/STOCK_DAY?date=20260701&stockNo=2317&response=csv"
+        self.assertEqual(body, b"governed-csv")
+        self.assertEqual(first.requested_path, expected_path)
+        self.assertEqual(direct.requested_path, expected_path)
+        self.assertEqual(metadata["request_url"], requested)
+        self.assertEqual(metadata["final_url"], requested)
+        self.assertEqual(metadata["redirect_status"], 302)
+        self.assertIsNone(metadata["redirect_location"])
+        self.assertTrue(metadata["canonical_direct_fallback"])
+        self.assertEqual(metadata["https_get_count"], 2)
+
+    def test_confirmed_official_revision_changes_one_row_and_appends_one_row(self) -> None:
+        old = self.activity("2026-09-08", 39921647, 10039328945, 36632)
+        self.write_authority([old], [("2026-09-08", "251.5"), ("2026-09-09", "252.0")])
+        candidate = self.root / "runtime" / "confirmed.candidate.csv"
+        revised = self.activity("2026-09-08", 40240647, 10119470867, 36634)
+        appended = self.activity("2026-09-09", 21343799, 5388667990, 18134)
+        updater.write_candidate(candidate, [revised, appended])
+        formal = self.root / updater.FORMAL_REL
+        before = formal.read_bytes()
+        journal = updater.publish_confirmed_official_revision(
+            self.root,
+            candidate_path=candidate,
+            output_dir=self.root / "runtime" / "confirmed.publish",
+        )
+        with formal.open(encoding="utf-8", newline="") as handle:
+            after_rows = list(csv.DictReader(handle))
+        self.assertEqual(journal["status"], "PUBLISHED")
+        self.assertEqual(journal["row_diff"]["replaced"]["date"], "2026-09-08")
+        self.assertEqual(journal["row_diff"]["appended"][0], "2026-09-09")
+        self.assertEqual(len(after_rows), 2)
+        self.assertEqual(after_rows[0]["trade_volume"], "40240647")
+        self.assertEqual(after_rows[1]["date"], "2026-09-09")
+        self.assertFalse(formal.read_bytes().startswith(before))
+        self.assertEqual(journal["duplicate_dates"], 0)
 
     def test_publisher_rolls_back_csv_and_manifest(self) -> None:
         self.write_authority([self.activity("2026-07-16")], [("2026-07-16", "233"), ("2026-07-17", "234")])
