@@ -1,24 +1,9 @@
 ## macro_snapshot.csv
-## version: v2.2
-## created: 2026-06-05
-## updated: 2026-06-16（修正Fed_Rate至3.625/修正06-12欄位錯位/新增06-16數據）
-## purpose: 總經風險監控快照數據庫（因果論架構）
-## codex_rule_v2: 歷史行唯讀禁止修改，工作流可自動追加最新日期行
-## append_rule: 每次執行只追加當日新行（Date不重複）
-## modify_rule: 禁止修改任何已存在的歷史行
-## auto_update: 工作流自動抓取並追加：股價/VIX/WTI/US_10Y/TWD/DXY/FedProb/RiskLevel
-##
-## 欄位說明：
-## 領先指標：US_10Y_Yield/Fed_Rate/Fed_Hike_Prob_YE/DXY/WTI_Oil/Foreign_Net_Buy/TW_Export_YoY
-## 同步指標：TWD_USD/VIX/TAIEX_Weekly_Chg
-## 落後指標：US_GDP_QoQ/US_CPI_YoY/TW_GDP_QoQ
-## 鴻海直接：CSP_Capex_Signal/Hon_Hai_Rev_YoY
-## 風險判定：RiskLevel：NORMAL/CAUTION/SYSTEMIC / RiskNote：說明
-##
-## 門檻（版本D，2026-06-05回測驗證）：
-## CAUTION觸發(任1項)：US_10Y>4.2% / DXY>106 / WTI>$90 / Fed升息≥50bp / CPI>6% / Fed_Hike_Prob_YE>70%
-## SYSTEMIC觸發(任2項)：VIX>27 / GDP<0% / TWD>32.5 / 外資<-400億 / US_10Y>4.8% / WTI>$105 / Fed升息≥125bp / CSP連續2季CONTRACTION / EPS_YoY<-30%且無BlackSwanFlag
-## PART Y與PART W連動：CAUTION→CSP_mult上限1.0(BLOCK線約226元) / SYSTEMIC→CSP_mult=0.95(BLOCK線約215元)
+## version: v2.2-candidate-phase3a
+## classification: CANDIDATE_NON_AUTHORITATIVE
+## owner_promotion_required: true
+## actionable: false
+## source_union: OWNER+LEGACY+CURRENT; conflicts governed by candidate manifest
 Date,TWD_USD,VIX,WTI_Oil,US_10Y_Yield,Fed_Rate,Fed_Hike_Prob_YE,DXY,US_GDP_QoQ,US_CPI_YoY,TW_GDP_QoQ,TAIEX_Weekly_Chg,CSP_Capex_Signal,Hon_Hai_Rev_YoY,Foreign_Net_Buy,TW_Export_YoY,RiskLevel,RiskNote
 2021-03-31,28.500,,58.0,1.35,0.25,0,91.5,+6.4,2.6,,,NO_DATA,,+500,,NORMAL,COVID復甦;疫苗接種
 2021-06-30,27.900,,66.0,1.58,0.25,0,90.5,+6.7,4.9,,,NO_DATA,+15.0%,+800,,NORMAL,通膨升溫;科技股強勁
@@ -59,3 +44,22 @@ Date,TWD_USD,VIX,WTI_Oil,US_10Y_Yield,Fed_Rate,Fed_Hike_Prob_YE,DXY,US_GDP_QoQ,U
 2026-07-07,32.087,15.87,69.12,4.485,3.625,72.0,100.948,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.485%；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false
 2026-07-08,32.053,17.65,74.3,4.529,3.625,72.0,101.206,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.529%；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false
 2026-07-10,32.128,16.1,72.05,4.539,3.625,72.0,100.845,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.539%；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false
+2026-07-16,32.208,16.11,79.47,4.545,3.625,72.0,100.569,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.545%；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false
+2026-07-17,32.286,17.93,78.8,4.569,3.625,72.0,100.679,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.569%；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false
+2026-07-19,32.365,18.77,82.49,4.541,3.625,72.0,100.75,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.541%；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false
+2026-07-20,32.283,18.53,81.62,4.541,3.625,72.0,100.78,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.541%；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false
+2026-07-21,32.303,17.48,82.01,4.598,3.625,72.0,100.932,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.598%；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false
+2026-07-23,32.326,18.99,91.43,4.707,3.625,72.0,101.505,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.707%；WTI=91.43；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false
+2026-07-27,32.304,18.88,83.35,4.657,3.625,72.0,101.497,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.657%；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false
+2026-07-31,32.391,17.09,81.45,4.663,3.625,72.0,100.24,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.663%；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false
+2026-08-02,32.295,15.99,84.67,4.745,3.625,72.0,99.8,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.745%；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false
+2026-08-04,32.382,15.66,79.92,4.745,3.625,72.0,99.949,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.745%；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false
+2026-08-05,32.295,16.94,75.79,4.627,3.625,72.0,99.703,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.627%；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false
+2026-08-06,32.237,15.81,75.16,4.617,3.625,72.0,99.754,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.617%；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false
+2026-08-25,31.875,15.69,82.25,4.649,3.625,72.0,98.965,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.649%；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false
+2026-08-27,31.721,14.94,82.4,4.664,3.625,72.0,99.239,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.664%；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false
+2026-08-31,31.667,15.2,86.37,4.72,3.625,72.0,99.528,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.72%；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false
+2026-09-06,31.62,14.53,91.48,4.784,3.625,72.0,99.16,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.784%；WTI=91.48；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false
+2026-09-07,31.493,15.12,91.48,4.784,3.625,72.0,98.911,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.784%；WTI=91.48；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false
+2026-09-08,31.509,15.79,94.55,4.784,3.625,72.0,98.931,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.784%；WTI=94.55；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false
+2026-09-09,31.481,16.08,96.28,4.816,3.625,72.0,98.721,,,,,STRONG,+39.57%,,,CAUTION,自動建議：CAUTION；觸發：US_10Y=4.816%；WTI=96.28；Fed_Hike_Prob_YE=72.0%；資料註記：Fed Rate 應由 FRED DFEDTARU/DFEDTARL 目標區間中位數取得；本次連線失敗時沿用正式 CSV 最近值。；Fed 年底升息機率尚無穩定 CME FedWatch connector；沿用正式 CSV 既有值，僅作風險觀察。；僅供觀察，actionable:false

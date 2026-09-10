@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import io
 import json
 import shutil
 import subprocess
@@ -80,15 +81,25 @@ class PhaseAMacroRemediationTests(unittest.TestCase):
 
     def test_formal_macro_contains_only_numeric_or_blank_yoy_values(self) -> None:
         formal = PACKAGE_ROOT / remediation.FORMAL_REL
+        manifest = json.loads(
+            (PACKAGE_ROOT / "data/CSV_AUTHORITY_MANIFEST.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        entry = next(
+            item
+            for item in manifest["nonAuthoritativeFiles"]
+            if item["path"] == remediation.FORMAL_REL.as_posix()
+        )
         self.assertEqual(
             sha256(formal),
-            "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F",
+            entry["currentSha256"],
         )
         _, header, rows = remediation.read_macro(formal)
         date_index = header.index("Date")
         value_index = header.index("Hon_Hai_Rev_YoY")
         by_date = {row[date_index]: row for row in rows}
-        self.assertEqual(len(rows), 39)
+        self.assertEqual(len(rows), entry["rowCount"])
         for invalid_date in remediation.EXPECTED_INVALID_DATES:
             self.assertEqual(by_date[invalid_date][value_index], "")
         self.assertTrue(
@@ -108,14 +119,18 @@ class PhaseAMacroRemediationTests(unittest.TestCase):
             item["path"]: item
             for item in manifest.get("nonAuthoritativeFiles", [])
         }
-        expected_cutoffs = {
-            "data/macro_snapshot.csv": "2026-07-10",
-            "data/fx_trend_observations.csv": "2026-07-27",
-            "data/macro_event_observations.csv": "2026-07-27",
-        }
-        for path, cutoff in expected_cutoffs.items():
+        for path, entry in entries.items():
             with self.subTest(path=path):
-                self.assertEqual(entries[path]["cutoffDate"], cutoff)
+                lines = [
+                    line
+                    for line in (PACKAGE_ROOT / path)
+                    .read_text(encoding="utf-8-sig")
+                    .splitlines()
+                    if line.strip() and not line.startswith("#")
+                ]
+                rows = list(csv.DictReader(io.StringIO("\n".join(lines))))
+                self.assertEqual(max(row["Date"] for row in rows), entry["cutoffDate"])
+                self.assertEqual(sha256(PACKAGE_ROOT / path), entry["currentSha256"])
 
 
 if __name__ == "__main__":

@@ -239,23 +239,56 @@ def _manifest_entries(manifest: dict[str, Any]) -> list[dict[str, Any]]:
 
 def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str, Any]:
     manifest = read_json(root / "data" / "CSV_AUTHORITY_MANIFEST.json")
-    entries = _manifest_entries(manifest)
+    authority_entries = manifest.get("authoritativeFiles", [])
+    research_entries = manifest.get("nonAuthoritativeFiles", [])
+    entries = authority_entries + research_entries
     classification = classify_authority_paths((item["path"] for item in entries), record)
-    actual_hashes: dict[str, str] = {}
-    for entry in entries:
+    authority_hashes: dict[str, str] = {}
+    research_hashes: dict[str, str] = {}
+    for entry in authority_entries:
         path = root / entry["path"]
         require(path.is_file(), f"Authority file is missing: {entry['path']}")
+        expected_hash = entry["sha256"].upper()
+        filesystem_hash = sha256_file(path)
+        require(
+            filesystem_hash == expected_hash,
+            f"PRODUCTION_AUTHORITY_HASH_MISMATCH: {entry['path']}",
+        )
         committed = git_blob_bytes(root, entry["path"])
         committed_hash = sha256_bytes(committed)
         require(
-            committed_hash == entry["sha256"].upper(),
-            f"Authority hash mismatch: {entry['path']}",
+            committed_hash == expected_hash,
+            f"PRODUCTION_AUTHORITY_REPOSITORY_MISMATCH: {entry['path']}",
+        )
+        authority_hashes[entry["path"]] = filesystem_hash
+
+    for entry in research_entries:
+        path = root / entry["path"]
+        require(path.is_file(), f"Research current-state file is missing: {entry['path']}")
+        current_hash = str(entry.get("currentSha256") or "").upper()
+        baseline_hash = str(entry.get("acceptedBaselineSha256") or "").upper()
+        baseline_revision = str(entry.get("acceptedBaselineRevision") or "")
+        require(
+            current_hash and current_hash == str(entry.get("sha256") or "").upper(),
+            f"Research current-state manifest hash is invalid: {entry['path']}",
         )
         require(
-            normalize_checkout_eol(path.read_bytes()) == normalize_checkout_eol(committed),
-            f"Authority worktree content changed beyond checkout line endings: {entry['path']}",
+            baseline_revision and re.fullmatch(r"[0-9A-F]{64}", baseline_hash),
+            f"Research historical baseline metadata is missing: {entry['path']}",
         )
-        actual_hashes[entry["path"]] = committed_hash
+        require(
+            sha256_bytes(git_blob_bytes(root, entry["path"], baseline_revision))
+            == baseline_hash,
+            f"Research historical baseline lineage mismatch: {entry['path']}",
+        )
+        filesystem_hash = sha256_file(path)
+        require(
+            filesystem_hash == current_hash,
+            f"NON_AUTHORITATIVE_RESEARCH_LINEAGE_MISMATCH: {entry['path']}",
+        )
+        research_hashes[entry["path"]] = filesystem_hash
+
+    actual_hashes = {**authority_hashes, **research_hashes}
 
     receipt_verified = False
     if classification in {"PHASE_A_CLOSURE_SIX", "INTEGRATED_SEVEN"}:
@@ -292,10 +325,27 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
             },
             "Phase A authority receipt is not accepted",
         )
-        require(
-            receipt.get("authorityFiles") == actual_hashes,
-            "Phase A authority receipt does not match committed authority bytes",
-        )
+        historical_receipt_hashes: dict[str, str] = {}
+        historical_revision = ""
+        if acceptance_status == "P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT":
+            historical_revision = receipt.get("remediationLineage", {}).get(
+                "remediationCommit", ""
+            )
+            historical_receipt_hashes = {
+                relative: sha256_bytes(
+                    git_blob_bytes(root, relative, historical_revision)
+                )
+                for relative in receipt.get("authorityFiles", {})
+            }
+            require(
+                receipt.get("authorityFiles") == historical_receipt_hashes,
+                "Phase A authority receipt does not match committed authority bytes",
+            )
+        else:
+            require(
+                receipt.get("authorityFiles") == actual_hashes,
+                "Phase A authority receipt does not match committed authority bytes",
+            )
         if acceptance_status == "EXISTING_OWNER_PUBLISHED_AUTHORITIES_PINNED_FOR_CI":
             require(
                 receipt.get("formalPublishExecutedByThisReceipt") is False,
@@ -738,9 +788,13 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                 manifest_reference.get("path") == "data/CSV_AUTHORITY_MANIFEST.json"
                 and manifest_reference.get("sha256")
                 == sha256_bytes(
-                    git_blob_bytes(root, "data/CSV_AUTHORITY_MANIFEST.json")
+                    git_blob_bytes(
+                        root,
+                        "data/CSV_AUTHORITY_MANIFEST.json",
+                        historical_revision,
+                    )
                 ),
-                "TWSE remediation current authority manifest mismatch",
+                "TWSE remediation historical authority manifest mismatch",
             )
             require(
                 receipt.get("authoritySummary")
@@ -797,7 +851,12 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
         )
         require(
             macro_decision.get("requiredSha256")
-            == actual_hashes.get("data/macro_snapshot.csv"),
+            == (
+                historical_receipt_hashes.get("data/macro_snapshot.csv")
+                if acceptance_status
+                == "P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT"
+                else actual_hashes.get("data/macro_snapshot.csv")
+            ),
             "Macro authority receipt hash mismatch",
         )
         require(receipt.get("actionable") is False, "Authority receipt became actionable")
@@ -805,6 +864,10 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
     return {
         "baseline": classification,
         "filesVerified": len(entries),
+        "productionAuthority": "PASS",
+        "productionAuthorityFilesVerified": len(authority_entries),
+        "researchCurrentStateLineage": "PASS",
+        "researchCurrentStateFilesVerified": len(research_entries),
         "authorityReceiptVerified": receipt_verified,
     }
 

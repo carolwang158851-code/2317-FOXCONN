@@ -2,7 +2,7 @@
   "manifestVersion": "1.6.0",
   "approvedAt": "2026-09-09",
   "approvedBy": "Owner",
-  "approvalSource": "P1008 PHASE 4D Owner-authorized frozen Phase3A canonical authority promotion; external/public publication not authorized.; Owner approval 2026-09-06; formal target 2026-09-04 via owner_publish_csv_v2.py; appended 49 row(s); Owner approval 2026-09-07; formal target 2026-09-07 via owner_publish_csv_v2.py; appended 44 row(s); Owner approval 2026-09-08; formal target 2026-09-08 via owner_publish_csv_v2.py; appended 40 row(s)",
+  "approvalSource": "P1008 PHASE 4D Owner-authorized frozen Phase3A canonical authority promotion; external/public publication not authorized.; Owner approval 2026-09-06; formal target 2026-09-04 via owner_publish_csv_v2.py; appended 49 row(s); Owner approval 2026-09-07; formal target 2026-09-07 via owner_publish_csv_v2.py; appended 44 row(s); Owner approval 2026-09-08; formal target 2026-09-08 via owner_publish_csv_v2.py; appended 40 row(s); Owner approval 2026-09-09; formal target 2026-09-09 via owner_publish_csv_v2.py; appended 43 row(s)",
   "authorityPolicy": {
     "hashAlgorithm": "SHA-256",
     "hashMismatchStatus": "APPROVAL_EXPIRED",
@@ -10,6 +10,20 @@
     "automaticRecovery": false,
     "csvWritePolicy": "READ_ONLY",
     "csvWritePolicyZh": "正式 CSV 維持唯讀，不得由程式自動修改"
+  },
+  "validationClasses": {
+    "productionAuthority": {
+      "manifestSection": "authoritativeFiles",
+      "currentFilesystemMustMatchApprovedSha256": true,
+      "currentGitBlobMustMatchApprovedSha256": true,
+      "mismatchStatus": "PRODUCTION_AUTHORITY_HASH_MISMATCH"
+    },
+    "researchCurrentState": {
+      "manifestSection": "nonAuthoritativeFiles",
+      "historicalBaselineIsLineageOnly": true,
+      "currentFilesystemMustMatchCurrentSha256": true,
+      "mismatchStatus": "NON_AUTHORITATIVE_RESEARCH_LINEAGE_MISMATCH"
+    }
   },
   "authoritativeFiles": [
     {
@@ -523,11 +537,14 @@
       "publishRuleZh": "正式macro_snapshot.csv原則上僅能append新日期行；歷史格式修正須由Owner明確核准，並同步更新SHA-256與manifest",
       "actionable": false,
       "zh": "使用者整理資料，尚未完成CSV_AUTHORITY權威驗證；可供市場情報觀察，不啟用交易規則；2026-06-29已由Owner核准修正7筆歷史欄位錯位",
-      "sha256": "87C8CB6563DE802D9D267AC3766B27C6783BE0A1A33C778D20E92B45CAAE565D",
-      "fileSizeBytes": 15875,
-      "rowCount": 57,
-      "cutoffDate": "2026-08-31",
-      "lastPublishedAt": "2026-09-08T08:20:47Z",
+      "sha256": "0A665388B496E261F832963EB480BDE23E803674959B64EAD9DC77046B1F3788",
+      "currentSha256": "0A665388B496E261F832963EB480BDE23E803674959B64EAD9DC77046B1F3788",
+      "acceptedBaselineRevision": "28537440c9bfd1cfbe89cbbe7cae51803c6aa9dc",
+      "acceptedBaselineSha256": "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F",
+      "fileSizeBytes": 16327,
+      "rowCount": 58,
+      "cutoffDate": "2026-09-09",
+      "lastPublishedAt": "2026-09-09T15:19:15Z",
       "publishApprovalZh": "Owner approved append; MARKET INTELLIGENCE sidecar remains observation only; actionable:false.",
       "columnCount": 18,
       "columns": [
@@ -552,7 +569,7 @@
       ],
       "dateRange": {
         "start": "2021-03-31",
-        "end": "2026-08-31"
+        "end": "2026-09-09"
       },
       "validationStatus": "PASS_WITH_QUARANTINE",
       "promotionProvenance": "OWNER_CONFLICT_BASE_PLUS_LEGACY_AND_CURRENT_UNIQUE_DATES",
@@ -583,16 +600,19 @@
         "DecisionImpactZh",
         "Actionable"
       ],
-      "sha256": "431A6FC236357452A5680545C57814987C7EFB1E9502A3B7016BFCA4CE6E9E61",
-      "fileSizeBytes": 544864,
-      "rowCount": 850,
-      "cutoffDate": "2026-08-31",
+      "sha256": "52DB91CE4557C5B8FA7A2D9049CD62BA9A6E96F97378C09F795A7557B8FB8206",
+      "currentSha256": "52DB91CE4557C5B8FA7A2D9049CD62BA9A6E96F97378C09F795A7557B8FB8206",
+      "acceptedBaselineRevision": "28537440c9bfd1cfbe89cbbe7cae51803c6aa9dc",
+      "acceptedBaselineSha256": "76B93F8932BA606390D44D68BD0D57D0BE7CB5D1D1364183F192A062D8B94BF2",
+      "fileSizeBytes": 571024,
+      "rowCount": 891,
+      "cutoffDate": "2026-09-09",
       "publishApprovalZh": "Owner approved append; MARKET INTELLIGENCE sidecar remains observation only; actionable:false.",
-      "lastPublishedAt": "2026-09-08T08:20:47Z",
+      "lastPublishedAt": "2026-09-09T15:19:15Z",
       "columnCount": 14,
       "dateRange": {
         "start": "2026-07-05",
-        "end": "2026-08-31"
+        "end": "2026-09-09"
       },
       "validationStatus": "PASS_WITH_QUARANTINE",
       "promotionProvenance": "PROVENANCE_PRESERVING_OWNER_LEGACY_CURRENT_UNION",
@@ -624,16 +644,19 @@
         "SummaryZh",
         "Actionable"
       ],
-      "sha256": "A24D1F58061FFA73ABAAF0FE7101917C85DDADF1FC1AABDFE17B53C603B1FDAF",
-      "fileSizeBytes": 11298,
-      "rowCount": 23,
-      "cutoffDate": "2026-08-31",
+      "sha256": "2FAAAEFAE6685F04A16964088062B41E519B9E0A2EFBBA7695827B36C12B7CC3",
+      "currentSha256": "2FAAAEFAE6685F04A16964088062B41E519B9E0A2EFBBA7695827B36C12B7CC3",
+      "acceptedBaselineRevision": "28537440c9bfd1cfbe89cbbe7cae51803c6aa9dc",
+      "acceptedBaselineSha256": "BFEC53845C68D689D20CC29972550279E3A4AE8D473816EFDB0855FF0DD091CD",
+      "fileSizeBytes": 11753,
+      "rowCount": 24,
+      "cutoffDate": "2026-09-09",
       "publishApprovalZh": "Owner approved append; MARKET INTELLIGENCE sidecar remains observation only; actionable:false.",
-      "lastPublishedAt": "2026-09-08T08:20:47Z",
+      "lastPublishedAt": "2026-09-09T15:19:15Z",
       "columnCount": 15,
       "dateRange": {
         "start": "2026-07-05",
-        "end": "2026-08-31"
+        "end": "2026-09-09"
       },
       "validationStatus": "PASS_WITH_QUARANTINE",
       "promotionProvenance": "PROVENANCE_PRESERVING_OWNER_LEGACY_CURRENT_UNION",

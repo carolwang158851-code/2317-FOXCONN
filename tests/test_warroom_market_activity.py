@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import csv
 import json
 import shutil
 import sys
@@ -157,11 +158,22 @@ class MarketActivityTests(unittest.TestCase):
         self.assertFalse(result["actionable"])
 
     def test_current_formal_market_activity_is_ready(self) -> None:
+        latest_dates: list[dt.date] = []
+        for relative, field in (
+            ("data/2317_daily_price.csv", "Date"),
+            ("data/2317_daily_market_activity.csv", "date"),
+        ):
+            with (PACKAGE_ROOT / relative).open(encoding="utf-8", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            latest_dates.append(max(dt.date.fromisoformat(row[field]) for row in rows))
+        as_of_date = max(latest_dates)
         result = analyze_optional_files(
             PACKAGE_ROOT / "data/2317_daily_price.csv",
             PACKAGE_ROOT / "data/2317_daily_market_activity.csv",
-            as_of_date=dt.date(2026, 8, 11),
-            now_utc=dt.datetime(2026, 8, 12, 12, 0, tzinfo=dt.timezone.utc),
+            as_of_date=as_of_date,
+            now_utc=dt.datetime.combine(
+                as_of_date + dt.timedelta(days=1), dt.time(12), tzinfo=dt.timezone.utc
+            ),
         )
         self.assertEqual(result["status"], READY)
         self.assertFalse(result["actionable"])

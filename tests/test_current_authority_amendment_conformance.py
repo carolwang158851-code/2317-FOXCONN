@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -42,6 +43,81 @@ class CurrentAuthorityAmendmentConformanceTests(unittest.TestCase):
 
     def validate(self) -> dict[str, object]:
         return RUNNER.validate_authority_manifest(ROOT, self.record)
+
+    def validation_fixture(self) -> tuple[tempfile.TemporaryDirectory[str], Path, dict[str, object]]:
+        temporary = tempfile.TemporaryDirectory(prefix="p1008-authority-classes-")
+        root = Path(temporary.name)
+        manifest = RUNNER.read_json(ROOT / "data" / "CSV_AUTHORITY_MANIFEST.json")
+        paths = [item["path"] for item in RUNNER._manifest_entries(manifest)]
+        for relative in paths:
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((ROOT / relative).read_bytes())
+        manifest_path = root / "data" / "CSV_AUTHORITY_MANIFEST.json"
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        record = {
+            "authorityBaselines": {
+                "legacyFive": paths,
+                "currentSix": [],
+                "phaseAClosureSix": [],
+                "integratedSeven": [],
+            }
+        }
+        return temporary, root, record
+
+    def validate_fixture(self, root: Path, record: dict[str, object]) -> dict[str, object]:
+        def blob(_root: Path, relative: str, revision: str = "HEAD") -> bytes:
+            if revision == "HEAD":
+                return (root / relative).read_bytes()
+            return self.original_git_blob_bytes(ROOT, relative, revision)
+
+        with mock.patch.object(RUNNER, "git_blob_bytes", side_effect=blob):
+            return RUNNER.validate_authority_manifest(root, record)
+
+    def test_production_authority_filesystem_mismatch_is_hard_failure(self) -> None:
+        temporary, root, record = self.validation_fixture()
+        with temporary:
+            path = root / "data" / "2317_master_v9.csv"
+            path.write_bytes(path.read_bytes() + b"tamper")
+            with self.assertRaisesRegex(
+                AssertionError, "PRODUCTION_AUTHORITY_HASH_MISMATCH"
+            ):
+                self.validate_fixture(root, record)
+
+    def test_research_current_state_can_differ_from_historical_baseline(self) -> None:
+        temporary, root, record = self.validation_fixture()
+        with temporary:
+            result = self.validate_fixture(root, record)
+            self.assertEqual(result["productionAuthority"], "PASS")
+            self.assertEqual(result["researchCurrentStateLineage"], "PASS")
+            self.assertEqual(result["productionAuthorityFilesVerified"], 4)
+            self.assertEqual(result["researchCurrentStateFilesVerified"], 3)
+
+    def test_research_current_state_mismatch_is_classified_separately(self) -> None:
+        temporary, root, record = self.validation_fixture()
+        with temporary:
+            path = root / "data" / "macro_snapshot.csv"
+            path.write_bytes(path.read_bytes() + b"tamper")
+            with self.assertRaisesRegex(
+                AssertionError, "NON_AUTHORITATIVE_RESEARCH_LINEAGE_MISMATCH"
+            ):
+                self.validate_fixture(root, record)
+
+    def test_reconciled_master_matches_owner_approved_manifest_hash(self) -> None:
+        temporary, root, record = self.validation_fixture()
+        with temporary:
+            result = self.validate_fixture(root, record)
+            manifest = RUNNER.read_json(root / "data" / "CSV_AUTHORITY_MANIFEST.json")
+            master = next(
+                item
+                for item in manifest["authoritativeFiles"]
+                if item["path"] == "data/2317_master_v9.csv"
+            )
+            self.assertEqual(RUNNER.sha256_file(root / master["path"]), master["sha256"])
+            self.assertEqual(result["productionAuthority"], "PASS")
 
     def mutated_amendment(self, mutate: object) -> tuple[bytes, str]:
         original = self.original_git_blob_bytes(

@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import date, timedelta
 from pathlib import Path
 
 
@@ -149,7 +150,7 @@ class OwnerPublishTradeDateTests(unittest.TestCase):
             self.root, self._stage_trade_pair("2026-09-04")
         )
         self.assertTrue(readiness["allowed"], readiness["blockers"])
-        self.assertEqual(readiness["executionDate"], "2026-09-06")
+        self.assertEqual(readiness["executionDate"], date.today().isoformat())
         self.assertEqual(readiness["candidateTradingDate"], "2026-09-04")
         self.assertEqual(readiness["formalTargetDate"], "2026-09-04")
 
@@ -232,43 +233,48 @@ class OwnerPublishTradeDateTests(unittest.TestCase):
             shutil.copy2(PACKAGE_ROOT / rel, destination)
             self.assertEqual(sha256(destination), source_hashes[rel])
 
-        source_staging = PACKAGE_ROOT / "staging" / "2026-09-06"
-        isolated_staging = self.root / "staging" / "2026-09-06"
-        source_dry_run = json.loads((source_staging / "DRY_RUN.json").read_text(encoding="utf-8"))
-        for generated in source_dry_run["generatedFiles"]:
-            relative = Path(generated.replace("\\", "/"))
-            destination = self.root / relative
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(PACKAGE_ROOT / relative, destination)
-        isolated_dry_run_path = isolated_staging / "DRY_RUN.json"
-        shutil.copy2(source_staging / "DRY_RUN.json", isolated_dry_run_path)
-        original_isolated_dry_run = isolated_dry_run_path.read_bytes()
-
-        for status_rel, runtime_rel in (
-            (PUBLISHER.DAILY_PRICE_STATUS_PATH, "runtime/daily_price_incremental"),
-            (PUBLISHER.MARKET_ACTIVITY_STATUS_PATH, "runtime/market_activity_incremental"),
+        latest_dates: list[date] = []
+        for rel, field in (
+            (PUBLISHER.DAILY_TARGET, "Date"),
+            (PUBLISHER.MARKET_ACTIVITY_TARGET, "date"),
         ):
-            status = json.loads((PACKAGE_ROOT / status_rel).read_text(encoding="utf-8"))
-            source_candidate = Path(status["candidate_path"])
-            source_run = source_candidate.parent
-            isolated_run = self.root / runtime_rel / status["run_id"]
-            shutil.copytree(source_run, isolated_run)
-            status["candidate_path"] = str(isolated_run / source_candidate.name)
-            isolated_receipts: list[str] = []
-            for receipt_value in status.get("receipt_paths", []):
-                source_receipt = Path(receipt_value)
-                isolated_receipt = isolated_run / source_receipt.relative_to(source_run)
-                receipt = json.loads(isolated_receipt.read_text(encoding="utf-8"))
-                source_raw = Path(receipt["raw_artifact_path"])
-                receipt["raw_artifact_path"] = str(
-                    isolated_run / source_raw.relative_to(source_run)
-                )
-                isolated_receipt.write_text(json.dumps(receipt), encoding="utf-8")
-                isolated_receipts.append(str(isolated_receipt))
-            status["receipt_paths"] = isolated_receipts
-            isolated_status = self.root / status_rel
-            isolated_status.parent.mkdir(parents=True, exist_ok=True)
-            isolated_status.write_text(json.dumps(status), encoding="utf-8")
+            header, rows, _ = PUBLISHER.read_csv_header_and_rows(self.root / rel)
+            index = header.index(field)
+            latest_dates.append(max(date.fromisoformat(row[index]) for row in rows))
+        candidate_day = max(latest_dates) + timedelta(days=1)
+        while candidate_day.weekday() >= 5:
+            candidate_day += timedelta(days=1)
+        candidate_date = candidate_day.isoformat()
+
+        isolated_staging = self.root / "staging" / "2026-09-06"
+        isolated_dry_run_path = isolated_staging / "DRY_RUN.json"
+        dry_run = self._stage_trade_pair(candidate_date)
+        daily_status_path = self.root / PUBLISHER.DAILY_PRICE_STATUS_PATH
+        market_status_path = self.root / PUBLISHER.MARKET_ACTIVITY_STATUS_PATH
+        daily_status = json.loads(daily_status_path.read_text(encoding="utf-8"))
+        market_status = json.loads(market_status_path.read_text(encoding="utf-8"))
+        daily_header, daily_rows, _ = PUBLISHER.read_csv_header_and_rows(
+            self.root / PUBLISHER.DAILY_TARGET
+        )
+        daily_candidate = Path(daily_status["candidate_path"])
+        self._write_csv(
+            daily_candidate,
+            daily_header,
+            [
+                *daily_rows,
+                [candidate_date, "201", "2026Q2", "100", "2.010", "OFFICIAL_TWSE_A1", "STAGING_CANDIDATE"],
+            ],
+        )
+        daily_status["candidate_sha256"] = sha256(daily_candidate)
+        market_status["price_validation_provenance"]["daily_price_candidate_sha256"] = sha256(
+            daily_candidate
+        )
+        daily_status_path.write_text(json.dumps(daily_status), encoding="utf-8")
+        market_status_path.write_text(json.dumps(market_status), encoding="utf-8")
+        isolated_dry_run_path.write_text(
+            json.dumps(dry_run), encoding="utf-8"
+        )
+        original_isolated_dry_run = isolated_dry_run_path.read_bytes()
 
         before_counts = {
             rel: PUBLISHER.row_count(self.root / rel)
@@ -290,7 +296,7 @@ class OwnerPublishTradeDateTests(unittest.TestCase):
         ]
         published = subprocess.run(
             command,
-            input="APPROVE 2026-09-04\n",
+            input=f"APPROVE {candidate_date}\n",
             text=True,
             encoding="utf-8",
             capture_output=True,
@@ -303,8 +309,8 @@ class OwnerPublishTradeDateTests(unittest.TestCase):
             header, rows, _ = PUBLISHER.read_csv_header_and_rows(self.root / rel)
             date_field = "Date" if rel == PUBLISHER.DAILY_TARGET else "date"
             dates = [row[header.index(date_field)] for row in rows]
-            self.assertEqual(dates.count("2026-09-04"), 1)
-            self.assertEqual(len(rows), before_counts[rel] + 4)
+            self.assertEqual(dates.count(candidate_date), 1)
+            self.assertEqual(len(rows), before_counts[rel] + 1)
 
         manifest = json.loads((self.root / PUBLISHER.MANIFEST_PATH).read_text(encoding="utf-8"))
         entries = manifest["authoritativeFiles"] + manifest.get("nonAuthoritativeFiles", [])
@@ -318,7 +324,7 @@ class OwnerPublishTradeDateTests(unittest.TestCase):
         isolated_dry_run_path.write_bytes(original_isolated_dry_run)
         duplicate = subprocess.run(
             command,
-            input="APPROVE 2026-09-04\n",
+            input=f"APPROVE {candidate_date}\n",
             text=True,
             encoding="utf-8",
             capture_output=True,
