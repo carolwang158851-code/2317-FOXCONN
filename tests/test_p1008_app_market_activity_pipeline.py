@@ -39,6 +39,7 @@ class FakeManager(app_server.P1008JobManager):
         self.calls: list[str] = []
         self.timeouts: dict[str, int] = {}
         self.step_args: dict[str, list[str]] = {}
+        self.python_step_args: dict[str, list[str]] = {}
         self.daily_payload: dict[str, object] = {
             "status": "NO_NEW_DAILY_PRICE", "launcher_status": "NO_NEW_DATA",
             "last_success_date": "2026-07-17", "receipt_paths": ["receipt.json"],
@@ -102,6 +103,7 @@ class FakeManager(app_server.P1008JobManager):
 
     def _run_python_step(self, step_id, label, args, timeout_seconds, *, allow_after_errors=False):
         self.calls.append(step_id)
+        self.python_step_args[step_id] = list(args)
         self._set_step(step_id, label, "SUCCEEDED", exitCode=0)
         if step_id == "official-ir-scan":
             path = self.package_root / app_server.OFFICIAL_IR_STATUS_REL
@@ -146,6 +148,34 @@ class LauncherMarketActivityPipelineTests(unittest.TestCase):
         self.assertEqual(manager.timeouts, {"daily-price-authority": 180, "market-activity": 180, "authority-freshness": 60, "update-data": 420})
         self.assertEqual(manager.step_args["daily-price-authority"], ["--dry-run"])
         self.assertEqual(manager.step_args["market-activity"], ["--dry-run"])
+
+    def test_official_ir_propagates_existing_canonical_period_across_quarters(self) -> None:
+        manager = FakeManager(self.root)
+        path = self.root / app_server.RESEARCH_INTEGRATION_STATUS_REL
+        path.parent.mkdir(parents=True, exist_ok=True)
+        for period in (
+            "FY2025 Q4",
+            "FY2026 Q1",
+            "FY2026 Q2",
+            "FY2026 Q3",
+            "FY2026 Q4",
+            "FY2027 Q1",
+        ):
+            with self.subTest(period=period):
+                path.write_text(
+                    json.dumps({"official_ir": {"active_fiscal_period": period}}),
+                    encoding="utf-8",
+                )
+                manager._run_official_ir_step()
+                self.assertEqual(
+                    manager.python_step_args["official-ir-scan"][-2:],
+                    ["--period", period],
+                )
+
+    def test_official_ir_missing_canonical_period_does_not_guess(self) -> None:
+        manager = FakeManager(self.root)
+        manager._run_official_ir_step()
+        self.assertNotIn("--period", manager.python_step_args["official-ir-scan"])
 
     def test_launcher_binds_market_activity_to_same_run_daily_price_staging(self) -> None:
         manager = FakeManager(self.root)

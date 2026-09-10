@@ -66,6 +66,7 @@ MARKET_ACTIVITY_STATUS_REL = "runtime/market_activity_incremental/latest_status.
 FRESHNESS_STATUS_REL = "runtime/authority_freshness/latest_status.json"
 SOURCE_MANIFEST_REL = "data/NEWS_SCAN_SOURCE_MANIFEST.json"
 OFFICIAL_IR_STATUS_REL = "runtime/official_ir_evidence/latest_status.json"
+RESEARCH_INTEGRATION_STATUS_REL = "runtime/research_plugin/latest_content_integration.json"
 SERVER_VERSION = "P1008_APP_SERVER_20260812_OFFICIAL_IR_PARTIAL_COVERAGE_V1_1"
 CURRENT_WAR_BRIEF_ROUTE = "/" + rolling_brief.LATEST_REPORT_REL
 WAR_BRIEF_NAVIGATION_ID = "p1008-war-brief-navigation"
@@ -1660,6 +1661,13 @@ class P1008JobManager:
             "--package-root",
             str(self.package_root),
         ]
+        integration = read_json(
+            self.package_root / RESEARCH_INTEGRATION_STATUS_REL, default={}
+        ) or {}
+        official_ir = integration.get("official_ir") or {}
+        canonical_period = official_ir.get("active_fiscal_period", "")
+        if isinstance(canonical_period, str) and canonical_period.strip():
+            args.extend(["--period", canonical_period.strip()])
         self._run_python_step(
             "official-ir-scan", "Governed Official IR evidence scan", args,
             timeout_seconds=90,

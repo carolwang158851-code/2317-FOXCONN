@@ -22,6 +22,7 @@ def main() -> int:
     from p1008_research_plugin.adapters.official_ir_evidence_adapter import (  # noqa: PLC0415
         OfficialIREvidenceAdapter,
         OfficialIREvidenceError,
+        _period,
     )
     from p1008_research_plugin.orchestrator.research_content_integration import (  # noqa: PLC0415
         ResearchContentIntegrationError,
@@ -31,10 +32,8 @@ def main() -> int:
 
     period = None
     if args.period:
-        try:
-            year, quarter = args.period.upper().replace("FY", "").split("-Q", 1)
-            period = (int(year), int(quarter))
-        except (ValueError, TypeError):
+        period = _period(args.period)
+        if period is None:
             print(json.dumps({"status": "FAIL_CLOSED", "error": "INVALID_PERIOD", "actionable": False}))
             return 20
     try:

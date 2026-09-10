@@ -21,6 +21,7 @@ from p1008_research_plugin.adapters.official_ir_evidence_adapter import (  # noq
     OfficialIREvidenceAdapter,
     OfficialIREvidenceError,
     _ascii_transport_url,
+    _period,
 )
 from p1008_research_plugin.orchestrator.research_content_integration import (  # noqa: E402
     ResearchContentIntegrationError,
@@ -408,6 +409,26 @@ class OfficialIREvidenceIngestionTests(unittest.TestCase):
 
 
 class OfficialIRTransportPortabilityTests(unittest.TestCase):
+    def test_existing_period_normalizer_accepts_canonical_quarters_and_rejects_invalid(self) -> None:
+        for value, expected in (
+            ("FY2025 Q4", (2025, 4)),
+            ("FY2026 Q1", (2026, 1)),
+            ("FY2026 Q2", (2026, 2)),
+            ("FY2026 Q3", (2026, 3)),
+            ("FY2026 Q4", (2026, 4)),
+            ("FY2027 Q1", (2027, 1)),
+        ):
+            with self.subTest(value=value):
+                self.assertEqual(_period(value), expected)
+        for value in ("FY2026 Q0", "FY2026 Q5", "FY2026"):
+            with self.subTest(value=value):
+                self.assertIsNone(_period(value))
+
+    def test_live_mops_missing_target_period_remains_fail_closed(self) -> None:
+        adapter = OfficialIREvidenceAdapter.__new__(OfficialIREvidenceAdapter)
+        with self.assertRaisesRegex(OfficialIREvidenceError, "MOPS_TARGET_PERIOD_REQUIRED"):
+            adapter._fetch_live_mops({}, None)
+
     def test_unicode_official_link_is_ascii_encoded_only_for_transport(self) -> None:
         original = "https://image.honhai.com/lawtalk/鴻海_2Q26_Results.pdf?語言=中文"
         encoded = _ascii_transport_url(original)
