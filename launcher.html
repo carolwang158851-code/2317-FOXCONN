@@ -278,16 +278,23 @@
             <div id="editorial-current" class="small" style="margin-top:6px">current: N/A</div>
           </div>
           <div class="stat">
-            <div class="label">匯入格式</div>
+            <div class="label">匯入版本 JSON</div>
             <input id="editorial-file" type="file" accept="application/json,.json" style="width:100%;margin-top:6px" />
-            <div class="small" style="margin-top:6px">JSON：report_key、revision、parentEditorialVersion、reportCandidate</div>
+            <div class="small" style="margin-top:6px">只接受 .json；必填：report_key、revision、parentEditorialVersion、reportCandidate。</div>
+          </div>
+          <div class="stat">
+            <div class="label">匯入戰報成品</div>
+            <input id="report-artifact-file" type="file" accept="text/html,application/pdf,.html,.pdf" style="width:100%;margin-top:6px" />
+            <div class="small" style="margin-top:6px">只接受 .html / .pdf，檔名須為所選 report_key，或以 report_key_ 開頭（例如 &lt;report_key&gt;_OWNER_REVIEW_V3.html）。建議組合：&lt;report_key&gt;.html、&lt;report_key&gt;.pdf、&lt;report_key&gt;.report.json；JSON 管版本治理，HTML/PDF 管閱讀內容。僅供 Owner Review 閱讀、預覽與 report-library attachment。</div>
           </div>
         </div>
         <div class="buttons" style="margin-top:10px">
-          <button id="import-editorial" type="button">匯入潤稿版</button>
+          <button id="import-editorial" type="button">匯入版本 JSON</button>
+          <button id="import-report-artifact" type="button">匯入戰報成品</button>
           <button id="apply-editorial" type="button" disabled>套用潤稿版</button>
         </div>
         <div id="editorial-message" class="small" style="margin-top:8px">讀取季度版本歷史中。</div>
+        <div id="report-artifact-message" class="small" style="margin-top:8px"></div>
         <div id="editorial-history" class="small" style="margin-top:8px"></div>
       </div>
       <div class="notice blue" style="margin-top:12px">
@@ -889,15 +896,23 @@
         return `<div>${safe(item.editorialVersion)} ${safe(label + current)}</div>`;
       }).join('') : '尚無季度 Owner Review。';
       $('import-editorial').disabled = !report || Boolean(pending);
+      $('import-report-artifact').disabled = !report;
       $('apply-editorial').disabled = !pending;
       $('apply-editorial').dataset.version = pending?.editorialVersion || '';
     }
 
     async function importEditorial() {
       const file = $('editorial-file').files?.[0];
-      if (!file) { $('editorial-message').textContent = '請先選擇潤稿回傳 JSON。'; return; }
+      if (!file) { $('editorial-message').textContent = '請先選擇版本 JSON。'; return; }
       try {
+        if (!file.name.toLowerCase().endsWith('.json')) {
+          throw new Error('此入口只接受版本 JSON；HTML/PDF 請使用「匯入戰報成品」。');
+        }
         const body = JSON.parse(await file.text());
+        const required = ['report_key', 'revision', 'parentEditorialVersion', 'reportCandidate'];
+        if (!body || typeof body !== 'object' || required.some((key) => !Object.prototype.hasOwnProperty.call(body, key))) {
+          throw new Error('版本 JSON 缺少必要 metadata：report_key、revision、parentEditorialVersion、reportCandidate。');
+        }
         const selected = selectedEditorialReport();
         if (!selected) throw new Error('尚未選擇治理報告。');
         const result = await fetchJson('/api/p1008/quarterly-editorial/import', {method: 'POST', body: JSON.stringify({
@@ -910,6 +925,39 @@
         $('editorial-message').textContent = `FAIL_CLOSED：${error.payload?.reason || error.message}`;
       }
       await refreshAll();
+    }
+
+    async function fileAsBase64(file) {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('戰報成品讀取失敗。'));
+        reader.readAsDataURL(file);
+      });
+      const marker = String(dataUrl).indexOf(',');
+      if (marker < 0) throw new Error('戰報成品格式無法讀取。');
+      return String(dataUrl).slice(marker + 1);
+    }
+
+    async function importReportArtifact() {
+      const file = $('report-artifact-file').files?.[0];
+      if (!file) { $('report-artifact-message').textContent = '請先選擇 .html 或 .pdf 戰報成品。'; return; }
+      try {
+        const suffix = file.name.toLowerCase().split('.').pop();
+        if (!['html', 'pdf'].includes(suffix)) throw new Error('此入口只接受 .html 或 .pdf 戰報成品。');
+        const selected = selectedEditorialReport();
+        if (!selected) throw new Error('尚未選擇治理報告。');
+        const result = await fetchJson('/api/p1008/quarterly-editorial/artifact-import', {method: 'POST', body: JSON.stringify({
+          selectedReportKey: selected.report_key,
+          selectedRevision: selected.revision,
+          fileName: file.name,
+          contentBase64: await fileAsBase64(file),
+        })});
+        const link = result.artifactUrl ? ` <a href="${safe(result.artifactUrl)}" target="_blank" rel="noopener">預覽附件</a>` : '';
+        $('report-artifact-message').innerHTML = `${safe(result.report_key)} / r${safe(result.revision)} 已附加 ${safe(result.fileName)}；僅供 Owner Review，未發布、未改變 Core View 或 authority。${link}`;
+      } catch (error) {
+        $('report-artifact-message').textContent = `FAIL_CLOSED：${error.payload?.reason || error.message}`;
+      }
     }
 
     async function applyEditorial() {
@@ -1000,6 +1048,7 @@
     $('approval-phrase').addEventListener('input', renderStatus);
     $('editorial-report-select').addEventListener('change', renderEditorial);
     $('import-editorial').addEventListener('click', importEditorial);
+    $('import-report-artifact').addEventListener('click', importReportArtifact);
     $('apply-editorial').addEventListener('click', applyEditorial);
 
     refreshAll();

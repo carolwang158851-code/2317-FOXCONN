@@ -10,6 +10,7 @@ publish gate and is never part of the Launcher default data pipeline.
 from __future__ import annotations
 
 import argparse
+import base64
 import csv
 import hashlib
 import http.server
@@ -84,6 +85,9 @@ Q2_OWNER_REVIEW_MANIFESTS = {
     "runtime/warroom_report_manifest.json",
     "reports/P1008_REPORT_MANIFEST.json",
 }
+REPORT_LIBRARY_ATTACHMENT_REL = "runtime/report_library_artifacts"
+MAX_REPORT_ARTIFACT_BYTES = 25 * 1024 * 1024
+REPORT_ARTIFACT_BASENAME_PATTERN = re.compile(r"^[A-Z0-9]+(?:_[A-Z0-9]+)*$")
 
 WEEKDAY_ZH = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"]
 FIELD_LABEL_ZH = {
@@ -176,6 +180,80 @@ def _safe_governed_path(package_root: Path, relative_path: str) -> Path:
     if resolved != resolved_root and resolved_root not in resolved.parents:
         raise ValueError(f"Governed artifact escaped package root: {relative_path}")
     return resolved
+
+
+def import_report_library_artifact(
+    package_root: Path | str,
+    *,
+    selected_report_key: str,
+    selected_revision: int,
+    file_name: str,
+    content_base64: str,
+) -> dict[str, Any]:
+    """Attach a readable Owner-Review artifact without changing governed report state."""
+    root = Path(package_root)
+    catalog = quarterly_editorial.quarterly_editorial_catalog(root)
+    selected = [
+        item for item in catalog.get("reports", [])
+        if isinstance(item, dict)
+        and item.get("report_key") == selected_report_key
+        and item.get("revision") == selected_revision
+    ]
+    if len(selected) != 1:
+        raise ValueError("REPORT_ARTIFACT_SELECTED_REPORT_NOT_FOUND")
+    if not isinstance(file_name, str) or Path(file_name).name != file_name:
+        raise ValueError("REPORT_ARTIFACT_FILENAME_INVALID")
+    suffix = Path(file_name).suffix.lower()
+    if suffix not in {".html", ".pdf"}:
+        raise ValueError("REPORT_ARTIFACT_TYPE_NOT_ALLOWED_HTML_OR_PDF_REQUIRED")
+    basename = Path(file_name).stem
+    if not REPORT_ARTIFACT_BASENAME_PATTERN.fullmatch(basename):
+        raise ValueError("REPORT_ARTIFACT_BASENAME_INVALID")
+    if basename != selected_report_key and not basename.startswith(f"{selected_report_key}_"):
+        raise ValueError("REPORT_ARTIFACT_REPORT_KEY_MISMATCH")
+    if not isinstance(content_base64, str) or not content_base64:
+        raise ValueError("REPORT_ARTIFACT_CONTENT_REQUIRED")
+    try:
+        content = base64.b64decode(content_base64, validate=True)
+    except (ValueError, TypeError) as error:
+        raise ValueError("REPORT_ARTIFACT_BASE64_INVALID") from error
+    if not content or len(content) > MAX_REPORT_ARTIFACT_BYTES:
+        raise ValueError("REPORT_ARTIFACT_SIZE_INVALID")
+
+    relative = (
+        Path(REPORT_LIBRARY_ATTACHMENT_REL)
+        / selected_report_key
+        / f"r{selected_revision}"
+        / file_name
+    )
+    target = _safe_governed_path(root, relative.as_posix())
+    target.parent.mkdir(parents=True, exist_ok=True)
+    content_sha256 = hashlib.sha256(content).hexdigest().upper()
+    if target.exists():
+        if not target.is_file() or hashlib.sha256(target.read_bytes()).hexdigest().upper() != content_sha256:
+            raise ValueError("REPORT_ARTIFACT_ATTACHMENT_CONFLICT")
+    else:
+        temporary = target.with_name(f".{target.name}.{uuid.uuid4().hex}.tmp")
+        try:
+            temporary.write_bytes(content)
+            temporary.replace(target)
+        finally:
+            if temporary.exists():
+                temporary.unlink()
+    return {
+        "status": "ATTACHED_OWNER_REVIEW_ONLY",
+        "report_key": selected_report_key,
+        "revision": selected_revision,
+        "fileName": file_name,
+        "format": suffix.removeprefix(".").upper(),
+        "sha256": content_sha256,
+        "artifactUrl": "/" + relative.as_posix(),
+        "publication": False,
+        "actionable": False,
+        "coreViewChanged": False,
+        "authorityModified": False,
+        "reportTriggerChanged": False,
+    }
 
 
 def build_q2_owner_review_export(package_root: Path) -> tuple[bytes, str]:
@@ -1997,6 +2075,21 @@ class P1008AppHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json(400, {"status": "FAIL_CLOSED", "reason": str(error)})
                 return
             self._send_json(200 if payload.get("status") == "PENDING" else 409, payload)
+            return
+        if parsed.path == "/api/p1008/quarterly-editorial/artifact-import":
+            try:
+                request = self._read_json_body()
+                payload = import_report_library_artifact(
+                    self.manager.package_root,
+                    selected_report_key=str(request.get("selectedReportKey") or ""),
+                    selected_revision=int(request.get("selectedRevision") or 0),
+                    file_name=str(request.get("fileName") or ""),
+                    content_base64=str(request.get("contentBase64") or ""),
+                )
+            except (TypeError, ValueError) as error:
+                self._send_json(400, {"status": "FAIL_CLOSED", "reason": str(error)})
+                return
+            self._send_json(200, payload)
             return
         if parsed.path == "/api/p1008/quarterly-editorial/apply":
             try:
