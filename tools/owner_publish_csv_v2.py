@@ -907,10 +907,13 @@ def update_manifest(package_root: Path, touched_targets: list[str], approval_not
             entry["rowCount"] = rows
             entry["lastPublishedAt"] = now
             entry["publishApprovalZh"] = "Owner approved append; MARKET INTELLIGENCE sidecar remains observation only; actionable:false."
-            if target_rel == DAILY_TARGET:
+            if target_rel in {DAILY_TARGET, MARKET_ACTIVITY_TARGET}:
                 _, data_rows, _ = read_csv_header_and_rows(target_path)
                 if data_rows:
-                    entry.setdefault("dateRange", {})["end"] = data_rows[-1][0]
+                    date_range = entry.setdefault("dateRange", {})
+                    if target_rel == MARKET_ACTIVITY_TARGET:
+                        date_range["start"] = data_rows[0][0]
+                    date_range["end"] = data_rows[-1][0]
             updated = True
         if not updated:
             raise ValueError(f"Manifest has no entry for {target_rel}.")
