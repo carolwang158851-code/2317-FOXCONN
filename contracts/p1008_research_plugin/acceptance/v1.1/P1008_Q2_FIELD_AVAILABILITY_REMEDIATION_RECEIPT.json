@@ -1,0 +1,227 @@
+{
+  "schemaVersion": "P1008_Q2_FIELD_AVAILABILITY_REMEDIATION_RECEIPT_V1",
+  "receiptId": "P1008-Q2-FIELD-AVAILABILITY-REMEDIATION-20260915",
+  "recordedAtUtc": "2026-09-15T07:36:14Z",
+  "recordStatus": "VERIFIED_REMEDIATION_CLOSEOUT_EVIDENCE",
+  "actionable": false,
+  "publicationAuthorized": false,
+  "receiptLineage": {
+    "canonicalAcceptanceRoot": "contracts/p1008_research_plugin/acceptance/v1.1",
+    "priorAcceptanceReceipt": {
+      "path": "contracts/p1008_research_plugin/acceptance/v1.1/PHASE_A_FINAL_INTEGRATION_AMENDMENT_RECEIPT.json",
+      "sha256": "112373EA26100384F93B85A87415C5625DA34A1634B1C83E557C45BCC7829AAE"
+    },
+    "fieldAvailabilityContract": {
+      "path": "contracts/p1008_quarterly_authority/v1.0/P1008_QUARTERLY_FIELD_AVAILABILITY_CONTRACT_V1.json",
+      "sha256": "345DC5FBE527322D7BA5D86E5FCF9FD98B6ED9B1D5D6DB3DD48CB960410EEE19"
+    }
+  },
+  "remediation": {
+    "commitSha": "741a3c1eaa67c84aca354f3c11f5e52e7ba6d820",
+    "commitSubject": "P1008 quarterly field-level availability governance",
+    "scope": "Separate latest-quarter selection from latest-available-ROIC selection without changing authority CSV bytes or fabricating unavailable values.",
+    "beforeRowSelection": {
+      "latestQuarterRow": "One newest master row supplied every current metric, including ROIC_Precise_Pct.",
+      "effectForPartialQ2": "Selecting 2026Q2 for all metrics exposed a blank ROIC value to the ROIC consumer."
+    },
+    "afterRowSelection": {
+      "latestQuarterRow": "2026Q2 remains the latest formal row for its verified EPS, BVPS, ROE, margin and dividend fields.",
+      "latestAvailableRoicRow": "2026Q1 is selected independently by latest_available_roic_row(); ROIC_Precise_Pct=12.57.",
+      "unavailableQuarter": "2026Q2 remains explicitly listed in unavailableRoicQuarters and is not converted to zero or copied forward."
+    }
+  },
+  "q2AuthorityIdentity": {
+    "path": "data/2317_master_v9.csv",
+    "quarter": "2026Q2",
+    "fileAuthority": "CSV_AUTHORITY",
+    "dataSupportLevel": "L1",
+    "validationStatus": "PASS_WITH_FIELD_LEVEL_AVAILABILITY",
+    "masterSha256": "E623CA082F2A080613C33F4155BA8006646E30D6A517DE926AF6108062F84D48",
+    "manifestDeclaredSha256": "E623CA082F2A080613C33F4155BA8006646E30D6A517DE926AF6108062F84D48",
+    "manifestHashMatch": true,
+    "gitBlobIdAtReceipt": "606b3bfd213de4b0ce81f067131270defede46a1",
+    "q2RawCsvRecordSha256WithoutLineTerminator": "BEF9AE6FEF1E0312DD247A6B5B530A9CF76B02F894BB8986B7D496246B7E5540"
+  },
+  "blankFieldAudit": {
+    "exactBlankFieldCount": 17,
+    "selectionBasis": "The 17 are the blank 2026Q2 fields listed by the browser's MASTER_NUMERIC_COLUMNS after excluding its three explicitly optional numeric columns (FCF_Annual_100M, FCFYield_Annual_Pct and ForeignHoldChange_Pct). Blank status/text companions are outside this numeric-field set.",
+    "exactBlankFields": [
+      "TaxRevMean_Pct",
+      "TaxRevStd_Pct",
+      "TaxZ",
+      "ROE_Annual_Pct",
+      "payoutRatio_Pct",
+      "MarketCap_100M",
+      "ROIC_Approx_Pct",
+      "ROIC_Precise_Pct",
+      "NOPAT_Annual_100M",
+      "InvestedCapital_100M",
+      "InterestBearingDebt_100M",
+      "NetDebt_100M",
+      "EBITDA_Approx_100M",
+      "DA_Est_100M",
+      "NetDebtToEBITDA_Approx",
+      "ForeignHoldRatio_Pct",
+      "AI_Revenue_Pct"
+    ],
+    "classificationRule": "EXPLICITLY_ALLOWED_UNAVAILABLE is limited to the four contract-named ROIC fields. BLANK_OUTSIDE_Q2_VERIFIED_FIELD_SET means the Q2 partial promotion did not assert a value and the field is not part of validate_quarterly_authority_row.required_verified; it does not create a general unavailable-field permission.",
+    "perField": [
+      {
+        "field": "TaxRevMean_Pct",
+        "classification": "BLANK_OUTSIDE_Q2_VERIFIED_FIELD_SET",
+        "evidence": ["tools/quarterly_owner_promotion.py::build_q2_row", "modules/p1008_research_plugin/src/p1008_research_plugin/quarterly_authority.py::validate_quarterly_authority_row.required_verified", "tools/quarterly_owner_promotion.py::field_lineage:2026Q2.ROIC.reason"]
+      },
+      {
+        "field": "TaxRevStd_Pct",
+        "classification": "BLANK_OUTSIDE_Q2_VERIFIED_FIELD_SET",
+        "evidence": ["tools/quarterly_owner_promotion.py::build_q2_row", "modules/p1008_research_plugin/src/p1008_research_plugin/quarterly_authority.py::validate_quarterly_authority_row.required_verified", "tools/quarterly_owner_promotion.py::field_lineage:2026Q2.ROIC.reason"]
+      },
+      {
+        "field": "TaxZ",
+        "classification": "BLANK_OUTSIDE_Q2_VERIFIED_FIELD_SET",
+        "evidence": ["tools/quarterly_owner_promotion.py::build_q2_row", "modules/p1008_research_plugin/src/p1008_research_plugin/quarterly_authority.py::validate_quarterly_authority_row.required_verified", "tools/quarterly_owner_promotion.py::field_lineage:2026Q2.ROIC.reason"]
+      },
+      {
+        "field": "ROE_Annual_Pct",
+        "classification": "BLANK_OUTSIDE_Q2_VERIFIED_FIELD_SET",
+        "evidence": ["tools/quarterly_owner_promotion.py::build_q2_row", "data/CSV_AUTHORITY_MANIFEST.json::authoritativeFiles[data/2317_master_v9.csv].fieldOverrides.ROE_TTM_Pct"]
+      },
+      {
+        "field": "payoutRatio_Pct",
+        "classification": "BLANK_OUTSIDE_Q2_VERIFIED_FIELD_SET",
+        "evidence": ["tools/quarterly_owner_promotion.py::build_q2_row", "modules/p1008_research_plugin/src/p1008_research_plugin/quarterly_authority.py::validate_quarterly_authority_row.required_verified"]
+      },
+      {
+        "field": "MarketCap_100M",
+        "classification": "BLANK_OUTSIDE_Q2_VERIFIED_FIELD_SET",
+        "evidence": ["tools/quarterly_owner_promotion.py::build_q2_row", "modules/p1008_research_plugin/src/p1008_research_plugin/quarterly_authority.py::validate_quarterly_authority_row.required_verified"]
+      },
+      {
+        "field": "ROIC_Approx_Pct",
+        "classification": "ROIC_UNAVAILABLE_NO_ESTIMATE",
+        "evidence": ["tools/quarterly_owner_promotion.py::build_q2_row", "tools/quarterly_owner_promotion.py::field_lineage:2026Q2.ROIC", "data/2317_master_v9.csv::2026Q2.ROIC_Status=INSUFFICIENT_DATA"]
+      },
+      {
+        "field": "ROIC_Precise_Pct",
+        "classification": "EXPLICITLY_ALLOWED_UNAVAILABLE",
+        "evidence": ["contracts/p1008_quarterly_authority/v1.0/P1008_QUARTERLY_FIELD_AVAILABILITY_CONTRACT_V1.json::conditionallyBlankFields", "data/CSV_AUTHORITY_MANIFEST.json::authoritativeFiles[data/2317_master_v9.csv].fieldOverrides.ROIC_Precise_Pct"]
+      },
+      {
+        "field": "NOPAT_Annual_100M",
+        "classification": "EXPLICITLY_ALLOWED_UNAVAILABLE",
+        "evidence": ["contracts/p1008_quarterly_authority/v1.0/P1008_QUARTERLY_FIELD_AVAILABILITY_CONTRACT_V1.json::conditionallyBlankFields", "tools/quarterly_owner_promotion.py::field_lineage:2026Q2.ROIC"]
+      },
+      {
+        "field": "InvestedCapital_100M",
+        "classification": "EXPLICITLY_ALLOWED_UNAVAILABLE",
+        "evidence": ["contracts/p1008_quarterly_authority/v1.0/P1008_QUARTERLY_FIELD_AVAILABILITY_CONTRACT_V1.json::conditionallyBlankFields", "tools/quarterly_owner_promotion.py::field_lineage:2026Q2.ROIC"]
+      },
+      {
+        "field": "InterestBearingDebt_100M",
+        "classification": "EXPLICITLY_ALLOWED_UNAVAILABLE",
+        "evidence": ["contracts/p1008_quarterly_authority/v1.0/P1008_QUARTERLY_FIELD_AVAILABILITY_CONTRACT_V1.json::conditionallyBlankFields", "tools/quarterly_owner_promotion.py::field_lineage:2026Q2.ROIC"]
+      },
+      {
+        "field": "NetDebt_100M",
+        "classification": "BLANK_OUTSIDE_Q2_VERIFIED_FIELD_SET",
+        "evidence": ["tools/quarterly_owner_promotion.py::build_q2_row", "modules/p1008_research_plugin/src/p1008_research_plugin/quarterly_authority.py::validate_quarterly_authority_row.required_verified"]
+      },
+      {
+        "field": "EBITDA_Approx_100M",
+        "classification": "BLANK_OUTSIDE_Q2_VERIFIED_FIELD_SET",
+        "evidence": ["tools/quarterly_owner_promotion.py::build_q2_row", "modules/p1008_research_plugin/src/p1008_research_plugin/quarterly_authority.py::validate_quarterly_authority_row.required_verified"]
+      },
+      {
+        "field": "DA_Est_100M",
+        "classification": "BLANK_OUTSIDE_Q2_VERIFIED_FIELD_SET",
+        "evidence": ["tools/quarterly_owner_promotion.py::build_q2_row", "modules/p1008_research_plugin/src/p1008_research_plugin/quarterly_authority.py::validate_quarterly_authority_row.required_verified"]
+      },
+      {
+        "field": "NetDebtToEBITDA_Approx",
+        "classification": "BLANK_OUTSIDE_Q2_VERIFIED_FIELD_SET",
+        "evidence": ["tools/quarterly_owner_promotion.py::build_q2_row", "modules/p1008_research_plugin/src/p1008_research_plugin/quarterly_authority.py::validate_quarterly_authority_row.required_verified"]
+      },
+      {
+        "field": "ForeignHoldRatio_Pct",
+        "classification": "Q2_NOT_AVAILABLE_OFFICIAL_SERIES_ENDS_2026Q1",
+        "evidence": ["data/CSV_AUTHORITY_MANIFEST.json::authoritativeFiles[data/2317_master_v9.csv].fieldOverrides.ForeignHoldRatio_Pct.periodCoverage=2021Q1~2026Q1", "tools/quarterly_owner_promotion.py::build_q2_row"]
+      },
+      {
+        "field": "AI_Revenue_Pct",
+        "classification": "Q2_NOT_PROMOTED_USER_CURATED_OBSERVATION_ONLY",
+        "evidence": ["data/CSV_AUTHORITY_MANIFEST.json::authoritativeFiles[data/2317_master_v9.csv].fieldOverrides.AI_Revenue_Pct", "tools/quarterly_owner_promotion.py::build_q2_row"]
+      }
+    ]
+  },
+  "midrFieldUse": {
+    "fieldsFromExact17RequiredByMidr": [],
+    "masterFieldsActuallyRequiredByMidr": ["CashDividend", "EPS_YoY_Pct"],
+    "otherMidrInputs": ["PB_daily", "Close", "US_10Y_Yield", "Fed_Hike_Prob_YE", "RiskLevel"],
+    "evidence": "src/index_p1008_v7.source.html::calculateMidrObservation and its call sites",
+    "scopeStatement": "No one of the exact 17 blank Q2 fields is consumed as a required MIDR input."
+  },
+  "explicitlyAllowedUnavailable": {
+    "statusField": "ROIC_Status",
+    "requiredStatus": "INSUFFICIENT_DATA",
+    "fields": [
+      "ROIC_Precise_Pct",
+      "NOPAT_Annual_100M",
+      "InvestedCapital_100M",
+      "InterestBearingDebt_100M"
+    ],
+    "policy": "These fields must remain blank when ROIC_Status is INSUFFICIENT_DATA; bare N/A, NA, UNAVAILABLE and INSUFFICIENT_DATA tokens are invalid."
+  },
+  "masterCsvBytesUnchangedProof": {
+    "remediationCommitParentGitBlob": "8f6ad0040e66392def1773542360bafdfa7d3945",
+    "remediationCommitGitBlob": "8f6ad0040e66392def1773542360bafdfa7d3945",
+    "remediationCommitChangedMasterPath": false,
+    "currentReceiptPreWriteSha256": "E623CA082F2A080613C33F4155BA8006646E30D6A517DE926AF6108062F84D48",
+    "currentReceiptPreWriteGitBlob": "606b3bfd213de4b0ce81f067131270defede46a1",
+    "proofCommands": [
+      "git rev-parse 741a3c1^:data/2317_master_v9.csv",
+      "git rev-parse 741a3c1:data/2317_master_v9.csv",
+      "git diff --name-only 741a3c1^ 741a3c1 -- data/2317_master_v9.csv",
+      "Get-FileHash -Algorithm SHA256 data/2317_master_v9.csv",
+      "git hash-object data/2317_master_v9.csv"
+    ]
+  },
+  "sourceBundleParity": {
+    "result": "PASS",
+    "method": "Run tools/build_index_p1008_v7.js in an isolated temporary copy and compare generated and tracked bundle text after CRLF-to-LF normalization.",
+    "generatedNormalizedSha256": "C881D07CE41F322C1BE7FA6A708E9ABF76B9EB67C0F1ABF9BEAA21811FE8E3CD",
+    "trackedNormalizedSha256": "C881D07CE41F322C1BE7FA6A708E9ABF76B9EB67C0F1ABF9BEAA21811FE8E3CD",
+    "sourceRawSha256": "861F118F286049894820CD44649CE033FDF414BB03933C8B12D11C391EB810EB",
+    "bundleRawSha256": "EBB173F97A5B6EE9B853389E3DC60D49D873E5B4838D4FBDBCA5604C24B8FCE3"
+  },
+  "regressionTests": [
+    {
+      "suite": "tests.test_quarterly_field_availability_governance",
+      "result": "PASS_9_OF_9",
+      "testNames": [
+        "test_valid_partial_q2_row_passes_and_exposes_split_latest_quarters",
+        "test_missing_roic_status_with_blanks_fails_closed",
+        "test_numeric_roic_with_unavailable_status_fails_closed",
+        "test_bare_na_is_invalid",
+        "test_available_roic_consumer_uses_q1_without_decimal_on_q2_blank",
+        "test_owner_gated_atomic_manifest_and_master_update",
+        "test_formal_master_verifier_accepts_governed_partial_q2",
+        "test_partial_failure_rolls_back_exact_bytes",
+        "test_no_owner_approval_denies_formal_write"
+      ]
+    },
+    {
+      "suite": "modules.p1008_research_plugin.tests.phaseb1.test_historical_kpi_backfill_v1.HistoricalKPIBackfillV1Tests.test_h15b_current_formal_roe_and_roic_availability_is_explicit",
+      "result": "PASS_1_OF_1",
+      "runtime": "bundled workspace Python with declared dependencies"
+    }
+  ],
+  "integrityStatements": {
+    "missingValuesFabricated": false,
+    "missingValuesZeroFilled": false,
+    "explicitStatement": "No missing values were fabricated, inferred, copied forward, or zero-filled. The governed blanks remain blank; unavailable Q2 ROIC is represented by ROIC_Status=INSUFFICIENT_DATA and the consumer selects the latest earlier quarter with an actually available governed ROIC value.",
+    "masterCsvModifiedByThisDurableRecord": false,
+    "midrFormulaModified": false,
+    "ownerGateModified": false,
+    "formalPublicationPerformed": false
+  }
+}
