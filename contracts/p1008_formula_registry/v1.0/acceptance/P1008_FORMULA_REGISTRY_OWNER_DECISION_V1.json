@@ -1,0 +1,67 @@
+{
+  "$schema": "../schemas/owner_decision_record.schema.json",
+  "recordType": "P1008_FORMULA_REGISTRY_OWNER_DECISION",
+  "recordVersion": "1.0",
+  "decisionId": "P1008-FORMULA-REGISTRY-OWNER-DECISION-20260915-V1",
+  "decisionDate": "2026-09-15",
+  "approvalReference": "OWNER_APPROVAL_P1008_FORMULA_REGISTRY_V1_MIDR_TRUTHFULNESS_REMEDIATION",
+  "decisions": {
+    "RTM_0_CANDIDATE_APPROVED": true,
+    "RTM_0_PRODUCTION_ACTIVATED": false,
+    "MRD_M0_CURRENT_BEHAVIOR_APPROVED": true,
+    "UI_PROVENANCE_TRUTHFULNESS_REMEDIATION_APPROVED": true,
+    "FORMULA_REGISTRY_LINEAGE_CREATION_APPROVED": true,
+    "UD_CHANGE_ALLOWED": false,
+    "ownerDecisionSummary": [
+      "RTM-0 is approved as the preferred formula candidate",
+      "MRD-M0 DISPLAY_ONLY is approved as current production behavior",
+      "UI and provenance truthfulness remediation is approved",
+      "Creation of the canonical P1008 Formula Registry lineage is approved",
+      "RTM-0 production activation is not approved",
+      "UD changes are prohibited"
+    ]
+  },
+  "backtestEvidence": {
+    "datesReplayed": 151,
+    "window": "2026-01-28/2026-09-14",
+    "baselineVerdictCounts": {"SEVERE": 51, "CAUTION": 48, "NEUTRAL": 52},
+    "macroAsOfPolicy": "For sparse macro rows, use the latest nonblank value for each required field on or before each daily date",
+    "baselineDateTotalVerdictSha256": "A234DD3A99360E4EE5586EF00D850CC0CAB09578DA926584FC40C49AD21546AC",
+    "numericParity": "PASS",
+    "verdictParity": "PASS",
+    "RTM-0VerdictFlipsIfEventuallyActivated": 9,
+    "MRD-M0VerdictFlips": 0
+  },
+  "authorityProtection": {
+    "hashAlgorithm": "SHA-256",
+    "preImplementation": {
+      "data/2317_master_v9.csv": "E623CA082F2A080613C33F4155BA8006646E30D6A517DE926AF6108062F84D48",
+      "data/2317_daily_price.csv": "CBCF7D96490CB5B5C24E282F362F29953216DE8BEA16124D4B854842B250567C",
+      "data/2317_daily_market_activity.csv": "86618182D9A6441DA9CE1761CF10D99D27F0B26B91CB4FEF732F3FE55447B326",
+      "data/CSV_AUTHORITY_MANIFEST.json": "3A977A8B38A02D7F51C9E18F35B4E46464A3F148BCB97C9E9CBC1ADEC2861CDA"
+    },
+    "postImplementation": {
+      "data/2317_master_v9.csv": "E623CA082F2A080613C33F4155BA8006646E30D6A517DE926AF6108062F84D48",
+      "data/2317_daily_price.csv": "CBCF7D96490CB5B5C24E282F362F29953216DE8BEA16124D4B854842B250567C",
+      "data/2317_daily_market_activity.csv": "86618182D9A6441DA9CE1761CF10D99D27F0B26B91CB4FEF732F3FE55447B326",
+      "data/CSV_AUTHORITY_MANIFEST.json": "3A977A8B38A02D7F51C9E18F35B4E46464A3F148BCB97C9E9CBC1ADEC2861CDA"
+    },
+    "authorityBytesChanged": false,
+    "missingValuesFabricatedOrZeroFilled": false
+  },
+  "buildEvidence": {
+    "buildTool": "tools/build_index_p1008_v7.js",
+    "sourceBundleParity": "PASS",
+    "runtimeHtmlParity": "PASS",
+    "normalizedBundleSha256": "9A115973FE270B73F3EFF064613259EBA8885F7CB0DFA68B39DBD1E72B7C2ADA",
+    "normalizedHtmlSha256": "6C7E64410D10C65A2D539598C1456B39A70E9BCF6C710BFB434A82FAFD99E48A"
+  },
+  "implementationCommitSha": null,
+  "commitStatus": "NOT_COMMITTED",
+  "activationReceipt": false,
+  "actionable": false,
+  "formalDecision": false,
+  "holdChanged": false,
+  "ruleChanged": false,
+  "productionActivation": false
+}

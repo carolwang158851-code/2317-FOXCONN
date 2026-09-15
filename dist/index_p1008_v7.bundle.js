@@ -706,20 +706,20 @@ function calculateMrdObservation({
 
   score = Math.round(score * 10) / 10;
   let level = 'NORMAL',
-      message = `MRD=${score} ⚪正常：市場反應合理，無超跌現象。`,
+      message = `MRD=${score} ⚪正常：市場反應合理，無超跌現象。MRD 診斷參考=-0.15；MIDR 現行判讀邊界維持 -0.25/-0.15。DISPLAY_ONLY · NOT_CONSUMED_BY_MIDR_VERDICT · ACTIONABLE_FALSE。`,
       threshold = -0.15;
 
   if (score >= 60) {
     level = 'STRONG_OVERSOLD';
-    message = `MRD=${score} 🔴強烈超跌觀察：MIDR 觀察門檻調整為 -0.20，不產生加碼指令。`;
+    message = `MRD=${score} 🔴強烈超跌觀察：MRD 診斷參考=-0.20；MIDR 現行判讀邊界維持 -0.25/-0.15。DISPLAY_ONLY · NOT_CONSUMED_BY_MIDR_VERDICT · ACTIONABLE_FALSE。`;
     threshold = -0.20;
   } else if (score >= 40) {
     if (qReturn > 30) {
       level = 'MOMENTUM_CONT';
-      message = `MRD=${score} 🟡動能延續：降級為觀察，不放寬門檻。`;
+      message = `MRD=${score} 🟡動能延續：MRD 診斷參考=-0.15；MIDR 現行判讀邊界維持 -0.25/-0.15。DISPLAY_ONLY · NOT_CONSUMED_BY_MIDR_VERDICT · ACTIONABLE_FALSE。`;
     } else {
       level = 'OVERSOLD';
-      message = `MRD=${score} 🟠中度超跌觀察：MIDR 觀察門檻調整為 -0.10，不產生加碼指令。`;
+      message = `MRD=${score} 🟠中度超跌觀察：MRD 診斷參考=-0.10；MIDR 現行判讀邊界維持 -0.25/-0.15。DISPLAY_ONLY · NOT_CONSUMED_BY_MIDR_VERDICT · ACTIONABLE_FALSE。`;
       threshold = -0.10;
     }
   }
@@ -734,6 +734,29 @@ function calculateMrdObservation({
   };
 }
 
+function buildLegacyRtmMetadata({
+  foreignHoldChange,
+  foreignHoldTrend,
+  currentForeignPeriod,
+  latestGovernedForeignPeriod
+}) {
+  const governedTrends = new Set(['RISING', 'STABLE', 'DECLINING']);
+  const currentPeriodAvailable = Number.isFinite(foreignHoldChange) && governedTrends.has(foreignHoldTrend);
+  return {
+    rtmScoreMode: 'LEGACY_FIXED_SCORE',
+    rtmRawScore: 0.1,
+    rtmWeightedRawContribution: 0.01,
+    rtmCurrentPeriod: currentForeignPeriod || 'NOT_AVAILABLE',
+    rtmCurrentPeriodStatus: currentPeriodAvailable ? 'AVAILABLE' : 'DATA_UNAVAILABLE',
+    rtmCurrentValue: currentPeriodAvailable ? `${foreignHoldTrend} (${foreignHoldChange.toFixed(2)}pp)` : 'DATA_UNAVAILABLE',
+    rtmCurrentForeignTrend: currentPeriodAvailable ? foreignHoldTrend : 'DATA_UNAVAILABLE',
+    rtmCurrentForeignChange: currentPeriodAvailable ? foreignHoldChange : null,
+    latestGovernedForeignPeriod: latestGovernedForeignPeriod || 'NOT_AVAILABLE',
+    currentPeriodFallbackUsed: false,
+    zForeign: 'NOT_AVAILABLE_NOT_DERIVED_FROM_FOREIGN_DATA'
+  };
+}
+
 function calculateMidrObservation({
   currentPB,
   cashDividend,
@@ -742,7 +765,11 @@ function calculateMidrObservation({
   fedProbVal,
   dynamicEpsYoY,
   rawRiskLevel,
-  threshold = -0.15
+  threshold = -0.15,
+  foreignHoldChange = null,
+  foreignHoldTrend = null,
+  currentForeignPeriod = null,
+  latestGovernedForeignPeriod = null
 }) {
   if (!Number.isFinite(currentPB) || !Number.isFinite(cashDividend) || !Number.isFinite(currentPrice) || !Number.isFinite(us10yVal) || !Number.isFinite(dynamicEpsYoY)) return null;
   const w = {
@@ -792,6 +819,12 @@ function calculateMidrObservation({
   const scorePb = (pbScoreRaw * w.val * ud).toFixed(3);
   const scoreRev = (frvScore * w.frv * ud).toFixed(3);
   const scoreForeign = (rtmScore * w.rtm * ud).toFixed(3);
+  const rtmMetadata = buildLegacyRtmMetadata({
+    foreignHoldChange,
+    foreignHoldTrend,
+    currentForeignPeriod,
+    latestGovernedForeignPeriod
+  });
   return {
     yield: currentYield.toFixed(2),
     excessYield: excessYield.toFixed(2),
@@ -806,8 +839,7 @@ function calculateMidrObservation({
     zFrv: ((dynamicEpsYoY - 10) / 15).toFixed(2),
     frvScore: scoreRev,
     scoreRev,
-    rtm: 1.1,
-    zForeign: riskKeyword === 'NORMAL' ? '+1.25' : riskKeyword === 'CAUTION' ? '-0.50' : '-2.00',
+    ...rtmMetadata,
     rtmScore: scoreForeign,
     scoreForeign,
     mdr: mdrScore.toFixed(3),
@@ -3730,6 +3762,11 @@ const App = () => {
         const latestMacroEvent = validMacroEvents[0] || null;
         const latestFxTrend = validFxTrends[0] || null;
         const latestMaster = validMas[0];
+        const latestGovernedForeignRow = validMas.find(row => {
+          const change = finiteNumber(row, 'ForeignHoldChange_Pct');
+          return Number.isFinite(change) && ['RISING', 'STABLE', 'DECLINING'].includes(row?.ForeignHoldTrend);
+        }) || null;
+        const latestGovernedForeignPeriod = latestGovernedForeignRow?.Quarter || null;
         const latestDaily = validDaily[validDaily.length - 1];
         const latestMac = validMac[0];
         const masterHashValid = masterHash === authorityEntry.sha256;
@@ -3925,7 +3962,11 @@ const App = () => {
             fedProbVal: obsFedProb,
             dynamicEpsYoY: obsEpsYoy,
             rawRiskLevel: latestMac?.RiskLevel,
-            threshold: obsMrd?.threshold || -0.15
+            threshold: obsMrd?.threshold || -0.15,
+            foreignHoldChange: obsForeignHoldChange,
+            foreignHoldTrend: obsForeignHoldTrend,
+            currentForeignPeriod: latestMaster?.Quarter || null,
+            latestGovernedForeignPeriod
           });
           const obsRadar = calculateRadarPackage({
             quality: obsQuality,
@@ -4110,20 +4151,20 @@ const App = () => {
 
         mrdScore2 = Math.round(mrdScore2 * 10) / 10;
         let mrdLevel2 = 'NORMAL',
-            mrdMessage2 = `MRD=${mrdScore2} ⚪正常：市場反應合理，無超跌現象。`,
+            mrdMessage2 = `MRD=${mrdScore2} ⚪正常：市場反應合理，無超跌現象。MRD 診斷參考=-0.15；MIDR 現行判讀邊界維持 -0.25/-0.15。DISPLAY_ONLY · NOT_CONSUMED_BY_MIDR_VERDICT · ACTIONABLE_FALSE。`,
             midrThreshold2 = -0.15;
 
         if (mrdScore2 >= 60) {
           mrdLevel2 = 'STRONG_OVERSOLD';
-          mrdMessage2 = `MRD=${mrdScore2} 🔴強烈超跌觀察：MIDR 觀察門檻調整為 -0.20，不產生加碼指令。`;
+          mrdMessage2 = `MRD=${mrdScore2} 🔴強烈超跌觀察：MRD 診斷參考=-0.20；MIDR 現行判讀邊界維持 -0.25/-0.15。DISPLAY_ONLY · NOT_CONSUMED_BY_MIDR_VERDICT · ACTIONABLE_FALSE。`;
           midrThreshold2 = -0.20;
         } else if (mrdScore2 >= 40) {
           if (qReturn > 30) {
             mrdLevel2 = 'MOMENTUM_CONT';
-            mrdMessage2 = `MRD=${mrdScore2} 🟡動能延續：降級為觀察，不放寬門檻。`;
+            mrdMessage2 = `MRD=${mrdScore2} 🟡動能延續：MRD 診斷參考=-0.15；MIDR 現行判讀邊界維持 -0.25/-0.15。DISPLAY_ONLY · NOT_CONSUMED_BY_MIDR_VERDICT · ACTIONABLE_FALSE。`;
           } else {
             mrdLevel2 = 'OVERSOLD';
-            mrdMessage2 = `MRD=${mrdScore2} 🟠中度超跌觀察：MIDR 觀察門檻調整為 -0.10，不產生加碼指令。`;
+            mrdMessage2 = `MRD=${mrdScore2} 🟠中度超跌觀察：MRD 診斷參考=-0.10；MIDR 現行判讀邊界維持 -0.25/-0.15。DISPLAY_ONLY · NOT_CONSUMED_BY_MIDR_VERDICT · ACTIONABLE_FALSE。`;
             midrThreshold2 = -0.10;
           }
         }
@@ -4179,11 +4220,16 @@ const App = () => {
         }
 
         const zFrv = ((dynamicEpsYoY - 10) / 15).toFixed(2);
-        const zForeign = rawRiskLevel === "NORMAL" ? "+1.25" : rawRiskLevel === "CAUTION" ? "-0.50" : "-2.00";
         const scoreYield = (yaScore * w.ya * ud).toFixed(3);
         const scorePb = (pbScore * w.val * ud).toFixed(3);
         const scoreRev = (frvScore * w.frv * ud).toFixed(3);
         const scoreForeign = (rtmScore * w.rtm * ud).toFixed(3);
+        const rtmMetadata = buildLegacyRtmMetadata({
+          foreignHoldChange: currentForeignHoldChange,
+          foreignHoldTrend: currentForeignHoldTrend,
+          currentForeignPeriod: latestMaster?.Quarter || null,
+          latestGovernedForeignPeriod
+        });
         setMidrResult({
           yield: currentYield2.toFixed(2),
           excessYield: excessYield.toFixed(2),
@@ -4198,8 +4244,7 @@ const App = () => {
           zFrv: zFrv,
           frvScore: scoreRev,
           scoreRev,
-          rtm: 1.1,
-          zForeign: zForeign,
+          ...rtmMetadata,
           rtmScore: scoreForeign,
           scoreForeign,
           mdr: mdrScore.toFixed(3),
@@ -5846,7 +5891,7 @@ const App = () => {
     className: "text-[15px] font-black text-slate-100 flex flex-col"
   }, "MIDR \u6700\u7D42\u7D71\u8A08\u7B97\u5206 ", React.createElement("span", {
     className: "text-[12px] text-slate-400 font-num mt-1"
-  }, "\u89C0\u5BDF\u9580\u6ABB > ", midrResult?.threshold, " \xB7 actionable:false")), React.createElement("div", {
+  }, "MRD \u8A3A\u65B7\u53C3\u8003 ", midrResult?.threshold, " \xB7 MIDR \u5224\u8B80\u908A\u754C\u7DAD\u6301 -0.25/-0.15 \xB7 DISPLAY_ONLY \xB7 actionable:false")), React.createElement("div", {
     className: "text-right flex flex-col items-end"
   }, React.createElement("div", {
     className: `text-4xl font-black font-num ${midrResult?.verdictColor || 'text-white'}`
@@ -5901,12 +5946,16 @@ const App = () => {
   }, React.createElement("td", {
     className: "py-3"
   }, "\u5916\u8CC7\u7C4C\u78BC\u4FEE\u6B63"), React.createElement("td", {
-    className: "py-3 text-emerald-400"
-  }, "RISING"), React.createElement("td", {
-    className: "py-3 text-right text-emerald-400"
-  }, midrResult?.zForeign, "\u03C3"), React.createElement("td", {
-    className: "py-3 text-right font-bold text-emerald-400"
-  }, midrResult?.scoreForeign)), React.createElement("tr", {
+    className: "py-3 text-slate-300"
+  }, React.createElement("div", null, midrResult?.rtmCurrentValue || 'DATA_UNAVAILABLE'), React.createElement("div", {
+    className: "text-[10px] text-slate-500"
+  }, "\u7576\u671F ", midrResult?.rtmCurrentPeriod || 'NOT_AVAILABLE', " \xB7 \u6700\u8FD1\u6709\u503C ", midrResult?.latestGovernedForeignPeriod || 'NOT_AVAILABLE', " \xB7 \u4E0D\u56DE\u9000\u8A08\u5206")), React.createElement("td", {
+    className: "py-3 text-right text-slate-400"
+  }, midrResult?.zForeign || 'NOT_AVAILABLE'), React.createElement("td", {
+    className: "py-3 text-right font-bold text-slate-300"
+  }, React.createElement("div", null, midrResult?.scoreForeign), React.createElement("div", {
+    className: "text-[10px] text-slate-500"
+  }, "LEGACY raw ", midrResult?.rtmRawScore, " \xB7 pre-UD ", Number.isFinite(midrResult?.rtmWeightedRawContribution) ? midrResult.rtmWeightedRawContribution.toFixed(2) : 'N/A'))), React.createElement("tr", {
     className: "border-t border-slate-700/50"
   }, React.createElement("td", {
     className: "py-3 text-slate-400 text-xs"

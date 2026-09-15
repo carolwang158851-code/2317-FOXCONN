@@ -1,0 +1,179 @@
+{
+  "$schema": "schemas/formula_registry.schema.json",
+  "formulaRegistryId": "P1008_FORMULA_REGISTRY",
+  "registryVersion": "1.0",
+  "status": "OWNER_APPROVED_GOVERNANCE_LINEAGE",
+  "lifecycleClassifications": [
+    "CURRENT_PRODUCTION",
+    "OWNER_APPROVED_CANDIDATE",
+    "RESEARCH_ONLY",
+    "REJECTED",
+    "LEGACY"
+  ],
+  "entries": [
+    {
+      "formulaId": "MIDR.RTM",
+      "lifecycleClassification": "LEGACY",
+      "formulaDefinition": {
+        "currentProduction": "LEGACY_FIXED_0_1",
+        "currentFormula": "rtmScore = 0.1",
+        "weight": 0.1,
+        "weightedRawContribution": 0.01,
+        "preferredCandidate": "RTM-0_TRUTHFUL_NEUTRAL",
+        "candidateFormula": "score = 0 when no approved current-period foreign scoring mapping exists",
+        "candidateStatus": "OWNER_APPROVED_CANDIDATE",
+        "rejectedAlternatives": {
+          "RTM-1_ENUM_ORDINAL_RESEARCH": "RESEARCH_ONLY_NOT_ACTIVATED",
+          "RTM-2_DATA_DERIVED_CONTINUOUS": "RESEARCH_ONLY_NOT_ACTIVATED"
+        }
+      },
+      "dataProvenance": {
+        "sourceFile": "data/2317_master_v9.csv",
+        "authorityManifest": "data/CSV_AUTHORITY_MANIFEST.json",
+        "sourceFields": ["ForeignHoldRatio_Pct", "ForeignHoldChange_Pct", "ForeignHoldTrend"],
+        "authorityLevels": {
+          "ForeignHoldRatio_Pct": "OFFICIAL_TWSE_A1_L1",
+          "ForeignHoldChange_Pct": "DERIVED_FROM_OFFICIAL_TWSE_A1_L1",
+          "ForeignHoldTrend": "DERIVED_FROM_OFFICIAL_TWSE_A1_L1"
+        },
+        "ruleUsage": "OBSERVATION_ONLY",
+        "currentGovernedPeriod": "2026Q2",
+        "currentPeriodStatus": "DATA_UNAVAILABLE",
+        "latestPopulatedGovernedPeriod": "2026Q1",
+        "currentPeriodFallbackAllowed": false,
+        "currentPeriodFallbackUsed": false
+      },
+      "activationStatus": {
+        "currentProduction": "LEGACY_FIXED_0_1",
+        "candidateProductionActivated": false,
+        "separateOwnerActivationApprovalRequired": true,
+        "actionable": false
+      },
+      "ownerApproval": {
+        "preferredCandidateApproved": true,
+        "approvedCandidate": "RTM-0_TRUTHFUL_NEUTRAL",
+        "productionActivationApproved": false
+      },
+      "backtestEvidence": {
+        "dailyDatesReplayed": 151,
+        "dailyWindow": "2026-01-28/2026-09-14",
+        "governedQuarterlyObservations": 21,
+        "quarterlyWindow": "2021Q1/2026Q1",
+        "currentPeriodUnavailableDailyDates": 24,
+        "baselineVerdictCounts": {"SEVERE": 51, "CAUTION": 48, "NEUTRAL": 52},
+        "baselineDateTotalVerdictSha256": "A234DD3A99360E4EE5586EF00D850CC0CAB09578DA926584FC40C49AD21546AC",
+        "RTM-0VerdictFlips": 9,
+        "RTM-1VerdictFlips": 59,
+        "RTM-2VerdictFlips": 40,
+        "knownLimitations": [
+          "Current-period 2026Q2 foreign data is unavailable",
+          "The governed quarterly history is limited and directionally imbalanced",
+          "No candidate was optimized for a preferred investment conclusion"
+        ]
+      },
+      "implementationStatus": {
+        "numericFormulaChanged": false,
+        "truthfulMetadataImplemented": true,
+        "misleadingRtmDisplayRemoved": true,
+        "misleadingForeignZScoreRemoved": true,
+        "literalRisingDisplayRemoved": true
+      },
+      "knownDefects": [
+        "Numeric score is not derived from foreign positioning",
+        "Legacy displayed rtm=1.1 did not equal the numeric score",
+        "Legacy displayed RISING was not derived from current foreign data",
+        "Legacy zForeign was derived from RiskLevel rather than foreign data",
+        "Current-period 2026Q2 foreign data is unavailable"
+      ]
+    },
+    {
+      "formulaId": "MIDR.MRD_WIRING",
+      "lifecycleClassification": "CURRENT_PRODUCTION",
+      "formulaDefinition": {
+        "currentProduction": "DISPLAY_ONLY",
+        "ownerApprovedBehavior": "MRD-M0_DISPLAY_ONLY",
+        "diagnosticThresholdMappings": {
+          "default": -0.15,
+          "MRD_GTE_60": -0.2,
+          "MRD_40_TO_59_9_QRETURN_LTE_30": -0.1,
+          "MRD_40_TO_59_9_QRETURN_GT_30": -0.15
+        },
+        "midrVerdictBoundaries": {"severeBelow": -0.25, "cautionBelow": -0.15},
+        "thresholdConsumedByMidrVerdict": false,
+        "rejectedAlternatives": {
+          "MRD-M1_CAUTION_BOUNDARY_ONLY": "REJECTED_CURRENT_MAPPING",
+          "MRD-M2_BOUNDARY_OFFSET_MODEL": "REJECTED_CURRENT_MAPPING"
+        }
+      },
+      "dataProvenance": {
+        "implementationSource": "src/index_p1008_v7.source.html",
+        "inputs": ["daily price history", "quarter-end close", "cash dividend", "US10Y", "EPS YoY"],
+        "status": "OBSERVATION_ONLY"
+      },
+      "activationStatus": {
+        "dynamicThresholdActive": false,
+        "displayOnly": true,
+        "actionable": false
+      },
+      "ownerApproval": {
+        "currentBehaviorApproved": true,
+        "approvedBehavior": "MRD-M0_DISPLAY_ONLY",
+        "dynamicThresholdActivationApproved": false
+      },
+      "backtestEvidence": {
+        "dailyDatesReplayed": 151,
+        "macroAsOfPolicy": "For sparse macro rows, use the latest nonblank value for each required field on or before each daily date",
+        "baselineDateTotalVerdictSha256": "A234DD3A99360E4EE5586EF00D850CC0CAB09578DA926584FC40C49AD21546AC",
+        "MRDLevelCounts": {"NORMAL": 151, "STRONG_OVERSOLD": 0, "OVERSOLD": 0, "MOMENTUM_CONT": 0},
+        "historicalVerdictFlips": {"MRD-M0": 0, "MRD-M1": 0, "MRD-M2": 0},
+        "interpretationLimit": "No historical non-NORMAL MRD period was available to validate dynamic wiring"
+      },
+      "implementationStatus": {
+        "thresholdConsumedByVerdict": false,
+        "numericFormulaChanged": false,
+        "diagnosticWordingImplemented": true
+      },
+      "semanticContradictions": [
+        "-0.20 makes caution classification less likely",
+        "-0.10 makes caution classification more likely",
+        "The current OVERSOLD threshold mapping is not coherent enough for production wiring"
+      ]
+    },
+    {
+      "formulaId": "MIDR.UD",
+      "lifecycleClassification": "CURRENT_PRODUCTION",
+      "formulaDefinition": {
+        "status": "UNCHANGED_PROTECTED",
+        "currentBehavior": {"NORMAL": 1.0, "CAUTION": 0.9, "SYSTEMIC": 0.8},
+        "ownerDecision": "DO_NOT_CHANGE"
+      },
+      "dataProvenance": {
+        "implementationSource": "src/index_p1008_v7.source.html",
+        "input": "RiskLevel",
+        "documentationOnly": true
+      },
+      "activationStatus": {
+        "changedByThisVersion": false,
+        "reinterpretationAllowed": false,
+        "actionable": false
+      },
+      "ownerApproval": {
+        "doNotChange": true
+      },
+      "backtestEvidence": {
+        "dailyDatesReplayed": 151,
+        "numericParityRequired": true,
+        "verdictParityRequired": true
+      },
+      "implementationStatus": {
+        "changed": false,
+        "protected": true
+      }
+    }
+  ],
+  "actionable": false,
+  "formalDecision": false,
+  "holdChangeAllowed": false,
+  "ruleChangeAllowed": false,
+  "productionActivation": false
+}
