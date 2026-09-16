@@ -149,7 +149,7 @@ class MarketActivityIncrementalUpdaterTests(unittest.TestCase):
         result = {
             "run_id": run_id,
             "status": "DRY_RUN_READY",
-            "launcher_status": "UPDATED",
+            "launcher_status": "DRY_RUN_READY",
             "anchor_date": anchor_date,
             "candidate_path": str(candidate.resolve()),
             "candidate_sha256": hash_file(candidate),
@@ -474,30 +474,33 @@ class MarketActivityIncrementalUpdaterTests(unittest.TestCase):
         self.assertTrue(metadata["canonical_direct_fallback"])
         self.assertEqual(metadata["https_get_count"], 2)
 
-    def test_confirmed_official_revision_changes_one_row_and_appends_one_row(self) -> None:
-        old = self.activity("2026-09-08", 39921647, 10039328945, 36632)
-        self.write_authority([old], [("2026-09-08", "251.5"), ("2026-09-09", "252.0")])
-        candidate = self.root / "runtime" / "confirmed.candidate.csv"
-        revised = self.activity("2026-09-08", 40240647, 10119470867, 36634)
-        appended = self.activity("2026-09-09", 21343799, 5388667990, 18134)
-        updater.write_candidate(candidate, [revised, appended])
+    def test_historical_revision_is_preserved_while_later_dates_are_staged(self) -> None:
+        old = self.activity("2026-09-14", 22260973, 5492709017, 22321)
+        self.write_authority(
+            [old],
+            [("2026-09-14", "251.5"), ("2026-09-15", "252.0"), ("2026-09-16", "253.0")],
+        )
+        receipts = self.root / "fixtures"
+        self.write_month(receipts, "2026-09", [
+            ("2026-09-14", 25260973, 6232907117, "251.5", 22323),
+            ("2026-09-15", 21343799, 5388667990, "252.0", 18134),
+            ("2026-09-16", 22343799, 5588667990, "253.0", 19134),
+        ])
         formal = self.root / updater.FORMAL_REL
         before = formal.read_bytes()
-        journal = updater.publish_confirmed_official_revision(
-            self.root,
-            candidate_path=candidate,
-            output_dir=self.root / "runtime" / "confirmed.publish",
+        result = updater.run_update(
+            self.root, as_of_date=dt.date(2026, 9, 16), dry_run=True,
+            offline_receipt_dir=receipts,
         )
-        with formal.open(encoding="utf-8", newline="") as handle:
-            after_rows = list(csv.DictReader(handle))
-        self.assertEqual(journal["status"], "PUBLISHED")
-        self.assertEqual(journal["row_diff"]["replaced"]["date"], "2026-09-08")
-        self.assertEqual(journal["row_diff"]["appended"][0], "2026-09-09")
-        self.assertEqual(len(after_rows), 2)
-        self.assertEqual(after_rows[0]["trade_volume"], "40240647")
-        self.assertEqual(after_rows[1]["date"], "2026-09-09")
-        self.assertFalse(formal.read_bytes().startswith(before))
-        self.assertEqual(journal["duplicate_dates"], 0)
+        with Path(result["candidate_path"]).open(encoding="utf-8", newline="") as handle:
+            candidate_rows = list(csv.DictReader(handle))
+        reconciliation = json.loads(Path(result["reconciliation_path"]).read_text(encoding="utf-8"))
+        self.assertEqual(result["status"], "RECONCILIATION_REQUIRED")
+        self.assertEqual(result["launcher_status"], "RECONCILIATION_REQUIRED")
+        self.assertEqual([row["date"] for row in candidate_rows], ["2026-09-15", "2026-09-16"])
+        self.assertEqual(reconciliation["revisions"][0]["date"], "2026-09-14")
+        self.assertTrue(reconciliation["formal_rows_preserved"])
+        self.assertEqual(formal.read_bytes(), before)
 
     def test_publisher_rolls_back_csv_and_manifest(self) -> None:
         self.write_authority([self.activity("2026-07-16")], [("2026-07-16", "233"), ("2026-07-17", "234")])

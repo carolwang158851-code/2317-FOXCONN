@@ -80,8 +80,11 @@ class OwnerPublishCsvV2MarketActivityTests(unittest.TestCase):
                         {
                             "path": PUBLISHER.MARKET_ACTIVITY_TARGET,
                             "sha256": sha256(self.formal),
+                            "currentSha256": sha256(self.formal),
                             "fileSizeBytes": self.formal.stat().st_size,
+                            "size": self.formal.stat().st_size,
                             "rowCount": 1,
+                            "cutoffDate": "2026-07-17",
                             "dateRange": {
                                 "start": "2026-07-17",
                                 "end": "2026-07-17",
@@ -199,8 +202,12 @@ class OwnerPublishCsvV2MarketActivityTests(unittest.TestCase):
             "authoritativeFiles"
         ][0]
         self.assertEqual(entry["sha256"], sha256(self.formal))
+        self.assertEqual(entry["currentSha256"], sha256(self.formal))
         self.assertEqual(entry["fileSizeBytes"], self.formal.stat().st_size)
+        self.assertEqual(entry["size"], self.formal.stat().st_size)
         self.assertEqual(entry["rowCount"], 2)
+        self.assertEqual(entry["dateRange"], {"start": "2026-07-17", "end": "2026-07-20"})
+        self.assertEqual(entry["cutoffDate"], "2026-07-20")
 
     def test_market_activity_metadata_does_not_rewrite_history(self) -> None:
         historical_bytes = self.formal.read_bytes()
@@ -288,7 +295,7 @@ class OwnerPublishCsvV2MarketActivityTests(unittest.TestCase):
         daily_entry = json.loads(self.manifest.read_text(encoding="utf-8"))[
             "authoritativeFiles"
         ][-1]
-        self.assertEqual(daily_entry["dateRange"]["start"], "PRESERVE-ME")
+        self.assertEqual(daily_entry["dateRange"]["start"], "2026-07-17")
         self.assertEqual(daily_entry["dateRange"]["end"], "2026-07-20")
         self.assertEqual(daily_entry["sha256"], sha256(daily_path))
         self.assertEqual(daily_entry["fileSizeBytes"], daily_path.stat().st_size)
@@ -319,6 +326,193 @@ class OwnerPublishCsvV2MarketActivityTests(unittest.TestCase):
             if entry["path"] != PUBLISHER.MARKET_ACTIVITY_TARGET
         }
         self.assertEqual(unrelated_after, unrelated_before)
+
+    def test_generic_publish_rolls_back_csv_and_manifest_together(self) -> None:
+        candidate = self.root / "runtime" / "2317_daily_market_activity.incremental.candidate.csv"
+        shutil.copy2(self.candidate, candidate)
+        before = (self.formal.read_bytes(), self.manifest.read_bytes())
+        with mock.patch.object(PUBLISHER, "update_manifest", side_effect=OSError("injected manifest failure")):
+            with self.assertRaisesRegex(OSError, "injected manifest failure"):
+                PUBLISHER.publish_generated_candidates_atomically(
+                    self.root,
+                    [str(candidate.relative_to(self.root))],
+                    self.root / "runtime" / "backup",
+                    "test append {rows}",
+                )
+        self.assertEqual((self.formal.read_bytes(), self.manifest.read_bytes()), before)
+        self.assertTrue((self.root / "runtime" / "backup" / self.manifest.name).is_file())
+
+    def _prepare_historical_reconciliation(
+        self,
+        *,
+        state: str = "RECONCILIATION_REQUIRED",
+        revisions: int = 1,
+    ) -> tuple[Path, Path, dict[str, str], str]:
+        self._write_csv(self.formal, [
+            ["2026-09-13", "2317", "111", "222", "33", self._url("2026-09"), "2026-09"],
+            ["2026-09-14", "2317", "22260973", "5492709017", "22321", self._url("2026-09"), "2026-09"],
+        ])
+        manifest = json.loads(self.manifest.read_text(encoding="utf-8"))
+        entry = manifest["authoritativeFiles"][0]
+        entry.update({
+            "sha256": sha256(self.formal),
+            "currentSha256": sha256(self.formal),
+            "fileSizeBytes": self.formal.stat().st_size,
+            "size": self.formal.stat().st_size,
+            "rowCount": 2,
+            "cutoffDate": "2026-09-14",
+            "dateRange": {"start": "2026-09-13", "end": "2026-09-14"},
+        })
+        self.manifest.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        run_dir = self.root / "runtime" / "market_activity_incremental" / "TEST-RUN"
+        run_dir.mkdir(parents=True)
+        reconciliation = run_dir / "HISTORICAL_RECONCILIATION_REQUIRED.json"
+        revision = {
+            "date": "2026-09-14",
+            "changed_fields": {
+                "trade_volume": {"formal": "22260973", "twse": "25260973"},
+                "trade_value": {"formal": "5492709017", "twse": "6232907117"},
+                "transaction_count": {"formal": "22321", "twse": "22323"},
+            },
+            "formal_row_preserved": True,
+            "twse_close_matches_price_authority": True,
+        }
+        reconciliation.write_text(json.dumps({
+            "status": state,
+            "formal_rows_preserved": True,
+            "revisions": [revision for _ in range(revisions)],
+            "actionable": False,
+        }), encoding="utf-8")
+        candidate = run_dir / "2317_daily_market_activity.incremental.candidate.csv"
+        self._write_csv(candidate, [
+            ["2026-09-15", "2317", "15812094", "3918516707", "17468", self._url("2026-09"), "2026-09"],
+            ["2026-09-16", "2317", "19737377", "4880814131", "18480", self._url("2026-09"), "2026-09"],
+        ])
+        replacement = {
+            "trade_volume": "25260973",
+            "trade_value": "6232907117",
+            "transaction_count": "22323",
+        }
+        phrase = PUBLISHER.market_activity_reconciliation_approval_phrase(
+            "2317", "2026-09-14", ["2026-09-15", "2026-09-16"]
+        )
+        return reconciliation, candidate, replacement, phrase
+
+    def test_historical_reconciliation_and_later_append_are_atomic_and_generic(self) -> None:
+        reconciliation, candidate, replacement, phrase = self._prepare_historical_reconciliation()
+        unrelated_line = self.formal.read_bytes().splitlines(keepends=True)[1]
+        result = PUBLISHER.publish_market_activity_historical_reconciliation(
+            self.root, reconciliation, self.root / "runtime" / "historical-publish",
+            stock_id="2317", replacement_values=replacement,
+            approval_phrase=phrase, append_candidate_path=candidate,
+        )
+        with self.formal.open(encoding="utf-8") as handle:
+            rows = list(csv.DictReader(handle))
+        entry = json.loads(self.manifest.read_text(encoding="utf-8"))["authoritativeFiles"][0]
+        revised = next(row for row in rows if row["date"] == "2026-09-14")
+        self.assertEqual(result["status"], "PUBLISHED")
+        self.assertEqual(revised["trade_volume"], "25260973")
+        self.assertEqual(revised["trade_value"], "6232907117")
+        self.assertEqual(revised["transaction_count"], "22323")
+        self.assertEqual([row["date"] for row in rows[-2:]], ["2026-09-15", "2026-09-16"])
+        self.assertEqual(self.formal.read_bytes().splitlines(keepends=True)[1], unrelated_line)
+        self.assertEqual(entry["sha256"], sha256(self.formal))
+        self.assertEqual(entry["currentSha256"], sha256(self.formal))
+        self.assertEqual(entry["fileSizeBytes"], self.formal.stat().st_size)
+        self.assertEqual(entry["size"], self.formal.stat().st_size)
+        self.assertEqual(entry["rowCount"], 4)
+        self.assertEqual(entry["dateRange"], {"start": "2026-09-13", "end": "2026-09-16"})
+        self.assertEqual(entry["cutoffDate"], "2026-09-16")
+
+    def test_historical_reconciliation_rejects_changed_formal_precondition(self) -> None:
+        reconciliation, candidate, replacement, phrase = self._prepare_historical_reconciliation()
+        rows = PUBLISHER.read_csv_header_and_rows(self.formal)[1]
+        rows[1][2] = "999"
+        self._write_csv(self.formal, rows)
+        manifest = json.loads(self.manifest.read_text(encoding="utf-8"))
+        manifest["authoritativeFiles"][0]["sha256"] = sha256(self.formal)
+        manifest["authoritativeFiles"][0]["rowCount"] = 2
+        self.manifest.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+        before = (self.formal.read_bytes(), self.manifest.read_bytes())
+        with self.assertRaisesRegex(ValueError, "changed unexpectedly"):
+            PUBLISHER.publish_market_activity_historical_reconciliation(
+                self.root, reconciliation, self.root / "runtime" / "historical-publish",
+                stock_id="2317", replacement_values=replacement,
+                approval_phrase=phrase, append_candidate_path=candidate,
+            )
+        self.assertEqual((self.formal.read_bytes(), self.manifest.read_bytes()), before)
+
+    def test_historical_reconciliation_rejects_replacement_evidence_mismatch(self) -> None:
+        reconciliation, candidate, replacement, phrase = self._prepare_historical_reconciliation()
+        replacement["trade_volume"] = "25260974"
+        before = (self.formal.read_bytes(), self.manifest.read_bytes())
+        with self.assertRaisesRegex(ValueError, "does not match recorded TWSE evidence"):
+            PUBLISHER.publish_market_activity_historical_reconciliation(
+                self.root, reconciliation, self.root / "runtime" / "historical-publish",
+                stock_id="2317", replacement_values=replacement,
+                approval_phrase=phrase, append_candidate_path=candidate,
+            )
+        self.assertEqual((self.formal.read_bytes(), self.manifest.read_bytes()), before)
+
+    def test_historical_reconciliation_requires_state_owner_phrase_and_single_revision(self) -> None:
+        for case, state, revisions, approval, expected in (
+            ("state", "STALE", 1, "VALID", "RECONCILIATION_REQUIRED"),
+            ("approval", "RECONCILIATION_REQUIRED", 1, None, "exact Owner approval phrase"),
+            ("multiple", "RECONCILIATION_REQUIRED", 2, "VALID", "exactly one"),
+        ):
+            with self.subTest(case=case):
+                reconciliation, candidate, replacement, phrase = self._prepare_historical_reconciliation(
+                    state=state, revisions=revisions,
+                )
+                supplied = phrase if approval == "VALID" else approval
+                before = (self.formal.read_bytes(), self.manifest.read_bytes())
+                with self.assertRaisesRegex(ValueError, expected):
+                    PUBLISHER.publish_market_activity_historical_reconciliation(
+                        self.root, reconciliation,
+                        self.root / "runtime" / f"historical-publish-{case}",
+                        stock_id="2317", replacement_values=replacement,
+                        approval_phrase=supplied, append_candidate_path=candidate,
+                    )
+                self.assertEqual((self.formal.read_bytes(), self.manifest.read_bytes()), before)
+                shutil.rmtree(reconciliation.parent)
+
+    def test_historical_reconciliation_rolls_back_csv_and_manifest(self) -> None:
+        reconciliation, candidate, replacement, phrase = self._prepare_historical_reconciliation()
+        before = (self.formal.read_bytes(), self.manifest.read_bytes())
+        original_atomic_write = PUBLISHER._atomic_write_bytes
+        failed = False
+
+        def fail_manifest_once(path: Path, content: bytes) -> None:
+            nonlocal failed
+            if Path(path) == self.manifest and not failed:
+                failed = True
+                raise OSError("injected manifest replacement failure")
+            original_atomic_write(path, content)
+
+        with mock.patch.object(PUBLISHER, "_atomic_write_bytes", side_effect=fail_manifest_once):
+            with self.assertRaisesRegex(RuntimeError, "CSV and manifest restored"):
+                PUBLISHER.publish_market_activity_historical_reconciliation(
+                    self.root, reconciliation, self.root / "runtime" / "historical-publish",
+                    stock_id="2317", replacement_values=replacement,
+                    approval_phrase=phrase, append_candidate_path=candidate,
+                )
+        self.assertTrue(failed)
+        self.assertEqual((self.formal.read_bytes(), self.manifest.read_bytes()), before)
+
+    def test_ordinary_append_still_rejects_historical_overlap(self) -> None:
+        reconciliation, _, _, _ = self._prepare_historical_reconciliation()
+        overlap = reconciliation.parent / "ordinary-overlap.csv"
+        self._write_csv(overlap, [
+            ["2026-09-14", "2317", "25260973", "6232907117", "22323", self._url("2026-09"), "2026-09"],
+        ])
+        before = (self.formal.read_bytes(), self.manifest.read_bytes())
+        phrase = PUBLISHER.market_activity_approval_phrase(["2026-09-14"])
+        with self.assertRaisesRegex(ValueError, "rewrite or duplicate history"):
+            PUBLISHER.publish_market_activity_append(
+                self.root, overlap, self.root / "runtime" / "ordinary-publish",
+                approval_phrase=phrase,
+            )
+        self.assertEqual((self.formal.read_bytes(), self.manifest.read_bytes()), before)
 
     @staticmethod
     def _write_generic_csv(

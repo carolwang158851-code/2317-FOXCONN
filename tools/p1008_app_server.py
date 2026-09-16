@@ -976,9 +976,9 @@ class P1008JobManager:
                 failed = True
             elif status == "BLOCKED":
                 blocked = True
-            elif status == "STALE" or status.startswith("PARTIAL_FAILURE"):
+            elif status in {"STALE", "RECONCILIATION_REQUIRED"} or status.startswith("PARTIAL_FAILURE"):
                 partial = True
-            if status in {"FAILED", "FAIL_CLOSED", "BLOCKED", "STALE"} or status.startswith("PARTIAL_FAILURE"):
+            if status in {"FAILED", "FAIL_CLOSED", "BLOCKED", "STALE", "RECONCILIATION_REQUIRED"} or status.startswith("PARTIAL_FAILURE"):
                 detail = (component or {}).get("error") or (component or {}).get("code")
                 if not detail and (component or {}).get("failedSources"):
                     detail = json.dumps((component or {})["failedSources"], ensure_ascii=False, sort_keys=True)
@@ -1121,6 +1121,7 @@ class P1008JobManager:
             return
 
         component_failures: list[str] = []
+        authority_reconciliation_required = False
         if job_type in {"default", "update-data"}:
             daily_before = formal_csv_hashes(self.package_root)
             daily_exit = self._run_bat_step(
@@ -1147,6 +1148,9 @@ class P1008JobManager:
                 daily_status,
                 exitCode=daily_exit,
                 lastSuccessDate=daily_result.get("last_success_date", ""),
+                formalLatestDate=daily_result.get("formal_authority_latest_date", ""),
+                candidateLatestDate=daily_result.get("candidate_latest_date", ""),
+                twseLatestValidatedDate=daily_result.get("twse_latest_validated_trading_date", ""),
                 receiptPaths=daily_result.get("receipt_paths", []) or [],
             )
 
@@ -1168,7 +1172,7 @@ class P1008JobManager:
                 market_before = formal_csv_hashes(self.package_root)
                 daily_run_dir = daily_result.get("run_dir")
                 daily_run_id = daily_result.get("run_id")
-                if daily_status == "UPDATED" and (
+                if daily_status == "DRY_RUN_READY" and (
                     not isinstance(daily_run_dir, str) or not isinstance(daily_run_id, str)
                 ):
                     component_failures.append("Daily Price staging lineage is incomplete")
@@ -1181,7 +1185,7 @@ class P1008JobManager:
                     market_exit = 20
                 else:
                     market_args = ["--dry-run"]
-                    if daily_status == "UPDATED":
+                    if daily_status == "DRY_RUN_READY":
                         market_args.extend([
                             "--daily-price-run-dir", daily_run_dir,
                             "--daily-price-run-id", daily_run_id,
@@ -1198,6 +1202,7 @@ class P1008JobManager:
                         self.package_root / MARKET_ACTIVITY_STATUS_REL, default={}
                     ) or {}
                     market_status = str(market_result.get("launcher_status") or "STALE")
+                    authority_reconciliation_required = market_status == "RECONCILIATION_REQUIRED"
                     boundary_error = self._market_activity_boundary_error(
                         market_before, market_after, market_status, candidate_only=bool(market_result.get("dry_run"))
                     )
@@ -1218,7 +1223,7 @@ class P1008JobManager:
                             market_status,
                             failure,
                         )
-                if not component_failures:
+                if not component_failures and not authority_reconciliation_required:
                     receipt_paths = market_result.get("receipt_paths", []) or []
                     receipt_dir = (
                         str(Path(receipt_paths[0]).parent) if receipt_paths else ""
@@ -1226,7 +1231,7 @@ class P1008JobManager:
                     freshness_args: list[str]
                     if daily_status == "NO_NEW_DATA" and market_status == "NO_NEW_DATA":
                         freshness_args = ["--receipt-dir", receipt_dir]
-                    elif daily_status == "UPDATED" and market_status == "UPDATED":
+                    elif daily_status == "DRY_RUN_READY" and market_status == "DRY_RUN_READY":
                         market_run_dir = market_result.get("run_dir")
                         market_run_id = market_result.get("run_id")
                         if not all(
@@ -1249,7 +1254,14 @@ class P1008JobManager:
                             "Daily Price and Market Activity freshness states disagree"
                         )
                         freshness_args = []
-                if not component_failures:
+                if authority_reconciliation_required:
+                    self._set_component_status(
+                        "freshness", "RECONCILIATION_REQUIRED",
+                        twseLatestDate=market_result.get("twse_latest_validated_trading_date", ""),
+                        formalAuthorityCurrent=False,
+                        ownerPublishRequired=True,
+                    )
+                elif not component_failures:
                     freshness_exit = self._run_bat_step(
                         "authority-freshness",
                         "TWSE authority freshness and continuity gate",
@@ -1288,6 +1300,9 @@ class P1008JobManager:
                 exitCode=(None if daily_status == "FAILED" else market_exit),
                 statusCode=market_result.get("status", ""),
                 lastSuccessDate=(market_result.get("last_success_date") or self._market_activity_last_date()),
+                formalLatestDate=(market_result.get("formal_authority_latest_date") or self._market_activity_last_date()),
+                candidateLatestDate=market_result.get("candidate_latest_date", ""),
+                twseLatestValidatedDate=market_result.get("twse_latest_validated_trading_date", ""),
                 receiptPaths=market_result.get("receipt_paths", []) or [],
                 logPath=(market_result.get("run_dir") or "logs/last_market_activity_update.log"),
             )
@@ -1352,10 +1367,10 @@ class P1008JobManager:
                 actionable=False,
             )
 
-        if job_type in {"default", "news-scan", "official-ir-scan"} and not component_failures:
+        if job_type in {"default", "news-scan", "official-ir-scan"} and not component_failures and not authority_reconciliation_required:
             self._evaluate_report_trigger_step()
 
-        if job_type == "default" and not component_failures:
+        if job_type == "default" and not component_failures and not authority_reconciliation_required:
             rolling_error = self._refresh_rolling_brief_step()
             if rolling_error:
                 component_failures.append(rolling_error)
@@ -1423,7 +1438,7 @@ class P1008JobManager:
             components = self.state.get("componentStatus", {}) or {}
             partial = any(
                 str((components.get(name) or {}).get("status", ""))
-                in {"FAILED", "STALE", "BLOCKED", "FAIL_CLOSED", "PARTIAL_FAILURE", "PARTIAL_FAILURE_WITH_AUTHORITY", "PARTIAL_FAILURE_NO_AUTHORITY"}
+                in {"FAILED", "STALE", "BLOCKED", "FAIL_CLOSED", "RECONCILIATION_REQUIRED", "PARTIAL_FAILURE", "PARTIAL_FAILURE_WITH_AUTHORITY", "PARTIAL_FAILURE_NO_AUTHORITY"}
                 for name in ("dailyPrice", "marketActivity", "news", "officialIR", "rollingBrief", "reportLibrary")
             )
             with self.lock:
@@ -1649,9 +1664,9 @@ class P1008JobManager:
             )
         if candidate_only and changed:
             return "Daily Price candidate-only run changed formal CSV or manifest"
-        if not candidate_only and launcher_status == "UPDATED" and changed != allowed:
+        if not candidate_only and launcher_status == "FORMAL_UPDATED" and changed != allowed:
             return "Daily Price UPDATED did not atomically change CSV and manifest only"
-        if launcher_status != "UPDATED" and changed:
+        if launcher_status != "FORMAL_UPDATED" and changed:
             return "Daily Price non-update status changed formal CSV or manifest"
         return ""
 
@@ -1671,9 +1686,9 @@ class P1008JobManager:
             )
         if candidate_only and changed:
             return "Market Activity candidate-only run changed formal CSV or manifest"
-        if not candidate_only and launcher_status == "UPDATED" and changed != allowed:
+        if not candidate_only and launcher_status == "FORMAL_UPDATED" and changed != allowed:
             return "Market Activity UPDATED did not atomically change CSV and manifest only"
-        if launcher_status != "UPDATED" and changed:
+        if launcher_status != "FORMAL_UPDATED" and changed:
             return "Market Activity non-update status changed formal CSV or manifest"
         return ""
 
@@ -1893,6 +1908,16 @@ class P1008JobManager:
             )
             self.state["formalCsvModifiedExpected"] = expected_authority_change
             self.state["latestStagingDate"] = latest_date or date.today().isoformat()
+            components = self.state.get("componentStatus", {}) or {}
+            daily = components.get("dailyPrice", {}) or {}
+            market = components.get("marketActivity", {}) or {}
+            self.state["authorityDates"] = {
+                "dailyPriceFormalLatestDate": daily.get("formalLatestDate", ""),
+                "dailyPriceCandidateLatestDate": daily.get("candidateLatestDate", ""),
+                "marketActivityFormalLatestDate": market.get("formalLatestDate", ""),
+                "marketActivityCandidateLatestDate": market.get("candidateLatestDate", ""),
+                "twseLatestValidatedTradingDate": market.get("twseLatestValidatedDate") or daily.get("twseLatestValidatedDate", ""),
+            }
             self.state["pendingOwnerReview"] = self.pending_owner_review()
             if after != before and not expected_authority_change:
                 self.state.setdefault("errors", []).append("Formal CSV hash changed; Owner gate boundary violated.")

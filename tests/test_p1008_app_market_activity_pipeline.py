@@ -177,15 +177,22 @@ class LauncherMarketActivityPipelineTests(unittest.TestCase):
         manager._run_official_ir_step()
         self.assertNotIn("--period", manager.python_step_args["official-ir-scan"])
 
+    def test_official_ir_ui_distinguishes_retrieval_failure_from_not_available(self) -> None:
+        launcher = (PACKAGE_ROOT / "launcher.html").read_text(encoding="utf-8")
+        self.assertIn(
+            "officialIRFailures.length ? 'RETRIEVAL_FAILED' : 'NOT_YET_AVAILABLE'",
+            launcher,
+        )
+
     def test_launcher_binds_market_activity_to_same_run_daily_price_staging(self) -> None:
         manager = FakeManager(self.root)
         manager.daily_payload = {
-            "status": "DRY_RUN_READY", "launcher_status": "UPDATED",
+            "status": "DRY_RUN_READY", "launcher_status": "DRY_RUN_READY",
             "run_id": "P1008-DAILY-PRICE-TEST", "run_dir": "C:/runtime/P1008-DAILY-PRICE-TEST",
             "last_success_date": "2026-07-17", "receipt_paths": ["receipt.json"], "dry_run": True,
         }
         manager.market_payload = {
-            "status": "DRY_RUN_READY", "launcher_status": "UPDATED",
+            "status": "DRY_RUN_READY", "launcher_status": "DRY_RUN_READY",
             "run_id": "P1008-MARKET-ACTIVITY-TEST",
             "run_dir": "C:/runtime/P1008-MARKET-ACTIVITY-TEST",
             "last_success_date": "2026-07-17", "receipt_paths": ["receipt.json"],
@@ -212,6 +219,47 @@ class LauncherMarketActivityPipelineTests(unittest.TestCase):
         freshness_state = manager.state["componentStatus"]["freshness"]
         self.assertEqual(freshness_state["status"], "PASS_CANDIDATE_OVERLAY")
         self.assertTrue(freshness_state["ownerPublishRequired"])
+
+    def test_market_reconciliation_allows_independent_ingestion(self) -> None:
+        manager = FakeManager(self.root)
+        manager.market_payload = {
+            "status": "RECONCILIATION_REQUIRED",
+            "launcher_status": "RECONCILIATION_REQUIRED",
+            "last_success_date": "2026-09-14",
+            "formal_authority_latest_date": "2026-09-14",
+            "candidate_latest_date": "2026-09-16",
+            "twse_latest_validated_trading_date": "2026-09-16",
+            "receipt_paths": ["receipt.json"],
+            "dry_run": True,
+        }
+        with mock.patch.object(app_server, "formal_csv_hashes", return_value=dict(BASE_HASHES)):
+            manager._run_job_inner("default")
+        self.assertIn("update-data", manager.calls)  # Macro / FX / event ingestion.
+        self.assertIn("news-scan", manager.calls)
+        self.assertIn("official-ir-scan", manager.calls)
+        self.assertNotIn("authority-freshness", manager.calls)
+        self.assertNotIn("rolling-brief", manager.calls)
+        self.assertEqual(manager.state["componentStatus"]["freshness"]["status"], "RECONCILIATION_REQUIRED")
+        self.assertEqual(manager.state["overallStatus"], "PARTIAL_FAILURE")
+
+    def test_latest_staging_date_remains_separate_from_authority_dates(self) -> None:
+        manager = FakeManager(self.root)
+        manager._set_component_status(
+            "dailyPrice", "DRY_RUN_READY", formalLatestDate="2026-09-14",
+            candidateLatestDate="2026-09-16", twseLatestValidatedDate="2026-09-16",
+        )
+        manager._set_component_status(
+            "marketActivity", "RECONCILIATION_REQUIRED", formalLatestDate="2026-09-14",
+            candidateLatestDate="2026-09-16", twseLatestValidatedDate="2026-09-16",
+        )
+        with mock.patch.object(app_server, "formal_csv_hashes", return_value=dict(BASE_HASHES)), \
+             mock.patch.object(app_server, "latest_staging_date", return_value="2026-09-12"), \
+             mock.patch.object(manager, "pending_owner_review", return_value={}):
+            app_server.P1008JobManager._refresh(manager, dict(BASE_HASHES))
+        self.assertEqual(manager.state["latestStagingDate"], "2026-09-12")
+        self.assertEqual(manager.state["authorityDates"]["dailyPriceFormalLatestDate"], "2026-09-14")
+        self.assertEqual(manager.state["authorityDates"]["marketActivityCandidateLatestDate"], "2026-09-16")
+        self.assertEqual(manager.state["authorityDates"]["twseLatestValidatedTradingDate"], "2026-09-16")
 
     def test_default_job_never_runs_report(self) -> None:
         manager = FakeManager(self.root)

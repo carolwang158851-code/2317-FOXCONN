@@ -35,11 +35,8 @@ FORMAL_FIELDS = publisher.MARKET_ACTIVITY_FIELDS
 PRICE_CANDIDATE_FIELDS = (
     "Date", "Close", "QuarterKey", "BVPS_ref", "PB_daily", "DataSupportLevel", "Status"
 )
-CONFIRMED_REVISION_DATE = "2026-09-08"
-CONFIRMED_REVISION_OLD = ("39921647", "10039328945", "36632")
-CONFIRMED_REVISION_NEW = ("40240647", "10119470867", "36634")
-
-STATUS_UPDATED = "UPDATED"
+STATUS_UPDATED = "FORMAL_UPDATED"
+STATUS_RECONCILIATION = "RECONCILIATION_REQUIRED"
 STATUS_NO_NEW = "NO_NEW_MARKET_ACTIVITY"
 STATUS_STALE = "MARKET_ACTIVITY_STALE"
 STATUS_BLOCKED = "MARKET_ACTIVITY_BLOCKED_BY_DAILY_PRICE"
@@ -424,114 +421,6 @@ def _render_market_row(row: dict[str, str], line_ending: str) -> bytes:
     return output.getvalue().encode("utf-8")
 
 
-def publish_confirmed_official_revision(
-    package_root: Path,
-    *,
-    candidate_path: Path,
-    output_dir: Path,
-) -> dict[str, Any]:
-    """Atomically apply only the confirmed 2026-09-08 TWSE correction plus 2026-09-09."""
-
-    package_root = package_root.resolve()
-    candidate_path = candidate_path.resolve()
-    output_dir = output_dir.resolve()
-    runtime_root = (package_root / "runtime").resolve()
-    if not candidate_path.is_relative_to(runtime_root) or not output_dir.is_relative_to(runtime_root):
-        raise UpdateFailure("Confirmed revision evidence must remain under runtime/")
-    if output_dir.exists():
-        raise UpdateFailure(f"Confirmed revision output already exists: {output_dir}")
-
-    formal_path = package_root / FORMAL_REL
-    manifest_path = package_root / publisher.MANIFEST_PATH
-    formal_header, formal_rows, _ = publisher.read_csv_header_and_rows(formal_path)
-    candidate_header, candidate_rows, _ = publisher.read_csv_header_and_rows(candidate_path)
-    if tuple(formal_header) != FORMAL_FIELDS or formal_header != candidate_header:
-        raise UpdateFailure("Confirmed revision CSV schema mismatch")
-    formal_dates = [row[0] for row in formal_rows]
-    candidate_dates = [row[0] for row in candidate_rows]
-    if formal_dates != sorted(set(formal_dates)) or candidate_dates != sorted(set(candidate_dates)):
-        raise UpdateFailure("Confirmed revision dates are not unique and increasing")
-    if candidate_dates != formal_dates + ["2026-09-09"]:
-        raise UpdateFailure("Confirmed revision candidate has an unexpected date sequence")
-    formal_by_date = {row[0]: row for row in formal_rows}
-    candidate_by_date = {row[0]: row for row in candidate_rows}
-    changed_dates = [row_date for row_date in formal_dates if candidate_by_date[row_date] != formal_by_date[row_date]]
-    if changed_dates != [CONFIRMED_REVISION_DATE]:
-        raise UpdateFailure("Confirmed revision candidate changes an unauthorized historical row")
-    old_row = formal_by_date[CONFIRMED_REVISION_DATE]
-    revised_row = candidate_by_date[CONFIRMED_REVISION_DATE]
-    appended_row = candidate_by_date["2026-09-09"]
-    if tuple(old_row[2:5]) != CONFIRMED_REVISION_OLD or tuple(revised_row[2:5]) != CONFIRMED_REVISION_NEW:
-        raise UpdateFailure("Confirmed revision values do not match the approved TWSE evidence")
-    for row in (revised_row, appended_row):
-        if row[1] != "2317" or not all(row[index].isdigit() for index in (2, 3, 4)) or not row[5].startswith(f"https://{TWSE_HOST}{TWSE_PATH}?") or row[6] != row[0][:7]:
-            raise UpdateFailure("Confirmed revision candidate is not approved TWSE market activity")
-
-    manifest = publisher.read_json(manifest_path)
-    target_path = str(FORMAL_REL).replace("\\", "/")
-    entry = next((item for item in manifest.get("authoritativeFiles", []) if item.get("path") == target_path), None)
-    formal_bytes = formal_path.read_bytes()
-    formal_sha = sha256_bytes(formal_bytes)
-    if entry is None or entry.get("sha256") != formal_sha or entry.get("rowCount") != len(formal_rows):
-        raise UpdateFailure("Market-activity manifest does not match the formal pre-reconciliation CSV")
-    lines = formal_bytes.splitlines(keepends=True)
-    old_line = next((line for line in lines if line.startswith(b"2026-09-08,")), None)
-    if old_line is None or sum(line.startswith(b"2026-09-08,") for line in lines) != 1:
-        raise UpdateFailure("Confirmed revision target row is not uniquely present")
-    line_ending = "\r\n" if old_line.endswith(b"\r\n") else "\n"
-    expected_old_line = _render_market_row(dict(zip(FORMAL_FIELDS, old_row, strict=True)), line_ending)
-    if old_line != expected_old_line:
-        raise UpdateFailure("Confirmed revision target row bytes do not match the parsed formal row")
-    replacement_line = _render_market_row(dict(zip(FORMAL_FIELDS, revised_row, strict=True)), line_ending)
-    appended_line = _render_market_row(dict(zip(FORMAL_FIELDS, appended_row, strict=True)), line_ending)
-    combined_bytes = formal_bytes.replace(old_line, replacement_line, 1) + appended_line
-    if combined_bytes.count(replacement_line) != 1 or not combined_bytes.endswith(appended_line):
-        raise UpdateFailure("Confirmed revision byte construction failed")
-    combined_sha = sha256_bytes(combined_bytes)
-
-    unrelated_entries = [item for item in manifest.get("authoritativeFiles", []) if item.get("path") != target_path]
-    published_at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    entry["sha256"] = combined_sha
-    entry["fileSizeBytes"] = len(combined_bytes)
-    entry["rowCount"] = len(candidate_rows)
-    entry["dateRange"]["end"] = "2026-09-09"
-    entry["lastPublishedAt"] = published_at
-    entry["lastAppend"] = {"rowsAdded": 1, "start": "2026-09-09", "end": "2026-09-09", "candidateSha256": sha256_file(candidate_path), "publishedAt": published_at, "publisher": "warroom_market_activity_updater.py", "mode": "TWSE_CONFIRMED_OFFICIAL_REVISION_AND_APPEND", "actionable": False}
-    manifest_bytes = (json.dumps(manifest, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
-
-    output_dir.mkdir(parents=True)
-    staged_dir = output_dir / "staged"
-    backup_dir = output_dir / "backup"
-    staged_dir.mkdir()
-    backup_dir.mkdir()
-    (staged_dir / formal_path.name).write_bytes(combined_bytes)
-    (staged_dir / manifest_path.name).write_bytes(manifest_bytes)
-    (backup_dir / formal_path.name).write_bytes(formal_bytes)
-    manifest_before = manifest_path.read_bytes()
-    (backup_dir / manifest_path.name).write_bytes(manifest_before)
-    journal_path = output_dir / "PUBLISH_JOURNAL.json"
-    journal: dict[str, Any] = {"mode": "TWSE_CONFIRMED_OFFICIAL_REVISION_AND_APPEND", "status": "BACKUP_VERIFIED", "pre_hashes": {target_path: formal_sha, publisher.MANIFEST_PATH: sha256_bytes(manifest_before)}, "pre_sizes": {target_path: len(formal_bytes), publisher.MANIFEST_PATH: len(manifest_before)}, "pre_row_count": len(formal_rows), "row_diff": {"replaced": {"date": CONFIRMED_REVISION_DATE, "before": old_row, "after": revised_row}, "appended": appended_row}, "staged_hashes": {target_path: combined_sha, publisher.MANIFEST_PATH: sha256_bytes(manifest_bytes)}, "actionable": False}
-    atomic_json(journal_path, journal)
-    try:
-        publisher._atomic_write_bytes(formal_path, combined_bytes)
-        publisher._atomic_write_bytes(manifest_path, manifest_bytes)
-        published_header, published_rows, _ = publisher.read_csv_header_and_rows(formal_path)
-        published_manifest = publisher.read_json(manifest_path)
-        published_entry = next(item for item in published_manifest["authoritativeFiles"] if item.get("path") == target_path)
-        published_unrelated = [item for item in published_manifest["authoritativeFiles"] if item.get("path") != target_path]
-        if tuple(published_header) != FORMAL_FIELDS or published_rows != candidate_rows or published_unrelated != unrelated_entries or sha256_file(formal_path) != combined_sha or published_entry.get("sha256") != combined_sha or published_entry.get("fileSizeBytes") != len(combined_bytes) or published_entry.get("rowCount") != len(candidate_rows):
-            raise UpdateFailure("Confirmed revision post-publish validation failed")
-        journal.update({"status": "PUBLISHED", "post_hashes": {target_path: sha256_file(formal_path), publisher.MANIFEST_PATH: sha256_file(manifest_path)}, "post_sizes": {target_path: formal_path.stat().st_size, publisher.MANIFEST_PATH: manifest_path.stat().st_size}, "post_row_count": len(published_rows), "last_date": published_rows[-1][0], "duplicate_dates": len(published_rows) - len({row[0] for row in published_rows}), "unrelated_manifest_entries_unchanged": True, "rollback_available": True})
-        atomic_json(journal_path, journal)
-        return journal
-    except Exception as exc:
-        publisher._atomic_write_bytes(formal_path, formal_bytes)
-        publisher._atomic_write_bytes(manifest_path, manifest_before)
-        journal.update({"status": "ROLLED_BACK", "error": str(exc), "rollback_verified": sha256_file(formal_path) == formal_sha and sha256_file(manifest_path) == sha256_bytes(manifest_before)})
-        atomic_json(journal_path, journal)
-        raise
-
-
 @contextmanager
 def update_lock(runtime_root: Path, stale_seconds: int = 1800) -> Iterator[Path]:
     runtime_root.mkdir(parents=True, exist_ok=True)
@@ -544,7 +433,10 @@ def update_lock(runtime_root: Path, stale_seconds: int = 1800) -> Iterator[Path]
         os.replace(lock_path, stale_path)
     descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     try:
-        os.write(descriptor, json.dumps({"pid": os.getpid(), "started_at_utc": dt.datetime.now(dt.timezone.utc).isoformat()}).encode("utf-8"))
+        os.write(descriptor, json.dumps({
+            "pid": os.getpid(),
+            "started_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+        }).encode("utf-8"))
         os.close(descriptor)
         yield lock_path
     finally:
@@ -563,7 +455,6 @@ def run_update(
     offline_receipt_dir: Path | None = None,
     daily_price_run_dir: Path | None = None,
     daily_price_run_id: str | None = None,
-    apply_confirmed_official_revision_20260908: bool = False,
 ) -> dict[str, Any]:
     package_root = package_root.resolve()
     formal_path = package_root / FORMAL_REL
@@ -630,29 +521,31 @@ def run_update(
                 receipt_paths.append(str(receipt_path.resolve()))
 
             formal_by_date = {row["date"]: row for row in formal_rows}
-            confirmed_revision_dates: list[str] = []
+            historical_revisions: list[dict[str, Any]] = []
             for row_date, formal in formal_by_date.items():
                 if row_date[:7] not in months:
                     continue
                 source = twse_rows.get(row_date)
                 if source is None:
                     raise UpdateFailure(f"TWSE month file no longer contains formal date {row_date}")
+                changed_fields: dict[str, dict[str, str]] = {}
                 for formal_field, source_field in (
                     ("trade_volume", "trade_volume"),
                     ("trade_value", "trade_value"),
                     ("transaction_count", "transaction_count"),
                 ):
                     if int(formal[formal_field]) != int(source[source_field]):
-                        if (
-                            apply_confirmed_official_revision_20260908
-                            and row_date == CONFIRMED_REVISION_DATE
-                            and tuple(formal[field] for field in ("trade_volume", "trade_value", "transaction_count")) == CONFIRMED_REVISION_OLD
-                            and tuple(str(source[field]) for field in ("trade_volume", "trade_value", "transaction_count")) == CONFIRMED_REVISION_NEW
-                            and price.get(row_date) == source["close"]
-                        ):
-                            confirmed_revision_dates.append(row_date)
-                            break
-                        raise UpdateFailure(f"Historical market-activity rewrite detected for {row_date}")
+                        changed_fields[formal_field] = {
+                            "formal": str(formal[formal_field]),
+                            "twse": str(source[source_field]),
+                        }
+                if changed_fields:
+                    historical_revisions.append({
+                        "date": row_date,
+                        "changed_fields": changed_fields,
+                        "formal_row_preserved": True,
+                        "twse_close_matches_price_authority": price.get(row_date) == source["close"],
+                    })
 
             new_rows: list[dict[str, Any]] = []
             for row_date in sorted(twse_rows):
@@ -681,44 +574,41 @@ def run_update(
                 )
                 new_rows.append(row)
 
-            if confirmed_revision_dates:
-                reconciled_rows = []
-                for row in formal_rows:
-                    row_date = row["date"]
-                    if row_date in confirmed_revision_dates:
-                        source = twse_rows[row_date]
-                        reconciled_rows.append({field: str(source[field]) for field in FORMAL_FIELDS})
-                    else:
-                        reconciled_rows.append(dict(row))
-                reconciled_rows.extend({field: str(row[field]) for field in FORMAL_FIELDS} for row in new_rows)
-                candidate_path = run_dir / "2317_daily_market_activity.confirmed_revision.candidate.csv"
-                write_candidate(candidate_path, reconciled_rows)
-                if dry_run:
-                    result = {
-                        "run_id": run_id, "status": "DRY_RUN_READY", "launcher_status": "UPDATED",
-                        "market_liquidity_analysis_status": STATUS_READY, "last_success_date": last_formal_date,
-                        "candidate_last_date": reconciled_rows[-1]["date"], "months_checked": months,
-                        "rows_added": 0, "rows_revised": len(confirmed_revision_dates),
-                        "candidate_rows": len(reconciled_rows), "candidate_path": str(candidate_path.resolve()),
-                        "candidate_sha256": sha256_file(candidate_path), "http_calls": http_calls,
-                        "receipt_paths": receipt_paths, "run_dir": str(run_dir.resolve()), "dry_run": True,
-                        "exit_code": EXIT_OK, "actionable": False, "price_validation_provenance": staging_provenance,
-                    }
-                else:
-                    publish_result = publish_confirmed_official_revision(
-                        package_root, candidate_path=candidate_path, output_dir=run_dir / "publish"
-                    )
-                    result = {
-                        "run_id": run_id, "status": STATUS_UPDATED, "launcher_status": "UPDATED",
-                        "market_liquidity_analysis_status": STATUS_READY, "last_success_date": publish_result["last_date"],
-                        "months_checked": months, "rows_added": len(new_rows), "rows_revised": len(confirmed_revision_dates),
-                        "candidate_path": str(candidate_path.resolve()), "candidate_sha256": sha256_file(candidate_path),
-                        "publish_journal": str((run_dir / "publish" / "PUBLISH_JOURNAL.json").resolve()),
-                        "formal_sha256": publish_result["post_hashes"][str(FORMAL_REL).replace("\\", "/")],
-                        "manifest_sha256": publish_result["post_hashes"][publisher.MANIFEST_PATH],
-                        "http_calls": http_calls, "receipt_paths": receipt_paths, "run_dir": str(run_dir.resolve()),
-                        "dry_run": False, "exit_code": EXIT_OK, "actionable": False, "price_validation_provenance": staging_provenance,
-                    }
+            twse_latest_date = max(day for day in twse_rows if day <= as_of_date.isoformat())
+            if historical_revisions:
+                candidate_path = run_dir / "2317_daily_market_activity.incremental.candidate.csv"
+                if new_rows:
+                    write_candidate(candidate_path, new_rows)
+                reconciliation_path = run_dir / "HISTORICAL_RECONCILIATION_REQUIRED.json"
+                atomic_json(reconciliation_path, {
+                    "status": STATUS_RECONCILIATION,
+                    "formal_rows_preserved": True,
+                    "revisions": historical_revisions,
+                    "actionable": False,
+                })
+                result = {
+                    "run_id": run_id, "status": STATUS_RECONCILIATION,
+                    "launcher_status": STATUS_RECONCILIATION,
+                    "market_liquidity_analysis_status": STATUS_LIMITED,
+                    "last_success_date": last_formal_date,
+                    "formal_authority_latest_date": last_formal_date,
+                    "candidate_last_date": new_rows[-1]["date"] if new_rows else None,
+                    "candidate_latest_date": new_rows[-1]["date"] if new_rows else None,
+                    "twse_latest_validated_trading_date": twse_latest_date,
+                    "months_checked": months, "rows_added": len(new_rows), "rows_revised": 0,
+                    "historical_revisions_detected": len(historical_revisions),
+                    "reconciliation_path": str(reconciliation_path.resolve()),
+                    "http_calls": http_calls, "receipt_paths": receipt_paths,
+                    "run_dir": str(run_dir.resolve()), "dry_run": dry_run,
+                    "exit_code": EXIT_OK, "actionable": False,
+                    "price_validation_provenance": staging_provenance,
+                }
+                if new_rows:
+                    result.update({
+                        "candidate_rows": len(new_rows),
+                        "candidate_path": str(candidate_path.resolve()),
+                        "candidate_sha256": sha256_file(candidate_path),
+                    })
             elif not new_rows:
                 result = {
                     "run_id": run_id,
@@ -726,6 +616,9 @@ def run_update(
                     "launcher_status": "NO_NEW_DATA",
                     "market_liquidity_analysis_status": STATUS_READY,
                     "last_success_date": last_formal_date,
+                    "formal_authority_latest_date": last_formal_date,
+                    "candidate_latest_date": None,
+                    "twse_latest_validated_trading_date": twse_latest_date,
                     "months_checked": months,
                     "rows_added": 0,
                     "http_calls": http_calls,
@@ -743,10 +636,13 @@ def run_update(
                     result = {
                         "run_id": run_id,
                         "status": "DRY_RUN_READY",
-                        "launcher_status": "UPDATED",
+                        "launcher_status": "DRY_RUN_READY",
                         "market_liquidity_analysis_status": STATUS_READY,
                         "last_success_date": last_formal_date,
                         "candidate_last_date": new_rows[-1]["date"],
+                        "formal_authority_latest_date": last_formal_date,
+                        "candidate_latest_date": new_rows[-1]["date"],
+                        "twse_latest_validated_trading_date": twse_latest_date,
                         "months_checked": months,
                         "rows_added": 0,
                         "candidate_rows": len(new_rows),
@@ -772,9 +668,12 @@ def run_update(
                     result = {
                         "run_id": run_id,
                         "status": STATUS_UPDATED,
-                        "launcher_status": "UPDATED",
+                        "launcher_status": "FORMAL_UPDATED",
                         "market_liquidity_analysis_status": STATUS_READY,
                         "last_success_date": publish_result["last_date"],
+                        "formal_authority_latest_date": publish_result["last_date"],
+                        "candidate_latest_date": new_rows[-1]["date"],
+                        "twse_latest_validated_trading_date": twse_latest_date,
                         "months_checked": months,
                         "rows_added": len(new_rows),
                         "candidate_path": str(candidate_path.resolve()),
@@ -829,7 +728,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--offline-receipt-dir", type=Path)
     parser.add_argument("--daily-price-run-dir", type=Path)
     parser.add_argument("--daily-price-run-id")
-    parser.add_argument("--apply-confirmed-official-revision-20260908", action="store_true")
     args = parser.parse_args(argv)
     try:
         result = run_update(
@@ -839,7 +737,6 @@ def main(argv: list[str] | None = None) -> int:
             offline_receipt_dir=args.offline_receipt_dir,
             daily_price_run_dir=args.daily_price_run_dir,
             daily_price_run_id=args.daily_price_run_id,
-            apply_confirmed_official_revision_20260908=args.apply_confirmed_official_revision_20260908,
         )
     except UpdateFailure as exc:
         print(json.dumps({"status": exc.status, "error": str(exc), "exit_code": exc.exit_code}, ensure_ascii=False))

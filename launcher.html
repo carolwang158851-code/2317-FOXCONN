@@ -318,6 +318,12 @@
         <div class="stat"><div class="label">News</div><div id="news-component-status" class="value">NO_CHANGE</div><div class="small">既有新聞更新流程</div></div>
         <div class="stat"><div class="label">整體狀態</div><div id="overall-component-status" class="value">IDLE</div><div id="market-activity-log" class="small">Receipt／log：N/A</div></div>
       </div>
+      <div class="grid four" style="margin-top:12px">
+        <div class="stat"><div class="label">Latest staging folder</div><div id="latest-staging-date" class="value">N/A</div><div class="small">僅代表 staging/YYYY-MM-DD</div></div>
+        <div class="stat"><div class="label">Daily Price formal / candidate</div><div id="daily-price-dates" class="small">N/A / N/A</div></div>
+        <div class="stat"><div class="label">Market Activity formal / candidate</div><div id="market-activity-dates" class="small">N/A / N/A</div></div>
+        <div class="stat"><div class="label">TWSE validated latest</div><div id="twse-validated-date" class="value">N/A</div></div>
+      </div>
       <div id="server-context-warning" class="notice amber" style="display:none"></div>
     </section>
 
@@ -677,8 +683,12 @@
       const marketComponent = components.marketActivity || app.marketActivity || {};
       const newsComponent = components.news || {};
       const officialIR = components.officialIR || app.officialIR || {};
+      const officialIRFailures = officialIR.failedSources || officialIR.failed_sources || [];
+      const officialIREvidence = officialIR.active_event_evidence || officialIR.validated_event_evidence || [];
+      const officialIRDocumentType = officialIR.documentType || officialIREvidence[0]?.quality_metadata?.document_type || '';
       const phaseB1 = components.phaseB1 || {};
       const trigger = app.reportTrigger || {};
+      const authorityDates = app.authorityDates || {};
       const busy = app.status === 'RUNNING';
 
       $('gate-badge').className = badgeClass(gate.code || 'CHECKING');
@@ -707,11 +717,15 @@
       $('official-ir-status').textContent = officialIR.status || 'NO_CHANGE';
       $('official-ir-event').textContent = [officialIR.event || officialIR.canonical_event_id, officialIR.fiscalPeriod].filter(Boolean).join(' / ') || 'N/A';
       $('official-ir-source').textContent = officialIR.officialSource || 'N/A';
-      $('official-ir-document').textContent = officialIR.documentType || 'NOT_YET_AVAILABLE';
+      $('official-ir-document').textContent = officialIRDocumentType || (officialIRFailures.length ? 'RETRIEVAL_FAILED' : 'NOT_YET_AVAILABLE');
       $('official-ir-retrieved').textContent = officialIR.retrievedAt || officialIR.evaluated_at_utc || 'N/A';
       $('official-ir-coverage').textContent = officialIR.coverageComplete === true ? 'COMPLETE' : officialIR.coverageComplete === false ? 'INCOMPLETE' : 'N/A';
-      $('official-ir-failures').textContent = (officialIR.failedSources || officialIR.failed_sources || []).map((item) => `${item.source_id}: ${item.error || item.status}`).join(' / ') || 'NONE';
+      $('official-ir-failures').textContent = officialIRFailures.map((item) => `${item.source_id}: ${item.error || item.status}`).join(' / ') || 'NONE';
       $('overall-component-status').textContent = app.overallStatus || app.status || 'IDLE';
+      $('latest-staging-date').textContent = app.latestStagingDate || 'N/A';
+      $('daily-price-dates').textContent = `${authorityDates.dailyPriceFormalLatestDate || 'N/A'} / ${authorityDates.dailyPriceCandidateLatestDate || 'N/A'}`;
+      $('market-activity-dates').textContent = `${authorityDates.marketActivityFormalLatestDate || 'N/A'} / ${authorityDates.marketActivityCandidateLatestDate || 'N/A'}`;
+      $('twse-validated-date').textContent = authorityDates.twseLatestValidatedTradingDate || 'N/A';
       $('phaseb1-run-id').textContent = phaseB1.runId || 'N/A';
       $('phaseb1-output').textContent = phaseB1.outputPath || 'N/A';
       $('trigger-status').className = badgeClass(trigger.status || 'NO_MATERIAL_CHANGE');

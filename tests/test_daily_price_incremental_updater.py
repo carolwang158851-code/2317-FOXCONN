@@ -110,6 +110,20 @@ class DailyPriceIncrementalUpdaterTests(unittest.TestCase):
             freshness.validate(self.root, self.receipts)
         self.assertIn("missing_market_activity", str(raised.exception))
 
+    def test_dry_run_reports_candidate_without_claiming_formal_update(self) -> None:
+        before = sha(self.root / updater.PRICE_REL)
+        result = updater.run_update(
+            self.root, as_of_date=dt.date(2026, 7, 22), dry_run=True,
+            offline_receipt_dir=self.receipts,
+        )
+        self.assertEqual(result["status"], "DRY_RUN_READY")
+        self.assertEqual(result["launcher_status"], "DRY_RUN_READY")
+        self.assertNotEqual(result["launcher_status"], "FORMAL_UPDATED")
+        self.assertEqual(result["formal_authority_latest_date"], "2026-07-20")
+        self.assertEqual(result["candidate_latest_date"], "2026-07-22")
+        self.assertEqual(result["twse_latest_validated_trading_date"], "2026-07-22")
+        self.assertEqual(sha(self.root / updater.PRICE_REL), before)
+
 
 if __name__ == "__main__":
     unittest.main()
