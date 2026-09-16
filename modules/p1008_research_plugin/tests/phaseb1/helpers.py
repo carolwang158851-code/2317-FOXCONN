@@ -23,13 +23,6 @@ GOVERNED_Q2_SOURCE_MOTHER = (
     / "source"
     / "HON_HAI_FY2026_Q2_ENTERPRISE_VALUE_WAR_REPORT.html"
 )
-CURRENT_AUTHORITY_RECEIPT_REL = Path(
-    "contracts/p1008_research_plugin/acceptance/v1.1/"
-    "P1008_FY2026Q2_ROIC_FINALIZATION_CLOSEOUT.json"
-)
-CURRENT_AUTHORITY_RECEIPT_SHA256 = (
-    "B1D431C6380E2914E40203DA6A077B3414029F100FA14FB0108E63F5D4069050"
-)
 sys.path.insert(0, str(SRC_ROOT))
 
 
@@ -50,16 +43,25 @@ def fixture() -> dict[str, object]:
 
 
 def current_authority_hashes() -> dict[str, str]:
-    raw = (PACKAGE_ROOT / CURRENT_AUTHORITY_RECEIPT_REL).read_bytes()
-    if hashlib.sha256(raw).hexdigest().upper() != CURRENT_AUTHORITY_RECEIPT_SHA256:
-        raise RuntimeError("Current authority amendment receipt hash mismatch")
-    receipt = json.loads(raw.decode("utf-8-sig"))
-    return {
-        str(receipt["authorityManifest"]["path"]): str(
-            receipt["authorityManifest"]["sha256"]
-        ),
-        **{str(path): str(digest) for path, digest in receipt["authorityFiles"].items()},
+    manifest_path = PACKAGE_ROOT / "data" / "CSV_AUTHORITY_MANIFEST.json"
+    manifest_raw = manifest_path.read_bytes()
+    manifest = json.loads(manifest_raw.decode("utf-8-sig"))
+    hashes = {
+        "data/CSV_AUTHORITY_MANIFEST.json": hashlib.sha256(
+            manifest_raw
+        ).hexdigest().upper()
     }
+    for entry in [
+        *manifest.get("authoritativeFiles", []),
+        *manifest.get("nonAuthoritativeFiles", []),
+    ]:
+        relative = str(entry["path"])
+        expected = str(entry.get("currentSha256") or entry["sha256"]).upper()
+        actual = hashlib.sha256((PACKAGE_ROOT / relative).read_bytes()).hexdigest().upper()
+        if actual != expected:
+            raise RuntimeError(f"Current authority hash mismatch: {relative}")
+        hashes[relative] = expected
+    return hashes
 
 
 def write_fixture(root: Path, payload: dict[str, object]) -> Path:

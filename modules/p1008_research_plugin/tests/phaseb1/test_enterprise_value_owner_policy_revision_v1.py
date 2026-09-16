@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import sys
 import unittest
 from pathlib import Path
@@ -13,6 +12,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from p1008_research_plugin.reporting.enterprise_value_owner_policy import load_policy_candidate
+from p1008_research_plugin.phaseb1_common import protected_state_hashes
 from p1008_research_plugin.reporting.enterprise_value_owner_policy_revision import (
     evaluate_fcf_recovery,
     evaluate_revised_add_on,
@@ -56,6 +56,7 @@ class EnterpriseValueOwnerPolicyRevisionV1Tests(unittest.TestCase):
         cls.raw_production_hashes_before = {
             rel: sha(PACKAGE_ROOT / rel) for rel in RAW_PRODUCTION_PATHS
         }
+        cls.protected_state_before = protected_state_hashes(PACKAGE_ROOT)
         cls.revision = load_policy_revision(CONTRACT)
         cls.base = load_policy_candidate()
         cls.base_by_id = {x["threshold_id"]: x for x in cls.base["thresholds"]}
@@ -255,8 +256,7 @@ class EnterpriseValueOwnerPolicyRevisionV1Tests(unittest.TestCase):
     def test_r38_raw_production_hashes_unchanged(self):
         for rel, digest in self.raw_production_hashes_before.items():
             self.assertEqual(sha(PACKAGE_ROOT / rel), digest, rel)
-        sqlite = Path(os.environ["LOCALAPPDATA"]) / "P1008" / "data" / "warroom.sqlite3"
-        self.assertEqual(sha(sqlite), "B365CB5540BDEDD2E0E0EF924DC9DFA2B4FD6F7954904BCBA5194DA0966BB832")
+        self.assertEqual(protected_state_hashes(PACKAGE_ROOT), self.protected_state_before)
 
 
 if __name__ == "__main__":

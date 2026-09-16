@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import unittest
+from pathlib import Path
 
 from pydantic import ValidationError
 
@@ -52,7 +53,7 @@ class PhaseB1OwnerReviewRemediationR1Tests(unittest.TestCase):
     def setUpClass(cls) -> None:
         with scratch("r1-valid-") as output:
             pipeline = fixture_pipeline(output)
-            result = pipeline.run_all(output_base=output)
+            result = pipeline.run_all()
             cls.analysis = result["analysis"]
             cls.report = result["report"]
         cls.evidence = pipeline.load_inputs()[1]
@@ -102,16 +103,15 @@ class PhaseB1OwnerReviewRemediationR1Tests(unittest.TestCase):
         payload["packets"][1]["as_of_date"] = "2026-07-06"
         with scratch("r1-missing-event-date-") as root:
             pipeline = fixture_pipeline(root, write_fixture(root, payload))
-            with scratch("r1-missing-event-output-") as output:
-                result = pipeline.run_all(output_base=output)
+            result = pipeline.run_all()
         reaction = result["analysis"].price_and_market_activity.event_window_reaction
         self.assertIs(reaction.status, EventWindowStatus.INSUFFICIENT_DATA)
         self.assertIsNone(reaction.publication_date)
 
     def test_second_fixture_has_no_date_or_evidence_identity_leakage(self) -> None:
         with scratch("r1-alt-") as output:
-            result = fixture_pipeline(output, ALT_FIXTURE).run_all(output_base=output)
-            run_root = output / result["run_id"]
+            result = fixture_pipeline(output, ALT_FIXTURE).run_all()
+            run_root = Path(result["run_root"])
             combined = (run_root / "analysis_packet.json").read_text(encoding="utf-8") + (
                 run_root / "report_candidate.json"
             ).read_text(encoding="utf-8")

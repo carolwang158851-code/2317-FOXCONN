@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import unittest
 from copy import deepcopy
@@ -10,11 +9,14 @@ from pathlib import Path
 from uuid import uuid4
 
 try:
-    from .helpers import PACKAGE_ROOT, SRC_ROOT
-    from .legacy_q2_authority_harness import legacy_q2_authority_overlay
+    from .helpers import (
+        GOVERNED_Q2_EVIDENCE_ROOT,
+        GOVERNED_Q2_SOURCE_MOTHER,
+        PACKAGE_ROOT,
+        SRC_ROOT,
+    )
 except ImportError:
-    from helpers import PACKAGE_ROOT, SRC_ROOT
-    from legacy_q2_authority_harness import legacy_q2_authority_overlay
+    from helpers import GOVERNED_Q2_EVIDENCE_ROOT, GOVERNED_Q2_SOURCE_MOTHER, PACKAGE_ROOT, SRC_ROOT
 
 from p1008_research_plugin.phaseb1_common import protected_state_hashes
 from p1008_research_plugin.phaseb1_pipeline import PhaseB1Pipeline
@@ -41,14 +43,8 @@ from p1008_research_plugin.reporting.war_report_production_runtime import (
 )
 
 
-EVIDENCE_ROOT = Path(
-    os.environ.get(
-        "P1008_GOVERNED_EVIDENCE_ROOT",
-        str(PACKAGE_ROOT / "test_fixtures/q2_legacy_v1/evidence"),
-    )
-).resolve()
-AUTHORITY_ROOT = PACKAGE_ROOT / "test_fixtures/q2_legacy_v1/authority"
-SOURCE_MOTHER = Path.home() / "Downloads" / "HON_HAI_FY2026_Q2_ENTERPRISE_VALUE_WAR_REPORT.html"
+EVIDENCE_ROOT = GOVERNED_Q2_EVIDENCE_ROOT.resolve()
+SOURCE_MOTHER = GOVERNED_Q2_SOURCE_MOTHER.resolve()
 
 
 class WarReportProductionRuntimeV1Tests(unittest.TestCase):
@@ -67,11 +63,10 @@ class WarReportProductionRuntimeV1Tests(unittest.TestCase):
         parent = PACKAGE_ROOT / "runtime" / "report_production" / "test_scratch"
         cls.output = parent / f"war-report-runtime-v1-{uuid4().hex}"
         cls.before = protected_state_hashes(PACKAGE_ROOT)
-        with legacy_q2_authority_overlay(PACKAGE_ROOT, AUTHORITY_ROOT):
-            cls.result = run_war_report_production(
-                package_root=PACKAGE_ROOT, trigger_context=cls.lineage, output_base=cls.output,
-                governed_evidence_root=EVIDENCE_ROOT, source_mother=SOURCE_MOTHER,
-            )
+        cls.result = run_war_report_production(
+            package_root=PACKAGE_ROOT, trigger_context=cls.lineage, output_base=cls.output,
+            governed_evidence_root=EVIDENCE_ROOT, source_mother=SOURCE_MOTHER,
+        )
         cls.after = protected_state_hashes(PACKAGE_ROOT)
         cls.html = Path(cls.result["output_html"]).read_text(encoding="utf-8")
         cls.audit = json.loads((Path(cls.result["output_root"]) / "chart_audit.json").read_text(encoding="utf-8"))
@@ -331,8 +326,20 @@ class WarReportProductionRuntimeV1Tests(unittest.TestCase):
     def test_r41_valuation_timepoints_and_chart_basis_are_explicit(self) -> None:
         valuation = self.result["analysis"].quarterly_earnings.valuation_scenarios["valuationTimeBasis"]
         self.assertEqual(valuation["preEventValuation"]["date"], "2026-08-11")
-        self.assertEqual(valuation["postEventValuation"]["status"], "UNAVAILABLE_LOCAL_AUTHORITY")
-        self.assertIn("事件後P/S、P/E與P/B均不可得", self.html)
+        self.assertEqual(
+            valuation["postEventValuation"],
+            {
+                "status": "AVAILABLE",
+                "date": "2026-09-16",
+                "price": "248.0",
+                "ps": "0.37",
+                "pe": "16.31",
+                "pb": "1.823",
+                "sourceId": "AUTH-PRICE-20260916",
+            },
+        )
+        self.assertNotIn("事件後P/S、P/E與P/B均不可得", self.html)
+        self.assertIn("2026-09-16", self.html)
         self.assertIn("歷史季度序列只到2026Q1", self.html)
         self.assertIn("獨立尺度", self.html)
 

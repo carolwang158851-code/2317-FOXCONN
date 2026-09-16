@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import json
-import os
 import unittest
 from pathlib import Path
 from uuid import uuid4
 
 try:
-    from .helpers import PACKAGE_ROOT
-    from .legacy_q2_authority_harness import legacy_q2_authority_overlay
+    from .helpers import (
+        GOVERNED_Q2_EVIDENCE_ROOT,
+        GOVERNED_Q2_SOURCE_MOTHER,
+        PACKAGE_ROOT,
+    )
 except ImportError:
-    from helpers import PACKAGE_ROOT
-    from legacy_q2_authority_harness import legacy_q2_authority_overlay
+    from helpers import GOVERNED_Q2_EVIDENCE_ROOT, GOVERNED_Q2_SOURCE_MOTHER, PACKAGE_ROOT
 
 from p1008_research_plugin.phaseb1_common import protected_state_hashes
 from p1008_research_plugin.reporting.enterprise_value_rule_engine import (
@@ -31,14 +32,8 @@ from p1008_research_plugin.reporting.forward_enterprise_value_analytics import (
 from p1008_research_plugin.reporting.war_report_production_runtime import run_war_report_production
 
 
-EVIDENCE_ROOT = Path(
-    os.environ.get(
-        "P1008_GOVERNED_EVIDENCE_ROOT",
-        str(PACKAGE_ROOT / "test_fixtures/q2_legacy_v1/evidence"),
-    )
-).resolve()
-AUTHORITY_ROOT = PACKAGE_ROOT / "test_fixtures/q2_legacy_v1/authority"
-SOURCE_MOTHER = Path.home() / "Downloads" / "HON_HAI_FY2026_Q2_ENTERPRISE_VALUE_WAR_REPORT.html"
+EVIDENCE_ROOT = GOVERNED_Q2_EVIDENCE_ROOT.resolve()
+SOURCE_MOTHER = GOVERNED_Q2_SOURCE_MOTHER.resolve()
 
 
 class ForwardEnterpriseValueAnalyticsV1Tests(unittest.TestCase):
@@ -59,11 +54,10 @@ class ForwardEnterpriseValueAnalyticsV1Tests(unittest.TestCase):
         cls.output = parent / f"forward-ev-v1-{uuid4().hex}"
         cls.output.mkdir(parents=False, exist_ok=False)
         cls.before = protected_state_hashes(PACKAGE_ROOT)
-        with legacy_q2_authority_overlay(PACKAGE_ROOT, AUTHORITY_ROOT):
-            cls.result = run_war_report_production(
-                package_root=PACKAGE_ROOT, trigger_context=lineage, output_base=cls.output,
-                governed_evidence_root=EVIDENCE_ROOT, source_mother=SOURCE_MOTHER,
-            )
+        cls.result = run_war_report_production(
+            package_root=PACKAGE_ROOT, trigger_context=lineage, output_base=cls.output,
+            governed_evidence_root=EVIDENCE_ROOT, source_mother=SOURCE_MOTHER,
+        )
         cls.after = protected_state_hashes(PACKAGE_ROOT)
         cls.root = Path(cls.result["output_root"])
         cls.forward = json.loads((cls.root / "forward_enterprise_value_analytics.json").read_text(encoding="utf-8"))

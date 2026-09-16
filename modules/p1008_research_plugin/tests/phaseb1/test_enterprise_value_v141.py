@@ -68,7 +68,7 @@ class EnterpriseValueV141Tests(unittest.TestCase):
         total = sum(Decimal(item) for item in self.valuation["ttmEpsComponents"]["values"])
         self.assertEqual(total, Decimal(self.valuation["ttmEps"]["value"]))
         self.assertEqual(self.valuation["ttmEps"]["value"], "15.21")
-        self.assertEqual(self.valuation["ttmPe"]["value"], "16.57")
+        self.assertEqual(self.valuation["ttmPe"]["value"], "16.31")
         self.assertEqual(self.valuation["priorH2Eps"]["value"], "7.38")
         self.assertEqual([row["fy26Eps"] for row in self.valuation["forwardPeScenarios"]], ["15.95", "16.69", "17.42"])
         governed_text = self.markdown + self.html + json.dumps(self.valuation, ensure_ascii=False)
@@ -91,7 +91,7 @@ class EnterpriseValueV141Tests(unittest.TestCase):
         chart = self.chart("operating_cost_absorption_8q")
         self.assertEqual(len(chart["series"]), 1)
         self.assertEqual(chart["series"][0]["unit"], "%")
-        self.assertEqual(chart["series"][0]["values"], ["3.235", "3.123", "3.282", "3.174", "2.926", "2.596", "2.630", "2.365"])
+        self.assertEqual(chart["series"][0]["values"], ["3.235", "3.123", "3.282", "3.174", "2.926", "2.596", "2.630", "2.367"])
         self.assertIn("597.30億元", " ".join(chart["commentaryZh"]))
 
     def test_working_capital_and_ccc_do_not_share_absolute_axis(self) -> None:
@@ -108,7 +108,7 @@ class EnterpriseValueV141Tests(unittest.TestCase):
         self.assertIn("2026H1", capex["period"])
         self.assertIn("官方累計值", capex["period"])
         roic = self.chart("capital_validation_status")
-        self.assertEqual(roic["series"][0]["values"], ["10.51", "13.16", "7.91", "10.66", "11.77", "14.41", "12.57", "12.35"])
+        self.assertEqual(roic["series"][0]["values"], ["10.51", "13.16", "7.91", "10.66", "11.77", "14.41", "12.57", "INSUFFICIENT_DATA"])
         self.assertNotEqual(roic["series"][0]["values"][-1], "0")
 
     def test_roe_is_first_class_and_dupont_is_partial(self) -> None:
@@ -126,18 +126,20 @@ class EnterpriseValueV141Tests(unittest.TestCase):
         bvps = self.analytics["bvps"]
         self.assertEqual(bvps["currentValue"], "136.02")
         self.assertEqual(bvps["provenance"], "GOVERNED_AUTHORITY_DIRECT")
-        self.assertEqual(len(bvps["periods"]), 7)
-        self.assertEqual(len(bvps["values"]), 7)
+        self.assertEqual(len(bvps["periods"]), 8)
+        self.assertEqual(len(bvps["values"]), 8)
+        self.assertEqual((bvps["periods"][-1], bvps["values"][-1]), ("2026Q2", "136.02"))
         self.assertEqual(self.valuation["governedBvps"]["value"], "136.02")
-        self.assertIn("1.853", self.markdown)
+        self.assertIn("1.823", self.markdown)
         self.assertIn("ROE", self.markdown)
         for forbidden in ("買進", "賣出", "目標價", "P/B顯示便宜", "P/B顯示昂貴"):
             self.assertNotIn(forbidden, self.markdown)
-        self.assertIn("P/B為1.853倍", self.markdown)
+        self.assertIn("P/B為1.823倍", self.markdown)
         self.assertEqual(self.chart("roe_equity_compounding")["series"][0]["labelZh"], "每股淨值")
         chart_commentary = " ".join(self.chart("roe_equity_compounding")["commentaryZh"])
-        self.assertIn("2025Q2降至105.14元", chart_commentary)
-        self.assertIn("原因待驗證", chart_commentary)
+        self.assertIn("最新有效ROE季度為2026Q2", chart_commentary)
+        self.assertIn("BVPS與ROE採各期受治理值", chart_commentary)
+        self.assertIn("不用舊期值外推", chart_commentary)
 
     def test_strategy_has_six_longitudinal_pillars_and_separate_gap(self) -> None:
         scorecard = self.analytics["strategyScorecard"]
