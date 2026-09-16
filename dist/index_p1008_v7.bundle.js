@@ -734,7 +734,11 @@ function calculateMrdObservation({
   };
 }
 
-function buildLegacyRtmMetadata({
+const RTM_MODE = 'TRUTHFUL_NEUTRAL';
+const RTM_SCORE = 0;
+const RTM_WEIGHTED_RAW_CONTRIBUTION = 0;
+
+function buildRtmMetadata({
   foreignHoldChange,
   foreignHoldTrend,
   currentForeignPeriod,
@@ -743,9 +747,11 @@ function buildLegacyRtmMetadata({
   const governedTrends = new Set(['RISING', 'STABLE', 'DECLINING']);
   const currentPeriodAvailable = Number.isFinite(foreignHoldChange) && governedTrends.has(foreignHoldTrend);
   return {
-    rtmScoreMode: 'LEGACY_FIXED_SCORE',
-    rtmRawScore: 0.1,
-    rtmWeightedRawContribution: 0.01,
+    rtmScoreMode: RTM_MODE,
+    rtmRawScore: RTM_SCORE,
+    rtmWeightedRawContribution: RTM_WEIGHTED_RAW_CONTRIBUTION,
+    rtmContributionStatus: 'NEUTRAL_ZERO_BY_GOVERNANCE',
+    approvedForeignNumericMapping: 'NONE',
     rtmCurrentPeriod: currentForeignPeriod || 'NOT_AVAILABLE',
     rtmCurrentPeriodStatus: currentPeriodAvailable ? 'AVAILABLE' : 'DATA_UNAVAILABLE',
     rtmCurrentValue: currentPeriodAvailable ? `${foreignHoldTrend} (${foreignHoldChange.toFixed(2)}pp)` : 'DATA_UNAVAILABLE',
@@ -753,6 +759,7 @@ function buildLegacyRtmMetadata({
     rtmCurrentForeignChange: currentPeriodAvailable ? foreignHoldChange : null,
     latestGovernedForeignPeriod: latestGovernedForeignPeriod || 'NOT_AVAILABLE',
     currentPeriodFallbackUsed: false,
+    missingForeignDataZeroFilled: false,
     zForeign: 'NOT_AVAILABLE_NOT_DERIVED_FROM_FOREIGN_DATA'
   };
 }
@@ -795,7 +802,7 @@ function calculateMidrObservation({
   const pbScoreRaw = pbProspect(currentPB);
   let frvScore = 0.2;
   if (dynamicEpsYoY > 50) frvScore = 0.8;else if (dynamicEpsYoY > 20) frvScore = 0.5;
-  const rtmScore = 0.1;
+  const rtmScore = RTM_SCORE;
   let mdrScore = us10yVal > 4.5 ? -0.5 : us10yVal > 4.0 ? -0.3 : 0.0;
   if (fedProbVal > 70) mdrScore -= 0.1;
   const riskKeyword = getRiskKeyword(rawRiskLevel);
@@ -819,7 +826,7 @@ function calculateMidrObservation({
   const scorePb = (pbScoreRaw * w.val * ud).toFixed(3);
   const scoreRev = (frvScore * w.frv * ud).toFixed(3);
   const scoreForeign = (rtmScore * w.rtm * ud).toFixed(3);
-  const rtmMetadata = buildLegacyRtmMetadata({
+  const rtmMetadata = buildRtmMetadata({
     foreignHoldChange,
     foreignHoldTrend,
     currentForeignPeriod,
@@ -4200,7 +4207,7 @@ const App = () => {
         const pbScore = pbProspect(currentPB);
         let frvScore = 0.2;
         if (dynamicEpsYoY > 50) frvScore = 0.8;else if (dynamicEpsYoY > 20) frvScore = 0.5;
-        const rtmScore = 0.1;
+        const rtmScore = RTM_SCORE;
         let mdrScore = us10yVal > 4.5 ? -0.5 : us10yVal > 4.0 ? -0.3 : 0.0;
         if (fedProbVal > 70) mdrScore -= 0.1;
         const ud = rawRiskLevel === 'CAUTION' ? 0.90 : rawRiskLevel === 'SYSTEMIC' ? 0.80 : 1.0;
@@ -4224,7 +4231,7 @@ const App = () => {
         const scorePb = (pbScore * w.val * ud).toFixed(3);
         const scoreRev = (frvScore * w.frv * ud).toFixed(3);
         const scoreForeign = (rtmScore * w.rtm * ud).toFixed(3);
-        const rtmMetadata = buildLegacyRtmMetadata({
+        const rtmMetadata = buildRtmMetadata({
           foreignHoldChange: currentForeignHoldChange,
           foreignHoldTrend: currentForeignHoldTrend,
           currentForeignPeriod: latestMaster?.Quarter || null,
@@ -5955,7 +5962,7 @@ const App = () => {
     className: "py-3 text-right font-bold text-slate-300"
   }, React.createElement("div", null, midrResult?.scoreForeign), React.createElement("div", {
     className: "text-[10px] text-slate-500"
-  }, "LEGACY raw ", midrResult?.rtmRawScore, " \xB7 pre-UD ", Number.isFinite(midrResult?.rtmWeightedRawContribution) ? midrResult.rtmWeightedRawContribution.toFixed(2) : 'N/A'))), React.createElement("tr", {
+  }, "TRUTHFUL_NEUTRAL \xB7 \u7121\u6838\u51C6\u5916\u8CC7\u6578\u503C\u6620\u5C04 \xB7 \u4E2D\u6027\u8CA2\u737B ", Number.isFinite(midrResult?.rtmWeightedRawContribution) ? midrResult.rtmWeightedRawContribution.toFixed(2) : 'N/A'))), React.createElement("tr", {
     className: "border-t border-slate-700/50"
   }, React.createElement("td", {
     className: "py-3 text-slate-400 text-xs"

@@ -1,0 +1,92 @@
+{
+  "$schema": "../schemas/activation_receipt.schema.json",
+  "recordType": "P1008_RTM0_PRODUCTION_ACTIVATION_RECEIPT",
+  "recordVersion": "1.0",
+  "activationId": "P1008-RTM0-PRODUCTION-ACTIVATION-20260915-V1",
+  "activationDate": "2026-09-15",
+  "ownerAuthorizationReference": "OWNER_AUTHORIZATION_P1008_RTM0_TRUTHFUL_NEUTRAL_PRODUCTION_ACTIVATION",
+  "predecessor": {
+    "registryVersion": "1.0",
+    "registryRootHash": "86FEDB268064923A02E8F8B3F8814B8098AFFB9A526DA657FD85A96829D54B1B",
+    "commitSha": "05b8ca344fa81f25f9c665d42a452eaf62e5e816"
+  },
+  "candidateApproval": {
+    "status": "PREVIOUSLY_COMPLETED",
+    "formula": "RTM_0_TRUTHFUL_NEUTRAL",
+    "record": "../../v1.0/acceptance/P1008_FORMULA_REGISTRY_OWNER_DECISION_V1.json"
+  },
+  "productionActivation": {
+    "status": "OWNER_AUTHORIZED_IMPLEMENTED_PENDING_COMMIT",
+    "priorProductionFormula": "LEGACY_FIXED_0_1",
+    "newProductionFormula": "RTM_0_TRUTHFUL_NEUTRAL",
+    "approvedForeignNumericMapping": "NONE",
+    "currentPeriodFallbackAllowed": false,
+    "currentPeriodFallbackUsed": false,
+    "missingForeignDataZeroFilled": false,
+    "contributionMeaning": "NEUTRAL_ZERO_BY_GOVERNANCE"
+  },
+  "numericTransition": {
+    "priorRawRtmScore": 0.1,
+    "newRawRtmScore": 0,
+    "rtmWeightBefore": 0.1,
+    "rtmWeightAfter": 0.1,
+    "priorWeightedRawContribution": 0.01,
+    "newWeightedRawContribution": 0
+  },
+  "replayEvidence": {
+    "dates": "2026-01-28/2026-09-14",
+    "rows": 151,
+    "beforeCounts": {"SEVERE": 51, "CAUTION": 48, "NEUTRAL": 52},
+    "afterCounts": {"SEVERE": 51, "CAUTION": 55, "NEUTRAL": 45},
+    "verdictFlips": 7,
+    "flipBreakdown": {"NEUTRAL_TO_CAUTION": 7, "CAUTION_TO_SEVERE": 0},
+    "beforeSha256": "A234DD3A99360E4EE5586EF00D850CC0CAB09578DA926584FC40C49AD21546AC",
+    "afterSha256": "899E8452509C7BD248253E59D587BAFEDDB533DE67F06FCD1C2A74EFAD9AF0AB",
+    "serialization": "date|old_total_3dp|new_total_3dp|delta_3dp|old_verdict|new_verdict|ud_2dp|old_rtm_weighted_3dp|new_rtm_weighted_3dp joined with LF",
+    "rtmOnlyDeltaValidation": "PASS",
+    "deltaCounts": {"NORMAL_-0.010": 45, "CAUTION_-0.009": 106, "SYSTEMIC_-0.008": 0},
+    "maximumRoundingResidual": 0,
+    "priorNineFlipEstimateDisposition": "REJECTED_NON_CANONICAL_SENSITIVITY_SUMMARY"
+  },
+  "invariantProtection": {
+    "YAChanged": false,
+    "VALChanged": false,
+    "FRVChanged": false,
+    "MDRChanged": false,
+    "MRDChanged": false,
+    "MRDCurrentProduction": "MRD-M0_DISPLAY_ONLY",
+    "dynamicMrdThresholdActive": false,
+    "midrWeightsChanged": false,
+    "midrVerdictBoundariesChanged": false,
+    "UDChanged": false,
+    "UDValues": {"NORMAL": 1.0, "CAUTION": 0.9, "SYSTEMIC": 0.8},
+    "MIDRStatus": "OBSERVATION_ONLY",
+    "holdChanged": false,
+    "ruleChanged": false,
+    "sqliteChanged": false
+  },
+  "authorityProtection": {
+    "hashAlgorithm": "SHA-256",
+    "beforeAndAfter": {
+      "data/2317_master_v9.csv": "E623CA082F2A080613C33F4155BA8006646E30D6A517DE926AF6108062F84D48",
+      "data/2317_daily_price.csv": "CBCF7D96490CB5B5C24E282F362F29953216DE8BEA16124D4B854842B250567C",
+      "data/2317_daily_market_activity.csv": "86618182D9A6441DA9CE1761CF10D99D27F0B26B91CB4FEF732F3FE55447B326",
+      "data/CSV_AUTHORITY_MANIFEST.json": "3A977A8B38A02D7F51C9E18F35B4E46464A3F148BCB97C9E9CBC1ADEC2861CDA"
+    },
+    "authorityBytesChanged": false
+  },
+  "buildEvidence": {
+    "buildTool": "tools/build_index_p1008_v7.js",
+    "sourceBundleParity": "PASS",
+    "runtimeHtmlParity": "PASS",
+    "normalizedBundleSha256": "F56DFBE99E2D5F825B64E588A98162197AE83447858C2D1999F45C2EAAEF37F5",
+    "normalizedHtmlSha256": "6C7E64410D10C65A2D539598C1456B39A70E9BCF6C710BFB434A82FAFD99E48A",
+    "runtimeHtmlContentChanged": false,
+    "runtimeHtmlBlob": "cd4ff9b64567f9a17fe2d77db1a20dc80b80c4b7"
+  },
+  "implementationCommitSha": null,
+  "commitStatus": "NOT_COMMITTED",
+  "activationReceipt": true,
+  "actionable": false,
+  "formalDecision": false
+}

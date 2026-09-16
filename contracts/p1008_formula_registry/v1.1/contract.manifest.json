@@ -1,0 +1,44 @@
+{
+  "contractId": "P1008_FORMULA_REGISTRY",
+  "contractVersion": "1.1",
+  "status": "OWNER_AUTHORIZED_RTM0_PRODUCTION_ACTIVATION_IMPLEMENTED_PENDING_COMMIT",
+  "predecessorVersion": "1.0",
+  "predecessorRootHash": "86FEDB268064923A02E8F8B3F8814B8098AFFB9A526DA657FD85A96829D54B1B",
+  "predecessorCommitSha": "05b8ca344fa81f25f9c665d42a452eaf62e5e816",
+  "hashAlgorithm": "SHA-256",
+  "rootHashConstruction": "SHA256(UTF8(join(sorted(path + '|' + sha256), LF)))",
+  "rootHash": "A35AC312C1C0B2D2E7D0D19C0E0FE3DC7E7B1B86F1352F817AAEF15B209AFD6A",
+  "artifacts": [
+    {
+      "path": "acceptance/P1008_RTM0_PRODUCTION_ACTIVATION_RECEIPT_V1.json",
+      "sha256": "BC13772D3A1F2D8FB4BECE2B009C638D6617ED882E7E8A21A354C4707C4FD1CE",
+      "sizeBytes": 3954
+    },
+    {
+      "path": "formula_registry.json",
+      "sha256": "E6CDE04D7BAE15B989D5D1FDB72C0E566107A8D132C4859883E50594BE83CF22",
+      "sizeBytes": 5689
+    },
+    {
+      "path": "README.md",
+      "sha256": "FF32D1716806AC52B2AF13D1B17D8103E8D69DAF18F0031A78333D38CA54DFC8",
+      "sizeBytes": 1004
+    },
+    {
+      "path": "schemas/activation_receipt.schema.json",
+      "sha256": "4D82A5C168CBBB0DECADA1C536FFE386A462D21F2621A05460718328D472B0B9",
+      "sizeBytes": 1542
+    },
+    {
+      "path": "schemas/formula_registry.schema.json",
+      "sha256": "DADEFDB0EE66CA7009A91858A61F266FD9B36F85F0859E5025C0CC637E551E72",
+      "sizeBytes": 1645
+    }
+  ],
+  "backwardCompatibility": "Additive RTM-only activation revision; v1.0 remains immutable; RTM weight, YA, VAL, FRV, MDR, MRD-M0, MIDR boundaries, UD, HOLD, RULE, SQLite, authority data, publication behavior, and actionable=false remain unchanged",
+  "actionable": false,
+  "formalDecision": false,
+  "holdChangeAllowed": false,
+  "ruleChangeAllowed": false,
+  "productionActivation": true
+}

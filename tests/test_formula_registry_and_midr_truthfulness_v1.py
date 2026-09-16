@@ -51,7 +51,7 @@ def _risk_keyword(value):
     return "NORMAL"
 
 
-def _midr_numeric(daily_row, master_row, macro_row):
+def _midr_numeric(daily_row, master_row, macro_row, rtm_score=0.1):
     current_pb = _number(daily_row, "PB_daily")
     current_price = _number(daily_row, "Close")
     cash_dividend = _number(master_row, "CashDividend")
@@ -79,7 +79,6 @@ def _midr_numeric(daily_row, master_row, macro_row):
     pb_score = max(pb_score + (-0.10 if current_pb > pb_ref else 0) + (-0.20 if current_pb > pb_strict else 0), -1.0)
 
     frv_score = 0.8 if eps_yoy > 50 else 0.5 if eps_yoy > 20 else 0.2
-    rtm_score = 0.1
     mdr_score = -0.5 if us10y > 4.5 else -0.3 if us10y > 4.0 else 0.0
     if fed_probability is not None and fed_probability > 70:
         mdr_score -= 0.1
@@ -164,8 +163,9 @@ class MidrTruthfulnessTests(unittest.TestCase):
     def setUpClass(cls):
         cls.source = SOURCE.read_text(encoding="utf-8")
 
-    def test_numeric_formula_verdict_and_ud_are_unchanged(self):
-        self.assertEqual(self.source.count("const rtmScore = 0.1;"), 2)
+    def test_numeric_formula_verdict_and_ud_are_unchanged_except_approved_rtm_activation(self):
+        self.assertIn("const RTM_SCORE = 0;", self.source)
+        self.assertEqual(self.source.count("const rtmScore = RTM_SCORE;"), 2)
         self.assertEqual(self.source.count("rtmScore * w.rtm"), 4)
         self.assertEqual(self.source.count("parseFloat(total) < -0.25"), 1)
         self.assertEqual(self.source.count("parseFloat(total) < -0.15"), 1)
@@ -179,9 +179,12 @@ class MidrTruthfulnessTests(unittest.TestCase):
         self.assertNotIn("<td className=\"py-3 text-emerald-400\">RISING</td>", self.source)
         self.assertNotIn("const zForeign = rawRiskLevel", self.source)
         self.assertNotIn("zForeign: riskKeyword ===", self.source)
-        self.assertIn("rtmScoreMode: 'LEGACY_FIXED_SCORE'", self.source)
-        self.assertIn("rtmRawScore: 0.1", self.source)
-        self.assertIn("rtmWeightedRawContribution: 0.01", self.source)
+        self.assertIn("const RTM_MODE = 'TRUTHFUL_NEUTRAL'", self.source)
+        self.assertIn("rtmRawScore: RTM_SCORE", self.source)
+        self.assertIn("rtmWeightedRawContribution: RTM_WEIGHTED_RAW_CONTRIBUTION", self.source)
+        self.assertIn("rtmContributionStatus: 'NEUTRAL_ZERO_BY_GOVERNANCE'", self.source)
+        self.assertIn("approvedForeignNumericMapping: 'NONE'", self.source)
+        self.assertIn("missingForeignDataZeroFilled: false", self.source)
         self.assertIn("zForeign: 'NOT_AVAILABLE_NOT_DERIVED_FROM_FOREIGN_DATA'", self.source)
         self.assertIn("currentPeriodFallbackUsed: false", self.source)
 

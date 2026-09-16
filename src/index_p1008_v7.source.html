@@ -664,13 +664,19 @@
             return { value: score, qReturn: qReturn.toFixed(1), level, message, threshold, signals };
         }
 
-        function buildLegacyRtmMetadata({ foreignHoldChange, foreignHoldTrend, currentForeignPeriod, latestGovernedForeignPeriod }) {
+        const RTM_MODE = 'TRUTHFUL_NEUTRAL';
+        const RTM_SCORE = 0;
+        const RTM_WEIGHTED_RAW_CONTRIBUTION = 0;
+
+        function buildRtmMetadata({ foreignHoldChange, foreignHoldTrend, currentForeignPeriod, latestGovernedForeignPeriod }) {
             const governedTrends = new Set(['RISING', 'STABLE', 'DECLINING']);
             const currentPeriodAvailable = Number.isFinite(foreignHoldChange) && governedTrends.has(foreignHoldTrend);
             return {
-                rtmScoreMode: 'LEGACY_FIXED_SCORE',
-                rtmRawScore: 0.1,
-                rtmWeightedRawContribution: 0.01,
+                rtmScoreMode: RTM_MODE,
+                rtmRawScore: RTM_SCORE,
+                rtmWeightedRawContribution: RTM_WEIGHTED_RAW_CONTRIBUTION,
+                rtmContributionStatus: 'NEUTRAL_ZERO_BY_GOVERNANCE',
+                approvedForeignNumericMapping: 'NONE',
                 rtmCurrentPeriod: currentForeignPeriod || 'NOT_AVAILABLE',
                 rtmCurrentPeriodStatus: currentPeriodAvailable ? 'AVAILABLE' : 'DATA_UNAVAILABLE',
                 rtmCurrentValue: currentPeriodAvailable ? `${foreignHoldTrend} (${foreignHoldChange.toFixed(2)}pp)` : 'DATA_UNAVAILABLE',
@@ -678,6 +684,7 @@
                 rtmCurrentForeignChange: currentPeriodAvailable ? foreignHoldChange : null,
                 latestGovernedForeignPeriod: latestGovernedForeignPeriod || 'NOT_AVAILABLE',
                 currentPeriodFallbackUsed: false,
+                missingForeignDataZeroFilled: false,
                 zForeign: 'NOT_AVAILABLE_NOT_DERIVED_FROM_FOREIGN_DATA',
             };
         }
@@ -698,7 +705,7 @@
             const pbScoreRaw = pbProspect(currentPB);
             let frvScore = 0.2;
             if (dynamicEpsYoY > 50) frvScore = 0.8; else if (dynamicEpsYoY > 20) frvScore = 0.5;
-            const rtmScore = 0.1;
+            const rtmScore = RTM_SCORE;
             let mdrScore = us10yVal > 4.5 ? -0.5 : us10yVal > 4.0 ? -0.3 : 0.0;
             if (fedProbVal > 70) mdrScore -= 0.1;
             const riskKeyword = getRiskKeyword(rawRiskLevel);
@@ -713,7 +720,7 @@
             const scorePb = (pbScoreRaw * w.val * ud).toFixed(3);
             const scoreRev = (frvScore * w.frv * ud).toFixed(3);
             const scoreForeign = (rtmScore * w.rtm * ud).toFixed(3);
-            const rtmMetadata = buildLegacyRtmMetadata({ foreignHoldChange, foreignHoldTrend, currentForeignPeriod, latestGovernedForeignPeriod });
+            const rtmMetadata = buildRtmMetadata({ foreignHoldChange, foreignHoldTrend, currentForeignPeriod, latestGovernedForeignPeriod });
             return {
                 yield: currentYield.toFixed(2), excessYield: excessYield.toFixed(2), yaScore: scoreYield, scoreYield, zYield: ((currentYield - 4.2) / 0.8).toFixed(2),
                 pb: currentPB, pbScore: scorePb, scorePb, zPb: currentPB > 0 ? ((currentPB - 1.45) / 0.25).toFixed(2) : '0.00',
@@ -2890,7 +2897,7 @@
                         let frvScore = 0.2;
                         if (dynamicEpsYoY > 50) frvScore = 0.8; else if (dynamicEpsYoY > 20) frvScore = 0.5;
 
-                        const rtmScore = 0.1; 
+                        const rtmScore = RTM_SCORE;
                         let mdrScore = us10yVal > 4.5 ? -0.5 : us10yVal > 4.0 ? -0.3 : 0.0;
                         if (fedProbVal > 70) mdrScore -= 0.1;
 
@@ -2908,7 +2915,7 @@
                         const scorePb = (pbScore * w.val * ud).toFixed(3);
                         const scoreRev = (frvScore * w.frv * ud).toFixed(3);
                         const scoreForeign = (rtmScore * w.rtm * ud).toFixed(3);
-                        const rtmMetadata = buildLegacyRtmMetadata({
+                        const rtmMetadata = buildRtmMetadata({
                             foreignHoldChange: currentForeignHoldChange,
                             foreignHoldTrend: currentForeignHoldTrend,
                             currentForeignPeriod: latestMaster?.Quarter || null,
@@ -4270,7 +4277,7 @@
                                             <td className="py-3 text-right text-slate-400">{midrResult?.zForeign || 'NOT_AVAILABLE'}</td>
                                             <td className="py-3 text-right font-bold text-slate-300">
                                                 <div>{midrResult?.scoreForeign}</div>
-                                                <div className="text-[10px] text-slate-500">LEGACY raw {midrResult?.rtmRawScore} · pre-UD {Number.isFinite(midrResult?.rtmWeightedRawContribution) ? midrResult.rtmWeightedRawContribution.toFixed(2) : 'N/A'}</div>
+                                                <div className="text-[10px] text-slate-500">TRUTHFUL_NEUTRAL · 無核准外資數值映射 · 中性貢獻 {Number.isFinite(midrResult?.rtmWeightedRawContribution) ? midrResult.rtmWeightedRawContribution.toFixed(2) : 'N/A'}</div>
                                             </td>
                                         </tr>
                                         <tr className="border-t border-slate-700/50">
