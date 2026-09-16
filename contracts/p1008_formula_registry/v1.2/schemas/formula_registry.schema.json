@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://formula-registry/v1.2/formula_registry",
+  "type": "object",
+  "required": [
+    "formulaRegistryId", "registryVersion", "status", "predecessor",
+    "lifecycleClassifications", "entries", "governanceOnlyRevision",
+    "formulaChange", "productionFormulaChanged", "udValuesChanged",
+    "actionable", "formalDecision", "holdChangeAllowed",
+    "ruleChangeAllowed", "productionActivation"
+  ],
+  "properties": {
+    "$schema": {"type": "string"},
+    "formulaRegistryId": {"const": "P1008_FORMULA_REGISTRY"},
+    "registryVersion": {"const": "1.2"},
+    "status": {"const": "OWNER_APPROVED_UD_RESEARCH_REVIEW_KEEP_CURRENT"},
+    "predecessor": {
+      "type": "object",
+      "required": ["version", "rootHash", "commitSha"],
+      "properties": {
+        "version": {"const": "1.1"},
+        "rootHash": {"const": "A35AC312C1C0B2D2E7D0D19C0E0FE3DC7E7B1B86F1352F817AAEF15B209AFD6A"},
+        "commitSha": {"const": "0f923778342370b89ac5cee02c34c263c98f8919"}
+      },
+      "additionalProperties": false
+    },
+    "lifecycleClassifications": {
+      "const": ["CURRENT_PRODUCTION", "OWNER_APPROVED_CANDIDATE", "RESEARCH_ONLY", "REJECTED", "LEGACY"]
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["formulaId", "lifecycleClassification", "formulaDefinition", "dataProvenance", "activationStatus", "ownerApproval", "backtestEvidence", "implementationStatus"]
+      }
+    },
+    "governanceOnlyRevision": {"const": true},
+    "formulaChange": {"const": false},
+    "productionFormulaChanged": {"const": false},
+    "udValuesChanged": {"const": false},
+    "actionable": {"const": false},
+    "formalDecision": {"const": false},
+    "holdChangeAllowed": {"const": false},
+    "ruleChangeAllowed": {"const": false},
+    "productionActivation": {"const": true}
+  },
+  "additionalProperties": false
+}
