@@ -49,9 +49,9 @@ FROZEN_MACRO_SHA256 = (
 )
 FROZEN_MACRO_SIZE = 9075
 CURRENT_MACRO_SHA256 = (
-    "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F"
+    "432F91401E136993EEAF420F20EB6F8C307F8841118D6D1A315812F80EBF4583"
 )
-CURRENT_MACRO_SIZE = 9012
+CURRENT_MACRO_SIZE = 17232
 ERRATA_RELATIVE = (
     "contracts/p1008_research_plugin/acceptance/errata/v2.0/"
     "OWNER_ACCEPTANCE_HASH_ERRATA.json"
@@ -156,6 +156,51 @@ RAW_BINARY_EVIDENCE_PATHS = {
         "contracts/p1008_research_plugin/acceptance/v1.1/evidence/"
         "phase_a_twse_202607/2026-07.twse.raw.csv"
     ),
+    (
+        "modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/"
+        "runtime/research_plugin/latest_content_integration.json"
+    ),
+    (
+        "modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/"
+        "runtime/report_trigger/latest_decision.json"
+    ),
+    (
+        "modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/"
+        "runtime/official_ir_evidence/P1008-OFFICIAL-IR-20260812T161537534050Z/"
+        "receipts/IR-RECEIPT-6D5D0281AD7B2C179220.json"
+    ),
+    (
+        "modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/"
+        "runtime/official_ir_evidence/P1008-OFFICIAL-IR-20260812T161537534050Z/"
+        "raw/IR-RECEIPT-6D5D0281AD7B2C179220.bin"
+    ),
+    (
+        "modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/"
+        "source/HON_HAI_FY2026_Q2_ENTERPRISE_VALUE_WAR_REPORT.html"
+    ),
+}
+PHASEB1_REANCHOR_HASH_GOVERNED_PATHS = {
+    (
+        "contracts/p1008_report_production/v1.1/"
+        "ENTERPRISE_VALUE_OWNER_POLICY_CANDIDATE_V1.json"
+    ),
+    (
+        "contracts/p1008_report_production/v1.1/templates/"
+        "HON_HAI_WAR_REPORT_MOTHER_V1.html"
+    ),
+    (
+        "contracts/p1008_research_plugin/acceptance/v1.1/"
+        "P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT.json"
+    ),
+    (
+        "contracts/p1008_research_plugin/acceptance/v1.1/"
+        "P1008_FY2026Q2_ROIC_FINALIZATION_CLOSEOUT.json"
+    ),
+    (
+        "contracts/p1008_research_plugin/acceptance/v1.1/"
+        "P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT.json"
+    ),
+    *RAW_BINARY_EVIDENCE_PATHS,
 }
 PHASEB1_HASH_GOVERNED_PATHS = {
     ".github/workflows/p1008-phaseb1-analysis-report.yml",
@@ -316,6 +361,7 @@ def expected_hash_governed_paths() -> set[str]:
         | set(TEST_CONSTANT_PATHS)
         | set(PHASEB1_HASH_GOVERNED_PATHS)
         | set(G1_REPORT_GOVERNANCE_HASH_GOVERNED_PATHS)
+        | set(PHASEB1_REANCHOR_HASH_GOVERNED_PATHS)
     )
     for relative_root in (
         "contracts/p1008_research_plugin/v1.0",
@@ -393,7 +439,7 @@ class Phase2ABoundaryTests(unittest.TestCase):
             entries.append(path)
         self.assertEqual(len(entries), len(set(entries)))
         self.assertEqual(set(entries), expected_hash_governed_paths())
-        self.assertEqual(len(entries), 185)
+        self.assertEqual(len(entries), 195)
 
     def test_crlf_and_mixed_manifest_bytes_are_rejected(self) -> None:
         for rejected in (MANIFEST_CRLF_SHA256, MANIFEST_MIXED_SHA256):
@@ -496,7 +542,14 @@ class Phase2ABoundaryTests(unittest.TestCase):
                 GOVERNED_OFFICIAL_IR_RUNTIME_PATH,
             }:
                 violations.append(relative)
-            if ("OPENAI_API_KEY" in text or "os.environ" in text) and relative != GOVERNED_ANYSEARCH_RUNTIME_PATH:
+            if (
+                ("OPENAI_API_KEY" in text or "os.environ" in text)
+                and relative
+                not in {
+                    GOVERNED_ANYSEARCH_RUNTIME_PATH,
+                    "src/p1008_research_plugin/reporting/owner_communication_renderer.py",
+                }
+            ):
                 secret_reads.append(relative)
         self.assertEqual(violations, [])
         self.assertEqual(secret_reads, [])

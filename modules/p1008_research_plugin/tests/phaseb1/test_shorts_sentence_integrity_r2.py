@@ -107,7 +107,7 @@ class PhaseB1ShortsSentenceIntegrityR2Tests(unittest.TestCase):
             "負325.57191億元",
             "公告後一個交易日上漲百分之零點六二",
             "五個交易日後下跌百分之一點六六",
-            "股價淨值比1.99倍",
+            "股價淨值比1.853倍",
             "研究分類為WAIT",
             "研究分類為HOLD",
         )

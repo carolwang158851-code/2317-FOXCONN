@@ -4,9 +4,11 @@ import copy
 import hashlib
 import importlib.util
 import json
+import shutil
 import sys
-import tempfile
 import unittest
+import uuid
+from contextlib import ExitStack
 from pathlib import Path
 from unittest import mock
 
@@ -44,9 +46,16 @@ class CurrentAuthorityAmendmentConformanceTests(unittest.TestCase):
     def validate(self) -> dict[str, object]:
         return RUNNER.validate_authority_manifest(ROOT, self.record)
 
-    def validation_fixture(self) -> tuple[tempfile.TemporaryDirectory[str], Path, dict[str, object]]:
-        temporary = tempfile.TemporaryDirectory(prefix="p1008-authority-classes-")
-        root = Path(temporary.name)
+    def validation_fixture(self) -> tuple[ExitStack, Path, dict[str, object]]:
+        root = (
+            ROOT
+            / "runtime"
+            / "authority_conformance_test_scratch"
+            / uuid.uuid4().hex
+        )
+        root.mkdir(parents=True)
+        temporary = ExitStack()
+        temporary.callback(shutil.rmtree, root, ignore_errors=True)
         manifest = RUNNER.read_json(ROOT / "data" / "CSV_AUTHORITY_MANIFEST.json")
         paths = [item["path"] for item in RUNNER._manifest_entries(manifest)]
         for relative in paths:

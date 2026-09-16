@@ -7,7 +7,6 @@ import sys
 import unittest
 from pathlib import Path
 
-
 PACKAGE_ROOT = Path(__file__).resolve().parents[4]
 SRC = PACKAGE_ROOT / "modules" / "p1008_research_plugin" / "src"
 if str(SRC) not in sys.path:
@@ -34,6 +33,17 @@ from p1008_research_plugin.reporting.enterprise_value_owner_policy_revision impo
 
 CONTRACT = PACKAGE_ROOT / "contracts" / "p1008_report_production" / "v1.1" / "ENTERPRISE_VALUE_OWNER_POLICY_REVISION_V1.json"
 SOURCE = SRC / "p1008_research_plugin" / "reporting" / "enterprise_value_owner_policy_revision.py"
+RAW_PRODUCTION_PATHS = (
+    "data/CSV_AUTHORITY_MANIFEST.json",
+    "data/2317_master_v9.csv",
+    "data/2317_daily_price.csv",
+    "data/2317_daily_market_activity.csv",
+    "data/2317_cash_flow_authority.csv",
+    "data/macro_snapshot.csv",
+    "data/macro_event_observations.csv",
+    "data/fx_trend_observations.csv",
+    "rules/RULE_STATUS_MANIFEST.json",
+)
 
 
 def sha(path: Path) -> str:
@@ -43,6 +53,9 @@ def sha(path: Path) -> str:
 class EnterpriseValueOwnerPolicyRevisionV1Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        cls.raw_production_hashes_before = {
+            rel: sha(PACKAGE_ROOT / rel) for rel in RAW_PRODUCTION_PATHS
+        }
         cls.revision = load_policy_revision(CONTRACT)
         cls.base = load_policy_candidate()
         cls.base_by_id = {x["threshold_id"]: x for x in cls.base["thresholds"]}
@@ -240,18 +253,7 @@ class EnterpriseValueOwnerPolicyRevisionV1Tests(unittest.TestCase):
         self.assertEqual(self.revision["external_calls"], {"network_requests": 0, "openai_api_calls": 0, "canva_calls": 0})
 
     def test_r38_raw_production_hashes_unchanged(self):
-        expected = {
-            "data/CSV_AUTHORITY_MANIFEST.json": "C6FF94A1FB2C9C877D7620184BDDD9A6270355ED833318638C3D87EB634A5398",
-            "data/2317_master_v9.csv": "0BB2FEC6FA3035AC642738BC12EA6959C81C8A79D5221E694BF780427051CF79",
-            "data/2317_daily_price.csv": "1C32081288731725CBA000C1CCC5144A24DD2A6F9A15A2964F930D8953839C6D",
-            "data/2317_daily_market_activity.csv": "021244A6E25894DB93C2223CA493EBA0BD72610D7CE06D4B95BCB5FBFD82D4BB",
-            "data/2317_cash_flow_authority.csv": "082ECA44A96A06F7DAE10DD33CBAF77C75DABA9B1B4DEA27B5B930F8CE8CD95C",
-            "data/macro_snapshot.csv": "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F",
-            "data/macro_event_observations.csv": "76B93F8932BA606390D44D68BD0D57D0BE7CB5D1D1364183F192A062D8B94BF2",
-            "data/fx_trend_observations.csv": "BFEC53845C68D689D20CC29972550279E3A4AE8D473816EFDB0855FF0DD091CD",
-            "rules/RULE_STATUS_MANIFEST.json": "054DA1FDAF0C75BB27B56DF45B96F1CC1720558D44C700F1AB70AB0280A2FE5C",
-        }
-        for rel, digest in expected.items():
+        for rel, digest in self.raw_production_hashes_before.items():
             self.assertEqual(sha(PACKAGE_ROOT / rel), digest, rel)
         sqlite = Path(os.environ["LOCALAPPDATA"]) / "P1008" / "data" / "warroom.sqlite3"
         self.assertEqual(sha(sqlite), "B365CB5540BDEDD2E0E0EF924DC9DFA2B4FD6F7954904BCBA5194DA0966BB832")

@@ -24,7 +24,7 @@ class OwnerCommunicationContractV1Tests(unittest.TestCase):
 
     def test_research_pack_is_frozen_and_governed(self) -> None:
         actual = hashlib.sha256((self.source / "validated_research_pack.json").read_bytes()).hexdigest().upper()
-        self.assertEqual(actual, "72B33BD7040F3B55870FC3CA707FB069E9B21DA56C7C153F8541CEADC0114EEE")
+        self.assertEqual(actual, "80E7FD111ECEA751BCC1DC614A04BC6CADB70C42F87B4D416C3C4BC42FAE001D")
         self.assertEqual(self.renderer.pack["templateVersion"], "1.4.1")
         self.assertIs(self.renderer.pack["actionable"], False)
 

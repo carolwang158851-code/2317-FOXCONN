@@ -16,6 +16,20 @@ PACKAGE_ROOT = MODULE_ROOT.parents[1]
 SRC_ROOT = MODULE_ROOT / "src"
 FIXTURE_PATH = MODULE_ROOT / "tests" / "fixtures" / "phaseb1" / "monthly_revenue_fixture.json"
 AUTHORITY_BASELINES_PATH = MODULE_ROOT / "tests" / "fixtures" / "authority_baselines.json"
+GOVERNED_Q2_FIXTURE_ROOT = MODULE_ROOT / "tests" / "fixtures" / "phaseb1" / "governed_q2"
+GOVERNED_Q2_EVIDENCE_ROOT = GOVERNED_Q2_FIXTURE_ROOT / "runtime"
+GOVERNED_Q2_SOURCE_MOTHER = (
+    GOVERNED_Q2_FIXTURE_ROOT
+    / "source"
+    / "HON_HAI_FY2026_Q2_ENTERPRISE_VALUE_WAR_REPORT.html"
+)
+CURRENT_AUTHORITY_RECEIPT_REL = Path(
+    "contracts/p1008_research_plugin/acceptance/v1.1/"
+    "P1008_FY2026Q2_ROIC_FINALIZATION_CLOSEOUT.json"
+)
+CURRENT_AUTHORITY_RECEIPT_SHA256 = (
+    "B1D431C6380E2914E40203DA6A077B3414029F100FA14FB0108E63F5D4069050"
+)
 sys.path.insert(0, str(SRC_ROOT))
 
 
@@ -35,6 +49,19 @@ def fixture() -> dict[str, object]:
     return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
 
 
+def current_authority_hashes() -> dict[str, str]:
+    raw = (PACKAGE_ROOT / CURRENT_AUTHORITY_RECEIPT_REL).read_bytes()
+    if hashlib.sha256(raw).hexdigest().upper() != CURRENT_AUTHORITY_RECEIPT_SHA256:
+        raise RuntimeError("Current authority amendment receipt hash mismatch")
+    receipt = json.loads(raw.decode("utf-8-sig"))
+    return {
+        str(receipt["authorityManifest"]["path"]): str(
+            receipt["authorityManifest"]["sha256"]
+        ),
+        **{str(path): str(digest) for path, digest in receipt["authorityFiles"].items()},
+    }
+
+
 def write_fixture(root: Path, payload: dict[str, object]) -> Path:
     path = root / "fixture.json"
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8", newline="\n")
@@ -43,26 +70,28 @@ def write_fixture(root: Path, payload: dict[str, object]) -> Path:
 
 def copy_gfs_contract_overlay(package: Path) -> None:
     contracts = package / "contracts" / "p1008_research_plugin"
-    (contracts / "v2.0").mkdir(parents=True, exist_ok=True)
-    shutil.copy2(
+    v2_manifest = (
         PACKAGE_ROOT
         / "contracts"
         / "p1008_research_plugin"
         / "v2.0"
-        / "contract.manifest.json",
-        contracts / "v2.0" / "contract.manifest.json",
+        / "contract.manifest.json"
     )
-    shutil.copytree(
-        PACKAGE_ROOT / "contracts" / "p1008_research_plugin" / "v2.1",
-        contracts / "v2.1",
-    )
+    if v2_manifest.is_file():
+        (contracts / "v2.0").mkdir(parents=True, exist_ok=True)
+        shutil.copy2(v2_manifest, contracts / "v2.0" / "contract.manifest.json")
+    v21 = PACKAGE_ROOT / "contracts" / "p1008_research_plugin" / "v2.1"
+    if v21.is_dir():
+        shutil.copytree(v21, contracts / "v2.1")
 
 
 def copy_quarterly_authority_contract(package: Path) -> None:
-    shutil.copytree(
-        PACKAGE_ROOT / "contracts" / "p1008_quarterly_authority",
-        package / "contracts" / "p1008_quarterly_authority",
-    )
+    source = PACKAGE_ROOT / "contracts" / "p1008_quarterly_authority"
+    if source.is_dir():
+        shutil.copytree(
+            source,
+            package / "contracts" / "p1008_quarterly_authority",
+        )
 
 
 def authority_sandbox(root: Path) -> Path:

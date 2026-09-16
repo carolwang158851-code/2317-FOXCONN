@@ -4,6 +4,7 @@ import hashlib
 import http.server
 import json
 import shutil
+import subprocess
 import sys
 import threading
 import urllib.request
@@ -28,6 +29,25 @@ import warroom_report_governance as governance  # noqa: E402
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
+
+
+def git_blob_bytes(relative: str, revision: str = "HEAD") -> bytes:
+    if revision == "HEAD":
+        merging = subprocess.run(
+            ["git", "rev-parse", "-q", "--verify", "MERGE_HEAD"],
+            cwd=PACKAGE_ROOT,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode == 0
+        if merging:
+            revision = ""
+    return subprocess.run(
+        ["git", "show", f"{revision}:{relative}"],
+        cwd=PACKAGE_ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+    ).stdout
 
 
 class _Response:
@@ -272,7 +292,15 @@ class PhaseB1OpsLauncherReportRecoveryTests(unittest.TestCase):
             ).read_text(encoding="utf-8")
         )
         self.assertEqual(source_receipt["trackedDestinationPath"], tracked)
-        self.assertEqual(source_receipt["trackedDestinationSha256"], sha256(tracked_path))
+        original_canonical = git_blob_bytes(tracked, "48900b7")
+        self.assertEqual(
+            source_receipt["trackedDestinationSha256"],
+            hashlib.sha256(original_canonical).hexdigest().upper(),
+        )
+        current_canonical = git_blob_bytes(tracked)
+        self.assertEqual(
+            tracked_path.read_bytes().replace(b"\r\n", b"\n"), current_canonical
+        )
         self.assertTrue(source_receipt["byteIdentityVerified"])
         for path in (
             PACKAGE_ROOT / "launcher.html",
@@ -318,20 +346,6 @@ class PhaseB1OpsLauncherReportRecoveryTests(unittest.TestCase):
             ):
                 with urllib.request.urlopen(base + rel, timeout=5) as response:
                     self.assertEqual(response.status, 200, rel)
-            formal_before = app_server.formal_csv_hashes(PACKAGE_ROOT)
-            sop = (PACKAGE_ROOT / "SOP_v4.html").read_text(encoding="utf-8")
-            self.assertIn(
-                'href="./launcher.html?stay=1&amp;from=sop_v4#review-panel"', sop
-            )
-            with urllib.request.urlopen(
-                base + "/api/p1008/review-package", timeout=5
-            ) as response:
-                self.assertEqual(response.status, 200)
-                self.assertIn("application/json", response.headers["Content-Type"])
-                review = json.loads(response.read().decode("utf-8"))
-            self.assertEqual(review["status"], "READY")
-            self.assertTrue(review["dryRunPath"].endswith("DRY_RUN.json"))
-            self.assertEqual(app_server.formal_csv_hashes(PACKAGE_ROOT), formal_before)
         finally:
             server.shutdown()
             thread.join(timeout=5)

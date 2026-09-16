@@ -108,6 +108,12 @@ class WarReportProductionRuntimeV1Tests(unittest.TestCase):
         self.assertEqual(manifest["reportChapterCount"], 11)
         self.assertEqual(sum(rendered.count(f'<section id="s{i}"') for i in range(1, 12)), 11)
         self.assertIn("Q2 單季同口徑 ROIC 待補", rendered)
+        self.assertEqual(
+            analysis["analysis"].quarterly_earnings.valuation_scenarios[
+                "valuationTimeBasis"
+            ]["postEventValuation"]["status"],
+            "AVAILABLE",
+        )
         self.assertTrue(result["protected_state_unchanged"])
 
     def test_r4_quarterly_requires_fcf_conversion(self) -> None:
@@ -340,9 +346,13 @@ class WarReportProductionRuntimeV1Tests(unittest.TestCase):
 
     def test_r43_smart_requires_durable_cash_per_share_and_valuation_confirmation(self) -> None:
         for phrase in (
-            "Q3單季CFO轉正只算初步改善", "H2、全年或TTM現金轉化恢復",
+            "後續累計CFO改善只算初步改善", "H2、全年或TTM現金轉化恢復",
             "每股價值", "FCF／相容加權平均股數", "估值第二階段", "形成再評價風險",
         ):
+            self.assertIn(phrase, self.html)
+
+    def test_r43a_cash_flow_keeps_official_h1_period_semantics(self) -> None:
+        for phrase in ("2026H1 CFO", "-691.22億元", "2026H1 FCF", "-1500.09億元", "不是Q2單季現金流"):
             self.assertIn(phrase, self.html)
 
     def test_r44_editorial_has_no_machine_or_unsupported_forward_language(self) -> None:

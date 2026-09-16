@@ -1,0 +1,85 @@
+{
+  "schemaVersion": "1.0",
+  "receiptId": "P1008_FY2026Q2_ROIC_FINALIZATION_CLOSEOUT_20260829",
+  "scopeId": "P1008-FY2026Q2-ROIC-FINALIZATION-20260829",
+  "acceptedBy": "Owner",
+  "acceptedAt": "2026-08-29",
+  "ownerApprovalReference": "P1008 FY2026Q2 ROIC FINALIZATION - MINIMAL CLOSEOUT",
+  "acceptanceStatus": "P1008_FY2026Q2_ROIC_FINALIZED",
+  "previousReceipt": {
+    "path": "contracts/p1008_research_plugin/acceptance/v1.1/P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT.json",
+    "sha256": "93176AC4E6E42B034500A27742077990C97B22E70C9BE2C2E1D80DFA85A0A390"
+  },
+  "sourceLineage": {
+    "parentCommit": "fc6af5072768ba92c90e4c7d7bc54dc10d407e3c",
+    "authorityMutation": true,
+    "newGovernancePhase": false,
+    "publication": false
+  },
+  "authorityManifest": {
+    "path": "data/CSV_AUTHORITY_MANIFEST.json",
+    "sha256": "C54056B72AEBF25ED1B2AE106AF86E761CE57D79F1999922E4B6487FE2381191",
+    "manifestVersion": "1.4.1"
+  },
+  "authorityFiles": {
+    "data/2317_master_v9.csv": "B3137F0A94895CCA1B589929F2DE368EFD9BC32BDD6609A375F78BE8610AE0EE",
+    "data/2317_daily_price.csv": "4FF01364DF90E1C3CE75174C9714B6E0F817F7972CE2309C8052AE1CCDEC5953",
+    "data/2317_daily_market_activity.csv": "899B2F8C103C0DC2993757391DF4617014146FEDE89D82D11B52C53208364E83",
+    "data/2317_cash_flow_authority.csv": "082ECA44A96A06F7DAE10DD33CBAF77C75DABA9B1B4DEA27B5B930F8CE8CD95C",
+    "data/macro_snapshot.csv": "7C3E5F320FBD7F1558CBA670246B5A3062060769A0420A105A4CAF8499DABC63",
+    "data/macro_event_observations.csv": "76B93F8932BA606390D44D68BD0D57D0BE7CB5D1D1364183F192A062D8B94BF2",
+    "data/fx_trend_observations.csv": "29343973B163D3E0B61EF6E6BBD42862E3A324D3E8CC20DE3069FA77D22A8267"
+  },
+  "fy2026Q2Roic": {
+    "canonicalValue": "12.35",
+    "unit": "PERCENT",
+    "period": "2026Q2",
+    "classification": "DERIVED_VERIFIED",
+    "displayLabelZh": "12.35%（推算）",
+    "annualizedNopatMillionTwd": "277886.5536",
+    "interestBearingDebtMillionTwd": "1304531",
+    "parentEquityMillionTwd": "1907936.607",
+    "cashAndCashEquivalentsMillionTwd": "963002",
+    "investedCapitalMillionTwd": "2249465.607",
+    "formula": "277886.5536 / 2249465.607 * 100",
+    "interestBearingDebtComponents": {
+      "shortTermBorrowingsMillionTwd": "845349",
+      "commercialPaperAndAcceptancesMillionTwd": "93459",
+      "currentPortionLongTermLiabilitiesMillionTwd": "64303",
+      "bondsPayableNoncurrentMillionTwd": "294708",
+      "bankBorrowingsNoncurrentMillionTwd": "6712"
+    },
+    "sourceLocator": "https://mops.twse.com.tw/mops/web/t164sb03?co_id=2317&year=115&season=02",
+    "trendComparableToQ1": false,
+    "trendRestrictionZh": "Q1未獲授權以相同直接有息負債方法重算，不得宣稱Q1至Q2為有效惡化或改善趨勢。"
+  },
+  "rejectedCandidateHistory": [
+    {
+      "value": "16.46",
+      "classification": "REJECTED",
+      "reasonCode": "NET_CASH_DENOMINATOR_SCOPE_MISMATCH",
+      "reasonZh": "Cash and Cash Equivalents 963,002百萬元與公司Net Cash所含現金加定存口徑不同，不得用Cash減Net Cash反推有息負債743,193百萬元。",
+      "canonical": false
+    }
+  ],
+  "preservedKpis": {
+    "bvps": "136.02",
+    "pb": "1.853",
+    "roe": "6.21",
+    "roePeriod": "2026H1",
+    "roeAnnualized": false
+  },
+  "macroAuthorityDecision": {
+    "unapprovedRowsAccepted": false,
+    "requiredSha256": "7C3E5F320FBD7F1558CBA670246B5A3062060769A0420A105A4CAF8499DABC63"
+  },
+  "formalPublishExecutedByThisReceipt": false,
+  "automaticReportGeneration": false,
+  "automaticPublicReportPublication": false,
+  "ruleHoldMidrModified": false,
+  "runtimeSqliteModified": false,
+  "openAiCalls": 0,
+  "webSearchCalls": 0,
+  "canvaCalls": 0,
+  "actionable": false
+}
