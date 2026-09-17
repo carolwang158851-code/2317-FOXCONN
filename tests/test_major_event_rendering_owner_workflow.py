@@ -32,7 +32,9 @@ class MajorEventRenderingOwnerWorkflowTests(unittest.TestCase):
             os.environ, {"P1008_GOVERNED_EVIDENCE_ROOT": ""}
         )
         self._evidence_env.start()
-        self.base = ROOT / "runtime" / "major_event_rendering_test_scratch"
+        configured = os.environ.get("P1008_TEST_TEMP_ROOT", "").strip()
+        controlled = Path(configured) if configured else ROOT / "runtime"
+        self.base = controlled / "major_event_rendering_test_scratch"
         self.base.mkdir(parents=True, exist_ok=True)
         self.root = self.base / uuid.uuid4().hex
         self.root.mkdir()

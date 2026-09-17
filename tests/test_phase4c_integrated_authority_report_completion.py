@@ -33,7 +33,9 @@ class Phase4CIntegratedAuthorityReportCompletionTests(unittest.TestCase):
             os.environ, {"P1008_GOVERNED_EVIDENCE_ROOT": ""}
         )
         self._evidence_env.start()
-        self.base = ROOT / "runtime" / "phase4c_completion_test_scratch"
+        configured = os.environ.get("P1008_TEST_TEMP_ROOT", "").strip()
+        controlled = Path(configured) if configured else ROOT / "runtime"
+        self.base = controlled / "phase4c_completion_test_scratch"
         self.base.mkdir(parents=True, exist_ok=True)
         self.root = self.base / uuid.uuid4().hex
         self.root.mkdir()
@@ -116,11 +118,20 @@ class Phase4CIntegratedAuthorityReportCompletionTests(unittest.TestCase):
 
     def test_candidate_hash_or_governance_drift_fails_closed(self):
         fake = self.root / "fake_code"
-        shutil.copytree(ROOT / "authority_candidates", fake / "authority_candidates")
-        shutil.copytree(
-            ROOT / "contracts" / "p1008_authority_integration",
-            fake / "contracts" / "p1008_authority_integration",
-        )
+        for source, destination in (
+            (ROOT / "authority_candidates", fake / "authority_candidates"),
+            (
+                ROOT / "contracts" / "p1008_authority_integration",
+                fake / "contracts" / "p1008_authority_integration",
+            ),
+        ):
+            for source_path in source.rglob("*"):
+                target_path = destination / source_path.relative_to(source)
+                if source_path.is_dir():
+                    target_path.mkdir(parents=True, exist_ok=True)
+                else:
+                    target_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(source_path, target_path)
         target = fake / "authority_candidates/phase3a_canonical_v1/data/2317_daily_price.csv"
         target.write_bytes(target.read_bytes() + b"tampered")
         with self.assertRaises(authority.IntegratedAuthorityError):
