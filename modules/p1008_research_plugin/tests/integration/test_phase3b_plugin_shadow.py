@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 import sys
-import tempfile
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
+from uuid import uuid4
 
 
 MODULE_ROOT = Path(__file__).resolve().parents[2]
@@ -33,6 +35,23 @@ def load_periodic_report_module():
     return module
 
 
+@contextmanager
+def governed_plugin_sandbox(prefix: str):
+    parent = PACKAGE_ROOT / "runtime" / "research_plugin" / "test_sandboxes"
+    parent.mkdir(parents=True, exist_ok=True)
+    path = parent / f"{prefix}{uuid4().hex}"
+    path.mkdir()
+    try:
+        yield path
+    finally:
+        shutil.rmtree(path, ignore_errors=False)
+        for candidate in (parent, parent.parent, parent.parent.parent):
+            try:
+                candidate.rmdir()
+            except OSError:
+                break
+
+
 class Phase3BPluginShadowIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.fixture = load_fixture()
@@ -54,8 +73,8 @@ class Phase3BPluginShadowIntegrationTests(unittest.TestCase):
         )
 
     def test_no_material_change_writes_candidate_without_synthesis(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="p1008-p3b-no-delta-") as temp_dir:
-            result = self.run_case("no_material_daily", Path(temp_dir))
+        with governed_plugin_sandbox("p1008-p3b-no-delta-") as temp_dir:
+            result = self.run_case("no_material_daily", temp_dir)
             report = result["report"]
             self.assertTrue(report.no_material_change)
             self.assertEqual(report.status, "NO_MATERIAL_CHANGE")
@@ -64,7 +83,7 @@ class Phase3BPluginShadowIntegrationTests(unittest.TestCase):
             self.assertEqual(report.changed_fields, [])
             self.assertEqual(report.evidence_ids, [])
             self.assertFalse(report.actionable)
-            latest = Path(temp_dir) / result["artifact"]["latest"]
+            latest = temp_dir / result["artifact"]["latest"]
             self.assertTrue(latest.is_file())
 
     def test_formal_war_room_baseline_is_read_only_and_hash_stable(self) -> None:
@@ -85,12 +104,12 @@ class Phase3BPluginShadowIntegrationTests(unittest.TestCase):
             "quarterly_earnings": 1,
             "major_event_financial": 1,
         }
-        with tempfile.TemporaryDirectory(prefix="p1008-p3b-smoke-") as temp_dir:
+        with governed_plugin_sandbox("p1008-p3b-smoke-") as temp_dir:
             for case_name, expected_calls in expected_synthesis.items():
                 with self.subTest(case=case_name):
                     result = self.run_case(
                         case_name,
-                        Path(temp_dir) / case_name,
+                        temp_dir / case_name,
                     )
                     report = result["report"]
                     self.assertEqual(result["synthesis_calls"], expected_calls)
@@ -110,9 +129,9 @@ class Phase3BPluginShadowIntegrationTests(unittest.TestCase):
                     )
 
     def test_material_fixture_is_byte_deterministic(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="p1008-p3b-replay-") as temp_dir:
-            first = self.run_case("monthly_revenue", Path(temp_dir) / "first")["report"]
-            second = self.run_case("monthly_revenue", Path(temp_dir) / "second")["report"]
+        with governed_plugin_sandbox("p1008-p3b-replay-") as temp_dir:
+            first = self.run_case("monthly_revenue", temp_dir / "first")["report"]
+            second = self.run_case("monthly_revenue", temp_dir / "second")["report"]
             first_json = json.dumps(
                 first.model_dump(mode="json", by_alias=True),
                 ensure_ascii=False,
@@ -130,10 +149,10 @@ class Phase3BPluginShadowIntegrationTests(unittest.TestCase):
             self.assertEqual(set(first.changed_fields), {"revenue"})
 
     def test_periodic_report_reads_and_separates_shadow_candidate(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="p1008-p3b-periodic-") as temp_dir:
-            result = self.run_case("monthly_revenue", Path(temp_dir))
+        with governed_plugin_sandbox("p1008-p3b-periodic-") as temp_dir:
+            result = self.run_case("monthly_revenue", temp_dir)
             periodic = load_periodic_report_module()
-            candidate = periodic.read_shadow_candidate(Path(temp_dir), self.as_of_date)
+            candidate = periodic.read_shadow_candidate(temp_dir, self.as_of_date)
             self.assertIsNotNone(candidate)
             markdown = periodic.append_shadow_candidate("# Existing periodic report\n", candidate)
             self.assertIn("### 戰情室基線", markdown)

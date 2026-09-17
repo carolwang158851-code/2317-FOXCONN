@@ -5,11 +5,13 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sys
-import tempfile
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 from unittest import mock
+from uuid import uuid4
 
 from pydantic import BaseModel
 
@@ -41,6 +43,23 @@ def fixture() -> dict[str, object]:
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
+
+
+@contextmanager
+def governed_plugin_sandbox(prefix: str):
+    parent = PACKAGE_ROOT / "runtime" / "research_plugin" / "test_sandboxes"
+    parent.mkdir(parents=True, exist_ok=True)
+    path = parent / f"{prefix}{uuid4().hex}"
+    path.mkdir()
+    try:
+        yield path
+    finally:
+        shutil.rmtree(path, ignore_errors=False)
+        for candidate in (parent, parent.parent, parent.parent.parent):
+            try:
+                candidate.rmdir()
+            except OSError:
+                break
 
 
 class Phase3BPluginBoundaryTests(unittest.TestCase):
@@ -131,14 +150,14 @@ class Phase3BPluginBoundaryTests(unittest.TestCase):
             watched.append(runtime_db)
         before = {str(path): sha256(path) for path in watched}
 
-        with tempfile.TemporaryDirectory(prefix="p1008-p3b-boundary-") as temp_dir:
+        with governed_plugin_sandbox("p1008-p3b-boundary-") as temp_dir:
             manager = RuntimeManager(PACKAGE_ROOT, RuntimeConfig.phase3b_shadow())
             result = manager.execute_plugin_shadow(
                 run_type=self.monthly["run_type"],
                 as_of_date=self.fixture["as_of_date"],
                 packets=self.monthly["packets"],
                 baseline=self.fixture["baseline"],
-                output_root=Path(temp_dir),
+                output_root=temp_dir,
             )
 
         after = {str(path): sha256(path) for path in watched}
@@ -155,7 +174,7 @@ class Phase3BPluginBoundaryTests(unittest.TestCase):
             self.assertFalse(result[field], field)
 
     def test_mock_output_is_non_actionable_and_has_no_trading_instruction(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="p1008-p3b-output-") as temp_dir:
+        with governed_plugin_sandbox("p1008-p3b-output-") as temp_dir:
             result = RuntimeManager(
                 PACKAGE_ROOT, RuntimeConfig.phase3b_shadow()
             ).execute_plugin_shadow(
@@ -163,7 +182,7 @@ class Phase3BPluginBoundaryTests(unittest.TestCase):
                 as_of_date=self.fixture["as_of_date"],
                 packets=self.monthly["packets"],
                 baseline=self.fixture["baseline"],
-                output_root=Path(temp_dir),
+                output_root=temp_dir,
             )
         output = json.dumps(
             result["report"].model_dump(mode="json", by_alias=True),
