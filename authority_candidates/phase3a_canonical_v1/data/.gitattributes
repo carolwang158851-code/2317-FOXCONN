@@ -1,0 +1,6 @@
+2317_daily_market_activity.csv -text -whitespace
+2317_daily_price.csv -text -whitespace
+CSV_AUTHORITY_MANIFEST.json -text -whitespace
+fx_trend_observations.csv -text -whitespace
+macro_event_observations.csv -text -whitespace
+macro_snapshot.csv -text -whitespace
