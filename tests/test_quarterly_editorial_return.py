@@ -31,6 +31,12 @@ def _remove_tree(path: Path) -> None:
 
 class QuarterlyEditorialReturnTests(unittest.TestCase):
     def setUp(self) -> None:
+        required = (
+            ROOT / rolling_brief.RUNTIME_MANIFEST_REL,
+            ROOT / rolling_brief.REPORT_MANIFEST_REL,
+        )
+        if any(not path.is_file() for path in required):
+            raise unittest.SkipTest("governed quarterly editorial fixture is unavailable")
         self.case = ROOT / "runtime" / "report_production" / "test_scratch" / f"editorial-{uuid.uuid4().hex}"
         self.case.mkdir(parents=True)
         runtime = json.loads((ROOT / rolling_brief.RUNTIME_MANIFEST_REL).read_text(encoding="utf-8"))

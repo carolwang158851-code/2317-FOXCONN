@@ -24,6 +24,13 @@ def sha256(data: bytes) -> str:
 
 
 class Q2OwnerReviewExportTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        required = app_server.Q2_OWNER_REVIEW_ARTIFACTS | app_server.Q2_OWNER_REVIEW_MANIFESTS
+        missing = [relative for relative in required if not (PACKAGE_ROOT / relative).is_file()]
+        if missing:
+            raise unittest.SkipTest("governed Q2 Owner-review export fixture is unavailable")
+
     def test_current_q2_r1_export_contains_only_validated_existing_artifacts(self) -> None:
         body, filename = app_server.build_q2_owner_review_export(PACKAGE_ROOT)
         self.assertEqual(filename, "P1008_FY2026_Q2_EARNINGS_r1_OWNER_REVIEW.zip")

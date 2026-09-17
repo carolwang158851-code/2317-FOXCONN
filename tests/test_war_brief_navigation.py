@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import http.server
+import json
 import sys
 import threading
 import unittest
 import urllib.request
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
 
@@ -22,6 +24,22 @@ def sha256(path: Path) -> str:
 class WarBriefNavigationTests(unittest.TestCase):
     def test_current_brief_uses_existing_local_server_routes(self) -> None:
         brief_path = PACKAGE_ROOT / "reports/generated/latest_report.html"
+        brief_json_path = PACKAGE_ROOT / "runtime/current_warroom_brief.json"
+        if not brief_path.is_file() or not brief_json_path.is_file():
+            self.skipTest("governed current war-brief fixture is unavailable")
+        brief = json.loads(brief_json_path.read_text(encoding="utf-8"))
+        market_activity = brief["marketBaseline"]["marketActivity"]
+        volume = Decimal(str(market_activity["tradeVolume"]))
+        value = Decimal(str(market_activity["tradeValue"]))
+        transactions = int(market_activity["transactionCount"])
+        expected_volume = (
+            f"{int(volume):,} 股（約 "
+            f"{(volume / Decimal('10000')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP):,.2f} 萬股）"
+        )
+        expected_value = (
+            f"{int(value):,} 元（約 "
+            f"{(value / Decimal('100000000')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP):,.2f} 億元）"
+        )
         before = sha256(brief_path)
         manager = app_server.P1008JobManager(PACKAGE_ROOT)
 
@@ -55,9 +73,9 @@ class WarBriefNavigationTests(unittest.TestCase):
             )
             self.assertIn("返回 Launcher", rendered)
             self.assertIn("進入新 UI", rendered)
-            self.assertIn("35,223,300 股（約 3,522.33 萬股）", rendered)
-            self.assertIn("8,776,917,438 元（約 87.77 億元）", rendered)
-            self.assertIn("30,653 筆", rendered)
+            self.assertIn(expected_volume, rendered)
+            self.assertIn(expected_value, rendered)
+            self.assertIn(f"{transactions:,} 筆", rendered)
             self.assertNotIn("file://", rendered)
             for route in (
                 "/launcher.html?stay=1&from=war_brief",

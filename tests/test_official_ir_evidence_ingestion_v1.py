@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import shutil
+import stat
 import sys
 import unittest
 from uuid import uuid4
@@ -79,7 +81,11 @@ class OfficialIREvidenceIngestionTests(unittest.TestCase):
         shutil.copy2(ROOT / "tools" / "warroom_report_governance.py", self.root / "tools")
 
     def tearDown(self) -> None:
-        shutil.rmtree(self.root, ignore_errors=False)
+        def clear_read_only(function, target, _error):
+            os.chmod(target, stat.S_IWRITE)
+            function(target)
+
+        shutil.rmtree(self.root, onexc=clear_read_only)
         try:
             self.root.parent.rmdir()
             self.root.parent.parent.rmdir()

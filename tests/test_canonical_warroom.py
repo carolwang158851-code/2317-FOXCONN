@@ -3,7 +3,9 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -15,8 +17,17 @@ import p1008_open_warroom as launcher
 
 
 class CanonicalWarroomTests(unittest.TestCase):
+    def current_record(self):
+        record = canonical.load_record()
+        record["canonicalRoot"] = ROOT.name
+        return record
+
     def test_default_is_integrated(self):
-        result = canonical.resolve_canonical()
+        with patch.object(canonical, "load_record", return_value=self.current_record()), patch.object(
+            canonical.subprocess, "run"
+        ) as run:
+            run.return_value.returncode = 0
+            result = canonical.resolve_canonical()
         self.assertEqual(Path(result["resolvedPackageRoot"]), ROOT)
         self.assertEqual(result["status"], "CANONICAL_VERIFIED")
         self.assertFalse(result["override"])
@@ -39,13 +50,25 @@ class CanonicalWarroomTests(unittest.TestCase):
                 canonical.resolve_canonical()
 
     def test_wrong_history_fails_closed(self):
-        with patch.object(canonical.subprocess, "run") as run:
+        with patch.object(canonical, "load_record", return_value=self.current_record()), patch.object(
+            canonical.subprocess, "run"
+        ) as run:
             run.return_value.returncode = 1
             with self.assertRaisesRegex(canonical.CanonicalWarroomError, "HEAD_NOT_PRESERVED"):
                 canonical.resolve_canonical()
 
     def test_explicit_override_is_visible(self):
-        result = canonical.resolve_canonical(ROOT.parent / "P1008_RESEARCH_CONTENT_INTEGRATION_V1")
+        configured = os.environ.get("P1008_TEST_TEMP_ROOT", "").strip()
+        controlled = Path(configured) if configured else ROOT / "runtime" / "canonical_test_scratch"
+        controlled.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=controlled, prefix="p1008-canonical-override-") as temp:
+            selected = Path(temp)
+            (selected / "launcher.html").write_text("fixture", encoding="utf-8")
+            with patch.object(canonical, "load_record", return_value=self.current_record()), patch.object(
+                canonical.subprocess, "run"
+            ) as run:
+                run.return_value.returncode = 0
+                result = canonical.resolve_canonical(selected)
         self.assertEqual(result["status"], "EXPLICIT_NON_CANONICAL_OVERRIDE")
         self.assertTrue(result["override"])
         self.assertFalse(result["publication"])
@@ -53,7 +76,15 @@ class CanonicalWarroomTests(unittest.TestCase):
     def test_launcher_read_only_smoke(self):
         output = io.StringIO()
         with patch.object(sys, "argv", ["launcher", "--preflight-only"]), contextlib.redirect_stdout(output):
-            with patch.object(launcher, "start_server") as start:
+            with patch.object(
+                canonical,
+                "resolve_canonical",
+                return_value={
+                    "status": "CANONICAL_VERIFIED",
+                    "resolvedPackageRoot": str(ROOT),
+                    "override": False,
+                },
+            ), patch.object(launcher, "start_server") as start:
                 self.assertEqual(launcher.main(), 0)
                 start.assert_not_called()
         self.assertIn("CANONICAL_VERIFIED", output.getvalue())

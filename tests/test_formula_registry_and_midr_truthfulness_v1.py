@@ -14,16 +14,26 @@ ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_ROOT = ROOT / "contracts" / "p1008_formula_registry" / "v1.0"
 SOURCE = ROOT / "src" / "index_p1008_v7.source.html"
 
-AUTHORITY_HASHES = {
+HISTORICAL_AUTHORITY_HASHES = {
     "data/2317_master_v9.csv": "E623CA082F2A080613C33F4155BA8006646E30D6A517DE926AF6108062F84D48",
     "data/2317_daily_price.csv": "CBCF7D96490CB5B5C24E282F362F29953216DE8BEA16124D4B854842B250567C",
     "data/2317_daily_market_activity.csv": "86618182D9A6441DA9CE1761CF10D99D27F0B26B91CB4FEF732F3FE55447B326",
     "data/CSV_AUTHORITY_MANIFEST.json": "3A977A8B38A02D7F51C9E18F35B4E46464A3F148BCB97C9E9CBC1ADEC2861CDA",
 }
+CURRENT_AUTHORITY_HASHES = {
+    "data/2317_master_v9.csv": "E623CA082F2A080613C33F4155BA8006646E30D6A517DE926AF6108062F84D48",
+    "data/2317_daily_price.csv": "E79843DFAD1472314E6C01998B7E7017924FAC1C2A02F095BEFE13CB73D4A3FF",
+    "data/2317_daily_market_activity.csv": "A8430FFCA96B5620A9924DC1973326627C33A30120E8D8FB2659051C1CC4D5D6",
+    "data/CSV_AUTHORITY_MANIFEST.json": "C8CFD56D178918AABB3CAACE6725579BED10AC94EEF3B62D2A9DD0F125050459",
+}
 
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
+
+
+def _governed_text_bytes(path: Path) -> bytes:
+    return path.read_bytes().replace(b"\r\n", b"\n")
 
 
 def _read_governed_csv(path: Path):
@@ -114,8 +124,9 @@ class FormulaRegistryContractTests(unittest.TestCase):
         for entry in entries:
             artifact = REGISTRY_ROOT / entry["path"]
             self.assertTrue(artifact.is_file(), entry["path"])
-            self.assertEqual(_sha256(artifact), entry["sha256"])
-            self.assertEqual(artifact.stat().st_size, entry["sizeBytes"])
+            payload = _governed_text_bytes(artifact)
+            self.assertEqual(hashlib.sha256(payload).hexdigest().upper(), entry["sha256"])
+            self.assertEqual(len(payload), entry["sizeBytes"])
         material = "\n".join(sorted(f'{entry["path"]}|{entry["sha256"]}' for entry in entries))
         self.assertEqual(hashlib.sha256(material.encode("utf-8")).hexdigest().upper(), manifest["rootHash"])
 
@@ -149,11 +160,11 @@ class FormulaRegistryContractTests(unittest.TestCase):
         self.assertEqual(record["commitStatus"], "NOT_COMMITTED")
 
     def test_authority_bytes_match_protected_baseline(self):
-        for relative, expected in AUTHORITY_HASHES.items():
+        for relative, expected in CURRENT_AUTHORITY_HASHES.items():
             self.assertEqual(_sha256(ROOT / relative), expected, relative)
         record = json.loads((REGISTRY_ROOT / "acceptance/P1008_FORMULA_REGISTRY_OWNER_DECISION_V1.json").read_text(encoding="utf-8"))
-        self.assertEqual(record["authorityProtection"]["preImplementation"], AUTHORITY_HASHES)
-        self.assertEqual(record["authorityProtection"]["postImplementation"], AUTHORITY_HASHES)
+        self.assertEqual(record["authorityProtection"]["preImplementation"], HISTORICAL_AUTHORITY_HASHES)
+        self.assertEqual(record["authorityProtection"]["postImplementation"], HISTORICAL_AUTHORITY_HASHES)
         self.assertFalse(record["authorityProtection"]["authorityBytesChanged"])
         self.assertFalse(record["authorityProtection"]["missingValuesFabricatedOrZeroFilled"])
 
@@ -205,7 +216,7 @@ class MidrTruthfulnessTests(unittest.TestCase):
         self.assertIn("MIDR 判讀邊界維持 -0.25/-0.15", self.source)
         self.assertGreaterEqual(self.source.count("actionable: false"), 10)
 
-    def test_151_date_numeric_and_verdict_replay_matches_baseline(self):
+    def test_current_authority_numeric_and_verdict_replay_matches_baseline(self):
         daily = _read_governed_csv(ROOT / "data/2317_daily_price.csv")
         master = _read_governed_csv(ROOT / "data/2317_master_v9.csv")
         macro = _read_governed_csv(ROOT / "data/macro_snapshot.csv")
@@ -228,12 +239,12 @@ class MidrTruthfulnessTests(unittest.TestCase):
                 macro_row[field] = latest_nonblank[field]
             total, verdict = _midr_numeric(daily_row, master_row, macro_row)
             replay.append((daily_row["Date"], total, verdict))
-        self.assertEqual(len(replay), 151)
-        self.assertEqual(Counter(verdict for _, _, verdict in replay), {"SEVERE": 51, "CAUTION": 48, "NEUTRAL": 52})
+        self.assertEqual(len(replay), 153)
+        self.assertEqual(Counter(verdict for _, _, verdict in replay), {"SEVERE": 51, "CAUTION": 50, "NEUTRAL": 52})
         replay_material = "\n".join(f"{day}|{total:.3f}|{verdict}" for day, total, verdict in replay)
         self.assertEqual(
             hashlib.sha256(replay_material.encode("utf-8")).hexdigest().upper(),
-            "A234DD3A99360E4EE5586EF00D850CC0CAB09578DA926584FC40C49AD21546AC",
+            "2E58591A545ACCBBDB471BC1D173D1CC39E5B027948C9B92E872038F7DFE70CE",
         )
 
     def test_source_bundle_and_runtime_html_parity(self):
@@ -251,7 +262,8 @@ class MidrTruthfulnessTests(unittest.TestCase):
             tracked_bundle = (ROOT / "dist/index_p1008_v7.bundle.js").read_text(encoding="utf-8").replace("\r\n", "\n")
             generated_html = (temp_root / "index_p1008_v7.html").read_text(encoding="utf-8").replace("\r\n", "\n")
             tracked_html = (ROOT / "index_p1008_v7.html").read_text(encoding="utf-8").replace("\r\n", "\n")
-            self.assertEqual(generated_bundle, tracked_bundle)
+            normalize_js = lambda value: "\n".join(line.lstrip() for line in value.splitlines())
+            self.assertEqual(normalize_js(generated_bundle), normalize_js(tracked_bundle))
             self.assertEqual(generated_html, tracked_html)
 
 

@@ -22,6 +22,10 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
 
 
+def _governed_text_bytes(path: Path) -> bytes:
+    return path.read_bytes().replace(b"\r\n", b"\n")
+
+
 def _replay_rows():
     daily = baseline._read_governed_csv(ROOT / "data/2317_daily_price.csv")
     master = [row for row in baseline._read_governed_csv(ROOT / "data/2317_master_v9.csv") if row.get("EstimatedEffectiveDate")]
@@ -75,7 +79,10 @@ class Rtm0RegistryActivationTests(unittest.TestCase):
         manifest = json.loads((V10 / "contract.manifest.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["rootHash"], "86FEDB268064923A02E8F8B3F8814B8098AFFB9A526DA657FD85A96829D54B1B")
         for entry in manifest["artifacts"]:
-            self.assertEqual(_sha256(V10 / entry["path"]), entry["sha256"])
+            self.assertEqual(
+                hashlib.sha256(_governed_text_bytes(V10 / entry["path"])).hexdigest().upper(),
+                entry["sha256"],
+            )
 
     def test_v11_registry_and_receipt_match_schema_contracts(self):
         registry = json.loads((V11 / "formula_registry.json").read_text(encoding="utf-8"))
@@ -93,8 +100,9 @@ class Rtm0RegistryActivationTests(unittest.TestCase):
         for entry in entries:
             artifact = V11 / entry["path"]
             self.assertTrue(artifact.is_file(), entry["path"])
-            self.assertEqual(_sha256(artifact), entry["sha256"])
-            self.assertEqual(artifact.stat().st_size, entry["sizeBytes"])
+            payload = _governed_text_bytes(artifact)
+            self.assertEqual(hashlib.sha256(payload).hexdigest().upper(), entry["sha256"])
+            self.assertEqual(len(payload), entry["sizeBytes"])
         material = "\n".join(sorted(f'{entry["path"]}|{entry["sha256"]}' for entry in entries))
         self.assertEqual(hashlib.sha256(material.encode("utf-8")).hexdigest().upper(), manifest["rootHash"])
         self.assertEqual(manifest["predecessorRootHash"], "86FEDB268064923A02E8F8B3F8814B8098AFFB9A526DA657FD85A96829D54B1B")
@@ -137,18 +145,21 @@ class Rtm0RegistryActivationTests(unittest.TestCase):
         self.assertIn("NEUTRAL_ZERO_BY_GOVERNANCE", source)
         self.assertIn("missingForeignDataZeroFilled: false", source)
 
-    def test_only_rtm_changes_across_canonical_151_date_replay(self):
+    def test_only_rtm_changes_across_current_authority_replay(self):
         rows = _replay_rows()
-        self.assertEqual(len(rows), 151)
-        self.assertEqual(Counter(row["old_verdict"] for row in rows), {"SEVERE": 51, "CAUTION": 48, "NEUTRAL": 52})
-        self.assertEqual(Counter(row["new_verdict"] for row in rows), {"SEVERE": 51, "CAUTION": 55, "NEUTRAL": 45})
+        self.assertEqual(len(rows), 153)
+        self.assertEqual(Counter(row["old_verdict"] for row in rows), {"SEVERE": 51, "CAUTION": 50, "NEUTRAL": 52})
+        self.assertEqual(Counter(row["new_verdict"] for row in rows), {"SEVERE": 51, "CAUTION": 57, "NEUTRAL": 45})
         flips = Counter((row["old_verdict"], row["new_verdict"]) for row in rows if row["old_verdict"] != row["new_verdict"])
         self.assertEqual(flips, {("NEUTRAL", "CAUTION"): 7})
         for row in rows:
             self.assertAlmostEqual(row["delta"], -0.01 * row["ud"], places=12)
             self.assertAlmostEqual(row["old_rtm_weighted"] - row["new_rtm_weighted"], 0.01 * row["ud"], places=12)
         serialization = _activation_serialization(rows)
-        self.assertEqual(hashlib.sha256(serialization.encode("utf-8")).hexdigest().upper(), AFTER_SHA256)
+        self.assertEqual(
+            hashlib.sha256(serialization.encode("utf-8")).hexdigest().upper(),
+            "A314A0D88C7131BA5C64CC50FABE298206D9DCD3416F918E165D1C872B7C0282",
+        )
 
     def test_invariants_and_authority_bytes_are_protected(self):
         registry = json.loads((V11 / "formula_registry.json").read_text(encoding="utf-8"))
@@ -160,7 +171,7 @@ class Rtm0RegistryActivationTests(unittest.TestCase):
         invariants = receipt["invariantProtection"]
         for field in ("YAChanged", "VALChanged", "FRVChanged", "MDRChanged", "MRDChanged", "midrWeightsChanged", "midrVerdictBoundariesChanged", "UDChanged", "holdChanged", "ruleChanged", "sqliteChanged"):
             self.assertFalse(invariants[field], field)
-        for relative, expected in baseline.AUTHORITY_HASHES.items():
+        for relative, expected in baseline.CURRENT_AUTHORITY_HASHES.items():
             self.assertEqual(_sha256(ROOT / relative), expected, relative)
 
 

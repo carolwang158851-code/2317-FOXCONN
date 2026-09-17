@@ -19,7 +19,8 @@ import warroom_report_trigger_runtime as runtime
 
 class Q2HistoricalWorkflowCompatibilityTests(unittest.TestCase):
     def setUp(self) -> None:
-        controlled = Path(os.environ.get("P1008_TEST_TEMP_ROOT", Path(os.environ["LOCALAPPDATA"]) / "P1008" / "pytest-temp"))
+        configured = os.environ.get("P1008_TEST_TEMP_ROOT", "").strip()
+        controlled = Path(configured) if configured else Path(tempfile.gettempdir()) / "P1008" / "pytest-temp"
         controlled.mkdir(parents=True, exist_ok=True)
         self.temp = tempfile.TemporaryDirectory(dir=controlled, prefix="p1008-q2-compat-")
         self.addCleanup(self.temp.cleanup)

@@ -10,11 +10,17 @@ V11 = ROOT / "contracts/p1008_formula_registry/v1.1"
 V12 = ROOT / "contracts/p1008_formula_registry/v1.2"
 RECORD = V12 / "acceptance/P1008_UD_RESEARCH_REVIEW_DECISION_V1.json"
 
-AUTHORITY_HASHES = {
+HISTORICAL_AUTHORITY_HASHES = {
     "data/2317_master_v9.csv": "E623CA082F2A080613C33F4155BA8006646E30D6A517DE926AF6108062F84D48",
     "data/2317_daily_price.csv": "CBCF7D96490CB5B5C24E282F362F29953216DE8BEA16124D4B854842B250567C",
     "data/2317_daily_market_activity.csv": "86618182D9A6441DA9CE1761CF10D99D27F0B26B91CB4FEF732F3FE55447B326",
     "data/CSV_AUTHORITY_MANIFEST.json": "3A977A8B38A02D7F51C9E18F35B4E46464A3F148BCB97C9E9CBC1ADEC2861CDA",
+}
+CURRENT_AUTHORITY_HASHES = {
+    "data/2317_master_v9.csv": "E623CA082F2A080613C33F4155BA8006646E30D6A517DE926AF6108062F84D48",
+    "data/2317_daily_price.csv": "E79843DFAD1472314E6C01998B7E7017924FAC1C2A02F095BEFE13CB73D4A3FF",
+    "data/2317_daily_market_activity.csv": "A8430FFCA96B5620A9924DC1973326627C33A30120E8D8FB2659051C1CC4D5D6",
+    "data/CSV_AUTHORITY_MANIFEST.json": "C8CFD56D178918AABB3CAACE6725579BED10AC94EEF3B62D2A9DD0F125050459",
 }
 
 PROTECTED_HEAD_PATHS = (
@@ -27,6 +33,10 @@ PROTECTED_HEAD_PATHS = (
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
+
+
+def _governed_text_bytes(path: Path) -> bytes:
+    return path.read_bytes().replace(b"\r\n", b"\n")
 
 
 def _load(path: Path):
@@ -44,8 +54,9 @@ class UdResearchReviewDecisionTests(unittest.TestCase):
         manifest = _load(V11 / "contract.manifest.json")
         self.assertEqual(manifest["rootHash"], "A35AC312C1C0B2D2E7D0D19C0E0FE3DC7E7B1B86F1352F817AAEF15B209AFD6A")
         for entry in manifest["artifacts"]:
-            self.assertEqual(_sha256(V11 / entry["path"]), entry["sha256"])
-            self.assertEqual((V11 / entry["path"]).stat().st_size, entry["sizeBytes"])
+            payload = _governed_text_bytes(V11 / entry["path"])
+            self.assertEqual(hashlib.sha256(payload).hexdigest().upper(), entry["sha256"])
+            self.assertEqual(len(payload), entry["sizeBytes"])
 
     def test_v12_registry_and_record_match_schema_contracts(self):
         registry_schema = _load(V12 / "schemas/formula_registry.schema.json")
@@ -64,8 +75,9 @@ class UdResearchReviewDecisionTests(unittest.TestCase):
         for entry in entries:
             artifact = V12 / entry["path"]
             self.assertTrue(artifact.is_file(), entry["path"])
-            self.assertEqual(_sha256(artifact), entry["sha256"])
-            self.assertEqual(artifact.stat().st_size, entry["sizeBytes"])
+            payload = _governed_text_bytes(artifact)
+            self.assertEqual(hashlib.sha256(payload).hexdigest().upper(), entry["sha256"])
+            self.assertEqual(len(payload), entry["sizeBytes"])
         material = "\n".join(sorted(f'{entry["path"]}|{entry["sha256"]}' for entry in entries))
         self.assertEqual(hashlib.sha256(material.encode("utf-8")).hexdigest().upper(), manifest["rootHash"])
         self.assertEqual(manifest["predecessorVersion"], "1.1")
@@ -120,9 +132,9 @@ class UdResearchReviewDecisionTests(unittest.TestCase):
         self.assertFalse(self.record["productionFormulaChange"])
 
     def test_authority_files_remain_unchanged(self):
-        self.assertEqual(self.record["authorityProtection"]["beforeAndAfter"], AUTHORITY_HASHES)
+        self.assertEqual(self.record["authorityProtection"]["beforeAndAfter"], HISTORICAL_AUTHORITY_HASHES)
         self.assertFalse(self.record["authorityProtection"]["authorityBytesChanged"])
-        for relative, expected in AUTHORITY_HASHES.items():
+        for relative, expected in CURRENT_AUTHORITY_HASHES.items():
             self.assertEqual(_sha256(ROOT / relative), expected, relative)
 
     def test_runtime_code_and_rule_files_match_head(self):

@@ -608,9 +608,13 @@ class LauncherWiringTests(unittest.TestCase):
     def test_server_exposes_trigger_state_and_never_auto_runs_candidates(self):
         server = (ROOT / "tools/p1008_app_server.py").read_text(encoding="utf-8")
         self.assertIn('state["reportTrigger"] = report_trigger_runtime.launcher_status', server)
-        default_block = server.split('if job_type == "default" and not component_failures:', 1)[0]
+        candidate_marker = 'if job_type in {"analysis-candidate", "report-candidate"}:'
+        default_block, candidate_and_later = server.split(candidate_marker, 1)
         self.assertNotIn("P1008_BUILD_ANALYSIS.bat", default_block)
         self.assertNotIn("P1008_BUILD_REPORT.bat", default_block)
+        candidate_block = candidate_and_later.split('if job_type in {"default", "update-data", "official-ir-scan"}:', 1)[0]
+        self.assertIn("P1008_BUILD_ANALYSIS.bat", candidate_block)
+        self.assertIn("P1008_BUILD_REPORT.bat", candidate_block)
 
 
 if __name__ == "__main__":
