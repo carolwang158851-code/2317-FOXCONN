@@ -28,7 +28,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            review_stamp: CI-WINDOWS
+          - os: ubuntu-latest
+            review_stamp: CI-LINUX
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
@@ -49,7 +53,7 @@ jobs:
       - name: Build fail-closed Final Owner Review package
         env:
           P1008_TEST_TEMP_ROOT: ${{ runner.temp }}/P1008/pytest-temp
-        run: python tools/p1008_build_phaseb1_final_review.py --package-root . --stamp CI-${{ runner.os }}
+        run: python tools/p1008_build_phaseb1_final_review.py --package-root . --stamp ${{ matrix.review_stamp }}
       - name: Run Launcher Phase B1 tests
         env:
           P1008_TEST_TEMP_ROOT: ${{ runner.temp }}/P1008/pytest-temp
