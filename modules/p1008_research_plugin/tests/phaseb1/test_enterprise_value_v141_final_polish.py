@@ -12,6 +12,7 @@ except ImportError:
     from helpers import GOVERNED_Q2_EVIDENCE_ROOT, PACKAGE_ROOT, scratch
 
 from p1008_research_plugin.phaseb1_pipeline import PhaseB1Pipeline
+from p1008_research_plugin.phaseb1_common import canonical_json_bytes
 
 
 class EnterpriseValueV141FinalPolishTests(unittest.TestCase):
@@ -62,7 +63,21 @@ class EnterpriseValueV141FinalPolishTests(unittest.TestCase):
         self.assertEqual(valuation["ttmPe"]["value"], "16.31")
         self.assertEqual(len(self.formulas), 10)
         self.assertEqual(self.formulas, self.pack["enterpriseValueAnalytics"]["formulaCards"])
-        self.assertEqual(hashlib.sha256(self.pack_bytes).hexdigest().upper(), "BFB3CE6604FDAAAF97FDA57E4CF4EA3565D838F3844B740D7298B03D08F28877")
+        self.assertEqual(self.pack_bytes, canonical_json_bytes(self.pack))
+        analysis_bytes = (self.root / "analysis_packet.json").read_bytes()
+        self.assertEqual(
+            self.pack["analysisPacketSha256"],
+            hashlib.sha256(analysis_bytes).hexdigest().upper(),
+        )
+        semantic_pack = {
+            key: value
+            for key, value in self.pack.items()
+            if key != "analysisPacketSha256"
+        }
+        self.assertEqual(
+            hashlib.sha256(canonical_json_bytes(semantic_pack)).hexdigest().upper(),
+            "EA369DC7E7BD3889BA5CD8184A993933AEC1F981992BFFA9FCC578683C77C599",
+        )
 
     def test_working_capital_is_index_chart_with_separate_ccc(self) -> None:
         chart = self.chart("working_capital_3period")
