@@ -9,6 +9,9 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from .contract_loader import ContractLoader
+from .governance import GovernanceBoundary, GovernanceError
+
 
 FORMAL_WRITE_ROOTS = ("data", "rules")
 
@@ -49,26 +52,52 @@ def ensure_runtime_output(package_root: Path, output_root: Path) -> Path:
     return resolved
 
 
-def atomic_write(path: Path, data: bytes, *, overwrite: bool = False) -> None:
-    if path.exists() and not overwrite:
-        raise PhaseB1BoundaryError(f"Refusing to overwrite Phase B1 artifact: {path}")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+def atomic_write(
+    path: Path,
+    data: bytes,
+    *,
+    overwrite: bool = False,
+    capability: str = "REPORT_PRODUCTION",
+) -> None:
+    try:
+        package_root = ContractLoader.discover_package_root(path)
+        governance = GovernanceBoundary(ContractLoader(package_root))
+        authorized = governance.authorize_write(capability, path)
+        authorized_parent = governance.authorize_write(capability, authorized.parent)
+    except (GovernanceError, RuntimeError) as exc:
+        raise PhaseB1BoundaryError(f"Atomic write denied: {exc}") from exc
+    if authorized.exists() and not overwrite:
+        raise PhaseB1BoundaryError(
+            f"Refusing to overwrite Phase B1 artifact: {authorized}"
+        )
+    authorized_parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{authorized.name}.", dir=authorized_parent
+    )
     temporary = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "wb") as handle:
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
-        temporary.replace(path)
+        governance.authorize_write(capability, temporary)
+        governance.authorize_write(capability, authorized)
+        temporary.replace(authorized)
     finally:
         if temporary.exists():
+            governance.authorize_write(capability, temporary)
             temporary.unlink()
 
 
-def atomic_write_json(path: Path, value: Any, *, overwrite: bool = False) -> str:
+def atomic_write_json(
+    path: Path,
+    value: Any,
+    *,
+    overwrite: bool = False,
+    capability: str = "REPORT_PRODUCTION",
+) -> str:
     data = canonical_json_bytes(value)
-    atomic_write(path, data, overwrite=overwrite)
+    atomic_write(path, data, overwrite=overwrite, capability=capability)
     return sha256_bytes(data)
 
 

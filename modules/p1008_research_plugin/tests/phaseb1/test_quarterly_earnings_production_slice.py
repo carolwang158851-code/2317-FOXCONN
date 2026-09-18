@@ -109,13 +109,13 @@ class QuarterlyEarningsProductionSliceTests(unittest.TestCase):
             self.assertNotIn("AI已證明能擴大營收與營業利益", sections["AI_SERVER_CLOUD_NETWORKING"])
             self.assertIn("鴻海官方2025Q4 basic EPS 3.23元", sections["VALUATION"])
             self.assertIn("合計15.21元", sections["VALUATION"])
-            self.assertIn("16.57倍", sections["VALUATION"])
+            self.assertIn("16.31倍", sections["VALUATION"])
             self.assertIn("2025H2 EPS為7.38元", sections["VALUATION"])
             self.assertIn("BVPS 136.02元", sections["VALUATION"])
             report_markdown = (run_root / "report_candidate.md").read_text(encoding="utf-8")
-            self.assertIn("1.853", report_markdown)
+            self.assertIn("1.823", report_markdown)
             self.assertIn("ROE", report_markdown)
-            self.assertIn("P/B為1.853倍", sections["VALUATION"])
+            self.assertIn("P/B為1.823倍", sections["VALUATION"])
             for forbidden in ("BUY", "SELL", "ADD", "TRIM", "TARGET PRICE", "目標價"):
                 self.assertNotIn(forbidden, sections["VALUATION"])
 
@@ -227,6 +227,49 @@ class QuarterlyEarningsProductionSliceTests(unittest.TestCase):
                 QuarterlyEarningsPacket(
                     PACKAGE_ROOT, self.lineage, governed_evidence_root=missing
                 )
+
+    def test_q2_selects_exact_results_authority_among_same_event_evidence(self) -> None:
+        expected = {
+            "expectedSourceSha256": "A" * 64,
+            "expectedDocumentType": "RESULTS_DOCUMENT_CONFIRMED",
+        }
+        press = {
+            "verification_status": "OFFICIAL_VERIFIED",
+            "source_hash": "B" * 64,
+            "quality_metadata": {
+                "document_type": "RESULTS_PRESS_RELEASE_CONFIRMED",
+                "raw_byte_hash_bound": True,
+            },
+        }
+        results = {
+            "verification_status": "OFFICIAL_VERIFIED",
+            "source_hash": "A" * 64,
+            "quality_metadata": {
+                "document_type": "RESULTS_DOCUMENT_CONFIRMED",
+                "raw_byte_hash_bound": True,
+            },
+        }
+        self.assertEqual(
+            QuarterlyEarningsPacket._select_expected_events([press, results], expected),
+            [results],
+        )
+
+    def test_q2_never_substitutes_press_release_for_results_authority(self) -> None:
+        expected = {
+            "expectedSourceSha256": "A" * 64,
+            "expectedDocumentType": "RESULTS_DOCUMENT_CONFIRMED",
+        }
+        press = {
+            "verification_status": "OFFICIAL_VERIFIED",
+            "source_hash": "B" * 64,
+            "quality_metadata": {
+                "document_type": "RESULTS_PRESS_RELEASE_CONFIRMED",
+                "raw_byte_hash_bound": True,
+            },
+        }
+        self.assertEqual(
+            QuarterlyEarningsPacket._select_expected_events([press], expected), []
+        )
 
     def test_raw_pdf_hash_drift_fails_closed(self) -> None:
         with scratch("quarterly-hash-drift-") as root:

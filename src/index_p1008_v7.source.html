@@ -666,16 +666,41 @@
             else if (qReturn > 30) { score -= 10; signals.push(`前季${qReturn.toFixed(1)}%（強勁上漲，非超跌-10）`); }
             if (epsYoy > 0) { score *= 1.1; signals.push(`EPS成長${epsYoy.toFixed(1)}%（基本面支撐×1.1）`); }
             score = Math.round(score * 10) / 10;
-            let level = 'NORMAL', message = `MRD=${score} ⚪正常：市場反應合理，無超跌現象。`, threshold = -0.15;
-            if (score >= 60) { level = 'STRONG_OVERSOLD'; message = `MRD=${score} 🔴強烈超跌觀察：MIDR 觀察門檻調整為 -0.20，不產生加碼指令。`; threshold = -0.20; }
+            let level = 'NORMAL', message = `MRD=${score} ⚪正常：市場反應合理，無超跌現象。MRD 診斷參考=-0.15；MIDR 現行判讀邊界維持 -0.25/-0.15。DISPLAY_ONLY · NOT_CONSUMED_BY_MIDR_VERDICT · ACTIONABLE_FALSE。`, threshold = -0.15;
+            if (score >= 60) { level = 'STRONG_OVERSOLD'; message = `MRD=${score} 🔴強烈超跌觀察：MRD 診斷參考=-0.20；MIDR 現行判讀邊界維持 -0.25/-0.15。DISPLAY_ONLY · NOT_CONSUMED_BY_MIDR_VERDICT · ACTIONABLE_FALSE。`; threshold = -0.20; }
             else if (score >= 40) {
-                if (qReturn > 30) { level = 'MOMENTUM_CONT'; message = `MRD=${score} 🟡動能延續：降級為觀察，不放寬門檻。`; }
-                else { level = 'OVERSOLD'; message = `MRD=${score} 🟠中度超跌觀察：MIDR 觀察門檻調整為 -0.10，不產生加碼指令。`; threshold = -0.10; }
+                if (qReturn > 30) { level = 'MOMENTUM_CONT'; message = `MRD=${score} 🟡動能延續：MRD 診斷參考=-0.15；MIDR 現行判讀邊界維持 -0.25/-0.15。DISPLAY_ONLY · NOT_CONSUMED_BY_MIDR_VERDICT · ACTIONABLE_FALSE。`; }
+                else { level = 'OVERSOLD'; message = `MRD=${score} 🟠中度超跌觀察：MRD 診斷參考=-0.10；MIDR 現行判讀邊界維持 -0.25/-0.15。DISPLAY_ONLY · NOT_CONSUMED_BY_MIDR_VERDICT · ACTIONABLE_FALSE。`; threshold = -0.10; }
             }
             return { value: score, qReturn: qReturn.toFixed(1), level, message, threshold, signals };
         }
 
-        function calculateMidrObservation({ currentPB, cashDividend, currentPrice, us10yVal, fedProbVal, dynamicEpsYoY, rawRiskLevel, threshold = -0.15 }) {
+        const RTM_MODE = 'TRUTHFUL_NEUTRAL';
+        const RTM_SCORE = 0;
+        const RTM_WEIGHTED_RAW_CONTRIBUTION = 0;
+
+        function buildRtmMetadata({ foreignHoldChange, foreignHoldTrend, currentForeignPeriod, latestGovernedForeignPeriod }) {
+            const governedTrends = new Set(['RISING', 'STABLE', 'DECLINING']);
+            const currentPeriodAvailable = Number.isFinite(foreignHoldChange) && governedTrends.has(foreignHoldTrend);
+            return {
+                rtmScoreMode: RTM_MODE,
+                rtmRawScore: RTM_SCORE,
+                rtmWeightedRawContribution: RTM_WEIGHTED_RAW_CONTRIBUTION,
+                rtmContributionStatus: 'NEUTRAL_ZERO_BY_GOVERNANCE',
+                approvedForeignNumericMapping: 'NONE',
+                rtmCurrentPeriod: currentForeignPeriod || 'NOT_AVAILABLE',
+                rtmCurrentPeriodStatus: currentPeriodAvailable ? 'AVAILABLE' : 'DATA_UNAVAILABLE',
+                rtmCurrentValue: currentPeriodAvailable ? `${foreignHoldTrend} (${foreignHoldChange.toFixed(2)}pp)` : 'DATA_UNAVAILABLE',
+                rtmCurrentForeignTrend: currentPeriodAvailable ? foreignHoldTrend : 'DATA_UNAVAILABLE',
+                rtmCurrentForeignChange: currentPeriodAvailable ? foreignHoldChange : null,
+                latestGovernedForeignPeriod: latestGovernedForeignPeriod || 'NOT_AVAILABLE',
+                currentPeriodFallbackUsed: false,
+                missingForeignDataZeroFilled: false,
+                zForeign: 'NOT_AVAILABLE_NOT_DERIVED_FROM_FOREIGN_DATA',
+            };
+        }
+
+        function calculateMidrObservation({ currentPB, cashDividend, currentPrice, us10yVal, fedProbVal, dynamicEpsYoY, rawRiskLevel, threshold = -0.15, foreignHoldChange = null, foreignHoldTrend = null, currentForeignPeriod = null, latestGovernedForeignPeriod = null }) {
             if (!Number.isFinite(currentPB) || !Number.isFinite(cashDividend) || !Number.isFinite(currentPrice) || !Number.isFinite(us10yVal) || !Number.isFinite(dynamicEpsYoY)) return null;
             const w = { ya: 0.20, val: 0.25, frv: 0.20, rtm: 0.10, mdr: 0.25 };
             const currentYield = (cashDividend / currentPrice) * 100;
@@ -691,7 +716,7 @@
             const pbScoreRaw = pbProspect(currentPB);
             let frvScore = 0.2;
             if (dynamicEpsYoY > 50) frvScore = 0.8; else if (dynamicEpsYoY > 20) frvScore = 0.5;
-            const rtmScore = 0.1;
+            const rtmScore = RTM_SCORE;
             let mdrScore = us10yVal > 4.5 ? -0.5 : us10yVal > 4.0 ? -0.3 : 0.0;
             if (fedProbVal > 70) mdrScore -= 0.1;
             const riskKeyword = getRiskKeyword(rawRiskLevel);
@@ -706,11 +731,12 @@
             const scorePb = (pbScoreRaw * w.val * ud).toFixed(3);
             const scoreRev = (frvScore * w.frv * ud).toFixed(3);
             const scoreForeign = (rtmScore * w.rtm * ud).toFixed(3);
+            const rtmMetadata = buildRtmMetadata({ foreignHoldChange, foreignHoldTrend, currentForeignPeriod, latestGovernedForeignPeriod });
             return {
                 yield: currentYield.toFixed(2), excessYield: excessYield.toFixed(2), yaScore: scoreYield, scoreYield, zYield: ((currentYield - 4.2) / 0.8).toFixed(2),
                 pb: currentPB, pbScore: scorePb, scorePb, zPb: currentPB > 0 ? ((currentPB - 1.45) / 0.25).toFixed(2) : '0.00',
                 frv: dynamicEpsYoY, zFrv: ((dynamicEpsYoY - 10) / 15).toFixed(2), frvScore: scoreRev, scoreRev,
-                rtm: 1.1, zForeign: riskKeyword === 'NORMAL' ? '+1.25' : (riskKeyword === 'CAUTION' ? '-0.50' : '-2.00'), rtmScore: scoreForeign, scoreForeign,
+                ...rtmMetadata, rtmScore: scoreForeign, scoreForeign,
                 mdr: mdrScore.toFixed(3), situation: 'HIGH_MID', weights: w, ud, daysToExDiv: null,
                 total, verdict, verdictColor, threshold, actionable: false,
             };
@@ -2495,6 +2521,11 @@
                         const latestFxTrend = validFxTrends[0] || null;
                         const latestFormalFxTrend = validFxTrendCsv[validFxTrendCsv.length - 1] || null;
                         const latestMaster = validMas[0];
+                        const latestGovernedForeignRow = validMas.find(row => {
+                            const change = finiteNumber(row, 'ForeignHoldChange_Pct');
+                            return Number.isFinite(change) && ['RISING', 'STABLE', 'DECLINING'].includes(row?.ForeignHoldTrend);
+                        }) || null;
+                        const latestGovernedForeignPeriod = latestGovernedForeignRow?.Quarter || null;
                         const latestDaily = validDaily[validDaily.length - 1];
                         const latestMac = validMac[0];
 
@@ -2678,6 +2709,10 @@
                                 dynamicEpsYoY: obsEpsYoy,
                                 rawRiskLevel: latestMac?.RiskLevel,
                                 threshold: obsMrd?.threshold || -0.15,
+                                foreignHoldChange: obsForeignHoldChange,
+                                foreignHoldTrend: obsForeignHoldTrend,
+                                currentForeignPeriod: latestMaster?.Quarter || null,
+                                latestGovernedForeignPeriod,
                             });
                             const obsRadar = calculateRadarPackage({
                                 quality: obsQuality,
@@ -2846,11 +2881,11 @@
                         if (dynamicEpsYoY > 0) { mrdScore2 *= 1.1; mrdSignals.push(`EPS成長${dynamicEpsYoY.toFixed(1)}%（基本面支撐×1.1）`); }
                         mrdScore2 = Math.round(mrdScore2 * 10) / 10;
 
-                        let mrdLevel2 = 'NORMAL', mrdMessage2 = `MRD=${mrdScore2} ⚪正常：市場反應合理，無超跌現象。`, midrThreshold2 = -0.15;
-                        if (mrdScore2 >= 60) { mrdLevel2 = 'STRONG_OVERSOLD'; mrdMessage2 = `MRD=${mrdScore2} 🔴強烈超跌觀察：MIDR 觀察門檻調整為 -0.20，不產生加碼指令。`; midrThreshold2 = -0.20; }
+                        let mrdLevel2 = 'NORMAL', mrdMessage2 = `MRD=${mrdScore2} ⚪正常：市場反應合理，無超跌現象。MRD 診斷參考=-0.15；MIDR 現行判讀邊界維持 -0.25/-0.15。DISPLAY_ONLY · NOT_CONSUMED_BY_MIDR_VERDICT · ACTIONABLE_FALSE。`, midrThreshold2 = -0.15;
+                        if (mrdScore2 >= 60) { mrdLevel2 = 'STRONG_OVERSOLD'; mrdMessage2 = `MRD=${mrdScore2} 🔴強烈超跌觀察：MRD 診斷參考=-0.20；MIDR 現行判讀邊界維持 -0.25/-0.15。DISPLAY_ONLY · NOT_CONSUMED_BY_MIDR_VERDICT · ACTIONABLE_FALSE。`; midrThreshold2 = -0.20; }
                         else if (mrdScore2 >= 40) {
-                            if (qReturn > 30) { mrdLevel2 = 'MOMENTUM_CONT'; mrdMessage2 = `MRD=${mrdScore2} 🟡動能延續：降級為觀察，不放寬門檻。`; }
-                            else { mrdLevel2 = 'OVERSOLD'; mrdMessage2 = `MRD=${mrdScore2} 🟠中度超跌觀察：MIDR 觀察門檻調整為 -0.10，不產生加碼指令。`; midrThreshold2 = -0.10; }
+                            if (qReturn > 30) { mrdLevel2 = 'MOMENTUM_CONT'; mrdMessage2 = `MRD=${mrdScore2} 🟡動能延續：MRD 診斷參考=-0.15；MIDR 現行判讀邊界維持 -0.25/-0.15。DISPLAY_ONLY · NOT_CONSUMED_BY_MIDR_VERDICT · ACTIONABLE_FALSE。`; }
+                            else { mrdLevel2 = 'OVERSOLD'; mrdMessage2 = `MRD=${mrdScore2} 🟠中度超跌觀察：MRD 診斷參考=-0.10；MIDR 現行判讀邊界維持 -0.25/-0.15。DISPLAY_ONLY · NOT_CONSUMED_BY_MIDR_VERDICT · ACTIONABLE_FALSE。`; midrThreshold2 = -0.10; }
                         }
                         setMrdResult({ value: mrdScore2, qReturn: qReturn.toFixed(1), level: mrdLevel2, message: mrdMessage2, threshold: midrThreshold2, signals: mrdSignals });
 
@@ -2871,7 +2906,7 @@
                         let frvScore = 0.2;
                         if (dynamicEpsYoY > 50) frvScore = 0.8; else if (dynamicEpsYoY > 20) frvScore = 0.5;
 
-                        const rtmScore = 0.1; 
+                        const rtmScore = RTM_SCORE;
                         let mdrScore = us10yVal > 4.5 ? -0.5 : us10yVal > 4.0 ? -0.3 : 0.0;
                         if (fedProbVal > 70) mdrScore -= 0.1;
 
@@ -2885,18 +2920,22 @@
                         else { midrVerdict = '🟢 中性觀察'; midrVerdictColor = 'text-emerald-400'; }
 
                         const zFrv = ((dynamicEpsYoY - 10) / 15).toFixed(2);
-                        const zForeign = rawRiskLevel === "NORMAL" ? "+1.25" : (rawRiskLevel === "CAUTION" ? "-0.50" : "-2.00"); 
-
                         const scoreYield = (yaScore * w.ya * ud).toFixed(3);
                         const scorePb = (pbScore * w.val * ud).toFixed(3);
                         const scoreRev = (frvScore * w.frv * ud).toFixed(3);
                         const scoreForeign = (rtmScore * w.rtm * ud).toFixed(3);
+                        const rtmMetadata = buildRtmMetadata({
+                            foreignHoldChange: currentForeignHoldChange,
+                            foreignHoldTrend: currentForeignHoldTrend,
+                            currentForeignPeriod: latestMaster?.Quarter || null,
+                            latestGovernedForeignPeriod,
+                        });
 
                         setMidrResult({
                             yield: currentYield2.toFixed(2), excessYield: excessYield.toFixed(2), yaScore: scoreYield, scoreYield, zYield: (((cashDividend / currentPrice) * 100 - 4.2) / 0.8).toFixed(2),
                             pb: currentPB, pbScore: scorePb, scorePb, zPb: currentPB > 0 ? ((currentPB - 1.45) / 0.25).toFixed(2) : "0.00",
                             frv: dynamicEpsYoY, zFrv: zFrv, frvScore: scoreRev, scoreRev,
-                            rtm: 1.1, zForeign: zForeign, rtmScore: scoreForeign, scoreForeign,
+                            ...rtmMetadata, rtmScore: scoreForeign, scoreForeign,
                             mdr: mdrScore.toFixed(3), situation: 'HIGH_MID', weights: w, ud: ud, daysToExDiv: null,
                             total: totalMidr2, verdict: midrVerdict, verdictColor: midrVerdictColor, threshold: midrThreshold2,
                             actionable: false
@@ -4216,7 +4255,7 @@
                                     <div className="readable-copy font-medium">{mrdResult?.message}</div>
                                 </div>
                                 <div className="mt-auto bg-slate-900/80 p-5 rounded-xl border border-slate-700 flex justify-between items-center shadow-md">
-                                    <span className="text-[15px] font-black text-slate-100 flex flex-col">MIDR 最終統計算分 <span className="text-[12px] text-slate-400 font-num mt-1">觀察門檻 &gt; {midrResult?.threshold} · actionable:false</span></span>
+                                    <span className="text-[15px] font-black text-slate-100 flex flex-col">MIDR 最終統計算分 <span className="text-[12px] text-slate-400 font-num mt-1">MRD 診斷參考 {midrResult?.threshold} · MIDR 判讀邊界維持 -0.25/-0.15 · DISPLAY_ONLY · actionable:false</span></span>
                                     <div className="text-right flex flex-col items-end">
                                         <div className={`text-4xl font-black font-num ${midrResult?.verdictColor || 'text-white'}`}>{midrResult?.total || 'N/A'}</div>
                                         <div className={`text-[12px] font-bold mt-1.5 px-2 py-1 rounded border ${midrResult?.verdictColor?.includes('red') ? 'bg-red-900/30 border-red-500/30' : midrResult?.verdictColor?.includes('orange') ? 'bg-orange-900/30 border-orange-500/30' : 'bg-emerald-900/30 border-emerald-500/30'} ${midrResult?.verdictColor || 'text-slate-400'}`}>{midrResult?.verdict || '計算中...'}</div>
@@ -4239,7 +4278,16 @@
                                             <td className="py-3 text-sky-400">營收動能 (FRV)</td><td className="py-3 text-sky-400">+{midrResult?.frv}%</td><td className="py-3 text-right text-sky-400">{midrResult?.zFrv > 0 ? '+' : ''}{midrResult?.zFrv}σ</td><td className="py-3 text-right font-bold text-sky-400">{midrResult?.scoreRev}</td>
                                         </tr>
                                         <tr className="border-b border-slate-800/60 hover:bg-slate-800/30">
-                                            <td className="py-3">外資籌碼修正</td><td className="py-3 text-emerald-400">RISING</td><td className="py-3 text-right text-emerald-400">{midrResult?.zForeign}σ</td><td className="py-3 text-right font-bold text-emerald-400">{midrResult?.scoreForeign}</td>
+                                            <td className="py-3">外資籌碼修正</td>
+                                            <td className="py-3 text-slate-300">
+                                                <div>{midrResult?.rtmCurrentValue || 'DATA_UNAVAILABLE'}</div>
+                                                <div className="text-[10px] text-slate-500">當期 {midrResult?.rtmCurrentPeriod || 'NOT_AVAILABLE'} · 最近有值 {midrResult?.latestGovernedForeignPeriod || 'NOT_AVAILABLE'} · 不回退計分</div>
+                                            </td>
+                                            <td className="py-3 text-right text-slate-400">{midrResult?.zForeign || 'NOT_AVAILABLE'}</td>
+                                            <td className="py-3 text-right font-bold text-slate-300">
+                                                <div>{midrResult?.scoreForeign}</div>
+                                                <div className="text-[10px] text-slate-500">TRUTHFUL_NEUTRAL · 無核准外資數值映射 · 中性貢獻 {Number.isFinite(midrResult?.rtmWeightedRawContribution) ? midrResult.rtmWeightedRawContribution.toFixed(2) : 'N/A'}</div>
+                                            </td>
                                         </tr>
                                         <tr className="border-t border-slate-700/50">
                                             <td className="py-3 text-slate-400 text-xs">MDR 總經折現率</td><td className="py-3 text-right font-num text-slate-300">{midrResult?.mdr || 'N/A'}</td><td className="py-3 text-right text-slate-500 text-xs">{midrResult?.situation || 'N/A'}</td><td className="py-3 text-right font-num text-xs"><span className="text-slate-400">{Number.isFinite(midrResult?.weights?.mdr) ? `×${(midrResult.weights.mdr * 100).toFixed(0)}%` : 'N/A'}</span></td>

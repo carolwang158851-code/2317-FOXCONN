@@ -1,0 +1,113 @@
+{
+  "$schema": "schemas/formula_registry.schema.json",
+  "formulaRegistryId": "P1008_FORMULA_REGISTRY",
+  "registryVersion": "1.1",
+  "status": "OWNER_AUTHORIZED_RTM0_PRODUCTION_ACTIVATION",
+  "predecessor": {
+    "version": "1.0",
+    "rootHash": "86FEDB268064923A02E8F8B3F8814B8098AFFB9A526DA657FD85A96829D54B1B",
+    "commitSha": "05b8ca344fa81f25f9c665d42a452eaf62e5e816"
+  },
+  "lifecycleClassifications": ["CURRENT_PRODUCTION", "OWNER_APPROVED_CANDIDATE", "RESEARCH_ONLY", "REJECTED", "LEGACY"],
+  "entries": [
+    {
+      "formulaId": "MIDR.RTM",
+      "lifecycleClassification": "CURRENT_PRODUCTION",
+      "formulaDefinition": {
+        "currentProduction": "RTM_0_TRUTHFUL_NEUTRAL",
+        "currentFormula": "RTM_SCORE = 0 when no separately Owner-approved current-period foreign-positioning numeric scoring mapping exists",
+        "score": 0,
+        "weight": 0.1,
+        "weightedRawContribution": 0,
+        "contributionMeaning": "NEUTRAL_ZERO_BY_GOVERNANCE",
+        "approvedForeignNumericMapping": "NONE",
+        "missingForeignDataZeroFilled": false,
+        "legacyPreviousProduction": {
+          "formula": "LEGACY_FIXED_0_1",
+          "score": 0.1,
+          "weight": 0.1,
+          "weightedRawContribution": 0.01,
+          "lifecycleClassification": "LEGACY",
+          "recordedInVersion": "1.0"
+        },
+        "nonActivatedAlternatives": {
+          "RTM-1_ENUM_ORDINAL_RESEARCH": "RESEARCH_ONLY",
+          "RTM-2_DATA_DERIVED_CONTINUOUS": "RESEARCH_ONLY"
+        }
+      },
+      "dataProvenance": {
+        "sourceFile": "data/2317_master_v9.csv",
+        "authorityManifest": "data/CSV_AUTHORITY_MANIFEST.json",
+        "observationFields": ["ForeignHoldRatio_Pct", "ForeignHoldChange_Pct", "ForeignHoldTrend"],
+        "observationUsage": "DISPLAY_ONLY_OBSERVATION_ONLY",
+        "currentGovernedPeriod": "2026Q2",
+        "currentPeriodStatus": "DATA_UNAVAILABLE",
+        "latestPopulatedGovernedPeriod": "2026Q1",
+        "currentPeriodFallbackAllowed": false,
+        "currentPeriodFallbackUsed": false,
+        "foreignObservationUsedForNumericScoring": false
+      },
+      "activationStatus": {
+        "productionActivated": true,
+        "activationScope": "RTM_ONLY",
+        "effectiveFormula": "RTM_0_TRUTHFUL_NEUTRAL",
+        "actionable": false
+      },
+      "ownerApproval": {
+        "candidateApproval": "PREVIOUSLY_COMPLETED_IN_V1.0",
+        "productionActivationAuthorized": true,
+        "authorizationReference": "OWNER_AUTHORIZATION_P1008_RTM0_TRUTHFUL_NEUTRAL_PRODUCTION_ACTIVATION"
+      },
+      "backtestEvidence": {
+        "datesReplayed": 151,
+        "window": "2026-01-28/2026-09-14",
+        "beforeCounts": {"SEVERE": 51, "CAUTION": 48, "NEUTRAL": 52},
+        "afterCounts": {"SEVERE": 51, "CAUTION": 55, "NEUTRAL": 45},
+        "verdictFlips": 7,
+        "flipBreakdown": {"NEUTRAL_TO_CAUTION": 7, "CAUTION_TO_SEVERE": 0},
+        "beforeDateTotalVerdictSha256": "A234DD3A99360E4EE5586EF00D850CC0CAB09578DA926584FC40C49AD21546AC",
+        "activationReplaySerialization": "date|old_total_3dp|new_total_3dp|delta_3dp|old_verdict|new_verdict|ud_2dp|old_rtm_weighted_3dp|new_rtm_weighted_3dp joined with LF",
+        "afterActivationReplaySha256": "899E8452509C7BD248253E59D587BAFEDDB533DE67F06FCD1C2A74EFAD9AF0AB",
+        "deltaCounts": {"NORMAL_-0.010": 45, "CAUTION_-0.009": 106, "SYSTEMIC_-0.008": 0},
+        "maximumRoundingResidual": 0,
+        "priorSensitivityDiscrepancy": "Earlier 9-flip estimate was non-canonical; canonical baseline minimum caution total is -0.240, so removing at most 0.010 produces no value below the strict severe boundary of -0.25"
+      },
+      "implementationStatus": {
+        "source": "src/index_p1008_v7.source.html",
+        "bundle": "dist/index_p1008_v7.bundle.js",
+        "allActivePathsUseRtm0": true,
+        "truthfulUiPreserved": true
+      }
+    },
+    {
+      "formulaId": "MIDR.MRD_WIRING",
+      "lifecycleClassification": "CURRENT_PRODUCTION",
+      "formulaDefinition": {
+        "currentProduction": "MRD-M0_DISPLAY_ONLY",
+        "diagnosticThresholdMappings": {"default": -0.15, "MRD_GTE_60": -0.2, "MRD_40_TO_59_9_QRETURN_LTE_30": -0.1, "MRD_40_TO_59_9_QRETURN_GT_30": -0.15},
+        "midrVerdictBoundaries": {"severeBelow": -0.25, "cautionBelow": -0.15},
+        "thresholdConsumedByMidrVerdict": false
+      },
+      "dataProvenance": {"implementationSource": "src/index_p1008_v7.source.html", "status": "OBSERVATION_ONLY"},
+      "activationStatus": {"dynamicThresholdActive": false, "displayOnly": true, "changedByThisRevision": false, "actionable": false},
+      "ownerApproval": {"currentBehaviorApproved": true, "dynamicThresholdActivationApproved": false},
+      "backtestEvidence": {"datesReplayed": 151, "resultChangedByRtmActivation": false},
+      "implementationStatus": {"changed": false, "protected": true}
+    },
+    {
+      "formulaId": "MIDR.UD",
+      "lifecycleClassification": "CURRENT_PRODUCTION",
+      "formulaDefinition": {"status": "UNCHANGED_PROTECTED", "currentBehavior": {"NORMAL": 1.0, "CAUTION": 0.9, "SYSTEMIC": 0.8}, "ownerDecision": "DO_NOT_CHANGE"},
+      "dataProvenance": {"implementationSource": "src/index_p1008_v7.source.html", "input": "RiskLevel"},
+      "activationStatus": {"changedByThisRevision": false, "reinterpretationAllowed": false, "actionable": false},
+      "ownerApproval": {"doNotChange": true},
+      "backtestEvidence": {"datesReplayed": 151, "valuesUnchanged": true},
+      "implementationStatus": {"changed": false, "protected": true}
+    }
+  ],
+  "actionable": false,
+  "formalDecision": false,
+  "holdChangeAllowed": false,
+  "ruleChangeAllowed": false,
+  "productionActivation": true
+}

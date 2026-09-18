@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sys
-import tempfile
 import unittest
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from uuid import uuid4
 
 
 MODULE_ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +22,23 @@ from p1008_research_plugin.ledgers.store import (
     canonical_json,
 )
 from p1008_research_plugin.projections.replay import ProjectionEngine
+
+
+@contextmanager
+def governed_ledger_sandbox(prefix: str):
+    parent = PACKAGE_ROOT / "runtime" / "research_plugin" / "ledgers"
+    parent.mkdir(parents=True, exist_ok=True)
+    path = parent / f"{prefix}{uuid4().hex}"
+    path.mkdir()
+    try:
+        yield path
+    finally:
+        shutil.rmtree(path, ignore_errors=False)
+        for candidate in (parent, parent.parent, parent.parent.parent):
+            try:
+                candidate.rmdir()
+            except OSError:
+                break
 
 
 def make_event(
@@ -87,10 +106,8 @@ class LedgerReplayTests(unittest.TestCase):
                 {"overall_score": 82},
             ),
         )
-        with tempfile.TemporaryDirectory(
-            prefix=".p1008-ledger-", dir=PACKAGE_ROOT.parent
-        ) as temp_dir:
-            store = self.store(Path(temp_dir))
+        with governed_ledger_sandbox(".p1008-ledger-") as temp_dir:
+            store = self.store(temp_dir)
             for index, (ledger, event_type, aggregate_id, payload) in enumerate(
                 events, start=1
             ):
@@ -99,7 +116,7 @@ class LedgerReplayTests(unittest.TestCase):
                     make_event(self.catalog, index, event_type, aggregate_id, payload),
                 )
             first = self.engine.replay_all(store)
-            restarted = self.engine.replay_all(self.store(Path(temp_dir)))
+            restarted = self.engine.replay_all(self.store(temp_dir))
             self.assertEqual(len(first["ledgers"]), 8)
             self.assertEqual(first["summary"]["record_count"], 8)
             self.assertEqual(first["projection_hash"], restarted["projection_hash"])
@@ -139,10 +156,8 @@ class LedgerReplayTests(unittest.TestCase):
                 ("RESEARCH_DEBT_RETIRED", "DEBT-C", {}),
             ],
         }
-        with tempfile.TemporaryDirectory(
-            prefix=".p1008-states-", dir=PACKAGE_ROOT.parent
-        ) as temp_dir:
-            store = self.store(Path(temp_dir))
+        with governed_ledger_sandbox(".p1008-states-") as temp_dir:
+            store = self.store(temp_dir)
             index = 0
             for ledger, items in sequences.items():
                 for event_type, aggregate_id, payload in items:
@@ -170,10 +185,8 @@ class LedgerReplayTests(unittest.TestCase):
             )
 
     def test_invalid_transition_is_rejected_during_replay(self) -> None:
-        with tempfile.TemporaryDirectory(
-            prefix=".p1008-invalid-", dir=PACKAGE_ROOT.parent
-        ) as temp_dir:
-            store = self.store(Path(temp_dir))
+        with governed_ledger_sandbox(".p1008-invalid-") as temp_dir:
+            store = self.store(temp_dir)
             store.append_event(
                 "knowledge_gap",
                 make_event(self.catalog, 1, "KNOWLEDGE_GAP_OPENED", "GAP-X"),
@@ -192,10 +205,8 @@ class LedgerReplayTests(unittest.TestCase):
                 self.engine.replay_all(store)
 
     def test_tamper_partial_truncation_and_known_count_suffix_loss_fail_closed(self) -> None:
-        with tempfile.TemporaryDirectory(
-            prefix=".p1008-corrupt-", dir=PACKAGE_ROOT.parent
-        ) as temp_dir:
-            store = self.store(Path(temp_dir))
+        with governed_ledger_sandbox(".p1008-corrupt-") as temp_dir:
+            store = self.store(temp_dir)
             store.append_event(
                 "inference_chain", make_event(self.catalog, 1, "RUN_STARTED", "RUN-X")
             )
@@ -206,10 +217,8 @@ class LedgerReplayTests(unittest.TestCase):
             with self.assertRaises(LedgerError):
                 store.read_records("inference_chain")
 
-        with tempfile.TemporaryDirectory(
-            prefix=".p1008-truncate-", dir=PACKAGE_ROOT.parent
-        ) as temp_dir:
-            store = self.store(Path(temp_dir))
+        with governed_ledger_sandbox(".p1008-truncate-") as temp_dir:
+            store = self.store(temp_dir)
             store.append_event(
                 "inference_chain", make_event(self.catalog, 1, "RUN_STARTED", "RUN-Y")
             )
@@ -219,10 +228,8 @@ class LedgerReplayTests(unittest.TestCase):
             with self.assertRaises(LedgerError):
                 store.read_records("inference_chain")
 
-        with tempfile.TemporaryDirectory(
-            prefix=".p1008-suffix-", dir=PACKAGE_ROOT.parent
-        ) as temp_dir:
-            store = self.store(Path(temp_dir))
+        with governed_ledger_sandbox(".p1008-suffix-") as temp_dir:
+            store = self.store(temp_dir)
             store.append_event(
                 "inference_chain", make_event(self.catalog, 1, "RUN_STARTED", "RUN-Z")
             )

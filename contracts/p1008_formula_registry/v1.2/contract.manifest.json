@@ -1,0 +1,48 @@
+{
+  "contractId": "P1008_FORMULA_REGISTRY",
+  "contractVersion": "1.2",
+  "status": "OWNER_APPROVED_UD_RESEARCH_REVIEW_KEEP_CURRENT_GOVERNANCE_ONLY_PENDING_COMMIT",
+  "predecessorVersion": "1.1",
+  "predecessorRootHash": "A35AC312C1C0B2D2E7D0D19C0E0FE3DC7E7B1B86F1352F817AAEF15B209AFD6A",
+  "predecessorCommitSha": "0f923778342370b89ac5cee02c34c263c98f8919",
+  "hashAlgorithm": "SHA-256",
+  "rootHashConstruction": "SHA256(UTF8(join(sorted(path + '|' + sha256), LF)))",
+  "rootHash": "FE73BB30A16569544D0CFF0CB66D074A3FDD1FC3E9D1984C7CECE47B6F81865A",
+  "artifacts": [
+    {
+      "path": "acceptance/P1008_UD_RESEARCH_REVIEW_DECISION_V1.json",
+      "sha256": "0DD7DF666C553FB7DF94A5A454B151E98E708E816ABAC4E1455377E32B0FC015",
+      "sizeBytes": 6015
+    },
+    {
+      "path": "formula_registry.json",
+      "sha256": "2A6FF32E48608A122A2089588D1C73B56A89E2C48254FCC185B7F0F84C543314",
+      "sizeBytes": 6688
+    },
+    {
+      "path": "README.md",
+      "sha256": "253DFF6A6FF0A0E65B7C36902BE48390911DE0A95DD009F722296246B34B08F1",
+      "sizeBytes": 1021
+    },
+    {
+      "path": "schemas/formula_registry.schema.json",
+      "sha256": "84F0D7E09CC4C989BC3C533186B51F16D325C4920715D1465E5274DDECFEF5BD",
+      "sizeBytes": 1959
+    },
+    {
+      "path": "schemas/ud_research_review_decision.schema.json",
+      "sha256": "B51B4F82480C2D7963D0215E595E790F17E8BA8FBEE847DDCD7CAB434BF5B7AC",
+      "sizeBytes": 2110
+    }
+  ],
+  "backwardCompatibility": "Additive governance-only UD research-review revision; v1.0 and v1.1 remain immutable; UD values and production formula, RTM-0, MRD-M0, YA, VAL, FRV, MDR, MIDR weights and boundaries, HOLD, RULE, SQLite, authority data, runtime code, publication behavior, and actionable=false remain unchanged",
+  "governanceOnlyRevision": true,
+  "formulaChange": false,
+  "productionFormulaChanged": false,
+  "udValuesChanged": false,
+  "actionable": false,
+  "formalDecision": false,
+  "holdChangeAllowed": false,
+  "ruleChangeAllowed": false,
+  "productionActivation": true
+}

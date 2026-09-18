@@ -1,0 +1,28 @@
+{
+  "recordId": "P1008-GFS1P1-WRITER-COVERAGE-CANDIDATE",
+  "contractVersion": "2.1",
+  "status": "OWNER_ACCEPTANCE_REQUIRED",
+  "coverage": [
+    {"writer": "PhaseB1Pipeline", "capability": "REPORT_PRODUCTION", "centralAuthorizer": true, "root": "runtime/report_production/", "residualBypass": false},
+    {"writer": "LedgerStore", "capability": "RESEARCH_PLUGIN_LEDGER", "centralAuthorizer": true, "root": "runtime/research_plugin/ledgers/", "residualBypass": false},
+    {"writer": "ShadowWriter", "capability": "RESEARCH_PLUGIN_RUNTIME", "centralAuthorizer": true, "root": "runtime/research_plugin/", "residualBypass": false},
+    {"writer": "shadow_runtime replay cleanup", "capability": "RESEARCH_PLUGIN_LEDGER", "centralAuthorizer": true, "root": "runtime/research_plugin/ledgers/<owned-child>/", "residualBypass": false},
+    {"writer": "OfficialIREvidenceAdapter", "capability": "OFFICIAL_IR_EVIDENCE", "centralAuthorizer": true, "root": "runtime/official_ir_evidence/", "residualBypass": false},
+    {"writer": "GovernedAnySearchRuntime", "capability": "ANYSEARCH_STAGING", "centralAuthorizer": true, "root": "runtime/anysearch_staging/", "residualBypass": false},
+    {"writer": "OwnerCommunicationRenderer", "capability": "OWNER_COMMUNICATION", "centralAuthorizer": true, "root": "runtime/owner_communication/", "residualBypass": false},
+    {"writer": "phaseb1_common.atomic_write", "capability": "CALLER_DECLARED_GOVERNED_CAPABILITY", "centralAuthorizer": true, "root": "CAPABILITY_BOUND", "residualBypass": false},
+    {"writer": "WarReportProductionRuntime", "capability": "REPORT_PRODUCTION_OR_CALLER_MAINTENANCE", "centralAuthorizer": true, "root": "CAPABILITY_BOUND", "residualBypass": false},
+    {"writer": "p1008_build_phaseb1_final_review", "capability": "MAINTENANCE_CAPABILITY", "centralAuthorizer": true, "root": "runtime/phaseb1_final_owner_review/", "residualBypass": false}
+  ],
+  "destructiveBoundary": {
+    "ownerCommunicationProfile": "exact .edge-profile child of one authorized output run",
+    "finalReviewPipeline": "exact _pipeline child of one authorized review run"
+  },
+  "residualRisks": [
+    "Windows symlink creation tests require privileges not present on every host",
+    "TOCTOU races against a concurrently mutating privileged process cannot be eliminated by path authorization alone"
+  ],
+  "ownerAcceptanceRequired": true,
+  "productionPromotionAuthorized": false,
+  "actionable": false
+}

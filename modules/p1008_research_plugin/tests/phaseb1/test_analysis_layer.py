@@ -27,7 +27,7 @@ class PhaseB1AnalysisLayerTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         with scratch("analysis-valid-") as output:
             pipeline = fixture_pipeline(output)
-            result = pipeline.run_all(output_base=output)
+            result = pipeline.run_all()
             cls.packet = result["analysis"]
             cls.evidence = pipeline.load_inputs()[1]
 
@@ -160,7 +160,7 @@ class PhaseB1AnalysisLayerTests(unittest.TestCase):
                 side_effect=[baseline, changed],
             ):
                 with self.assertRaises(PhaseB1PipelineError):
-                    pipeline.build_analysis(output_base=output)
+                    pipeline.build_analysis()
 
 
 if __name__ == "__main__":

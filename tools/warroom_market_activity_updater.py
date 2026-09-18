@@ -11,6 +11,7 @@ import csv
 import datetime as dt
 import hashlib
 import http.client
+import io
 import json
 import os
 import ssl
@@ -19,7 +20,7 @@ from contextlib import contextmanager
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Iterator
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit
 
 import owner_publish_csv_v2 as publisher
 
@@ -34,8 +35,8 @@ FORMAL_FIELDS = publisher.MARKET_ACTIVITY_FIELDS
 PRICE_CANDIDATE_FIELDS = (
     "Date", "Close", "QuarterKey", "BVPS_ref", "PB_daily", "DataSupportLevel", "Status"
 )
-
-STATUS_UPDATED = "UPDATED"
+STATUS_UPDATED = "FORMAL_UPDATED"
+STATUS_RECONCILIATION = "RECONCILIATION_REQUIRED"
 STATUS_NO_NEW = "NO_NEW_MARKET_ACTIVITY"
 STATUS_STALE = "MARKET_ACTIVITY_STALE"
 STATUS_BLOCKED = "MARKET_ACTIVITY_BLOCKED_BY_DAILY_PRICE"
@@ -99,6 +100,27 @@ def source_url(month: str) -> str:
     return f"https://{TWSE_HOST}{TWSE_PATH}?{query}"
 
 
+def approved_redirect_url(location: str, request_url: str) -> str:
+    """Allow one redirect only when it preserves the governed TWSE request."""
+    if not location:
+        raise UpdateFailure("TWSE redirect has no Location header")
+    target = urlsplit(urljoin(request_url, location))
+    requested = urlsplit(request_url)
+    if (
+        target.scheme != "https"
+        or target.hostname != TWSE_HOST
+        or target.port not in (None, 443)
+        or target.username is not None
+        or target.password is not None
+        or target.fragment
+        or target.path != TWSE_PATH
+        or parse_qsl(target.query, keep_blank_values=True)
+        != parse_qsl(requested.query, keep_blank_values=True)
+    ):
+        raise UpdateFailure(f"TWSE redirect target is not approved: {location}")
+    return target.geturl()
+
+
 def parse_twse_month(content: bytes, month: str) -> dict[str, dict[str, Any]]:
     try:
         text = content.decode("cp950", errors="strict")
@@ -146,34 +168,63 @@ def parse_twse_month(content: bytes, month: str) -> dict[str, dict[str, Any]]:
 
 
 def fetch_twse_month(month: str, timeout_seconds: int = 30) -> tuple[bytes, dict[str, Any]]:
-    """Perform exactly one verified HTTPS GET with zero application retries."""
+    """Fetch one TWSE CSV, allowing one governed redirect or direct-path recovery."""
 
     context = ssl.create_default_context()
     path = f"{TWSE_PATH}?{urlencode({'date': month.replace('-', '') + '01', 'stockNo': '2317', 'response': 'csv'})}"
+    request_url = source_url(month)
     connection: http.client.HTTPSConnection | None = None
     try:
-        connection = http.client.HTTPSConnection(
-            TWSE_HOST, timeout=timeout_seconds, context=context
-        )
-        connection.request(
-            "GET",
-            path,
-            headers={"Accept": "text/csv", "User-Agent": "P1008-Market-Activity/1.0"},
-        )
-        response = connection.getresponse()
-        sock = connection.sock
-        tls_version = sock.version() if sock else "NOT_AVAILABLE"
-        certificate = sock.getpeercert() if sock else {}
-        content = response.read()
+        def request_once(request_path: str) -> tuple[Any, bytes, str, dict[str, Any]]:
+            nonlocal connection
+            connection = http.client.HTTPSConnection(
+                TWSE_HOST, timeout=timeout_seconds, context=context
+            )
+            connection.request(
+                "GET",
+                request_path,
+                headers={"Accept": "text/csv", "User-Agent": "P1008-Market-Activity/1.0"},
+            )
+            response = connection.getresponse()
+            sock = connection.sock
+            tls = sock.version() if sock else "NOT_AVAILABLE"
+            cert = sock.getpeercert() if sock else {}
+            return response, response.read(), tls, cert
+
+        response, content, tls_version, certificate = request_once(path)
+        final_url = request_url
+        redirect_status: int | None = None
+        redirect_location: str | None = None
+        canonical_direct_fallback = False
+        if 300 <= response.status < 400:
+            redirect_status = response.status
+            redirect_location = response.getheader("Location")
+            connection.close()
+            connection = None
+            if isinstance(redirect_location, str) and redirect_location.strip():
+                final_url = approved_redirect_url(redirect_location.strip(), request_url)
+                target = urlsplit(final_url)
+                next_path = target.path + (f"?{target.query}" if target.query else "")
+            else:
+                # TWSE occasionally emits a redirect-like response without a usable
+                # Location.  Reissue only the already-governed direct STOCK_DAY URL;
+                # do not accept the 3xx body or broaden the approved destination set.
+                canonical_direct_fallback = True
+                next_path = path
+            response, content, tls_version, certificate = request_once(next_path)
         if response.status != 200:
             raise UpdateFailure(f"TWSE {month} HTTP status {response.status}")
         issuer = ", ".join("=".join(item) for group in certificate.get("issuer", ()) for item in group)
         subject = ", ".join("=".join(item) for group in certificate.get("subject", ()) for item in group)
         metadata = {
             "month": month,
-            "request_url": source_url(month),
+            "request_url": request_url,
+            "final_url": final_url,
             "http_status": response.status,
-            "https_get_count": 1,
+            "https_get_count": 2 if redirect_status is not None else 1,
+            "redirect_status": redirect_status,
+            "redirect_location": redirect_location,
+            "canonical_direct_fallback": canonical_direct_fallback,
             "max_retries": 0,
             "tls_version": tls_version,
             "certificate_issuer": issuer,
@@ -362,6 +413,14 @@ def write_candidate(path: Path, rows: list[dict[str, Any]]) -> None:
     os.replace(temporary, path)
 
 
+def _render_market_row(row: dict[str, str], line_ending: str) -> bytes:
+    output = io.StringIO(newline="")
+    csv.writer(output, lineterminator=line_ending).writerow(
+        [row[field] for field in FORMAL_FIELDS]
+    )
+    return output.getvalue().encode("utf-8")
+
+
 @contextmanager
 def update_lock(runtime_root: Path, stale_seconds: int = 1800) -> Iterator[Path]:
     runtime_root.mkdir(parents=True, exist_ok=True)
@@ -374,7 +433,10 @@ def update_lock(runtime_root: Path, stale_seconds: int = 1800) -> Iterator[Path]
         os.replace(lock_path, stale_path)
     descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     try:
-        os.write(descriptor, json.dumps({"pid": os.getpid(), "started_at_utc": dt.datetime.now(dt.timezone.utc).isoformat()}).encode("utf-8"))
+        os.write(descriptor, json.dumps({
+            "pid": os.getpid(),
+            "started_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+        }).encode("utf-8"))
         os.close(descriptor)
         yield lock_path
     finally:
@@ -459,19 +521,31 @@ def run_update(
                 receipt_paths.append(str(receipt_path.resolve()))
 
             formal_by_date = {row["date"]: row for row in formal_rows}
+            historical_revisions: list[dict[str, Any]] = []
             for row_date, formal in formal_by_date.items():
                 if row_date[:7] not in months:
                     continue
                 source = twse_rows.get(row_date)
                 if source is None:
                     raise UpdateFailure(f"TWSE month file no longer contains formal date {row_date}")
+                changed_fields: dict[str, dict[str, str]] = {}
                 for formal_field, source_field in (
                     ("trade_volume", "trade_volume"),
                     ("trade_value", "trade_value"),
                     ("transaction_count", "transaction_count"),
                 ):
                     if int(formal[formal_field]) != int(source[source_field]):
-                        raise UpdateFailure(f"Historical market-activity rewrite detected for {row_date}")
+                        changed_fields[formal_field] = {
+                            "formal": str(formal[formal_field]),
+                            "twse": str(source[source_field]),
+                        }
+                if changed_fields:
+                    historical_revisions.append({
+                        "date": row_date,
+                        "changed_fields": changed_fields,
+                        "formal_row_preserved": True,
+                        "twse_close_matches_price_authority": price.get(row_date) == source["close"],
+                    })
 
             new_rows: list[dict[str, Any]] = []
             for row_date in sorted(twse_rows):
@@ -500,13 +574,51 @@ def run_update(
                 )
                 new_rows.append(row)
 
-            if not new_rows:
+            twse_latest_date = max(day for day in twse_rows if day <= as_of_date.isoformat())
+            if historical_revisions:
+                candidate_path = run_dir / "2317_daily_market_activity.incremental.candidate.csv"
+                if new_rows:
+                    write_candidate(candidate_path, new_rows)
+                reconciliation_path = run_dir / "HISTORICAL_RECONCILIATION_REQUIRED.json"
+                atomic_json(reconciliation_path, {
+                    "status": STATUS_RECONCILIATION,
+                    "formal_rows_preserved": True,
+                    "revisions": historical_revisions,
+                    "actionable": False,
+                })
+                result = {
+                    "run_id": run_id, "status": STATUS_RECONCILIATION,
+                    "launcher_status": STATUS_RECONCILIATION,
+                    "market_liquidity_analysis_status": STATUS_LIMITED,
+                    "last_success_date": last_formal_date,
+                    "formal_authority_latest_date": last_formal_date,
+                    "candidate_last_date": new_rows[-1]["date"] if new_rows else None,
+                    "candidate_latest_date": new_rows[-1]["date"] if new_rows else None,
+                    "twse_latest_validated_trading_date": twse_latest_date,
+                    "months_checked": months, "rows_added": len(new_rows), "rows_revised": 0,
+                    "historical_revisions_detected": len(historical_revisions),
+                    "reconciliation_path": str(reconciliation_path.resolve()),
+                    "http_calls": http_calls, "receipt_paths": receipt_paths,
+                    "run_dir": str(run_dir.resolve()), "dry_run": dry_run,
+                    "exit_code": EXIT_OK, "actionable": False,
+                    "price_validation_provenance": staging_provenance,
+                }
+                if new_rows:
+                    result.update({
+                        "candidate_rows": len(new_rows),
+                        "candidate_path": str(candidate_path.resolve()),
+                        "candidate_sha256": sha256_file(candidate_path),
+                    })
+            elif not new_rows:
                 result = {
                     "run_id": run_id,
                     "status": STATUS_NO_NEW,
                     "launcher_status": "NO_NEW_DATA",
                     "market_liquidity_analysis_status": STATUS_READY,
                     "last_success_date": last_formal_date,
+                    "formal_authority_latest_date": last_formal_date,
+                    "candidate_latest_date": None,
+                    "twse_latest_validated_trading_date": twse_latest_date,
                     "months_checked": months,
                     "rows_added": 0,
                     "http_calls": http_calls,
@@ -524,10 +636,13 @@ def run_update(
                     result = {
                         "run_id": run_id,
                         "status": "DRY_RUN_READY",
-                        "launcher_status": "UPDATED",
+                        "launcher_status": "DRY_RUN_READY",
                         "market_liquidity_analysis_status": STATUS_READY,
                         "last_success_date": last_formal_date,
                         "candidate_last_date": new_rows[-1]["date"],
+                        "formal_authority_latest_date": last_formal_date,
+                        "candidate_latest_date": new_rows[-1]["date"],
+                        "twse_latest_validated_trading_date": twse_latest_date,
                         "months_checked": months,
                         "rows_added": 0,
                         "candidate_rows": len(new_rows),
@@ -553,9 +668,12 @@ def run_update(
                     result = {
                         "run_id": run_id,
                         "status": STATUS_UPDATED,
-                        "launcher_status": "UPDATED",
+                        "launcher_status": "FORMAL_UPDATED",
                         "market_liquidity_analysis_status": STATUS_READY,
                         "last_success_date": publish_result["last_date"],
+                        "formal_authority_latest_date": publish_result["last_date"],
+                        "candidate_latest_date": new_rows[-1]["date"],
+                        "twse_latest_validated_trading_date": twse_latest_date,
                         "months_checked": months,
                         "rows_added": len(new_rows),
                         "candidate_path": str(candidate_path.resolve()),

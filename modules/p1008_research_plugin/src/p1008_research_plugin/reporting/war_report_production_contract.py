@@ -60,6 +60,19 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest().upper()
 
 
+def _verified_template_bytes(raw: bytes, approved_sha256: str) -> bytes:
+    """Verify exact bytes, allowing only Windows CRLF to normalize to LF."""
+
+    if _sha256(raw) == approved_sha256:
+        return raw
+    normalized = raw.replace(b"\r\n", b"\n")
+    if b"\r" in normalized or normalized == raw:
+        raise WarReportContractError("MOTHER_TEMPLATE_HASH_MISMATCH")
+    if _sha256(normalized) != approved_sha256:
+        raise WarReportContractError("MOTHER_TEMPLATE_HASH_MISMATCH")
+    return normalized
+
+
 def _canonical_committed_text(path: Path, expected_sha256: str) -> bytes:
     package_root = _CONTRACT_DIR.parents[2]
     relative = path.relative_to(package_root).as_posix()

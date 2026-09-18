@@ -255,13 +255,47 @@
         <div class="stat"><div class="label">目前任務</div><div id="job-type" class="value">N/A</div><div id="job-id" class="small">等待啟動</div></div>
         <div class="stat"><div class="label">正式 CSV 邊界</div><div id="formal-boundary" class="value">檢查中</div><div class="small">一鍵資料流程前後 hash 必須不變</div></div>
         <div class="stat"><div class="label">新聞 connector</div><div id="connector-status" class="value">N/A</div><div class="small">未核准來源不得連網</div></div>
-        <div class="stat"><div class="label">最新戰報</div><div id="latest-report" class="value">N/A</div><div class="small">日報 / 週報 / 月報 manifest</div></div>
+        <div class="stat"><div class="label">最新戰報</div><div id="latest-report" class="value">N/A</div><div class="small">日報 / 週報 / 月報 manifest</div><a id="export-q2-owner-review" class="button" href="/api/p1008/export/q2-owner-review" download style="margin-top:10px">匯出 Q2 審查包</a></div>
       </div>
       <div class="grid four" style="margin-top:12px">
         <div class="stat"><div class="label">Served package root</div><div id="served-package-root" class="small">N/A</div></div>
         <div class="stat"><div class="label">Served git HEAD</div><div id="served-git-head" class="small">N/A</div></div>
         <div class="stat"><div class="label">Latest rolling brief date</div><div id="latest-rolling-brief-date" class="value">N/A</div></div>
         <div class="stat"><div class="label">Latest archived report date</div><div id="latest-archived-report-date" class="value">N/A</div><div id="report-library-health" class="small">CHECKING</div></div>
+      </div>
+      <div id="quarterly-editorial-panel" class="notice blue" style="margin-top:12px">
+        <div class="between">
+          <div>
+            <strong>季度 Owner Review｜版本歷史</strong>
+            <div class="small">潤稿版本留在所選 report_key / revision 內；匯入只建立 PENDING，套用後仍不發布。</div>
+          </div>
+          <span id="editorial-status" class="badge blue">READ ONLY</span>
+        </div>
+        <div class="grid two" style="margin-top:10px">
+          <div class="stat">
+            <div class="label">治理報告</div>
+            <select id="editorial-report-select" style="width:100%;margin-top:6px"></select>
+            <div id="editorial-current" class="small" style="margin-top:6px">current: N/A</div>
+          </div>
+          <div class="stat">
+            <div class="label">匯入版本 JSON</div>
+            <input id="editorial-file" type="file" accept="application/json,.json" style="width:100%;margin-top:6px" />
+            <div class="small" style="margin-top:6px">只接受 .json；必填：report_key、revision、parentEditorialVersion、reportCandidate。</div>
+          </div>
+          <div class="stat">
+            <div class="label">匯入戰報成品</div>
+            <input id="report-artifact-file" type="file" accept="text/html,application/pdf,.html,.pdf" style="width:100%;margin-top:6px" />
+            <div class="small" style="margin-top:6px">只接受 .html / .pdf，檔名須為所選 report_key，或以 report_key_ 開頭（例如 &lt;report_key&gt;_OWNER_REVIEW_V3.html）。建議組合：&lt;report_key&gt;.html、&lt;report_key&gt;.pdf、&lt;report_key&gt;.report.json；JSON 管版本治理，HTML/PDF 管閱讀內容。僅供 Owner Review 閱讀、預覽與 report-library attachment。</div>
+          </div>
+        </div>
+        <div class="buttons" style="margin-top:10px">
+          <button id="import-editorial" type="button">匯入版本 JSON</button>
+          <button id="import-report-artifact" type="button">匯入戰報成品</button>
+          <button id="apply-editorial" type="button" disabled>套用潤稿版</button>
+        </div>
+        <div id="editorial-message" class="small" style="margin-top:8px">讀取季度版本歷史中。</div>
+        <div id="report-artifact-message" class="small" style="margin-top:8px"></div>
+        <div id="editorial-history" class="small" style="margin-top:8px"></div>
       </div>
       <div class="notice blue" style="margin-top:12px">
         <div class="between">
@@ -283,6 +317,12 @@
         <div class="stat"><div class="label">Market Activity</div><div id="market-activity-status" class="value">N/A</div><div id="market-activity-date" class="small">最後成功日期：N/A</div></div>
         <div class="stat"><div class="label">News</div><div id="news-component-status" class="value">NO_CHANGE</div><div class="small">既有新聞更新流程</div></div>
         <div class="stat"><div class="label">整體狀態</div><div id="overall-component-status" class="value">IDLE</div><div id="market-activity-log" class="small">Receipt／log：N/A</div></div>
+      </div>
+      <div class="grid four" style="margin-top:12px">
+        <div class="stat"><div class="label">Latest staging folder</div><div id="latest-staging-date" class="value">N/A</div><div class="small">僅代表 staging/YYYY-MM-DD</div></div>
+        <div class="stat"><div class="label">Daily Price formal / candidate</div><div id="daily-price-dates" class="small">N/A / N/A</div></div>
+        <div class="stat"><div class="label">Market Activity formal / candidate</div><div id="market-activity-dates" class="small">N/A / N/A</div></div>
+        <div class="stat"><div class="label">TWSE validated latest</div><div id="twse-validated-date" class="value">N/A</div></div>
       </div>
       <div id="server-context-warning" class="notice amber" style="display:none"></div>
     </section>
@@ -603,7 +643,7 @@
         if (id === 'owner-publish') el.disabled = disabled || !canPublish();
         else if (id === 'copy-approval-phrase') el.disabled = disabled || !(state.review || {}).ownerApprovalPhrase;
         else if (id === 'run-analysis-candidate') el.disabled = disabled || trigger.analysisEligible !== true;
-        else if (id === 'run-report-candidate') el.disabled = disabled || trigger.reportEligible !== true;
+        else if (id === 'run-report-candidate') el.disabled = disabled || (trigger.reportCompletionEligible !== true && trigger.reportEligible !== true);
         else el.disabled = disabled;
       });
     }
@@ -635,15 +675,20 @@
       const networkSummary = news.networkSummary || sourceManifest.networkSummary || {};
       const sourceHealth = news.sourceHealth || sourceManifest.sourceHealth || [];
       const latest = app.latestReport || review.latestReport || {};
-      const latestDaily = latest.latestDaily || {};
+      const latestQuarterly = latest.latestQuarterly || {};
+      const latestReport = latest.latestQuarterly || latest.latestMonthly || latest.latestWeekly || latest.latestDaily || {};
       const steps = Array.isArray(app.steps) ? app.steps : [];
       const components = app.componentStatus || {};
       const dailyComponent = components.dailyPrice || {};
       const marketComponent = components.marketActivity || app.marketActivity || {};
       const newsComponent = components.news || {};
       const officialIR = components.officialIR || app.officialIR || {};
+      const officialIRFailures = officialIR.failedSources || officialIR.failed_sources || [];
+      const officialIREvidence = officialIR.active_event_evidence || officialIR.validated_event_evidence || [];
+      const officialIRDocumentType = officialIR.documentType || officialIREvidence[0]?.quality_metadata?.document_type || '';
       const phaseB1 = components.phaseB1 || {};
       const trigger = app.reportTrigger || {};
+      const authorityDates = app.authorityDates || {};
       const busy = app.status === 'RUNNING';
 
       $('gate-badge').className = badgeClass(gate.code || 'CHECKING');
@@ -672,11 +717,15 @@
       $('official-ir-status').textContent = officialIR.status || 'NO_CHANGE';
       $('official-ir-event').textContent = [officialIR.event || officialIR.canonical_event_id, officialIR.fiscalPeriod].filter(Boolean).join(' / ') || 'N/A';
       $('official-ir-source').textContent = officialIR.officialSource || 'N/A';
-      $('official-ir-document').textContent = officialIR.documentType || 'NOT_YET_AVAILABLE';
+      $('official-ir-document').textContent = officialIRDocumentType || (officialIRFailures.length ? 'RETRIEVAL_FAILED' : 'NOT_YET_AVAILABLE');
       $('official-ir-retrieved').textContent = officialIR.retrievedAt || officialIR.evaluated_at_utc || 'N/A';
       $('official-ir-coverage').textContent = officialIR.coverageComplete === true ? 'COMPLETE' : officialIR.coverageComplete === false ? 'INCOMPLETE' : 'N/A';
-      $('official-ir-failures').textContent = (officialIR.failedSources || officialIR.failed_sources || []).map((item) => `${item.source_id}: ${item.error || item.status}`).join(' / ') || 'NONE';
+      $('official-ir-failures').textContent = officialIRFailures.map((item) => `${item.source_id}: ${item.error || item.status}`).join(' / ') || 'NONE';
       $('overall-component-status').textContent = app.overallStatus || app.status || 'IDLE';
+      $('latest-staging-date').textContent = app.latestStagingDate || 'N/A';
+      $('daily-price-dates').textContent = `${authorityDates.dailyPriceFormalLatestDate || 'N/A'} / ${authorityDates.dailyPriceCandidateLatestDate || 'N/A'}`;
+      $('market-activity-dates').textContent = `${authorityDates.marketActivityFormalLatestDate || 'N/A'} / ${authorityDates.marketActivityCandidateLatestDate || 'N/A'}`;
+      $('twse-validated-date').textContent = authorityDates.twseLatestValidatedTradingDate || 'N/A';
       $('phaseb1-run-id').textContent = phaseB1.runId || 'N/A';
       $('phaseb1-output').textContent = phaseB1.outputPath || 'N/A';
       $('trigger-status').className = badgeClass(trigger.status || 'NO_MATERIAL_CHANGE');
@@ -686,8 +735,10 @@
       $('trigger-validation').textContent = trigger.validationState || trigger.error || 'NO_EVIDENCE';
       $('trigger-report-key').textContent = trigger.reportKey || 'N/A';
       $('trigger-revision').textContent = trigger.revision || 'N/A';
-      $('trigger-next-action').textContent = trigger.analysisEligible
-        ? (trigger.reportEligible ? 'Owner 可手動產生戰報候選' : 'Owner 可手動產生分析候選')
+      $('trigger-next-action').textContent = trigger.reportGenerated
+        ? '季度戰報已完成，等待本修訂版 Owner 審查；尚未發布'
+        : trigger.analysisEligible
+        ? (trigger.reportCompletionEligible || trigger.reportEligible ? 'Owner 可手動產生戰報候選' : 'Owner 可手動產生分析候選')
         : '尚未取得有效治理觸發；不產生正式戰報';
       const receiptPaths = marketComponent.receiptPaths || marketComponent.receipt_paths || [];
       $('market-activity-log').textContent = `Receipt／log：${receiptPaths[0] || marketComponent.logPath || marketComponent.run_dir || 'N/A'}`;
@@ -700,7 +751,11 @@
       const successCount = networkSummary.succeeded ?? 0;
       const checkedCount = networkSummary.checked ?? sourceHealth.length;
       $('connector-status').textContent = `${successCount}/${checkedCount || approvedCount} success`;
-      $('latest-report').textContent = latestDaily?.date || latestDaily?.title || 'N/A';
+      $('latest-report').textContent = latest.quarterlyStatus === 'FAIL_CLOSED'
+        ? `FAIL_CLOSED: ${latest.quarterlyError || 'Quarterly lineage 驗證失敗'}`
+        : latestQuarterly.report_key
+        ? `${latestQuarterly.report_key} / r${latestQuarterly.revision} / ${latestQuarterly.lifecycleState}`
+        : latestReport.date || latestReport.title || 'N/A';
       $('served-package-root').textContent = app.resolvedPackageRoot || 'N/A';
       $('served-git-head').textContent = app.gitHead || 'N/A';
       $('latest-rolling-brief-date').textContent = latest.latestRollingBriefDate || 'N/A';
@@ -804,12 +859,14 @@
 
     async function refreshAll() {
       try {
-        const [app, review] = await Promise.all([
+        const [app, review, editorial] = await Promise.all([
           fetchJson(`/api/p1008/status?t=${Date.now()}`),
           fetchJson(`/api/p1008/review-package?t=${Date.now()}`),
+          fetchJson(`/api/p1008/quarterly-editorial/catalog?t=${Date.now()}`),
         ]);
         state.app = app;
         state.review = review;
+        state.editorial = editorial;
         if (app.jobId) {
           try {
             const response = await fetch(`/api/p1008/log?jobId=${encodeURIComponent(app.jobId)}&t=${Date.now()}`, { cache: 'no-store' });
@@ -823,6 +880,111 @@
         state.review = { launcherGate: { code: 'APP_API_UNAVAILABLE', zh: 'App API 未啟動，請使用 P1008_APP.bat 開啟。', canEnterNewUi: false }, readiness: { blockers: [error.message] } };
       }
       renderStatus();
+      renderEditorial();
+    }
+
+    function selectedEditorialReport() {
+      const value = $('editorial-report-select').value || '';
+      const split = value.lastIndexOf('|');
+      if (split < 1) return null;
+      return { report_key: value.slice(0, split), revision: Number(value.slice(split + 1)) };
+    }
+
+    function renderEditorial() {
+      const catalog = state.editorial || {};
+      const reports = Array.isArray(catalog.reports) ? catalog.reports : [];
+      const select = $('editorial-report-select');
+      const prior = select.value;
+      select.innerHTML = reports.map((item) => `<option value="${safe(item.report_key)}|${safe(item.revision)}">${safe(item.report_key)} / r${safe(item.revision)}</option>`).join('');
+      if ([...select.options].some((option) => option.value === prior)) select.value = prior;
+      const chosen = selectedEditorialReport();
+      const report = chosen ? reports.find((item) => item.report_key === chosen.report_key && item.revision === chosen.revision) : null;
+      const versions = report?.versions || [];
+      const pending = versions.find((item) => item.status === 'PENDING');
+      $('editorial-status').className = badgeClass(pending ? 'PENDING' : reports.length ? 'PASS' : 'NO_REPORT');
+      $('editorial-status').textContent = pending ? 'PENDING' : reports.length ? 'READY' : 'NO REPORT';
+      $('editorial-current').textContent = report ? `current: ${report.currentEditorialVersion} / ${report.state}` : 'current: N/A';
+      $('editorial-history').innerHTML = report ? versions.map((item) => {
+        const label = item.editorialVersion === 'e0' ? '原始稿' : item.ownerApplied ? 'Owner Applied' : '潤稿版待套用';
+        const current = item.editorialVersion === report.currentEditorialVersion ? ' ← current' : '';
+        return `<div>${safe(item.editorialVersion)} ${safe(label + current)}</div>`;
+      }).join('') : '尚無季度 Owner Review。';
+      $('import-editorial').disabled = !report || Boolean(pending);
+      $('import-report-artifact').disabled = !report;
+      $('apply-editorial').disabled = !pending;
+      $('apply-editorial').dataset.version = pending?.editorialVersion || '';
+    }
+
+    async function importEditorial() {
+      const file = $('editorial-file').files?.[0];
+      if (!file) { $('editorial-message').textContent = '請先選擇版本 JSON。'; return; }
+      try {
+        if (!file.name.toLowerCase().endsWith('.json')) {
+          throw new Error('此入口只接受版本 JSON；HTML/PDF 請使用「匯入戰報成品」。');
+        }
+        const body = JSON.parse(await file.text());
+        const required = ['report_key', 'revision', 'parentEditorialVersion', 'reportCandidate'];
+        if (!body || typeof body !== 'object' || required.some((key) => !Object.prototype.hasOwnProperty.call(body, key))) {
+          throw new Error('版本 JSON 缺少必要 metadata：report_key、revision、parentEditorialVersion、reportCandidate。');
+        }
+        const selected = selectedEditorialReport();
+        if (!selected) throw new Error('尚未選擇治理報告。');
+        const result = await fetchJson('/api/p1008/quarterly-editorial/import', {method: 'POST', body: JSON.stringify({
+          selectedReportKey: selected.report_key,
+          selectedRevision: selected.revision,
+          editorialReturn: body,
+        })});
+        $('editorial-message').textContent = `${result.report_key} / r${result.revision} / ${result.editorialVersion} 已驗證為 PENDING；尚未覆寫 Owner Review。`;
+      } catch (error) {
+        $('editorial-message').textContent = `FAIL_CLOSED：${error.payload?.reason || error.message}`;
+      }
+      await refreshAll();
+    }
+
+    async function fileAsBase64(file) {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('戰報成品讀取失敗。'));
+        reader.readAsDataURL(file);
+      });
+      const marker = String(dataUrl).indexOf(',');
+      if (marker < 0) throw new Error('戰報成品格式無法讀取。');
+      return String(dataUrl).slice(marker + 1);
+    }
+
+    async function importReportArtifact() {
+      const file = $('report-artifact-file').files?.[0];
+      if (!file) { $('report-artifact-message').textContent = '請先選擇 .html 或 .pdf 戰報成品。'; return; }
+      try {
+        const suffix = file.name.toLowerCase().split('.').pop();
+        if (!['html', 'pdf'].includes(suffix)) throw new Error('此入口只接受 .html 或 .pdf 戰報成品。');
+        const selected = selectedEditorialReport();
+        if (!selected) throw new Error('尚未選擇治理報告。');
+        const result = await fetchJson('/api/p1008/quarterly-editorial/artifact-import', {method: 'POST', body: JSON.stringify({
+          selectedReportKey: selected.report_key,
+          selectedRevision: selected.revision,
+          fileName: file.name,
+          contentBase64: await fileAsBase64(file),
+        })});
+        const link = result.artifactUrl ? ` <a href="${safe(result.artifactUrl)}" target="_blank" rel="noopener">預覽附件</a>` : '';
+        $('report-artifact-message').innerHTML = `${safe(result.report_key)} / r${safe(result.revision)} 已附加 ${safe(result.fileName)}；僅供 Owner Review，未發布、未改變 Core View 或 authority。${link}`;
+      } catch (error) {
+        $('report-artifact-message').textContent = `FAIL_CLOSED：${error.payload?.reason || error.message}`;
+      }
+    }
+
+    async function applyEditorial() {
+      const selected = selectedEditorialReport();
+      const version = $('apply-editorial').dataset.version;
+      if (!selected || !version || !confirm(`套用 ${selected.report_key} / r${selected.revision} / ${version}？此動作不會發布。`)) return;
+      try {
+        const result = await fetchJson('/api/p1008/quarterly-editorial/apply', {method: 'POST', body: JSON.stringify({...selected, editorialVersion: version})});
+        $('editorial-message').textContent = `${result.report_key} / r${result.revision} 已套用 ${result.currentEditorialVersion}，仍為 OWNER_REVIEW_REQUIRED。`;
+      } catch (error) {
+        $('editorial-message').textContent = `FAIL_CLOSED：${error.payload?.reason || error.message}`;
+      }
+      await refreshAll();
     }
 
     async function runJob(route) {
@@ -898,6 +1060,10 @@
     $('owner-publish').addEventListener('click', ownerPublish);
     $('copy-approval-phrase').addEventListener('click', copyApprovalPhrase);
     $('approval-phrase').addEventListener('input', renderStatus);
+    $('editorial-report-select').addEventListener('change', renderEditorial);
+    $('import-editorial').addEventListener('click', importEditorial);
+    $('import-report-artifact').addEventListener('click', importReportArtifact);
+    $('apply-editorial').addEventListener('click', applyEditorial);
 
     refreshAll();
     setInterval(refreshAll, 5000);

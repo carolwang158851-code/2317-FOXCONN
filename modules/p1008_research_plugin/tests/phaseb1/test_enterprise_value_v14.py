@@ -83,8 +83,10 @@ class EnterpriseValueV14Tests(unittest.TestCase):
         history = self.result["analysis"].quarterly_earnings.quarterly_history
         for key in ("periods", "revenue100mTwd", "grossProfit100mTwd", "operatingIncome100mTwd", "opexProxy100mTwd", "opexProxyRevenuePct"):
             self.assertEqual(len(history[key]), 8, key)
-        self.assertEqual(history["grossProfitOrigin"][-1], "OFFICIAL")
-        self.assertEqual(history["operatingProfitOrigin"][-1], "OFFICIAL")
+        self.assertEqual(
+            history["grossProfitOrigin"][-1], "DERIVED_FROM_GOVERNED_AUTHORITY"
+        )
+        self.assertEqual(history["operatingProfitOrigin"][-1], "GOVERNED_AUTHORITY")
 
     def test_formula_cards_define_formula_inputs_result_use_and_limit(self) -> None:
         cards = self.analytics["formulaCards"]

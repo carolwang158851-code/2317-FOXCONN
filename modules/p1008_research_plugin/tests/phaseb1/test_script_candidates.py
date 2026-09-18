@@ -17,7 +17,7 @@ class PhaseB1ScriptCandidateTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         with scratch("script-valid-") as output:
-            result = fixture_pipeline(output).run_all(output_base=output)
+            result = fixture_pipeline(output).run_all()
             cls.report = result["report"]
 
     def test_script_generator_rejects_raw_csv_path(self) -> None:

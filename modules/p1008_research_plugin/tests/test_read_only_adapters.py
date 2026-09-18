@@ -121,6 +121,16 @@ class ReadOnlyAdapterTests(unittest.TestCase):
             json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
+        contract_source = (
+            PACKAGE_ROOT
+            / "contracts"
+            / "p1008_quarterly_authority"
+            / "v1.0"
+            / "P1008_QUARTERLY_FIELD_AVAILABILITY_CONTRACT_V1.json"
+        )
+        contract_target = root / contract_source.relative_to(PACKAGE_ROOT)
+        contract_target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(contract_source, contract_target)
 
     def test_integrated_baseline_missing_cash_flow_fails_closed(self) -> None:
         manifest = self._manifest()

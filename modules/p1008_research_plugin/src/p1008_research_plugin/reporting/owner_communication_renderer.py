@@ -19,6 +19,9 @@ from typing import Any
 
 from .report_contracts import ChartData
 from .report_renderer_formal import FormalPreviewRenderer
+from ..contract_loader import ContractLoader
+from ..governance import GovernanceBoundary, GovernanceError
+from ..phaseb1_common import PhaseB1BoundaryError, atomic_write
 
 
 CONTRACT_VERSION = "1"
@@ -45,6 +48,10 @@ class OwnerCommunicationRenderer:
     """Render the frozen FY2026 Q2 pack for an Owner decision audience."""
 
     def __init__(self, source_dir: Path) -> None:
+        self.package_root = Path(__file__).resolve().parents[5]
+        self.filesystem_governance = GovernanceBoundary(
+            ContractLoader(self.package_root)
+        )
         self.source_dir = source_dir.resolve()
         missing = [name for name in REQUIRED_INPUTS if not (self.source_dir / name).is_file()]
         if missing:
@@ -64,6 +71,25 @@ class OwnerCommunicationRenderer:
             item["metric"]: item
             for item in json.loads((self.source_dir / "formula_cards.json").read_text(encoding="utf-8"))
         }
+
+    def authorize_output_dir(self, output_dir: Path) -> Path:
+        try:
+            return self.filesystem_governance.authorize_write(
+                "OWNER_COMMUNICATION", output_dir
+            )
+        except GovernanceError as exc:
+            raise RuntimeError(f"Owner Communication output denied: {exc}") from exc
+
+    def authorize_profile_cleanup(self, output_dir: Path, profile: Path) -> Path:
+        try:
+            return self.filesystem_governance.authorize_tree_delete(
+                "OWNER_COMMUNICATION",
+                profile,
+                owned_parent=output_dir,
+                expected_name=".edge-profile",
+            )
+        except GovernanceError as exc:
+            raise RuntimeError(f"Owner Communication cleanup denied: {exc}") from exc
 
     @property
     def exact(self) -> dict[str, str]:
@@ -340,21 +366,35 @@ class OwnerCommunicationRenderer:
         raise RuntimeError("Microsoft Edge is unavailable for local PDF export")
 
     def write(self, output_dir: Path) -> dict[str, Any]:
-        output_dir = output_dir.resolve()
+        output_dir = self.authorize_output_dir(output_dir)
         output_dir.mkdir(parents=True, exist_ok=False)
         pre_sha = self.pack_sha
         markdown_path = output_dir / "report_candidate.md"
         html_path = output_dir / "report_candidate.html"
         pdf_path = output_dir / "report_candidate.pdf"
-        markdown_path.write_text(self.markdown(), encoding="utf-8", newline="\n")
-        html_path.write_bytes(self.html())
+        atomic_write(
+            markdown_path,
+            self.markdown().encode("utf-8"),
+            capability="OWNER_COMMUNICATION",
+        )
+        atomic_write(
+            html_path, self.html(), capability="OWNER_COMMUNICATION"
+        )
         for name in ("validated_research_pack.json", "chart_data.json", "formula_cards.json", "strategy_scorecard.json"):
-            shutil.copyfile(self.source_dir / name, output_dir / name)
+            destination = self.filesystem_governance.authorize_write(
+                "OWNER_COMMUNICATION", output_dir / name
+            )
+            shutil.copyfile(self.source_dir / name, destination)
         post_sha = _sha(output_dir / "validated_research_pack.json")
         if post_sha != pre_sha or (output_dir / "validated_research_pack.json").read_bytes() != self.pack_path.read_bytes():
             raise RuntimeError("research pack drifted during Owner Communication rendering")
         edge = self._edge_executable()
-        profile = output_dir / ".edge-profile"
+        profile = self.filesystem_governance.authorize_write(
+            "OWNER_COMMUNICATION", output_dir / ".edge-profile"
+        )
+        pdf_path = self.filesystem_governance.authorize_write(
+            "OWNER_COMMUNICATION", pdf_path
+        )
         command = [
             str(edge), "--headless", "--disable-gpu", "--no-pdf-header-footer",
             f"--user-data-dir={profile}", f"--print-to-pdf={pdf_path}", html_path.as_uri(),
@@ -363,7 +403,8 @@ class OwnerCommunicationRenderer:
         if completed.returncode != 0 or not pdf_path.is_file() or pdf_path.stat().st_size == 0:
             diagnostic = (completed.stderr or completed.stdout or b"").decode("utf-8", errors="replace").strip()
             raise RuntimeError(f"PDF export failed: {diagnostic}")
-        shutil.rmtree(profile, ignore_errors=False)
+        disposable_profile = self.authorize_profile_cleanup(output_dir, profile)
+        shutil.rmtree(disposable_profile, ignore_errors=False)
         review = {
             "recordType": "P1008_OWNER_COMMUNICATION_REVIEW",
             "contractVersion": CONTRACT_VERSION,
@@ -383,7 +424,16 @@ class OwnerCommunicationRenderer:
             "actionable": False,
         }
         review_path = output_dir / "owner_communication_review.json"
-        review_path.write_text(json.dumps(review, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
+        try:
+            atomic_write(
+                review_path,
+                (json.dumps(review, ensure_ascii=False, indent=2) + "\n").encode(
+                    "utf-8"
+                ),
+                capability="OWNER_COMMUNICATION",
+            )
+        except PhaseB1BoundaryError as exc:
+            raise RuntimeError(f"Owner Communication review denied: {exc}") from exc
         return {
             "markdown": str(markdown_path), "html": str(html_path), "pdf": str(pdf_path),
             "review": str(review_path), "research_pack_sha256": post_sha,

@@ -49,9 +49,9 @@ FROZEN_MACRO_SHA256 = (
 )
 FROZEN_MACRO_SIZE = 9075
 CURRENT_MACRO_SHA256 = (
-    "7C3E5F320FBD7F1558CBA670246B5A3062060769A0420A105A4CAF8499DABC63"
+    "432F91401E136993EEAF420F20EB6F8C307F8841118D6D1A315812F80EBF4583"
 )
-CURRENT_MACRO_SIZE = 9451
+CURRENT_MACRO_SIZE = 17232
 ERRATA_RELATIVE = (
     "contracts/p1008_research_plugin/acceptance/errata/v2.0/"
     "OWNER_ACCEPTANCE_HASH_ERRATA.json"
@@ -366,6 +366,7 @@ def expected_hash_governed_paths() -> set[str]:
     for relative_root in (
         "contracts/p1008_research_plugin/v1.0",
         "contracts/p1008_research_plugin/v2.0",
+        "contracts/p1008_research_plugin/v2.1",
     ):
         root = PACKAGE_ROOT / relative_root
         manifest = load_json(root / "contract.manifest.json")
@@ -438,7 +439,7 @@ class Phase2ABoundaryTests(unittest.TestCase):
             entries.append(path)
         self.assertEqual(len(entries), len(set(entries)))
         self.assertEqual(set(entries), expected_hash_governed_paths())
-        self.assertEqual(len(entries), 185)
+        self.assertEqual(len(entries), 195)
 
     def test_crlf_and_mixed_manifest_bytes_are_rejected(self) -> None:
         for rejected in (MANIFEST_CRLF_SHA256, MANIFEST_MIXED_SHA256):

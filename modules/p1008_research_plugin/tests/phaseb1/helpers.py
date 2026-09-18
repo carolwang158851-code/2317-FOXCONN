@@ -23,19 +23,12 @@ GOVERNED_Q2_SOURCE_MOTHER = (
     / "source"
     / "HON_HAI_FY2026_Q2_ENTERPRISE_VALUE_WAR_REPORT.html"
 )
-CURRENT_AUTHORITY_RECEIPT_REL = Path(
-    "contracts/p1008_research_plugin/acceptance/v1.1/"
-    "P1008_FY2026Q2_ROIC_FINALIZATION_CLOSEOUT.json"
-)
-CURRENT_AUTHORITY_RECEIPT_SHA256 = (
-    "B1D431C6380E2914E40203DA6A077B3414029F100FA14FB0108E63F5D4069050"
-)
 sys.path.insert(0, str(SRC_ROOT))
 
 
 @contextmanager
 def scratch(prefix: str) -> Iterator[Path]:
-    root = PACKAGE_ROOT / "runtime" / "phaseb1_test_scratch"
+    root = PACKAGE_ROOT / "runtime" / "report_production" / "test_scratch"
     root.mkdir(parents=True, exist_ok=True)
     # Do not use tempfile.TemporaryDirectory here. The verified bundled Python
     # can create normal runtime folders on Windows/OneDrive, while inherited
@@ -50,22 +43,57 @@ def fixture() -> dict[str, object]:
 
 
 def current_authority_hashes() -> dict[str, str]:
-    raw = (PACKAGE_ROOT / CURRENT_AUTHORITY_RECEIPT_REL).read_bytes()
-    if hashlib.sha256(raw).hexdigest().upper() != CURRENT_AUTHORITY_RECEIPT_SHA256:
-        raise RuntimeError("Current authority amendment receipt hash mismatch")
-    receipt = json.loads(raw.decode("utf-8-sig"))
-    return {
-        str(receipt["authorityManifest"]["path"]): str(
-            receipt["authorityManifest"]["sha256"]
-        ),
-        **{str(path): str(digest) for path, digest in receipt["authorityFiles"].items()},
+    manifest_path = PACKAGE_ROOT / "data" / "CSV_AUTHORITY_MANIFEST.json"
+    manifest_raw = manifest_path.read_bytes()
+    manifest = json.loads(manifest_raw.decode("utf-8-sig"))
+    hashes = {
+        "data/CSV_AUTHORITY_MANIFEST.json": hashlib.sha256(
+            manifest_raw
+        ).hexdigest().upper()
     }
+    for entry in [
+        *manifest.get("authoritativeFiles", []),
+        *manifest.get("nonAuthoritativeFiles", []),
+    ]:
+        relative = str(entry["path"])
+        expected = str(entry.get("currentSha256") or entry["sha256"]).upper()
+        actual = hashlib.sha256((PACKAGE_ROOT / relative).read_bytes()).hexdigest().upper()
+        if actual != expected:
+            raise RuntimeError(f"Current authority hash mismatch: {relative}")
+        hashes[relative] = expected
+    return hashes
 
 
 def write_fixture(root: Path, payload: dict[str, object]) -> Path:
     path = root / "fixture.json"
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8", newline="\n")
     return path
+
+
+def copy_gfs_contract_overlay(package: Path) -> None:
+    contracts = package / "contracts" / "p1008_research_plugin"
+    v2_manifest = (
+        PACKAGE_ROOT
+        / "contracts"
+        / "p1008_research_plugin"
+        / "v2.0"
+        / "contract.manifest.json"
+    )
+    if v2_manifest.is_file():
+        (contracts / "v2.0").mkdir(parents=True, exist_ok=True)
+        shutil.copy2(v2_manifest, contracts / "v2.0" / "contract.manifest.json")
+    v21 = PACKAGE_ROOT / "contracts" / "p1008_research_plugin" / "v2.1"
+    if v21.is_dir():
+        shutil.copytree(v21, contracts / "v2.1")
+
+
+def copy_quarterly_authority_contract(package: Path) -> None:
+    source = PACKAGE_ROOT / "contracts" / "p1008_quarterly_authority"
+    if source.is_dir():
+        shutil.copytree(
+            source,
+            package / "contracts" / "p1008_quarterly_authority",
+        )
 
 
 def authority_sandbox(root: Path) -> Path:
@@ -75,6 +103,8 @@ def authority_sandbox(root: Path) -> Path:
         PACKAGE_ROOT / "contracts" / "p1008_research_plugin" / "v1.0",
         package / "contracts" / "p1008_research_plugin" / "v1.0",
     )
+    copy_gfs_contract_overlay(package)
+    copy_quarterly_authority_contract(package)
     (package / "rules").mkdir(parents=True)
     shutil.copy2(
         PACKAGE_ROOT / "rules" / "RULE_STATUS_MANIFEST.json",
@@ -91,6 +121,8 @@ def frozen_authority_package(root: Path) -> Path:
         PACKAGE_ROOT / "contracts" / "p1008_research_plugin" / "v1.0",
         package / "contracts" / "p1008_research_plugin" / "v1.0",
     )
+    copy_gfs_contract_overlay(package)
+    copy_quarterly_authority_contract(package)
     (package / "rules").mkdir(parents=True)
     shutil.copy2(
         PACKAGE_ROOT / "rules" / "RULE_STATUS_MANIFEST.json",

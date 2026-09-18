@@ -1,0 +1,41 @@
+{
+  "contractId": "P1008_FORMULA_REGISTRY",
+  "contractVersion": "1.0",
+  "status": "OWNER_APPROVED_GOVERNANCE_LINEAGE_IMPLEMENTED_PRODUCTION_FORMULA_UNCHANGED",
+  "hashAlgorithm": "SHA-256",
+  "rootHashConstruction": "SHA256(UTF8(join(sorted(path + '|' + sha256), LF)))",
+  "rootHash": "86FEDB268064923A02E8F8B3F8814B8098AFFB9A526DA657FD85A96829D54B1B",
+  "artifacts": [
+    {
+      "path": "acceptance/P1008_FORMULA_REGISTRY_OWNER_DECISION_V1.json",
+      "sha256": "39A5881F3165F394118D550D060870715E39A40AE6279471BFD1810516C5C3DF",
+      "sizeBytes": 3219
+    },
+    {
+      "path": "formula_registry.json",
+      "sha256": "EC6BB143B030A19C401C88A2A9C51F46B00CA5F04061EF6E3E40140BA95C1EDC",
+      "sizeBytes": 7030
+    },
+    {
+      "path": "README.md",
+      "sha256": "524423677B3955E2825F0A5A87CE9FEDC243DF5519B099B4F622EF0D7444041A",
+      "sizeBytes": 1001
+    },
+    {
+      "path": "schemas/formula_registry.schema.json",
+      "sha256": "9DC5F371FF5BD52A6B33FE10611C685AB8EF8F94F32A42DC598CF7CE94969039",
+      "sizeBytes": 1997
+    },
+    {
+      "path": "schemas/owner_decision_record.schema.json",
+      "sha256": "C0CE29F9C8696111C49693BC1DEF3B487F366A5E8B206C8A0BA3703EAEDA02CC",
+      "sizeBytes": 1459
+    }
+  ],
+  "backwardCompatibility": "Additive formula-governance lineage and representation-only UI remediation; current MIDR numeric formula, verdict boundaries, weights, UD, HOLD, RULE, and authority data remain unchanged",
+  "actionable": false,
+  "formalDecision": false,
+  "holdChangeAllowed": false,
+  "ruleChangeAllowed": false,
+  "productionActivation": false
+}

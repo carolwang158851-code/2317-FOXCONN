@@ -75,6 +75,11 @@ class PhaseB1LauncherTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("compile_existing_phaseb1_result", pipeline)
         self.assertIn('"reportChapterCount": 11', pipeline)
+        report_entry = (PACKAGE_ROOT / "tools" / "p1008_build_report.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("complete_quarterly_report", report_entry)
+        self.assertIn("OWNER_REVIEW_REQUIRED", report_entry)
 
 
 if __name__ == "__main__":

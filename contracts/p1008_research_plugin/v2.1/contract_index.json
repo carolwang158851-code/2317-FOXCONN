@@ -1,0 +1,23 @@
+{
+  "contractId": "P1008_RESEARCH_GOVERNANCE_CONTRACT",
+  "contractVersion": "2.1",
+  "status": "OWNER_ACCEPTANCE_REQUIRED",
+  "contractForm": "ADDITIVE_GOVERNANCE_OVERLAY",
+  "extendsContractVersion": "2.0",
+  "extendsContractRootHash": "E056357A8A63A15BCF9FDC286BEE0BDB56E043AF26F4DDCD5624FDB3707BD782",
+  "preservesV1RootHash": "3370C4DBD6B564E2200D051AC07C8507442C130ADE64D770621107FA09D2924D",
+  "policyOverlay": "policies/plugin_policy.json",
+  "ownerAcceptanceRequired": true,
+  "productionPromotionAuthorized": false,
+  "actionable": false,
+  "permanentInvariants": {
+    "noAutoTrade": true,
+    "noFormalCsvWrite": true,
+    "noRuleEnablement": true,
+    "canModifyRuntimeSqlite": false,
+    "canChangeMidr": false,
+    "canChangeHold": false,
+    "canPublish": false,
+    "modelCannotApproveGovernance": true
+  }
+}

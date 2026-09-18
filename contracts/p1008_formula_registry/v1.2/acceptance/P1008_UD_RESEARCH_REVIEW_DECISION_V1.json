@@ -1,0 +1,140 @@
+{
+  "$schema": "../schemas/ud_research_review_decision.schema.json",
+  "recordType": "P1008_UD_RESEARCH_REVIEW_DECISION",
+  "recordVersion": "1.0",
+  "decisionId": "P1008-UD-RESEARCH-REVIEW-DECISION-20260916-V1",
+  "decisionDate": "2026-09-16",
+  "ownerApprovalReference": "OWNER_DECISION_P1008_UD_RESEARCH_REVIEW_KEEP_CURRENT",
+  "formulaId": "MIDR.UD",
+  "decisionSemantics": {
+    "designIntent": "NOT_PROVEN",
+    "defect": "NOT_PROVEN",
+    "currentFormulaProvenCorrect": false,
+    "currentFormulaOptimalityProven": false,
+    "formulaChangeJustified": false,
+    "ownerDecision": "KEEP_CURRENT",
+    "udStatus": "UNCHANGED_PROTECTED",
+    "interpretation": "Defect not proven is not equivalent to formula proven correct; this is a no-change governance decision, not a permanent semantic endorsement."
+  },
+  "productionSnapshot": {
+    "formula": "MIDR_final = MIDR_raw * UD",
+    "values": {"NORMAL": 1.0, "CAUTION": 0.9, "SYSTEMIC": 0.8},
+    "status": "UNCHANGED_PROTECTED",
+    "latestOwnerReview": "KEEP_CURRENT",
+    "formulaChanged": false,
+    "udValuesChanged": false
+  },
+  "provenanceEvidence": {
+    "earliestTraceableCommit": "efbf0b2ec1aaf25d1d4f9025fe4a04b0f336dce7",
+    "earliestPath": "src/index_p1008_v7.source.html",
+    "explicitFullName": "NOT_FOUND",
+    "explicitDesignIntent": "NOT_FOUND",
+    "repositoryHistoryBeforeRootCommit": "NOT_AVAILABLE"
+  },
+  "mathematicalBehavior": {
+    "negativeRawMidr": "Risk escalation multiplies by a smaller positive factor and moves the score toward zero.",
+    "positiveRawMidr": "Risk escalation multiplies by a smaller positive factor and moves the score toward zero.",
+    "reinterpretationAuthorized": false
+  },
+  "canonicalBacktest": {
+    "status": "COMPLETED",
+    "dates": "2026-01-28/2026-09-14",
+    "rows": 151,
+    "riskLevelCounts": {"NORMAL": 45, "CAUTION": 106, "SYSTEMIC": 0},
+    "rawVerdictCounts": {"SEVERE": 59, "CAUTION": 49, "NEUTRAL": 43},
+    "currentUdFinalCounts": {"SEVERE": 51, "CAUTION": 55, "NEUTRAL": 45},
+    "udCausedFlips": 10,
+    "flipBreakdown": {"SEVERE_TO_CAUTION": 8, "CAUTION_TO_NEUTRAL": 2},
+    "systemicSample": "NONE",
+    "baselineSha256": "2DE165ADD677DF2492FBC63F27CE6CAA25BBBE9708901740B99F1237F65AD18E",
+    "hashSerialization": "date|final MIDR to 3 decimals|verdict joined with LF"
+  },
+  "researchCandidates": {
+    "UD-0_CURRENT_SHRINKAGE": {"status": "KEEP_PRODUCTION", "productionActivated": true},
+    "UD-1_NO_UD": {"status": "RESEARCH_SUPPORTED_CONTROL", "productionActivated": false},
+    "UD-2_DOWNSIDE_AMPLIFIER": {"status": "RESEARCH_WEAK", "productionActivated": false},
+    "UD-3_NEGATIVE_HOLD_POSITIVE_DISCOUNT": {"status": "RESEARCH_WEAK", "productionActivated": false}
+  },
+  "limitations": {
+    "governedCanonicalObservations": 151,
+    "normalObservations": 45,
+    "cautionObservations": 106,
+    "systemicObservations": 0,
+    "actualSystemicProductionObservations": false,
+    "allHistoricalRawMidrNegative": true,
+    "ud3DistinguishableFromUd1OnSample": false,
+    "observationsOverlap": true,
+    "outcomeSamplesShrinkAt20DAnd60D": true,
+    "outOfSampleValidation": false,
+    "causalInference": false,
+    "tradingStrategyInference": false,
+    "governedLookaheadSafeHistoryBefore20260128": "NOT_SUPPORTED"
+  },
+  "exploratoryOutcomeEvidence": {
+    "status": "EXPLORATORY_ONLY",
+    "interpretation": "Exploratory alignment only; these results do not prove causality, formula optimality, or trading performance.",
+    "5D": {
+      "SEVERE": {"n": 51, "returnPct": -1.18, "maePct": -3.93, "mfePct": 2.61},
+      "CAUTION": {"n": 50, "returnPct": 1.50, "maePct": -1.78, "mfePct": 3.56},
+      "NEUTRAL": {"n": 45, "returnPct": 1.72, "maePct": -1.77, "mfePct": 3.46}
+    },
+    "20D": {
+      "SEVERE": {"n": 51, "returnPct": -3.69, "maePct": -8.52, "mfePct": 7.88},
+      "CAUTION": {"n": 35, "returnPct": 4.21, "maePct": -5.17, "mfePct": 11.47},
+      "NEUTRAL": {"n": 45, "returnPct": 7.75, "maePct": -4.84, "mfePct": 13.53}
+    },
+    "60D": {
+      "SEVERE": {"n": 30, "returnPct": -4.56, "maePct": -13.88, "mfePct": 11.12},
+      "CAUTION": {"n": 16, "returnPct": 9.89, "maePct": -10.21, "mfePct": 24.13},
+      "NEUTRAL": {"n": 45, "returnPct": 22.39, "maePct": -6.75, "mfePct": 42.81}
+    }
+  },
+  "futureReconsiderationEvidence": [
+    "Explicit historical design documentation",
+    "Meaningful SYSTEMIC observations",
+    "Materially longer governed history",
+    "Out-of-sample evidence",
+    "Evidence that current behavior conflicts with an approved semantic contract"
+  ],
+  "invariantProtection": {
+    "YAChanged": false,
+    "VALChanged": false,
+    "FRVChanged": false,
+    "RTMChanged": false,
+    "RTMCurrentProduction": "RTM_0_TRUTHFUL_NEUTRAL",
+    "MDRChanged": false,
+    "MRDChanged": false,
+    "MRDCurrentProduction": "MRD-M0_DISPLAY_ONLY",
+    "midrWeightsChanged": false,
+    "midrVerdictBoundariesChanged": false,
+    "UDChanged": false,
+    "holdChanged": false,
+    "ruleChanged": false,
+    "sqliteChanged": false
+  },
+  "authorityProtection": {
+    "hashAlgorithm": "SHA-256",
+    "beforeAndAfter": {
+      "data/2317_master_v9.csv": "E623CA082F2A080613C33F4155BA8006646E30D6A517DE926AF6108062F84D48",
+      "data/2317_daily_price.csv": "CBCF7D96490CB5B5C24E282F362F29953216DE8BEA16124D4B854842B250567C",
+      "data/2317_daily_market_activity.csv": "86618182D9A6441DA9CE1761CF10D99D27F0B26B91CB4FEF732F3FE55447B326",
+      "data/CSV_AUTHORITY_MANIFEST.json": "3A977A8B38A02D7F51C9E18F35B4E46464A3F148BCB97C9E9CBC1ADEC2861CDA"
+    },
+    "authorityBytesChanged": false
+  },
+  "codeProtection": {
+    "sourceHtmlChanged": false,
+    "bundleChanged": false,
+    "runtimeHtmlChanged": false,
+    "ruleChanged": false,
+    "holdChanged": false,
+    "sqliteChanged": false
+  },
+  "baselineCommitSha": "0f923778342370b89ac5cee02c34c263c98f8919",
+  "recordCommitSha": null,
+  "commitStatus": "NOT_COMMITTED",
+  "candidateActivationAuthorized": false,
+  "actionable": false,
+  "formalDecision": false,
+  "productionFormulaChange": false
+}

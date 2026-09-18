@@ -245,9 +245,17 @@ class PhaseAFinalOwnerReviewTests(unittest.TestCase):
         rows = review["row_preview"]
         self.assertEqual(invalid_values, [])
         self.assertEqual(rows, [])
+        manifest = json.loads(
+            (ROOT / "data/CSV_AUTHORITY_MANIFEST.json").read_text(encoding="utf-8")
+        )
+        macro_entry = next(
+            item
+            for item in manifest.get("nonAuthoritativeFiles", [])
+            if item.get("path") == "data/macro_snapshot.csv"
+        )
         self.assertEqual(
             self.module.sha256_file(ROOT / "data/macro_snapshot.csv"),
-            "7C3E5F320FBD7F1558CBA670246B5A3062060769A0420A105A4CAF8499DABC63",
+            macro_entry["currentSha256"],
         )
 
 

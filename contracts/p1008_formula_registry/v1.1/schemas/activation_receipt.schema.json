@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://formula-registry/v1.1/activation_receipt",
+  "type": "object",
+  "required": [
+    "recordType", "recordVersion", "activationId", "activationDate",
+    "ownerAuthorizationReference", "predecessor", "candidateApproval",
+    "productionActivation", "numericTransition", "replayEvidence",
+    "invariantProtection", "authorityProtection", "buildEvidence",
+    "implementationCommitSha", "commitStatus", "activationReceipt",
+    "actionable", "formalDecision"
+  ],
+  "properties": {
+    "$schema": {"type": "string"},
+    "recordType": {"const": "P1008_RTM0_PRODUCTION_ACTIVATION_RECEIPT"},
+    "recordVersion": {"const": "1.0"},
+    "activationId": {"type": "string", "minLength": 1},
+    "activationDate": {"type": "string", "format": "date"},
+    "ownerAuthorizationReference": {"type": "string", "minLength": 1},
+    "predecessor": {"type": "object"},
+    "candidateApproval": {"type": "object"},
+    "productionActivation": {"type": "object"},
+    "numericTransition": {"type": "object"},
+    "replayEvidence": {"type": "object"},
+    "invariantProtection": {"type": "object"},
+    "authorityProtection": {"type": "object"},
+    "buildEvidence": {"type": "object"},
+    "implementationCommitSha": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+    "commitStatus": {"const": "NOT_COMMITTED"},
+    "activationReceipt": {"const": true},
+    "actionable": {"const": false},
+    "formalDecision": {"const": false}
+  },
+  "additionalProperties": false
+}

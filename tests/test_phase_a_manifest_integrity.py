@@ -11,18 +11,9 @@ from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = PACKAGE_ROOT / "data/CSV_AUTHORITY_MANIFEST.json"
-PHASE_A_FILES = (
-    "data/2317_daily_price.csv",
-    "data/2317_daily_market_activity.csv",
-    "data/macro_snapshot.csv",
-    "data/fx_trend_observations.csv",
-    "data/macro_event_observations.csv",
-)
-
-
-def git_blob_bytes(relative: str) -> bytes:
+def git_blob_bytes(relative: str, revision: str = "HEAD") -> bytes:
     return subprocess.run(
-        ["git", "show", f"HEAD:{relative}"],
+        ["git", "show", f"{revision}:{relative}"],
         cwd=PACKAGE_ROOT,
         check=True,
         capture_output=True,
@@ -41,29 +32,40 @@ def csv_row_count_bytes(payload: bytes) -> int:
 class PhaseAManifestIntegrityTests(unittest.TestCase):
     def test_phase_a_csv_hashes_and_rows_match_manifest(self) -> None:
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-        entries = {
-            item["path"]: item
-            for item in (
-                manifest.get("authoritativeFiles", [])
-                + manifest.get("nonAuthoritativeFiles", [])
-            )
-        }
-        for relative in PHASE_A_FILES:
+        for entry in manifest.get("authoritativeFiles", []):
+            relative = entry["path"]
             with self.subTest(relative=relative):
                 path = PACKAGE_ROOT / relative
-                entry = entries[relative]
                 committed = git_blob_bytes(relative)
-                worktree = path.read_bytes().replace(b"\r\n", b"\n")
+                worktree = path.read_bytes()
                 self.assertEqual(
-                    worktree,
-                    committed.replace(b"\r\n", b"\n"),
-                    "worktree differs from the accepted Git blob beyond line endings",
+                    hashlib.sha256(worktree).hexdigest().upper(),
+                    entry["sha256"],
+                    "PRODUCTION_AUTHORITY_HASH_MISMATCH",
                 )
                 self.assertEqual(
                     entry["sha256"],
                     hashlib.sha256(committed).hexdigest().upper(),
+                    "PRODUCTION_AUTHORITY_REPOSITORY_MISMATCH",
                 )
                 self.assertEqual(entry["rowCount"], csv_row_count_bytes(committed))
+
+        for entry in manifest.get("nonAuthoritativeFiles", []):
+            relative = entry["path"]
+            with self.subTest(relative=relative):
+                current = (PACKAGE_ROOT / relative).read_bytes()
+                self.assertEqual(entry["sha256"], entry["currentSha256"])
+                self.assertEqual(
+                    hashlib.sha256(current).hexdigest().upper(),
+                    entry["currentSha256"],
+                    "NON_AUTHORITATIVE_RESEARCH_LINEAGE_MISMATCH",
+                )
+                baseline = git_blob_bytes(relative, entry["acceptedBaselineRevision"])
+                self.assertEqual(
+                    hashlib.sha256(baseline).hexdigest().upper(),
+                    entry["acceptedBaselineSha256"],
+                    "RESEARCH_HISTORICAL_BASELINE_LINEAGE_MISMATCH",
+                )
 
     def test_phase_a_tools_do_not_import_ai_or_canva_clients(self) -> None:
         for relative in (

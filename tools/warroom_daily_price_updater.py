@@ -84,6 +84,7 @@ def run_update(
     price_path = package_root / PRICE_REL
     activity_path = package_root / ACTIVITY_REL
     formal_rows = read_rows(price_path)
+    formal_latest_date = formal_rows[-1]["Date"]
     anchor = activity_last_date(activity_path)
     months = twse.month_sequence(anchor[:7], as_of_date.strftime("%Y-%m"))
     run_id = f"P1008-DAILY-PRICE-{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')}"
@@ -135,6 +136,8 @@ def run_update(
                 "launcher_status": "NO_NEW_DATA",
                 "anchor_date": anchor,
                 "last_success_date": anchor,
+                "formal_authority_latest_date": formal_latest_date,
+                "candidate_latest_date": None,
                 "twse_latest_validated_trading_date": max(
                     day for day in twse_rows if day <= as_of_date.isoformat()
                 ),
@@ -204,15 +207,17 @@ def run_update(
                 run_dir / "publish",
                 immutable_through=anchor,
             )
-            status = "UPDATED" if twse.sha256_file(price_path) != before_hash else "NO_NEW_DAILY_PRICE"
+            status = "FORMAL_UPDATED" if twse.sha256_file(price_path) != before_hash else "NO_NEW_DAILY_PRICE"
             last_date = publish["last_date"]
             rows_added = len(added_dates)
         result = {
             "run_id": run_id,
             "status": status,
-            "launcher_status": "UPDATED" if status in {"UPDATED", "DRY_RUN_READY"} else "NO_NEW_DATA",
+            "launcher_status": status if status in {"FORMAL_UPDATED", "DRY_RUN_READY"} else "NO_NEW_DATA",
             "anchor_date": anchor,
             "last_success_date": last_date,
+            "formal_authority_latest_date": formal_latest_date if dry_run else last_date,
+            "candidate_latest_date": target_dates[-1] if dry_run else None,
             "twse_latest_validated_trading_date": target_dates[-1],
             "months_checked": months,
             "missing_dates_detected": added_dates,

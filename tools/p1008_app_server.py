@@ -10,25 +10,31 @@ publish gate and is never part of the Launcher default data pipeline.
 from __future__ import annotations
 
 import argparse
+import base64
 import csv
 import hashlib
 import http.server
+import io
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
 import time
 import urllib.parse
 import uuid
+import zipfile
 from datetime import date, datetime, timezone
-from pathlib import Path
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import owner_publish_csv_v2 as owner_publish
 import warroom_report_governance as report_governance
 import warroom_report_trigger_runtime as report_trigger_runtime
 import warroom_rolling_brief as rolling_brief
+import warroom_quarterly_editorial_return as quarterly_editorial
 
 
 UTF8_MIME_TYPES = {
@@ -61,7 +67,27 @@ MARKET_ACTIVITY_STATUS_REL = "runtime/market_activity_incremental/latest_status.
 FRESHNESS_STATUS_REL = "runtime/authority_freshness/latest_status.json"
 SOURCE_MANIFEST_REL = "data/NEWS_SCAN_SOURCE_MANIFEST.json"
 OFFICIAL_IR_STATUS_REL = "runtime/official_ir_evidence/latest_status.json"
+RESEARCH_INTEGRATION_STATUS_REL = "runtime/research_plugin/latest_content_integration.json"
 SERVER_VERSION = "P1008_APP_SERVER_20260812_OFFICIAL_IR_PARTIAL_COVERAGE_V1_1"
+CURRENT_WAR_BRIEF_ROUTE = "/" + rolling_brief.LATEST_REPORT_REL
+WAR_BRIEF_NAVIGATION_ID = "p1008-war-brief-navigation"
+Q2_OWNER_REVIEW_EXPORT_ROUTE = "/api/p1008/export/q2-owner-review"
+Q2_REPORT_KEY = "P1008_FY2026_Q2_EARNINGS"
+Q2_REPORT_LATEST_KEY = f"quarterly:{Q2_REPORT_KEY}"
+Q2_OWNER_REVIEW_ARTIFACTS = {
+    f"reports/private_candidates/quarterly/{Q2_REPORT_KEY}/r1/report_candidate.json",
+    f"reports/private_candidates/quarterly/{Q2_REPORT_KEY}/r1/editorial_validation.json",
+    f"reports/private_candidates/quarterly/{Q2_REPORT_KEY}/r1/rendered/owner_review.html",
+    f"reports/private_candidates/quarterly/{Q2_REPORT_KEY}/r1/rendered/owner_review.pdf",
+    f"runtime/report_production/quarterly_owner_reviews/{Q2_REPORT_KEY}/r1/owner_review.json",
+}
+Q2_OWNER_REVIEW_MANIFESTS = {
+    "runtime/warroom_report_manifest.json",
+    "reports/P1008_REPORT_MANIFEST.json",
+}
+REPORT_LIBRARY_ATTACHMENT_REL = "runtime/report_library_artifacts"
+MAX_REPORT_ARTIFACT_BYTES = 25 * 1024 * 1024
+REPORT_ARTIFACT_BASENAME_PATTERN = re.compile(r"^[A-Z0-9]+(?:_[A-Z0-9]+)*$")
 
 WEEKDAY_ZH = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"]
 FIELD_LABEL_ZH = {
@@ -89,6 +115,236 @@ SOURCE_LABEL_ZH = {
 
 def now_iso() -> str:
     return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def format_war_brief_market_numbers(document: str) -> str:
+    """Format market KPIs for display without changing governed source bytes."""
+    specifications = {
+        "成交股數": (Decimal("10000"), "股", "萬股"),
+        "成交金額": (Decimal("100000000"), "元", "億元"),
+        "成交筆數": (None, "筆", None),
+    }
+    for label, (scale, unit, scale_unit) in specifications.items():
+        label_pattern = re.escape(label) + (r"(?:（[^<]+）)?" if label == "成交金額" else "")
+        pattern = re.compile(
+            rf"(<div class=\"kpi\">{label_pattern}<br><strong>)([0-9]+)(</strong>)"
+        )
+
+        def replacement(match: re.Match[str]) -> str:
+            try:
+                value = Decimal(match.group(2))
+            except InvalidOperation:
+                return match.group(0)
+            primary = f"{int(value):,} {unit}"
+            if scale is not None and scale_unit is not None:
+                secondary = (value / scale).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                primary += f"（約 {secondary:,.2f} {scale_unit}）"
+            return f"{match.group(1)}{primary}{match.group(3)}"
+
+        document = pattern.sub(replacement, document, count=1)
+    return document
+
+
+def add_war_brief_navigation(document: str) -> str:
+    """Add local-server navigation without mutating the governed artifact."""
+    document = format_war_brief_market_numbers(document)
+    if WAR_BRIEF_NAVIGATION_ID in document:
+        return document
+    body_marker = "<body>"
+    if body_marker not in document:
+        raise ValueError("Current war brief HTML has no supported body element")
+    navigation = f"""<nav id="{WAR_BRIEF_NAVIGATION_ID}" aria-label="P1008 戰報導覽" style="position:fixed;inset:0 0 auto 0;z-index:9999;display:flex;gap:10px;align-items:center;padding:12px 18px;background:rgba(7,17,31,.97);border-bottom:1px solid #274761;box-shadow:0 6px 18px rgba(0,0,0,.28)">
+  <a href="/launcher.html?stay=1&amp;from=war_brief" target="_self" style="display:inline-block;padding:9px 14px;border:1px solid #67e8f9;border-radius:9px;color:#cffafe;text-decoration:none;font-weight:700">返回 Launcher</a>
+  <a href="/ui/P1008_WARROOM_COMMAND_CENTER_v24.html?from=war_brief" target="_self" style="display:inline-block;padding:9px 14px;border:1px solid #34d399;border-radius:9px;color:#d1fae5;text-decoration:none;font-weight:700">進入新 UI</a>
+</nav>"""
+    return document.replace(
+        body_marker,
+        body_marker + navigation + '<div aria-hidden="true" style="height:64px"></div>',
+        1,
+    )
+
+
+def _strict_json(path: Path) -> dict[str, Any]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Governed JSON must be an object: {path}")
+    return payload
+
+
+def _safe_governed_path(package_root: Path, relative_path: str) -> Path:
+    logical = PurePosixPath(relative_path)
+    if logical.is_absolute() or ".." in logical.parts:
+        raise ValueError(f"Unsafe governed artifact path: {relative_path}")
+    resolved_root = package_root.resolve()
+    resolved = (package_root / Path(*logical.parts)).resolve()
+    if resolved != resolved_root and resolved_root not in resolved.parents:
+        raise ValueError(f"Governed artifact escaped package root: {relative_path}")
+    return resolved
+
+
+def import_report_library_artifact(
+    package_root: Path | str,
+    *,
+    selected_report_key: str,
+    selected_revision: int,
+    file_name: str,
+    content_base64: str,
+) -> dict[str, Any]:
+    """Attach a readable Owner-Review artifact without changing governed report state."""
+    root = Path(package_root)
+    catalog = quarterly_editorial.quarterly_editorial_catalog(root)
+    selected = [
+        item for item in catalog.get("reports", [])
+        if isinstance(item, dict)
+        and item.get("report_key") == selected_report_key
+        and item.get("revision") == selected_revision
+    ]
+    if len(selected) != 1:
+        raise ValueError("REPORT_ARTIFACT_SELECTED_REPORT_NOT_FOUND")
+    if not isinstance(file_name, str) or Path(file_name).name != file_name:
+        raise ValueError("REPORT_ARTIFACT_FILENAME_INVALID")
+    suffix = Path(file_name).suffix.lower()
+    if suffix not in {".html", ".pdf"}:
+        raise ValueError("REPORT_ARTIFACT_TYPE_NOT_ALLOWED_HTML_OR_PDF_REQUIRED")
+    basename = Path(file_name).stem
+    if not REPORT_ARTIFACT_BASENAME_PATTERN.fullmatch(basename):
+        raise ValueError("REPORT_ARTIFACT_BASENAME_INVALID")
+    if basename != selected_report_key and not basename.startswith(f"{selected_report_key}_"):
+        raise ValueError("REPORT_ARTIFACT_REPORT_KEY_MISMATCH")
+    if not isinstance(content_base64, str) or not content_base64:
+        raise ValueError("REPORT_ARTIFACT_CONTENT_REQUIRED")
+    try:
+        content = base64.b64decode(content_base64, validate=True)
+    except (ValueError, TypeError) as error:
+        raise ValueError("REPORT_ARTIFACT_BASE64_INVALID") from error
+    if not content or len(content) > MAX_REPORT_ARTIFACT_BYTES:
+        raise ValueError("REPORT_ARTIFACT_SIZE_INVALID")
+
+    relative = (
+        Path(REPORT_LIBRARY_ATTACHMENT_REL)
+        / selected_report_key
+        / f"r{selected_revision}"
+        / file_name
+    )
+    target = _safe_governed_path(root, relative.as_posix())
+    target.parent.mkdir(parents=True, exist_ok=True)
+    content_sha256 = hashlib.sha256(content).hexdigest().upper()
+    if target.exists():
+        if not target.is_file() or hashlib.sha256(target.read_bytes()).hexdigest().upper() != content_sha256:
+            raise ValueError("REPORT_ARTIFACT_ATTACHMENT_CONFLICT")
+    else:
+        temporary = target.with_name(f".{target.name}.{uuid.uuid4().hex}.tmp")
+        try:
+            temporary.write_bytes(content)
+            temporary.replace(target)
+        finally:
+            if temporary.exists():
+                temporary.unlink()
+    return {
+        "status": "ATTACHED_OWNER_REVIEW_ONLY",
+        "report_key": selected_report_key,
+        "revision": selected_revision,
+        "fileName": file_name,
+        "format": suffix.removeprefix(".").upper(),
+        "sha256": content_sha256,
+        "artifactUrl": "/" + relative.as_posix(),
+        "publication": False,
+        "actionable": False,
+        "coreViewChanged": False,
+        "authorityModified": False,
+        "reportTriggerChanged": False,
+    }
+
+
+def build_q2_owner_review_export(package_root: Path) -> tuple[bytes, str]:
+    """Package the existing validated Q2 r1 Owner-review artifacts only."""
+    manifest_paths = {
+        relative: _safe_governed_path(package_root, relative)
+        for relative in Q2_OWNER_REVIEW_MANIFESTS
+    }
+    manifests = {relative: _strict_json(path) for relative, path in manifest_paths.items()}
+    lifecycle = manifests["runtime/warroom_report_manifest.json"].get("latest", {}).get(
+        Q2_REPORT_LATEST_KEY
+    )
+    library = manifests["reports/P1008_REPORT_MANIFEST.json"].get("latest", {}).get(
+        Q2_REPORT_LATEST_KEY
+    )
+    if not isinstance(lifecycle, dict) or not isinstance(library, dict):
+        raise ValueError("Governed Q2 r1 lifecycle/private-library entry is missing")
+
+    for name, entry in (("lifecycle", lifecycle), ("private library", library)):
+        expected = {
+            "report_key": Q2_REPORT_KEY,
+            "revision": 1,
+            "ownerReviewStatus": "OWNER_REVIEW_REQUIRED",
+            "publication": False,
+            "publicationComplete": False,
+            "publishAuthorized": False,
+        }
+        for field, value in expected.items():
+            if entry.get(field) != value:
+                raise ValueError(f"Q2 {name} state mismatch: {field}")
+    if lifecycle.get("lifecycleState") != "OWNER_REVIEW_REQUIRED":
+        raise ValueError("Q2 lifecycle state mismatch: lifecycleState")
+    if library.get("status") != "OWNER_REVIEW_REQUIRED":
+        raise ValueError("Q2 private library state mismatch: status")
+
+    def artifact_map(entry: dict[str, Any]) -> dict[str, str]:
+        artifacts = entry.get("pluginArtifacts")
+        if not isinstance(artifacts, list):
+            raise ValueError("Q2 pluginArtifacts is missing")
+        result: dict[str, str] = {}
+        for artifact in artifacts:
+            if not isinstance(artifact, dict):
+                raise ValueError("Invalid Q2 plugin artifact record")
+            relative = str(artifact.get("path") or "")
+            digest = str(artifact.get("sha256") or "").upper()
+            if not relative or len(digest) != 64 or relative in result:
+                raise ValueError("Invalid or duplicate Q2 plugin artifact identity")
+            result[relative] = digest
+        return result
+
+    lifecycle_artifacts = artifact_map(lifecycle)
+    library_artifacts = artifact_map(library)
+    if lifecycle_artifacts != library_artifacts:
+        raise ValueError("Q2 lifecycle/private-library artifact lineage mismatch")
+    if set(lifecycle_artifacts) != Q2_OWNER_REVIEW_ARTIFACTS:
+        raise ValueError("Q2 governed artifact set is not the approved r1 export set")
+
+    archive_entries: dict[str, bytes] = {}
+    for relative, expected_sha in lifecycle_artifacts.items():
+        path = _safe_governed_path(package_root, relative)
+        if not path.is_file():
+            raise ValueError(f"Q2 governed artifact is missing: {relative}")
+        data = path.read_bytes()
+        actual_sha = hashlib.sha256(data).hexdigest().upper()
+        if actual_sha != expected_sha:
+            raise ValueError(f"Q2 governed artifact hash mismatch: {relative}")
+        archive_entries[relative] = data
+    for relative, path in manifest_paths.items():
+        archive_entries[relative] = path.read_bytes()
+
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for relative in sorted(archive_entries):
+            info = zipfile.ZipInfo(relative, date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o100644 << 16
+            archive.writestr(info, archive_entries[relative])
+    filename = f"{Q2_REPORT_KEY}_r1_OWNER_REVIEW.zip"
+    return output.getvalue(), filename
+
+
+def command_failure_reason(output: str, fallback: str) -> str:
+    """Extract a structured current-run failure without trusting old state."""
+    for line in reversed(output.splitlines()):
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict) and payload.get("error"):
+            return str(payload["error"])
+    return fallback
 
 
 def server_context() -> dict[str, Any]:
@@ -410,19 +666,25 @@ class P1008JobManager:
         }
 
     def pending_owner_review(self) -> dict[str, Any]:
+        from warroom_quarterly_report_completion import quarterly_report_status
+        quarterly = quarterly_report_status(self.package_root)
         runtime = read_json(self.package_root / "runtime" / "warroom_realtime_snapshot.json", default={}) or {}
         news = read_json(self.package_root / "runtime" / "warroom_news_scan_snapshot.json", default={}) or {}
         review = read_json(self.package_root / "runtime" / "warroom_event_review_state.json", default={}) or {}
         pending = bool(runtime.get("ownerConfirmationRequired") or news.get("ownerConfirmationRequired") or review.get("ownerAckRequired"))
         return {
-            "pending": pending,
+            "pending": pending or bool(quarterly["pendingOwnerReviews"]),
+            "quarterlyStatus": quarterly["status"],
+            "quarterlyReviews": quarterly["pendingOwnerReviews"],
             "runtimeCandidateDate": runtime.get("candidateDate", ""),
             "newsCandidateDate": news.get("candidateDate", ""),
             "reviewStatus": review.get("status", ""),
-            "pendingReviewCount": len(review.get("pendingReviews", []) or []),
+            "pendingReviewCount": len(review.get("pendingReviews", []) or []) + len(quarterly["pendingOwnerReviews"]),
         }
 
     def latest_report_status(self) -> dict[str, Any]:
+        from warroom_quarterly_report_completion import quarterly_report_status
+        quarterly = quarterly_report_status(self.package_root)
         manifest = read_json(self.package_root / "runtime" / "warroom_report_manifest.json", default={}) or {}
         latest = manifest.get("latest", {}) if isinstance(manifest.get("latest", {}), dict) else {}
         health = rolling_brief.report_library_health(self.package_root)
@@ -432,6 +694,11 @@ class P1008JobManager:
             "latestDaily": latest.get("daily"),
             "latestWeekly": latest.get("weekly"),
             "latestMonthly": latest.get("monthly"),
+            "latestQuarterly": quarterly["latestQuarterly"],
+            "quarterlyStatus": quarterly["status"],
+            "reportGenerated": quarterly["reportGenerated"],
+            "reportEligible": quarterly["reportEligible"],
+            "quarterlyError": quarterly.get("reason", ""),
             "latestRollingBriefDate": health.get("latestRollingBriefDate", ""),
             "latestArchivedReportDate": health.get("latestArchivedReportDate", ""),
             "health": health,
@@ -456,18 +723,24 @@ class P1008JobManager:
             dry_run_path = staging_dir / "DRY_RUN.json"
             dry_run = owner_publish.read_json(dry_run_path)
             readiness = owner_publish.build_publish_readiness(self.package_root, dry_run)
-            candidate_date = str(dry_run.get("candidateDate") or staging_dir.name)
-            explanations = readiness_explanation_zh(readiness, candidate_date)
+            staging_candidate_date = str(dry_run.get("candidateDate") or staging_dir.name)
+            execution_date = str(readiness.get("executionDate") or date.today().isoformat())
+            formal_target_date = str(readiness.get("formalTargetDate") or staging_candidate_date)
+            explanations = readiness_explanation_zh(readiness, formal_target_date)
             generated_files = dry_run.get("generatedFiles", []) or []
             pending_owner = self.pending_owner_review()
             news = read_json(self.package_root / "runtime" / "warroom_news_scan_snapshot.json", default={}) or {}
             event_review = read_json(self.package_root / "runtime" / "warroom_event_review_state.json", default={}) or {}
             latest_report = self.latest_report_status()
-            approval_phrase = f"OWNER_APPROVE_PUBLISH_{candidate_date}"
+            approval_phrase = f"OWNER_APPROVE_PUBLISH_{formal_target_date}"
             return {
                 "status": "READY",
                 "stagingDate": staging_dir.name,
-                "candidateDate": candidate_date,
+                "candidateDate": staging_candidate_date,
+                "candidateTradingDate": readiness.get("candidateTradingDate"),
+                "formalTargetDate": formal_target_date,
+                "ownerApprovalDate": readiness.get("ownerApprovalDate"),
+                "executionDate": execution_date,
                 "dryRunPath": str(dry_run_path.relative_to(self.package_root)).replace("/", "\\"),
                 "generatedFiles": generated_files,
                 "candidatePending": bool(generated_files),
@@ -477,7 +750,7 @@ class P1008JobManager:
                 "marketProxyManifest": dry_run.get("marketProxyManifest", []) or [],
                 "readiness": readiness,
                 "readinessExplanation": explanations,
-                "marketContext": market_context(candidate_date),
+                "marketContext": market_context(formal_target_date),
                 "ownerApprovalPhrase": approval_phrase,
                 "pendingOwnerReview": pending_owner,
                 "newsScan": {
@@ -665,10 +938,10 @@ class P1008JobManager:
         try:
             self._run_job_inner(job_type)
             with self.lock:
-                requested_status = self.state.get("overallStatus")
-                self.state["status"] = requested_status or (
-                    "FAILED" if self.state.get("errors") else "SUCCEEDED"
-                )
+                status, reasons = self._aggregate_current_run_status()
+                self.state["status"] = status
+                self.state["overallStatus"] = status
+                self.state["failureReasons"] = reasons
                 self.state["finishedAt"] = now_iso()
                 self._persist_locked()
             self._append_log(f"JOB {job_id} finished with status={self.state['status']}")
@@ -678,6 +951,54 @@ class P1008JobManager:
                 self.state["status"] = "FAILED"
                 self.state["finishedAt"] = now_iso()
                 self._persist_locked()
+
+    def _aggregate_current_run_status(self) -> tuple[str, list[dict[str, str]]]:
+        """Derive health only from this run's child states, never prior UI success."""
+        reasons: list[dict[str, str]] = []
+        failed = False
+        blocked = False
+        partial = False
+        for step in self.state.get("steps", []) or []:
+            status = str(step.get("status") or "")
+            if status in {"FAILED", "FAIL_CLOSED"}:
+                failed = True
+            elif status == "BLOCKED":
+                blocked = True
+            if status in {"FAILED", "FAIL_CLOSED", "BLOCKED"}:
+                reasons.append({
+                    "source": str(step.get("id") or "UNKNOWN_STEP"),
+                    "status": status,
+                    "reason": str(step.get("message") or step.get("code") or status),
+                })
+        for name, component in (self.state.get("componentStatus", {}) or {}).items():
+            status = str((component or {}).get("status") or "")
+            if status in {"FAILED", "FAIL_CLOSED"}:
+                failed = True
+            elif status == "BLOCKED":
+                blocked = True
+            elif status in {"STALE", "RECONCILIATION_REQUIRED"} or status.startswith("PARTIAL_FAILURE"):
+                partial = True
+            if status in {"FAILED", "FAIL_CLOSED", "BLOCKED", "STALE", "RECONCILIATION_REQUIRED"} or status.startswith("PARTIAL_FAILURE"):
+                detail = (component or {}).get("error") or (component or {}).get("code")
+                if not detail and (component or {}).get("failedSources"):
+                    detail = json.dumps((component or {})["failedSources"], ensure_ascii=False, sort_keys=True)
+                reasons.append({"source": str(name), "status": status, "reason": str(detail or status)})
+        requested = str(self.state.get("overallStatus") or "")
+        if requested == "FAILED":
+            failed = True
+        elif requested == "BLOCKED":
+            blocked = True
+        elif requested == "PARTIAL_FAILURE":
+            partial = True
+        if failed:
+            return "FAILED", reasons
+        if blocked:
+            return "BLOCKED", reasons
+        if partial:
+            return "PARTIAL_FAILURE", reasons
+        if self.state.get("errors"):
+            return "FAILED", reasons
+        return "SUCCEEDED", reasons
 
     def _run_owner_publish_job(self, job_id: str, date_str: str | None, approval_phrase: str) -> None:
         before = formal_csv_hashes(self.package_root)
@@ -709,8 +1030,9 @@ class P1008JobManager:
             self._add_error(message)
             return
 
-        candidate_date = str(review.get("candidateDate") or date_str or "")
-        expected_web_phrase = f"OWNER_APPROVE_PUBLISH_{candidate_date}"
+        staging_date = str(review.get("stagingDate") or date_str or "")
+        formal_target_date = str(review.get("formalTargetDate") or "")
+        expected_web_phrase = f"OWNER_APPROVE_PUBLISH_{formal_target_date}"
         if approval_phrase.strip() != expected_web_phrase:
             message = f"Owner approval phrase mismatch. Expected {expected_web_phrase}."
             self._set_step("owner-review", "Build Owner review package", "FAILED", message=message)
@@ -722,7 +1044,15 @@ class P1008JobManager:
             self._set_step("owner-review", "Build Owner review package", "FAILED", message=message)
             self._add_error(message)
             return
-        self._set_step("owner-review", "Build Owner review package", "SUCCEEDED", message=f"candidateDate={candidate_date}")
+        self._set_step(
+            "owner-review",
+            "Build Owner review package",
+            "SUCCEEDED",
+            message=(
+                f"executionDate={review.get('executionDate')}; "
+                f"formalTargetDate={formal_target_date}"
+            ),
+        )
 
         self._set_step("owner-publish", "Owner formal CSV publish", "RUNNING")
         args = [
@@ -730,7 +1060,7 @@ class P1008JobManager:
             "--package-root",
             str(self.package_root),
             "--date",
-            candidate_date,
+            staging_date,
             "--publish",
         ]
         started = time.monotonic()
@@ -741,7 +1071,7 @@ class P1008JobManager:
             completed = subprocess.run(
                 [sys.executable, *args],
                 cwd=str(self.package_root),
-                input=f"APPROVE {candidate_date}\n",
+                input=f"APPROVE {formal_target_date}\n",
                 text=True,
                 encoding="utf-8",
                 errors="replace",
@@ -791,6 +1121,7 @@ class P1008JobManager:
             return
 
         component_failures: list[str] = []
+        authority_reconciliation_required = False
         if job_type in {"default", "update-data"}:
             daily_before = formal_csv_hashes(self.package_root)
             daily_exit = self._run_bat_step(
@@ -817,6 +1148,9 @@ class P1008JobManager:
                 daily_status,
                 exitCode=daily_exit,
                 lastSuccessDate=daily_result.get("last_success_date", ""),
+                formalLatestDate=daily_result.get("formal_authority_latest_date", ""),
+                candidateLatestDate=daily_result.get("candidate_latest_date", ""),
+                twseLatestValidatedDate=daily_result.get("twse_latest_validated_trading_date", ""),
                 receiptPaths=daily_result.get("receipt_paths", []) or [],
             )
 
@@ -838,7 +1172,7 @@ class P1008JobManager:
                 market_before = formal_csv_hashes(self.package_root)
                 daily_run_dir = daily_result.get("run_dir")
                 daily_run_id = daily_result.get("run_id")
-                if daily_status == "UPDATED" and (
+                if daily_status == "DRY_RUN_READY" and (
                     not isinstance(daily_run_dir, str) or not isinstance(daily_run_id, str)
                 ):
                     component_failures.append("Daily Price staging lineage is incomplete")
@@ -851,7 +1185,7 @@ class P1008JobManager:
                     market_exit = 20
                 else:
                     market_args = ["--dry-run"]
-                    if daily_status == "UPDATED":
+                    if daily_status == "DRY_RUN_READY":
                         market_args.extend([
                             "--daily-price-run-dir", daily_run_dir,
                             "--daily-price-run-id", daily_run_id,
@@ -868,6 +1202,7 @@ class P1008JobManager:
                         self.package_root / MARKET_ACTIVITY_STATUS_REL, default={}
                     ) or {}
                     market_status = str(market_result.get("launcher_status") or "STALE")
+                    authority_reconciliation_required = market_status == "RECONCILIATION_REQUIRED"
                     boundary_error = self._market_activity_boundary_error(
                         market_before, market_after, market_status, candidate_only=bool(market_result.get("dry_run"))
                     )
@@ -888,7 +1223,7 @@ class P1008JobManager:
                             market_status,
                             failure,
                         )
-                if not component_failures:
+                if not component_failures and not authority_reconciliation_required:
                     receipt_paths = market_result.get("receipt_paths", []) or []
                     receipt_dir = (
                         str(Path(receipt_paths[0]).parent) if receipt_paths else ""
@@ -896,7 +1231,7 @@ class P1008JobManager:
                     freshness_args: list[str]
                     if daily_status == "NO_NEW_DATA" and market_status == "NO_NEW_DATA":
                         freshness_args = ["--receipt-dir", receipt_dir]
-                    elif daily_status == "UPDATED" and market_status == "UPDATED":
+                    elif daily_status == "DRY_RUN_READY" and market_status == "DRY_RUN_READY":
                         market_run_dir = market_result.get("run_dir")
                         market_run_id = market_result.get("run_id")
                         if not all(
@@ -919,7 +1254,14 @@ class P1008JobManager:
                             "Daily Price and Market Activity freshness states disagree"
                         )
                         freshness_args = []
-                if not component_failures:
+                if authority_reconciliation_required:
+                    self._set_component_status(
+                        "freshness", "RECONCILIATION_REQUIRED",
+                        twseLatestDate=market_result.get("twse_latest_validated_trading_date", ""),
+                        formalAuthorityCurrent=False,
+                        ownerPublishRequired=True,
+                    )
+                elif not component_failures:
                     freshness_exit = self._run_bat_step(
                         "authority-freshness",
                         "TWSE authority freshness and continuity gate",
@@ -958,6 +1300,9 @@ class P1008JobManager:
                 exitCode=(None if daily_status == "FAILED" else market_exit),
                 statusCode=market_result.get("status", ""),
                 lastSuccessDate=(market_result.get("last_success_date") or self._market_activity_last_date()),
+                formalLatestDate=(market_result.get("formal_authority_latest_date") or self._market_activity_last_date()),
+                candidateLatestDate=market_result.get("candidate_latest_date", ""),
+                twseLatestValidatedDate=market_result.get("twse_latest_validated_trading_date", ""),
                 receiptPaths=market_result.get("receipt_paths", []) or [],
                 logPath=(market_result.get("run_dir") or "logs/last_market_activity_update.log"),
             )
@@ -1022,10 +1367,10 @@ class P1008JobManager:
                 actionable=False,
             )
 
-        if job_type in {"default", "news-scan", "official-ir-scan"} and not component_failures:
+        if job_type in {"default", "news-scan", "official-ir-scan"} and not component_failures and not authority_reconciliation_required:
             self._evaluate_report_trigger_step()
 
-        if job_type == "default" and not component_failures:
+        if job_type == "default" and not component_failures and not authority_reconciliation_required:
             rolling_error = self._refresh_rolling_brief_step()
             if rolling_error:
                 component_failures.append(rolling_error)
@@ -1062,19 +1407,28 @@ class P1008JobManager:
                 [],
                 timeout_seconds=180,
             )
-            latest = self._latest_phaseb1_status()
-            status = (
-                "ANALYSIS_CANDIDATE_READY"
-                if is_analysis and exit_code == 0
-                else "REPORT_CANDIDATE_READY"
-                if not is_analysis and exit_code == 0
-                else "FAIL_CLOSED"
-            )
+            step = next((item for item in self.state.get("steps", []) if item.get("id") == job_type), {})
+            latest = step.get("runtimeResult") or {}
+            allowed = ({"ANALYSIS_CANDIDATE_READY", "EXISTING_VALIDATED_RUN"} if is_analysis
+                       else {"REPORT_CANDIDATE_READY", "OWNER_REVIEW_REQUIRED", "IDEMPOTENT_REPLAY"})
+            status = latest.get("status") if exit_code == 0 and latest.get("status") in allowed else "FAIL_CLOSED"
+            if not is_analysis and trigger.get("event_type") == "QUARTERLY_EARNINGS":
+                from warroom_quarterly_report_completion import quarterly_report_status
+                governed = quarterly_report_status(self.package_root)
+                completed = latest.get("reportCompletion") or {}
+                persisted = governed.get("latestQuarterly") or {}
+                if not (governed["reportGenerated"] and completed.get("report_key") == persisted.get("report_key")
+                        and completed.get("revision") == persisted.get("revision")
+                        and status in {"OWNER_REVIEW_REQUIRED", "IDEMPOTENT_REPLAY"}):
+                    status = "FAIL_CLOSED"
+            if status == "FAIL_CLOSED":
+                self._add_error("CURRENT_RUN_REPORT_CHECKPOINT_NOT_VALIDATED")
             self._set_component_status(
                 "phaseB1",
                 status,
                 runId=latest.get("runId", ""),
                 outputPath=latest.get("outputPath", ""),
+                reportCompletion=latest.get("reportCompletion"),
                 actionable=False,
             )
         if job_type in {"default", "update-data", "official-ir-scan"}:
@@ -1084,7 +1438,7 @@ class P1008JobManager:
             components = self.state.get("componentStatus", {}) or {}
             partial = any(
                 str((components.get(name) or {}).get("status", ""))
-                in {"FAILED", "STALE", "BLOCKED", "FAIL_CLOSED"}
+                in {"FAILED", "STALE", "BLOCKED", "FAIL_CLOSED", "RECONCILIATION_REQUIRED", "PARTIAL_FAILURE", "PARTIAL_FAILURE_WITH_AUTHORITY", "PARTIAL_FAILURE_NO_AUTHORITY"}
                 for name in ("dailyPrice", "marketActivity", "news", "officialIR", "rollingBrief", "reportLibrary")
             )
             with self.lock:
@@ -1310,9 +1664,9 @@ class P1008JobManager:
             )
         if candidate_only and changed:
             return "Daily Price candidate-only run changed formal CSV or manifest"
-        if not candidate_only and launcher_status == "UPDATED" and changed != allowed:
+        if not candidate_only and launcher_status == "FORMAL_UPDATED" and changed != allowed:
             return "Daily Price UPDATED did not atomically change CSV and manifest only"
-        if launcher_status != "UPDATED" and changed:
+        if launcher_status != "FORMAL_UPDATED" and changed:
             return "Daily Price non-update status changed formal CSV or manifest"
         return ""
 
@@ -1332,9 +1686,9 @@ class P1008JobManager:
             )
         if candidate_only and changed:
             return "Market Activity candidate-only run changed formal CSV or manifest"
-        if not candidate_only and launcher_status == "UPDATED" and changed != allowed:
+        if not candidate_only and launcher_status == "FORMAL_UPDATED" and changed != allowed:
             return "Market Activity UPDATED did not atomically change CSV and manifest only"
-        if launcher_status != "UPDATED" and changed:
+        if launcher_status != "FORMAL_UPDATED" and changed:
             return "Market Activity non-update status changed formal CSV or manifest"
         return ""
 
@@ -1400,6 +1754,13 @@ class P1008JobManager:
             "--package-root",
             str(self.package_root),
         ]
+        integration = read_json(
+            self.package_root / RESEARCH_INTEGRATION_STATUS_REL, default={}
+        ) or {}
+        official_ir = integration.get("official_ir") or {}
+        canonical_period = official_ir.get("active_fiscal_period", "")
+        if isinstance(canonical_period, str) and canonical_period.strip():
+            args.extend(["--period", canonical_period.strip()])
         self._run_python_step(
             "official-ir-scan", "Governed Official IR evidence scan", args,
             timeout_seconds=90,
@@ -1449,13 +1810,26 @@ class P1008JobManager:
         if output.strip():
             self._append_log(output.rstrip())
         status = "SUCCEEDED" if completed.returncode == 0 else "FAILED"
+        message = f"exit={completed.returncode}"
+        if completed.returncode != 0:
+            message = command_failure_reason(output, message)
+        runtime_result = None
+        if step_id in {"analysis-candidate", "report-candidate"}:
+            for line in (completed.stdout or "").splitlines():
+                try:
+                    value = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(value, dict) and "status" in value:
+                    runtime_result = value
         self._set_step(
             step_id,
             label,
             status,
             exitCode=completed.returncode,
             durationSeconds=round(time.monotonic() - started, 2),
-            message=f"exit={completed.returncode}",
+            message=message,
+            runtimeResult=runtime_result,
         )
         return completed.returncode
 
@@ -1534,6 +1908,16 @@ class P1008JobManager:
             )
             self.state["formalCsvModifiedExpected"] = expected_authority_change
             self.state["latestStagingDate"] = latest_date or date.today().isoformat()
+            components = self.state.get("componentStatus", {}) or {}
+            daily = components.get("dailyPrice", {}) or {}
+            market = components.get("marketActivity", {}) or {}
+            self.state["authorityDates"] = {
+                "dailyPriceFormalLatestDate": daily.get("formalLatestDate", ""),
+                "dailyPriceCandidateLatestDate": daily.get("candidateLatestDate", ""),
+                "marketActivityFormalLatestDate": market.get("formalLatestDate", ""),
+                "marketActivityCandidateLatestDate": market.get("candidateLatestDate", ""),
+                "twseLatestValidatedTradingDate": market.get("twseLatestValidatedDate") or daily.get("twseLatestValidatedDate", ""),
+            }
             self.state["pendingOwnerReview"] = self.pending_owner_review()
             if after != before and not expected_authority_change:
                 self.state.setdefault("errors", []).append("Formal CSV hash changed; Owner gate boundary violated.")
@@ -1573,6 +1957,38 @@ class P1008AppHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_current_war_brief(self) -> None:
+        brief_path = self.manager.package_root / rolling_brief.LATEST_REPORT_REL
+        if not brief_path.is_file():
+            self.send_error(404, "Current war brief not found")
+            return
+        try:
+            document = brief_path.read_text(encoding="utf-8")
+            body = add_war_brief_navigation(document).encode("utf-8")
+        except (OSError, UnicodeError, ValueError) as error:
+            self.send_error(500, str(error))
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_q2_owner_review_export(self) -> None:
+        try:
+            body, filename = build_q2_owner_review_export(self.manager.package_root)
+        except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
+            self.send_error(409, str(error))
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "application/zip")
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def _read_json_body(self) -> dict[str, Any]:
         length = int(self.headers.get("Content-Length") or "0")
         if length <= 0:
@@ -1588,6 +2004,12 @@ class P1008AppHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib handler hook.
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == CURRENT_WAR_BRIEF_ROUTE:
+            self._send_current_war_brief()
+            return
+        if parsed.path == Q2_OWNER_REVIEW_EXPORT_ROUTE:
+            self._send_q2_owner_review_export()
+            return
         if parsed.path == "/api/p1008/status":
             self._send_json(200, self.manager.snapshot())
             return
@@ -1597,6 +2019,29 @@ class P1008AppHandler(http.server.SimpleHTTPRequestHandler):
             review = self.manager.review_package(date_str)
             payload = dict(review)
             payload["launcherGate"] = self.manager.launcher_gate_status(review)
+            self._send_json(200, payload)
+            return
+        if parsed.path == "/api/p1008/quarterly-editorial/catalog":
+            try:
+                payload = quarterly_editorial.quarterly_editorial_catalog(
+                    self.manager.package_root
+                )
+            except Exception as error:  # fail-closed read boundary
+                self._send_json(409, {"status": "FAIL_CLOSED", "reason": str(error)})
+                return
+            self._send_json(200, payload)
+            return
+        if parsed.path == "/api/p1008/quarterly-editorial/history":
+            query = urllib.parse.parse_qs(parsed.query)
+            report_key = str((query.get("report_key") or [""])[0])
+            try:
+                revision = int((query.get("revision") or ["0"])[0])
+                payload = quarterly_editorial.editorial_history(
+                    self.manager.package_root, report_key, revision
+                )
+            except Exception as error:  # fail-closed read boundary
+                self._send_json(409, {"status": "FAIL_CLOSED", "reason": str(error)})
+                return
             self._send_json(200, payload)
             return
         if parsed.path == "/api/p1008/log":
@@ -1637,6 +2082,57 @@ class P1008AppHandler(http.server.SimpleHTTPRequestHandler):
             status, payload = self.manager.start_owner_publish(date_str, approval_phrase)
             self._send_json(status, payload)
             return
+        if parsed.path == "/api/p1008/quarterly-editorial/import":
+            try:
+                request = self._read_json_body()
+                selected_key = str(request.get("selectedReportKey") or "")
+                selected_revision = int(request.get("selectedRevision") or 0)
+                editorial_return = request.get("editorialReturn")
+                if not isinstance(editorial_return, dict) or not (
+                    editorial_return.get("report_key") == selected_key
+                    and editorial_return.get("revision") == selected_revision
+                ):
+                    raise ValueError("EDITORIAL_SELECTED_REPORT_IDENTITY_MISMATCH")
+                payload = quarterly_editorial.import_editorial_return(
+                    self.manager.package_root, editorial_return
+                )
+            except (TypeError, ValueError) as error:
+                self._send_json(400, {"status": "FAIL_CLOSED", "reason": str(error)})
+                return
+            self._send_json(200 if payload.get("status") == "PENDING" else 409, payload)
+            return
+        if parsed.path == "/api/p1008/quarterly-editorial/artifact-import":
+            try:
+                request = self._read_json_body()
+                payload = import_report_library_artifact(
+                    self.manager.package_root,
+                    selected_report_key=str(request.get("selectedReportKey") or ""),
+                    selected_revision=int(request.get("selectedRevision") or 0),
+                    file_name=str(request.get("fileName") or ""),
+                    content_base64=str(request.get("contentBase64") or ""),
+                )
+            except (TypeError, ValueError) as error:
+                self._send_json(400, {"status": "FAIL_CLOSED", "reason": str(error)})
+                return
+            self._send_json(200, payload)
+            return
+        if parsed.path == "/api/p1008/quarterly-editorial/apply":
+            try:
+                body = self._read_json_body()
+                payload = quarterly_editorial.apply_editorial_return(
+                    self.manager.package_root,
+                    str(body.get("report_key") or ""),
+                    int(body.get("revision") or 0),
+                    str(body.get("editorialVersion") or ""),
+                )
+            except (TypeError, ValueError) as error:
+                self._send_json(400, {"status": "FAIL_CLOSED", "reason": str(error)})
+                return
+            self._send_json(
+                200 if payload.get("status") == "OWNER_REVIEW_REQUIRED" else 409,
+                payload,
+            )
+            return
         job_type = routes.get(parsed.path)
         if not job_type:
             self._send_json(404, {"error": "Unknown API route"})
@@ -1649,10 +2145,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Serve P1008 local app and whitelisted control API.")
     parser.add_argument("port", type=int)
     parser.add_argument("--bind", default="127.0.0.1")
-    parser.add_argument("--directory", type=Path, default=Path.cwd())
+    parser.add_argument("--directory", type=Path, default=None)
     args = parser.parse_args()
 
-    package_root = args.directory.resolve()
+    from p1008_canonical_warroom import CanonicalWarroomError, resolve_canonical
+    try:
+        canonical = resolve_canonical(args.directory)
+    except CanonicalWarroomError as exc:
+        print(f"[FAIL_CLOSED] {exc}")
+        return 6
+    print("[CANONICAL] " + json.dumps(canonical, ensure_ascii=False))
+    package_root = Path(canonical["resolvedPackageRoot"])
     manager = P1008JobManager(package_root)
 
     handler = lambda *h_args, **h_kwargs: P1008AppHandler(

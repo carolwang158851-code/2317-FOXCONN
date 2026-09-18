@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import json
-import os
 import unittest
 from pathlib import Path
 from uuid import uuid4
 
 try:
-    from .helpers import GOVERNED_Q2_EVIDENCE_ROOT, GOVERNED_Q2_SOURCE_MOTHER, PACKAGE_ROOT
+    from .helpers import (
+        GOVERNED_Q2_EVIDENCE_ROOT,
+        GOVERNED_Q2_SOURCE_MOTHER,
+        PACKAGE_ROOT,
+    )
 except ImportError:
     from helpers import GOVERNED_Q2_EVIDENCE_ROOT, GOVERNED_Q2_SOURCE_MOTHER, PACKAGE_ROOT
 
@@ -29,12 +32,7 @@ from p1008_research_plugin.reporting.forward_enterprise_value_analytics import (
 from p1008_research_plugin.reporting.war_report_production_runtime import run_war_report_production
 
 
-EVIDENCE_ROOT = Path(
-    os.environ.get(
-        "P1008_GOVERNED_EVIDENCE_ROOT",
-        GOVERNED_Q2_EVIDENCE_ROOT,
-    )
-).resolve()
+EVIDENCE_ROOT = GOVERNED_Q2_EVIDENCE_ROOT.resolve()
 SOURCE_MOTHER = GOVERNED_Q2_SOURCE_MOTHER.resolve()
 
 
@@ -51,7 +49,7 @@ class ForwardEnterpriseValueAnalyticsV1Tests(unittest.TestCase):
             "evidenceIds": trigger["qualifying_evidence_ids"], "authorityCutoffs": trigger["authority_cutoffs"],
             "actionable": False,
         }
-        parent = PACKAGE_ROOT / "runtime" / "phaseb1_test_scratch"
+        parent = PACKAGE_ROOT / "runtime" / "report_production" / "test_scratch"
         parent.mkdir(parents=True, exist_ok=True)
         cls.output = parent / f"forward-ev-v1-{uuid4().hex}"
         cls.output.mkdir(parents=False, exist_ok=False)

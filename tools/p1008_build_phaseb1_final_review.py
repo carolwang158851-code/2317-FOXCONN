@@ -22,6 +22,9 @@ from p1008_research_plugin.phaseb1_common import (  # noqa: E402
     sha256_file,
 )
 from p1008_research_plugin.phaseb1_pipeline import PhaseB1Pipeline  # noqa: E402
+from p1008_research_plugin.contract_loader import ContractLoader  # noqa: E402
+from p1008_research_plugin.governance import GovernanceBoundary  # noqa: E402
+from p1008_research_plugin.governance import GovernanceError  # noqa: E402
 
 
 REVIEW_FILES = (
@@ -65,27 +68,46 @@ def _utc_stamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
-def build_review(package_root: Path, stamp: str | None = None) -> Path:
+def authorized_review_root(package_root: Path, stamp: str | None = None) -> Path:
     package_root = package_root.resolve()
-    review_root = (
+    governance = GovernanceBoundary(ContractLoader(package_root))
+    selected_stamp = stamp or _utc_stamp()
+    if not selected_stamp or any(
+        character not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-"
+        for character in selected_stamp
+    ):
+        raise GovernanceError("Unsafe maintenance review identity")
+    candidate = (
         package_root
         / "runtime"
         / "phaseb1_final_owner_review"
-        / f"P1008-PHASE-B1-FINAL-OWNER-REVIEW-R2-{stamp or _utc_stamp()}"
+        / f"P1008-PHASE-B1-FINAL-OWNER-REVIEW-R2-{selected_stamp}"
     )
+    return governance.authorize_write("MAINTENANCE_CAPABILITY", candidate)
+
+
+def build_review(package_root: Path, stamp: str | None = None) -> Path:
+    package_root = package_root.resolve()
+    filesystem_governance = GovernanceBoundary(ContractLoader(package_root))
+    review_root = authorized_review_root(package_root, stamp)
     if review_root.exists():
         raise RuntimeError(f"Review package already exists: {review_root}")
     review_root.mkdir(parents=True, exist_ok=False)
     before = protected_state_hashes(package_root)
     pipeline_base = review_root / "_pipeline"
-    result = PhaseB1Pipeline(package_root).run_all(output_base=pipeline_base)
+    result = PhaseB1Pipeline(
+        package_root, output_capability="MAINTENANCE_CAPABILITY"
+    ).run_all(output_base=pipeline_base)
     run_root = pipeline_base / result["run_id"]
 
     for name in REVIEW_FILES:
         source = run_root / name
         if not source.is_file():
             raise RuntimeError(f"Required review artifact is missing: {name}")
-        shutil.copyfile(source, review_root / name)
+        destination = filesystem_governance.authorize_write(
+            "MAINTENANCE_CAPABILITY", review_root / name
+        )
+        shutil.copyfile(source, destination)
 
     report = json.loads((review_root / "report_candidate.json").read_text(encoding="utf-8"))
     editorial = json.loads((review_root / "editorial_validation.json").read_text(encoding="utf-8"))
@@ -105,7 +127,7 @@ def build_review(package_root: Path, stamp: str | None = None) -> Path:
         },
         "actionable": False,
     }
-    atomic_write_json(review_root / "source_lineage.json", source_lineage)
+    atomic_write_json(review_root / "source_lineage.json", source_lineage, capability="MAINTENANCE_CAPABILITY")
     supersession = {
         "recordType": "P1008_PHASE_B1_FINAL_REVIEW_SUPERSESSION_RECEIPT",
         "supersededReviewId": SUPERSEDED_REVIEW_ID,
@@ -119,10 +141,10 @@ def build_review(package_root: Path, stamp: str | None = None) -> Path:
         "finalOwnerAcceptanceGranted": False,
         "actionable": False,
     }
-    atomic_write_json(review_root / "supersession_receipt.json", supersession)
-    atomic_write_json(review_root / "protected_state_before.json", before)
+    atomic_write_json(review_root / "supersession_receipt.json", supersession, capability="MAINTENANCE_CAPABILITY")
+    atomic_write_json(review_root / "protected_state_before.json", before, capability="MAINTENANCE_CAPABILITY")
     after = protected_state_hashes(package_root)
-    atomic_write_json(review_root / "protected_state_after.json", after)
+    atomic_write_json(review_root / "protected_state_after.json", after, capability="MAINTENANCE_CAPABILITY")
 
     passed = final_review_passes(editorial, duration, before, after, report)
     decision = (
@@ -140,7 +162,7 @@ def build_review(package_root: Path, stamp: str | None = None) -> Path:
         "FINAL_OWNER_ACCEPTANCE_NOT_GRANTED\n"
         "ACTIONABLE_FALSE\n"
     )
-    atomic_write(review_root / "owner_decision.md", decision.encode("utf-8"))
+    atomic_write(review_root / "owner_decision.md", decision.encode("utf-8"), capability="MAINTENANCE_CAPABILITY")
 
     artifact_hashes = {
         path.name: sha256_file(path)
@@ -169,7 +191,7 @@ def build_review(package_root: Path, stamp: str | None = None) -> Path:
         "phaseB2Started": False,
         "actionable": False,
     }
-    atomic_write_json(review_root / "PHASE_B1_FINAL_REVIEW_REPORT.json", summary)
+    atomic_write_json(review_root / "PHASE_B1_FINAL_REVIEW_REPORT.json", summary, capability="MAINTENANCE_CAPABILITY")
     markdown = f"""# P1008 Phase B1 Final Owner Review R2
 
 - Status: `{summary['status']}`
@@ -188,13 +210,17 @@ def build_review(package_root: Path, stamp: str | None = None) -> Path:
     atomic_write(
         review_root / "PHASE_B1_FINAL_REVIEW_REPORT.md",
         markdown.replace("\r\n", "\n").encode("utf-8"),
+        capability="MAINTENANCE_CAPABILITY",
     )
     if not passed:
         raise RuntimeError("Final Owner Review package failed closed")
 
-    pipeline_resolved = pipeline_base.resolve()
-    if pipeline_resolved.parent != review_root.resolve():
-        raise RuntimeError("Unsafe pipeline cleanup path")
+    pipeline_resolved = filesystem_governance.authorize_tree_delete(
+        "MAINTENANCE_CAPABILITY",
+        pipeline_base,
+        owned_parent=review_root,
+        expected_name="_pipeline",
+    )
     shutil.rmtree(pipeline_resolved)
     return review_root
 

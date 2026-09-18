@@ -44,7 +44,7 @@ if not exist "%ROOT%\tools\p1008_open_warroom.py" (
   goto Finish
 )
 
-"%PYTHON_EXE%" "%ROOT%\tools\p1008_open_warroom.py" --package-root "%ROOT%" %*
+"%PYTHON_EXE%" "%ROOT%\tools\p1008_open_warroom.py" %*
 set "EXIT_CODE=%ERRORLEVEL%"
 
 :Finish

@@ -255,14 +255,24 @@ def start_server(package_root: Path, port: int, log_path: Path) -> subprocess.Po
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Open P1008 warroom via local app server.")
-    parser.add_argument("--package-root", type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument("--package-root", type=Path, default=None)
+    parser.add_argument("--preflight-only", action="store_true", help="Validate canonical root without starting jobs or a server.")
     parser.add_argument("--no-open", action="store_true", help="Verify/start the server but do not open a browser.")
     parser.add_argument("--fresh", action="store_true", help="Always start a fresh App server instead of reusing an existing localhost port.")
     parser.add_argument("--port-start", type=int, default=int(os.environ.get("P1008_PORT_START", DEFAULT_PORT_START)))
     parser.add_argument("--port-end", type=int, default=int(os.environ.get("P1008_PORT_END", DEFAULT_PORT_END)))
     args = parser.parse_args()
 
-    package_root = args.package_root.resolve()
+    from p1008_canonical_warroom import CanonicalWarroomError, resolve_canonical
+    try:
+        canonical = resolve_canonical(args.package_root)
+    except CanonicalWarroomError as exc:
+        print(f"[FAIL_CLOSED] {exc}")
+        return 6
+    print("[CANONICAL] " + json.dumps(canonical, ensure_ascii=False))
+    package_root = Path(canonical["resolvedPackageRoot"])
+    if args.preflight_only:
+        return 0
     page_path = package_root / "launcher.html"
     if not page_path.exists():
         print(f"[ERROR] Missing page: {page_path}")

@@ -1,0 +1,16 @@
+{
+  "recordType": "P1008_CANONICAL_WARROOM_V1",
+  "schemaVersion": "1.0",
+  "canonicalRoot": "P1008_INTEGRATED_WARROOM_V1",
+  "acceptedHead": "2fcc4b8ee3678f3a85f270ebd41667a9bf8ab904",
+  "phase4dAcceptanceRun": "20260904-121508-default",
+  "ownerAcceptance": {
+    "status": "APPROVED",
+    "scope": "CANONICAL_OPERATIONAL_CUTOVER",
+    "phase4dStatus": "P1008_PHASE4D_OPERATIONAL_ACCEPTANCE_PASS"
+  },
+  "previousOperationalRoot": "P1008_RESEARCH_CONTENT_INTEGRATION_V1",
+  "actionable": false,
+  "publishAuthorized": false,
+  "publication": false
+}

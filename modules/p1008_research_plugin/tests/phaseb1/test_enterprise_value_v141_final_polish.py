@@ -12,6 +12,7 @@ except ImportError:
     from helpers import GOVERNED_Q2_EVIDENCE_ROOT, PACKAGE_ROOT, scratch
 
 from p1008_research_plugin.phaseb1_pipeline import PhaseB1Pipeline
+from p1008_research_plugin.phaseb1_common import canonical_json_bytes
 
 
 class EnterpriseValueV141FinalPolishTests(unittest.TestCase):
@@ -59,10 +60,24 @@ class EnterpriseValueV141FinalPolishTests(unittest.TestCase):
         valuation = self.pack["valuationScenarios"]
         self.assertEqual(valuation["q4_2025Eps"]["value"], "3.23")
         self.assertEqual(valuation["ttmEps"]["value"], "15.21")
-        self.assertEqual(valuation["ttmPe"]["value"], "16.57")
+        self.assertEqual(valuation["ttmPe"]["value"], "16.31")
         self.assertEqual(len(self.formulas), 10)
         self.assertEqual(self.formulas, self.pack["enterpriseValueAnalytics"]["formulaCards"])
-        self.assertEqual(hashlib.sha256(self.pack_bytes).hexdigest().upper(), "3955E72AFE8B4A8DF077650BB0A9C1E40819F1F9F574A6C65DDAB0E6A8A86CA1")
+        self.assertEqual(self.pack_bytes, canonical_json_bytes(self.pack))
+        analysis_bytes = (self.root / "analysis_packet.json").read_bytes()
+        self.assertEqual(
+            self.pack["analysisPacketSha256"],
+            hashlib.sha256(analysis_bytes).hexdigest().upper(),
+        )
+        semantic_pack = {
+            key: value
+            for key, value in self.pack.items()
+            if key != "analysisPacketSha256"
+        }
+        self.assertEqual(
+            hashlib.sha256(canonical_json_bytes(semantic_pack)).hexdigest().upper(),
+            "EA369DC7E7BD3889BA5CD8184A993933AEC1F981992BFFA9FCC578683C77C599",
+        )
 
     def test_working_capital_is_index_chart_with_separate_ccc(self) -> None:
         chart = self.chart("working_capital_3period")
@@ -74,7 +89,7 @@ class EnterpriseValueV141FinalPolishTests(unittest.TestCase):
 
     def test_bvps_and_roe_are_separate_and_non_monotonic_language_is_correct(self) -> None:
         chart = self.chart("roe_equity_compounding")
-        self.assertEqual(chart["series"][0]["values"], ["115.16", "118.45", "118.2", "105.14", "117.18", "126.96", "127.12"])
+        self.assertEqual(chart["series"][0]["values"], ["115.16", "118.45", "118.2", "105.14", "117.18", "126.96", "127.12", "136.02"])
         rendered = self.md + self.html + self.pdf_text
         self.assertIn("105.14", rendered)
         self.assertIn("5.48% → 6.21%", rendered)

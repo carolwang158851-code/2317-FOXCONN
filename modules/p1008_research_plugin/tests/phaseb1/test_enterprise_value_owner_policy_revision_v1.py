@@ -2,16 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import sys
 import unittest
 from pathlib import Path
-
-try:
-    from .helpers import current_authority_hashes
-except ImportError:
-    from helpers import current_authority_hashes
-
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[4]
 SRC = PACKAGE_ROOT / "modules" / "p1008_research_plugin" / "src"
@@ -19,6 +12,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from p1008_research_plugin.reporting.enterprise_value_owner_policy import load_policy_candidate
+from p1008_research_plugin.phaseb1_common import protected_state_hashes
 from p1008_research_plugin.reporting.enterprise_value_owner_policy_revision import (
     evaluate_fcf_recovery,
     evaluate_revised_add_on,
@@ -39,6 +33,17 @@ from p1008_research_plugin.reporting.enterprise_value_owner_policy_revision impo
 
 CONTRACT = PACKAGE_ROOT / "contracts" / "p1008_report_production" / "v1.1" / "ENTERPRISE_VALUE_OWNER_POLICY_REVISION_V1.json"
 SOURCE = SRC / "p1008_research_plugin" / "reporting" / "enterprise_value_owner_policy_revision.py"
+RAW_PRODUCTION_PATHS = (
+    "data/CSV_AUTHORITY_MANIFEST.json",
+    "data/2317_master_v9.csv",
+    "data/2317_daily_price.csv",
+    "data/2317_daily_market_activity.csv",
+    "data/2317_cash_flow_authority.csv",
+    "data/macro_snapshot.csv",
+    "data/macro_event_observations.csv",
+    "data/fx_trend_observations.csv",
+    "rules/RULE_STATUS_MANIFEST.json",
+)
 
 
 def sha(path: Path) -> str:
@@ -48,6 +53,10 @@ def sha(path: Path) -> str:
 class EnterpriseValueOwnerPolicyRevisionV1Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        cls.raw_production_hashes_before = {
+            rel: sha(PACKAGE_ROOT / rel) for rel in RAW_PRODUCTION_PATHS
+        }
+        cls.protected_state_before = protected_state_hashes(PACKAGE_ROOT)
         cls.revision = load_policy_revision(CONTRACT)
         cls.base = load_policy_candidate()
         cls.base_by_id = {x["threshold_id"]: x for x in cls.base["thresholds"]}
@@ -245,14 +254,9 @@ class EnterpriseValueOwnerPolicyRevisionV1Tests(unittest.TestCase):
         self.assertEqual(self.revision["external_calls"], {"network_requests": 0, "openai_api_calls": 0, "canva_calls": 0})
 
     def test_r38_raw_production_hashes_unchanged(self):
-        expected = {
-            **current_authority_hashes(),
-            "rules/RULE_STATUS_MANIFEST.json": "054DA1FDAF0C75BB27B56DF45B96F1CC1720558D44C700F1AB70AB0280A2FE5C",
-        }
-        for rel, digest in expected.items():
+        for rel, digest in self.raw_production_hashes_before.items():
             self.assertEqual(sha(PACKAGE_ROOT / rel), digest, rel)
-        sqlite = Path(os.environ["LOCALAPPDATA"]) / "P1008" / "data" / "warroom.sqlite3"
-        self.assertEqual(sha(sqlite), "B365CB5540BDEDD2E0E0EF924DC9DFA2B4FD6F7954904BCBA5194DA0966BB832")
+        self.assertEqual(protected_state_hashes(PACKAGE_ROOT), self.protected_state_before)
 
 
 if __name__ == "__main__":

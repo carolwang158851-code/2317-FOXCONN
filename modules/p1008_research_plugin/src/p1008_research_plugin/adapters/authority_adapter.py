@@ -12,6 +12,11 @@ from types import MappingProxyType
 from typing import Any, Mapping
 
 from ..contract_loader import ContractLoader
+from ..quarterly_authority import (
+    QuarterlyAuthorityError,
+    load_quarterly_authority_contract,
+    validate_quarterly_authority_row,
+)
 
 
 class AuthorityAdapterError(RuntimeError):
@@ -53,6 +58,14 @@ class AuthorityAdapter:
     def __init__(self, package_root: Path | str, loader: ContractLoader) -> None:
         self.package_root = Path(package_root).resolve()
         self.loader = loader
+        try:
+            self._quarterly_contract = load_quarterly_authority_contract(
+                self.package_root
+            )
+        except (OSError, json.JSONDecodeError, QuarterlyAuthorityError) as exc:
+            raise AuthorityAdapterError(
+                f"Quarterly authority contract is invalid: {exc}"
+            ) from exc
         self._manifest = self._read_json(self._safe_package_path(self.MANIFEST_PATH))
         all_entries = self._manifest.get("authoritativeFiles", []) + self._manifest.get(
             "nonAuthoritativeFiles", []
@@ -146,6 +159,7 @@ class AuthorityAdapter:
         for relative_path in self.listed_paths:
             data, entry = self._verified_bytes(relative_path)
             self._validate_declared_csv_schema(relative_path, data, entry)
+            self._validate_quarterly_authority(relative_path, data)
             verified.append(
                 {
                     "relative_path": relative_path,
@@ -194,6 +208,29 @@ class AuthorityAdapter:
                 f"Authority schema mismatch: {relative_path}, missing={missing}"
             )
 
+    def _validate_quarterly_authority(
+        self, relative_path: str, data: bytes
+    ) -> None:
+        if relative_path != "data/2317_master_v9.csv":
+            return
+        try:
+            text = data.decode("utf-8-sig")
+            data_lines = [
+                line
+                for line in text.splitlines()
+                if line.strip() and not line.strip().startswith("##")
+            ]
+            rows = csv.DictReader(io.StringIO("\n".join(data_lines)))
+            allowed_statuses = self._quarterly_contract["roicStatusEnum"]
+            for row in rows:
+                validate_quarterly_authority_row(
+                    row, allowed_statuses=allowed_statuses
+                )
+        except (UnicodeDecodeError, KeyError, QuarterlyAuthorityError) as exc:
+            raise AuthorityAdapterError(
+                f"Quarterly authority row invalid: {exc}"
+            ) from exc
+
     def _verified_bytes(self, relative_path: str) -> tuple[bytes, dict[str, Any]]:
         entry = self._entries.get(relative_path)
         if entry is None:
@@ -210,6 +247,7 @@ class AuthorityAdapter:
 
     def read_csv(self, relative_path: str) -> CsvSnapshot:
         data, entry = self._verified_bytes(relative_path)
+        self._validate_quarterly_authority(relative_path, data)
         try:
             text = data.decode("utf-8-sig")
         except UnicodeDecodeError as exc:

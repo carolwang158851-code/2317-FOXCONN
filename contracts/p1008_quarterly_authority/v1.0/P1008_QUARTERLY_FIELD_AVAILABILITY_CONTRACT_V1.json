@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "P1008_QUARTERLY_FIELD_AVAILABILITY_V1",
+  "authorityFile": "data/2317_master_v9.csv",
+  "statusField": "ROIC_Status",
+  "roicStatusEnum": [
+    "LOW_CAPITAL_EFFICIENCY",
+    "ACCEPTABLE_CAPITAL_EFFICIENCY",
+    "HIGH_CAPITAL_EFFICIENCY",
+    "INSUFFICIENT_DATA"
+  ],
+  "unavailableStatus": "INSUFFICIENT_DATA",
+  "conditionallyBlankFields": [
+    "ROIC_Precise_Pct",
+    "NOPAT_Annual_100M",
+    "InvestedCapital_100M",
+    "InterestBearingDebt_100M"
+  ],
+  "bareUnavailableTokens": ["N/A", "NA", "UNAVAILABLE", "INSUFFICIENT_DATA"],
+  "rules": {
+    "unavailableStatusRequiresBlankFields": true,
+    "availableStatusRequiresNumericFields": true,
+    "bareUnavailableTokensAreInvalid": true,
+    "unavailableRoicMayNotBeCalculatedOrDisplayedAsFormal": true
+  },
+  "ownerPromotion": {
+    "approvalToken": "OWNER_APPROVE_P1008_2026Q2_QUARTERLY_FIELD_AVAILABILITY",
+    "atomicMasterAndManifestUpdate": true,
+    "rollbackRequired": true,
+    "receiptRequired": true
+  },
+  "actionable": false,
+  "publishAuthorized": false
+}

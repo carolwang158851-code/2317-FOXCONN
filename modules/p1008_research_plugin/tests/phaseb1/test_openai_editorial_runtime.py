@@ -83,14 +83,11 @@ def authorization(run_id: str, **changes):
 class OpenAIEditorialRuntimeTests(unittest.TestCase):
     def _run_editorial(self, root: Path, client=None):
         pipeline = fixture_pipeline(root)
-        output = root / "output"
-        analysis = pipeline.build_analysis(output_base=output)
+        analysis = pipeline.build_analysis()
         pipeline.editorial_required = True
         pipeline.editorial_authorization = authorization(analysis["run_id"])
         pipeline.editorial_client = client or FakeEditorialClient()
-        result = pipeline.build_report(
-            run_id=analysis["run_id"], output_base=output
-        )
+        result = pipeline.build_report(run_id=analysis["run_id"])
         return result, pipeline.editorial_client
 
     def test_mocked_execution_produces_hash_bound_editorial_envelope(self):
@@ -186,12 +183,11 @@ class OpenAIEditorialRuntimeTests(unittest.TestCase):
     def test_missing_authorization_and_provider_failure_fail_closed(self):
         with scratch("editorial-auth-") as root:
             pipeline = fixture_pipeline(root)
-            output = root / "output"
-            analysis = pipeline.build_analysis(output_base=output)
+            analysis = pipeline.build_analysis()
             pipeline.editorial_required = True
             pipeline.editorial_client = FakeEditorialClient()
             with self.assertRaisesRegex(PhaseB1PipelineError, "Owner authorization"):
-                pipeline.build_report(run_id=analysis["run_id"], output_base=output)
+                pipeline.build_report(run_id=analysis["run_id"])
         with scratch("editorial-provider-fail-") as root:
             with self.assertRaisesRegex(PhaseB1PipelineError, "provider execution"):
                 self._run_editorial(root, FakeEditorialClient(fail=True))
@@ -232,8 +228,7 @@ class OpenAIEditorialRuntimeTests(unittest.TestCase):
     def test_phaseb1_routes_editorial_through_existing_runtime_manager(self):
         with scratch("editorial-runtime-route-") as root:
             pipeline = fixture_pipeline(root)
-            output = root / "output"
-            analysis = pipeline.build_analysis(output_base=output)
+            analysis = pipeline.build_analysis()
             pipeline.editorial_required = True
             pipeline.editorial_authorization = authorization(analysis["run_id"])
             pipeline.editorial_runtime_config = RuntimeConfig.phase3b_shadow(live=True)
@@ -242,7 +237,7 @@ class OpenAIEditorialRuntimeTests(unittest.TestCase):
                 RuntimeManager, "resolve_editorial_client", return_value=fake
             ) as resolver:
                 result = pipeline.build_report(
-                    run_id=analysis["run_id"], output_base=output
+                    run_id=analysis["run_id"]
                 )
             resolver.assert_called_once()
             self.assertEqual(fake.calls, 1)
@@ -254,9 +249,8 @@ class OpenAIEditorialRuntimeTests(unittest.TestCase):
     def test_default_run_reports_callable_capability_without_claiming_execution(self):
         with scratch("editorial-default-") as root:
             pipeline = fixture_pipeline(root)
-            output = root / "output"
-            analysis = pipeline.build_analysis(output_base=output)
-            result = pipeline.build_report(run_id=analysis["run_id"], output_base=output)
+            analysis = pipeline.build_analysis()
+            result = pipeline.build_report(run_id=analysis["run_id"])
             skills = json.loads(
                 (Path(result["run_root"]) / "skill_execution_summary.json").read_text(
                     encoding="utf-8"
@@ -273,10 +267,9 @@ class OpenAIEditorialRuntimeTests(unittest.TestCase):
     def test_identical_editorial_candidate_preserves_existing_rendered_output(self):
         with scratch("editorial-render-baseline-") as baseline_root:
             baseline_pipeline = fixture_pipeline(baseline_root)
-            baseline_out = baseline_root / "output"
-            baseline_analysis = baseline_pipeline.build_analysis(output_base=baseline_out)
+            baseline_analysis = baseline_pipeline.build_analysis()
             baseline = baseline_pipeline.build_report(
-                run_id=baseline_analysis["run_id"], output_base=baseline_out
+                run_id=baseline_analysis["run_id"]
             )
         with scratch("editorial-render-test-") as editorial_root:
             editorial, _ = self._run_editorial(editorial_root)

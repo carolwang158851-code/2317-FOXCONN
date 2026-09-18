@@ -22,6 +22,7 @@ from ..analysis.analysis_contracts import AnalysisPacket
 from ..contract_loader import ContractLoader
 from ..phaseb1_common import atomic_write, atomic_write_json, canonical_json_bytes, sha256_bytes, sha256_file
 from ..phaseb1_pipeline import PhaseB1Pipeline
+from ..quarterly_authority import quarterly_metric_availability
 from .chart_data_builder import ChartDataBuilder
 from .enterprise_value_rule_engine import (
     build_decision_state,
@@ -353,16 +354,19 @@ def build_full_history_charts(package_root: Path, analysis: AnalysisPacket, hist
     periods = [row["Quarter"] for row in rows]
     if periods != sorted(periods) or len(periods) != len(set(periods)):
         raise WarReportRuntimeError("FULL_HISTORY_NOT_UNIQUE_CHRONOLOGICAL")
-    labels = periods + [qperiod]
+    q = analysis.quarterly_earnings
+    qperiod = q.fiscal_period.replace("FY", "").replace(" ", "")
+    append_current = qperiod not in periods
+    labels = periods + ([qperiod] if append_current else [])
     a = q.enterprise_value_analytics
     sources = list(q.revenue.evidence_ids)
     master_source = next(item for item in analysis.source_evidence_ids if item.startswith("AUTH-MASTER-"))
     cash_source = next(item for item in analysis.source_evidence_ids if item.startswith("AUTH-CASHFLOW-"))
     full_sources = [master_source, *sources]
     gp = [str((_dec(r["Revenue_Q_100M"]) * _dec(r["GrossMarginPct"]) / Decimal("100"))) for r in rows]
-    revenue_values = [r["Revenue_Q_100M"] for r in rows] + [str(_dec(q.revenue.value) / 100)]
-    gross_profit_values = gp + [str(_dec(a["grossProfitMillionTwd"]) / 100)]
-    operating_profit_values = [r["OperatingIncome_Q_100M"] for r in rows] + [str(_dec(a["operatingProfitMillionTwd"]) / 100)]
+    revenue_values = [r["Revenue_Q_100M"] for r in rows] + ([str(_dec(q.revenue.value) / 100)] if append_current else [])
+    gross_profit_values = gp + ([str(_dec(a["grossProfitMillionTwd"]) / 100)] if append_current else [])
+    operating_profit_values = [r["OperatingIncome_Q_100M"] for r in rows] + ([str(_dec(a["operatingProfitMillionTwd"]) / 100)] if append_current else [])
     charts = [
         _chart("full_history_profit_chain", "營收、毛利與營業利益成長指數", "規模成長是否持續轉為營業利益？", labels, [
             ChartSeries(label_zh="營收指數", unit="首期=100", values=_indexed(revenue_values)),
@@ -370,11 +374,11 @@ def build_full_history_charts(package_root: Path, analysis: AnalysisPacket, hist
             ChartSeries(label_zh="營業利益指數", unit="首期=100", values=_indexed(operating_profit_values)),
         ], full_sources, ["圖形特徵：2026Q2營業利益指數明顯領先營收與毛利指數，營運槓桿差擴大。", "為何重要：營收年增41%時，營業利益年增67.51%，表示新增規模已跨過毛利以下費用吸收門檻。", "論點含義：第一階段價值轉化獲支持；若後續營益率回落，這項支持即減弱。"]),
         _chart("full_history_margin", "毛利率與營益率完整歷史", "毛利與費用吸收是否出現結構背離？", labels, [
-            ChartSeries(label_zh="毛利率", unit="%", values=[r["GrossMarginPct"] for r in rows] + [q.gross_margin.value]),
-            ChartSeries(label_zh="營益率", unit="%", values=[r["OperatingMarginPct"] for r in rows] + [q.operating_margin.value]),
+            ChartSeries(label_zh="毛利率", unit="%", values=[r["GrossMarginPct"] for r in rows] + ([q.gross_margin.value] if append_current else [])),
+            ChartSeries(label_zh="營益率", unit="%", values=[r["OperatingMarginPct"] for r in rows] + ([q.operating_margin.value] if append_current else [])),
         ], full_sources, ["圖形特徵：2026Q2毛利率降至6.12%，營益率卻升至3.75%，兩條利潤率走勢背離。", "為何重要：改善發生在毛利以下，較符合費用吸收與規模效率，而不是產品毛利率擴張。", "論點含義：營運槓桿成立，但高價值產品組合提高毛利率的假說尚未獲證。"]),
         _chart("full_history_eps", "每股盈餘完整歷史", "企業獲利是否持續傳達至每股？", labels, [
-            ChartSeries(label_zh="EPS", unit="新台幣元", values=[r["EPS_Q"] for r in rows] + [q.eps.value]),
+            ChartSeries(label_zh="EPS", unit="新台幣元", values=[r["EPS_Q"] for r in rows] + ([q.eps.value] if append_current else [])),
         ], full_sources, ["圖形特徵：2026Q2 EPS升至4.27元，年增34%，每股獲利延續上升。", "為何重要：每股成長確認獲利沒有只停留在公司總額，但增幅仍低於營業利益。", "論點含義：每股價值獲部分支持；仍須由股數、BVPS與FCF交叉驗證。"]),
     ]
     historical_baseline = historical_baseline or build_historical_kpi_baseline(package_root, analysis)
@@ -410,9 +414,10 @@ def build_full_history_charts(package_root: Path, analysis: AnalysisPacket, hist
     charts.append(_chart("full_history_nwc_proxy", "季末營運資金代理值", "應收與存貨增加造成多少資金占用？", [item["period"] for item in nwc_rows], [
         ChartSeries(label_zh="NWC Proxy", unit="新台幣百萬元", values=[item["value"] for item in nwc_rows]),
     ], sources, ["圖形特徵：Q1至Q2的營運資金代理值增加1,747.38億元。", "為何重要：應收與存貨合計增加3,794.24億元，應付增加2,046.86億元只抵銷部分占用。", "論點含義：供應商融資提供緩衝而非現金消耗；淨占用仍壓低Q2 CFO。"] ))
+    availability = quarterly_metric_availability(rows)
     charts.extend([
-        _chart("full_history_roic", "ROIC完整歷史與本期核准值", "資本效率目前為何？", labels, [ChartSeries(label_zh="ROIC", unit="%", values=[r["ROIC_Precise_Pct"] for r in rows] + [current_row["ROIC_Precise_Pct"]])], full_sources, ["圖形特徵：2026Q2 ROIC為12.35%（推算），有息負債採正式資產負債表直接組成。", "為何重要：16.46%因NET_CASH_DENOMINATOR_SCOPE_MISMATCH遭拒，未進入正式序列。", "論點含義：Q1未以相同直接有息負債方法重算，因此本圖不得解讀為Q1至Q2惡化或改善趨勢。"]),
-        _chart("full_history_bvps", "每股淨值完整歷史", "帳面價值是否持續傳達至每股？", labels, [ChartSeries(label_zh="BVPS", unit="新台幣元", values=[r["BVPS"] for r in rows] + [current_row["BVPS"]])], full_sources, ["圖形特徵：2026Q2官方BVPS為136.02元，高於2026Q1的127.12元。", "為何重要：帳面價值累積仍需連同股利與股數變化解釋，單季上升不等於股東總報酬已完成。", "論點含義：每股帳面價值獲官方資料支持；現金轉化與ROIC仍須分開驗證。"]),
+        _chart("full_history_roic", "ROIC完整歷史與本期待驗", "資本效率是否改善？", availability["roic"]["labels"], [ChartSeries(label_zh="ROIC", unit="%", values=availability["roic"]["values"])], full_sources, [f"最新有效ROIC季度為{availability['latestValidRoicQuarter']}；2026Q2資料不足。", "為何重要：本期可計算部分營運投入資本估算，但無法取代完整同口徑實際ROIC。", "論點含義：新增資本是否提高報酬仍待驗；下一季須補標準化NOPAT與完整平均投入資本。"]),
+        _chart("full_history_bvps", "每股淨值完整歷史", "帳面價值是否持續傳達至每股？", periods, [ChartSeries(label_zh="BVPS", unit="新台幣元", values=[r["BVPS"] for r in rows])], full_sources, [f"最新有效ROE季度為{availability['latestValidRoeQuarter']}。", "為何重要：帳面價值累積並非直線，需連同股利與股數變化解釋。", "論點含義：股東資本複利方向須與ROE共同判讀。"]),
         _chart("full_history_valuation", "歷史季度P/B與TTM P/E（分尺度）", "截至2026Q1的歷史評價如何變化？", periods, [
             ChartSeries(label_zh="P/B", unit="倍", values=[item["value"] for item in observations_for(historical_baseline, "PB")]),
             ChartSeries(label_zh="TTM P/E", unit="倍", values=[item["value"] for item in observations_for(historical_baseline, "PE_TTM")]),
@@ -748,7 +753,7 @@ def _quarterly_research_chapters(
         ("營業利益品質", f"營益率{q.operating_margin.value}%，營業利益年增{a['operatingProfitYoyPct']}%", "營益率維持或提高，且毛利率不再下滑", "毛利率與營益率同步下降", "FY2026 Q3財報／法說"),
         ("營運現金回收", f"2026H1 CFO {_reader_amount_million(a['h1OperatingCashFlowMillionTwd'])}，Q2期末CCC {wc['cashConversionCycleDays'][-1]}天", "後續累計CFO改善只算初步改善；H2、全年或TTM現金轉化恢復才是主要確認", "CFO持續為負，或應收與存貨天數反轉上升", "FY2026 Q3及全年現金流量表"),
         ("自由現金流", f"2026H1 FCF {_reader_amount_million(a['h1FreeCashFlowMillionTwd'])}", "H2、全年或TTM FCF轉正且不依賴一次性營運資金釋放", "2026全年FCF仍為負", "FY2026 Q3／全年現金流量表"),
-        ("資本報酬", "Q2 ROIC 12.35%（推算），採直接有息負債組成；不作Q1至Q2趨勢判斷", "後續以相同直接負債方法建立可比期間", "投入資本增幅持續高於NOPAT，或來源組成失去可核對性", "FY2026 Q3"),
+        ("資本報酬", "Q2同口徑ROIC待補；缺口不得解讀為零或趨勢", "補齊標準化NOPAT與完整平均投入資本後再判定", "投入資本增幅持續高於NOPAT，或來源組成失去可核對性", "FY2026 Q3"),
         ("每股價值", f"Q2 EPS {q.eps.value}元；官方BVPS 136.02元；2026H1 FCF／相容加權平均股數約{_reader_number(h1_fcf_per_share)}元／股", "EPS、BVPS與FCF／股在相容期間共同改善，且股數未稀釋每股成果", "EPS與BVPS上升但FCF／股轉弱，或股數增幅抵銷分子成長", "FY2026 Q3／全年每股與現金資料"),
         ("估值第二階段", f"事件前P/S、P/E、P/B均處歷史較高位置；ROIC、FCF與每股價值尚未共同確認", "ROIC、正常化FCF與每股價值共同改善，為較高估值提供第二階段證據", "較高歷史位置延續，但ROIC、FCF或每股價值驗證失敗，形成再評價風險", "FY2026 Q3／全年財務及事件後正式行情"),
         ("AI價值轉化", "AI已到營收階段；專屬利潤、ROIC與FCF未揭露", "官方揭露可核對的AI獲利或現金證據", "AI成長伴隨合併毛利、ROIC與FCF惡化", "後續季報／法說"),
@@ -847,7 +852,7 @@ def _quarterly_research_chapters(
         + "<p>以上是既有90日敏感度，不是預測或政策門檻。淨現金提供存量緩衝，但兩個壓力情境顯示營運資金惡化會放大資金需求，因此只能判定韌性仍需現金回收驗證，不能對整體韌性作出確定的類別結論。</p>"
         "<h3>ROIC三層證據必須分開</h3>"
         "<p><strong>ROIC持續性／資本強度敏感度：</strong>以下三層不得混為同一個實際報酬率。</p>"
-        f"<p><strong>正式推算口徑：</strong>Q2 ROIC為12.35%，有息負債採正式資產負債表直接組成；16.46%因NET_CASH_DENOMINATOR_SCOPE_MISMATCH遭拒。Q1未以相同方法重算，因此不作Q1至Q2趨勢判斷。"
+        f"<p><strong>官方同口徑：</strong>Q2 單季同口徑 ROIC 待補；缺口不是零。"
         f"<strong>部分營運投入資本估算：</strong>以應收、存貨、營運用不動產廠房設備減應付帳款，平均投入資本"
         f"{_reader_amount_million(roic_estimate['average_invested_capital_million_twd'])}，單季估算ROIC "
         f"{_reader_number(roic_estimate['quarterly_roic_pct'])}%；這不是官方同口徑ROIC。"
@@ -899,7 +904,7 @@ def _quarterly_research_chapters(
         + _table([
             {"主題": "AI伺服器成長", "既有說法": "Q3 AI Rack出貨季增高雙位數", "截至本報告結果": "前瞻指引，實現值尚未揭露", "判定": "仍開放驗證"},
             {"主題": "營業利益轉化", "既有說法": "規模與整合有助營運效率", "截至本報告結果": f"Q2營業利益年增{a['operatingProfitYoyPct']}%，營益率升至{q.operating_margin.value}%", "判定": "本季財務結果支持"},
-            {"主題": "ROE／資本效率", "既有說法": "需由正式目標與同口徑資料核對", "截至本報告結果": "官方2026H1 ROE為6.21%（未年化）；Q2 ROIC為12.35%（推算），不作Q1至Q2趨勢判斷", "判定": "部分支持"},
+            {"主題": "ROE／資本效率", "既有說法": "需由正式目標與同口徑資料核對", "截至本報告結果": "官方2026H1 ROE為6.21%（未年化）；Q2同口徑ROIC待補", "判定": "部分支持"},
             {"主題": "資本支出", "既有說法": "本地證據沒有可比指引區間", "截至本報告結果": f"2026H1官方Capex {_reader_amount_million(a['h1CapexMillionTwd'])}", "判定": "無法判定超前或落後"},
         ], ("主題", "既有說法", "截至本報告結果", "判定"))
     )
@@ -1156,7 +1161,7 @@ def validate_runtime_candidate(*, rendered_html: str, trigger: str, identity: Ru
             raise WarReportRuntimeError("ARBITRARY_DECISION_SCORE_PRESENT")
 
 
-def compile_existing_phaseb1_result(*, package_root: Path, analysis: AnalysisPacket, evidence: Any, trigger_context: Mapping[str, Any], output_root: Path, previous_state: Mapping[str, Any] | None = None, source_mother: Path | None = None) -> dict[str, Any]:
+def compile_existing_phaseb1_result(*, package_root: Path, analysis: AnalysisPacket, evidence: Any, trigger_context: Mapping[str, Any], output_root: Path, previous_state: Mapping[str, Any] | None = None, source_mother: Path | None = None, output_capability: str = "REPORT_PRODUCTION", validate_existing: bool = False) -> dict[str, Any]:
     """Adapt a validated Phase B1 analysis into the permanent report candidate."""
     trigger = str(trigger_context.get("eventType") or trigger_context.get("event_type") or "")
     route = plan_trigger(trigger, trigger_context.get("impactedChapters", ()))
@@ -1196,28 +1201,39 @@ def compile_existing_phaseb1_result(*, package_root: Path, analysis: AnalysisPac
         charts=charts, audits=audits, baseline=baseline, decision=decision,
         owner_review=owner_review, forward=forward, rule_result=rule_result,
     )
-    output_root.mkdir(parents=True, exist_ok=False)
+    if output_root.exists() != validate_existing:
+        raise WarReportRuntimeError("REPORT_CHECKPOINT_EXISTENCE_MISMATCH")
+
+    def emit(path: Path, data: bytes, **_kwargs: Any) -> None:
+        if validate_existing:
+            if not path.is_file() or path.read_bytes() != data:
+                raise WarReportRuntimeError(f"REPORT_CHECKPOINT_CONTENT_MISMATCH: {path.name}")
+        else:
+            atomic_write(path, data, capability=output_capability)
+
+    def emit_json(path: Path, value: Any, **_kwargs: Any) -> None:
+        emit(path, canonical_json_bytes(value))
     html_path = output_root / "war_report_candidate.html"
-    atomic_write(html_path, rendered.encode("utf-8"))
-    atomic_write_json(output_root / "financial_baseline.json", baseline)
-    atomic_write_json(output_root / "historical_kpi_baseline.json", historical_baseline)
-    atomic_write_json(output_root / "fcf_conversion_state.json", fcf_state)
-    atomic_write_json(output_root / "per_share_value_state.json", per_share_state)
-    atomic_write_json(output_root / "forward_enterprise_value_analytics.json", forward)
-    atomic_write_json(output_root / "forward_model_ledger.json", forward["forward_model_ledger"])
-    atomic_write_json(output_root / "enterprise_value_rule_engine.json", rule_result)
-    atomic_write_json(output_root / "chart_data_full_history.json", [item.model_dump(mode="json", by_alias=True) for item in charts])
-    atomic_write_json(output_root / "chart_audit.json", audits)
-    atomic_write_json(output_root / "decision_state.json", decision)
-    atomic_write_json(output_root / "smart_state.json", smart)
-    atomic_write_json(output_root / "owner_review.json", owner_review)
+    emit(html_path, rendered.encode("utf-8"), capability=output_capability)
+    emit_json(output_root / "financial_baseline.json", baseline, capability=output_capability)
+    emit_json(output_root / "historical_kpi_baseline.json", historical_baseline, capability=output_capability)
+    emit_json(output_root / "fcf_conversion_state.json", fcf_state, capability=output_capability)
+    emit_json(output_root / "per_share_value_state.json", per_share_state, capability=output_capability)
+    emit_json(output_root / "forward_enterprise_value_analytics.json", forward, capability=output_capability)
+    emit_json(output_root / "forward_model_ledger.json", forward["forward_model_ledger"], capability=output_capability)
+    emit_json(output_root / "enterprise_value_rule_engine.json", rule_result, capability=output_capability)
+    emit_json(output_root / "chart_data_full_history.json", [item.model_dump(mode="json", by_alias=True) for item in charts], capability=output_capability)
+    emit_json(output_root / "chart_audit.json", audits, capability=output_capability)
+    emit_json(output_root / "decision_state.json", decision, capability=output_capability)
+    emit_json(output_root / "smart_state.json", smart, capability=output_capability)
+    emit_json(output_root / "owner_review.json", owner_review, capability=output_capability)
     revision_record = {
         "report_key": identity.report_key, "revision": identity.revision,
         "previous_revision": identity.previous_revision, "what_changed": trigger_context.get("whatChanged", "本期正式資料與證據更新"),
         "why": trigger_context.get("why", "有效報告觸發"), "which_data_changed": trigger_context.get("whichDataChanged", []),
         "investment_conclusion_changed": any(item["CHANGE"] != "UNCHANGED" for item in decision["items"]),
     }
-    atomic_write_json(output_root / "revision.json", revision_record)
+    emit_json(output_root / "revision.json", revision_record, capability=output_capability)
     lineage = validate_template_lineage(source_mother)
     receipt = {
         "state": "REPORT_CANDIDATE_READY", "owner_review_state": "OWNER_REVIEW_REQUIRED",
@@ -1232,7 +1248,7 @@ def compile_existing_phaseb1_result(*, package_root: Path, analysis: AnalysisPac
         "external_calls": {"network": 0, "openai_api": 0, "canva": 0},
         "publication": False, "actionable": False,
     }
-    atomic_write_json(output_root / "war_report_runtime_receipt.json", receipt)
+    emit_json(output_root / "war_report_runtime_receipt.json", receipt, capability=output_capability)
     return {**receipt, "output_html": str(html_path), "output_root": str(output_root), "report": report, "analysis": analysis}
 
 

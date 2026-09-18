@@ -19,8 +19,9 @@ def main() -> int:
     import warroom_report_trigger_runtime as trigger_runtime
 
     try:
-        evidence_root, _evidence_context = trigger_runtime.governed_evidence_root(package_root)
-        trigger = trigger_runtime.require_valid_trigger(package_root)
+        evidence_root, trigger, _evidence_context = (
+            trigger_runtime.resolve_analysis_authority(package_root)
+        )
         # Routing is owned by the existing PluginRouter. Phase B1 accepts only
         # event modes with a governed input path.
         from p1008_research_plugin.plugin_module.contracts import RunType
@@ -38,7 +39,7 @@ def main() -> int:
     print(
         json.dumps(
             {
-                "status": "ANALYSIS_CANDIDATE_READY",
+                "status": result.get("status", "ANALYSIS_CANDIDATE_READY"),
                 "runId": result["run_id"],
                 "outputPath": result["run_root"],
                 "analysisPacketSha256": result["analysis_sha256"],

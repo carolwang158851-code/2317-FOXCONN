@@ -85,6 +85,8 @@ REMEDIATION_REMOVED_DATES = {
 }
 
 MARKET_ACTIVITY_TARGET = "data/2317_daily_market_activity.csv"
+DAILY_PRICE_STATUS_PATH = "runtime/daily_price_incremental/latest_status.json"
+MARKET_ACTIVITY_STATUS_PATH = "runtime/market_activity_incremental/latest_status.json"
 MARKET_ACTIVITY_PRICE_SHA256 = REMEDIATION_CANDIDATE_SHA256
 MARKET_ACTIVITY_FIELDS = (
     "date",
@@ -306,6 +308,186 @@ def validate_daily_price_publish_rows(
             )
 
 
+def _candidate_rows_not_in_formal(
+    candidate: Path, target: Path, target_rel: str
+) -> tuple[list[str], list[list[str]]]:
+    """Return only new rows after proving an incremental candidate's prefix."""
+    candidate_header, candidate_rows, _ = read_csv_header_and_rows(candidate)
+    target_header, target_rows, _ = read_csv_header_and_rows(target)
+    if candidate_header != target_header:
+        raise ValueError(f"Schema mismatch: {candidate} does not match {target}.")
+    candidate_rows = normalize_candidate_rows_for_publish(
+        target_rel, candidate_header, candidate_rows
+    )
+    existing = {row_key(target_rel, target_header, row): row for row in target_rows if row}
+    seen: set[str] = set()
+    new_rows: list[list[str]] = []
+    for row in candidate_rows:
+        if not row:
+            continue
+        key = row_key(target_rel, candidate_header, row)
+        if not key or key in seen:
+            raise ValueError(f"Candidate has missing/repeated Date/Key: {key!r}")
+        seen.add(key)
+        formal_row = existing.get(key)
+        if formal_row is None:
+            new_rows.append(row)
+        elif formal_row != row:
+            raise ValueError(f"Candidate conflicts with formal Date/Key {key}")
+    return candidate_header, new_rows
+
+
+def _validate_market_activity_publish_rows(
+    header: list[str], rows: list[list[str]]
+) -> None:
+    if "date" not in header:
+        raise ValueError("Market Activity publish is missing required field: date")
+    date_index = header.index("date")
+    for row_number, row in enumerate(rows, start=2):
+        row_date = row[date_index] if date_index < len(row) else ""
+        try:
+            parsed = date.fromisoformat(row_date)
+        except ValueError as exc:
+            raise ValueError(
+                f"Market Activity publish has invalid date at row {row_number}: {row_date!r}"
+            ) from exc
+        if parsed.weekday() >= 5:
+            raise ValueError(
+                f"Market Activity publish refused: {row_date} is Saturday/Sunday"
+            )
+
+
+def _validated_runtime_candidate(
+    package_root: Path,
+    status_rel: str,
+    runtime_rel: str,
+    expected_name: str,
+) -> tuple[dict[str, Any], Path]:
+    status = read_json(package_root / status_rel)
+    if status.get("status") != "DRY_RUN_READY":
+        raise ValueError(f"Validated staged candidate is not ready: {status_rel}")
+    candidate_value = status.get("candidate_path")
+    if not isinstance(candidate_value, str) or not candidate_value:
+        raise ValueError(f"Validated staged candidate path is missing: {status_rel}")
+    candidate = Path(candidate_value).resolve()
+    runtime_root = (package_root / runtime_rel).resolve()
+    if candidate.name != expected_name or not candidate.is_relative_to(runtime_root):
+        raise ValueError(f"Validated staged candidate path is outside governed runtime: {candidate}")
+    if not candidate.is_file():
+        raise ValueError(f"Validated staged candidate is missing: {candidate}")
+    expected_sha = str(status.get("candidate_sha256") or "").upper()
+    if not expected_sha or sha256_file(candidate) != expected_sha:
+        raise ValueError(f"Validated staged candidate hash mismatch: {candidate}")
+    run_id = str(status.get("run_id") or "")
+    if not run_id or candidate.parent.name != run_id:
+        raise ValueError(f"Validated staged candidate run identity mismatch: {candidate}")
+    return status, candidate
+
+
+def _receipt_backed_trading_dates(status: dict[str, Any], candidate: Path) -> set[str]:
+    """Return trading dates proven by the candidate run's immutable TWSE receipts."""
+    receipt_root = (candidate.parent / "receipts").resolve()
+    proven_dates: set[str] = set()
+    for receipt_value in status.get("receipt_paths", []) or []:
+        receipt_path = Path(str(receipt_value)).resolve()
+        if not receipt_path.is_relative_to(receipt_root) or not receipt_path.is_file():
+            raise ValueError(f"TWSE receipt path is outside candidate run: {receipt_path}")
+        receipt = read_json(receipt_path)
+        raw_path = Path(str(receipt.get("raw_artifact_path") or "")).resolve()
+        if not raw_path.is_relative_to(receipt_root) or not raw_path.is_file():
+            raise ValueError(f"TWSE raw evidence path is outside candidate run: {raw_path}")
+        expected_sha = str(receipt.get("raw_artifact_sha256") or "").upper()
+        if not expected_sha or sha256_file(raw_path) != expected_sha:
+            raise ValueError(f"TWSE raw evidence hash mismatch: {raw_path}")
+        text = raw_path.read_bytes().decode(str(receipt.get("response_encoding") or "cp950"))
+        for row in csv.reader(io.StringIO(text)):
+            if not row:
+                continue
+            parts = row[0].strip().split("/")
+            if len(parts) != 3 or not all(part.isdigit() for part in parts):
+                continue
+            roc_year, month, day = (int(part) for part in parts)
+            try:
+                proven_dates.add(date(roc_year + 1911, month, day).isoformat())
+            except ValueError as exc:
+                raise ValueError(f"Invalid TWSE receipt trading date: {row[0]!r}") from exc
+    if not proven_dates:
+        raise ValueError("TWSE receipts contain no validated trading dates")
+    return proven_dates
+
+
+def resolve_trade_date_publish_plan(
+    package_root: Path, generated_files: list[str]
+) -> dict[str, Any] | None:
+    """Bind formal Price/Market publication to same-run TWSE candidates."""
+    has_daily = any(
+        Path(item.replace("\\", "/")).name == "2317_daily_price_candidate.csv"
+        for item in generated_files
+    )
+    if not has_daily:
+        return None
+
+    daily_status, daily_candidate = _validated_runtime_candidate(
+        package_root,
+        DAILY_PRICE_STATUS_PATH,
+        "runtime/daily_price_incremental",
+        "2317_daily_price.incremental.candidate.csv",
+    )
+    market_status, market_candidate = _validated_runtime_candidate(
+        package_root,
+        MARKET_ACTIVITY_STATUS_PATH,
+        "runtime/market_activity_incremental",
+        "2317_daily_market_activity.incremental.candidate.csv",
+    )
+    provenance = market_status.get("price_validation_provenance") or {}
+    if (
+        provenance.get("source") != "SAME_RUN_DAILY_PRICE_STAGING"
+        or provenance.get("daily_price_run_id") != daily_status.get("run_id")
+        or str(provenance.get("daily_price_candidate_sha256") or "").upper()
+        != str(daily_status.get("candidate_sha256") or "").upper()
+    ):
+        raise ValueError("Price/Market candidate same-run lineage mismatch")
+
+    daily_header, daily_rows = _candidate_rows_not_in_formal(
+        daily_candidate, package_root / DAILY_TARGET, DAILY_TARGET
+    )
+    market_header, market_rows = _candidate_rows_not_in_formal(
+        market_candidate, package_root / MARKET_ACTIVITY_TARGET, MARKET_ACTIVITY_TARGET
+    )
+    if not daily_rows or not market_rows:
+        raise ValueError("Price/Market candidate contains no reconciled new trading rows")
+    validate_daily_price_publish_rows(daily_header, daily_rows)
+    _validate_market_activity_publish_rows(market_header, market_rows)
+    daily_dates = [row[daily_header.index("Date")] for row in daily_rows]
+    market_dates = [row[market_header.index("date")] for row in market_rows]
+    if daily_dates != sorted(set(daily_dates)) or market_dates != sorted(set(market_dates)):
+        raise ValueError("Price/Market candidate trading dates are not unique and increasing")
+    if daily_dates != market_dates:
+        raise ValueError(
+            f"Price/Market candidate date mismatch: Price={daily_dates}, Market={market_dates}"
+        )
+    formal_target_date = daily_dates[-1]
+    if daily_status.get("twse_latest_validated_trading_date") != formal_target_date:
+        raise ValueError("Daily Price validated trading-date cutoff mismatch")
+    if market_status.get("candidate_last_date") != formal_target_date:
+        raise ValueError("Market Activity validated trading-date cutoff mismatch")
+    receipt_dates = _receipt_backed_trading_dates(market_status, market_candidate)
+    unproven_dates = sorted(set(daily_dates) - receipt_dates)
+    if unproven_dates:
+        raise ValueError(
+            f"Price/Market candidate includes non-receipt trading dates: {unproven_dates}"
+        )
+    return {
+        "candidateTradingDates": daily_dates,
+        "formalTargetDate": formal_target_date,
+        "dailyCandidate": str(daily_candidate),
+        "marketCandidate": str(market_candidate),
+        "dailyRunId": daily_status["run_id"],
+        "marketRunId": market_status["run_id"],
+        "sameRunLineage": "PASS",
+    }
+
+
 def row_key(target_rel: str, header: list[str], row: list[str]) -> str:
     def cell(name: str, fallback_index: int = 0) -> str:
         if name in header:
@@ -354,8 +536,6 @@ def append_candidate(candidate: Path, target: Path, target_rel: str) -> int:
     if not candidate_rows:
         raise ValueError(f"{candidate} contains no candidate rows.")
     candidate_rows = normalize_candidate_rows_for_publish(target_rel, candidate_header, candidate_rows)
-    if target_rel == DAILY_TARGET:
-        validate_daily_price_publish_rows(candidate_header, candidate_rows)
     if target_rel in OBSERVATION_ONLY_TARGETS:
         actionable_errors = actionability_violations(candidate_header, candidate_rows)
         if actionable_errors:
@@ -369,10 +549,14 @@ def append_candidate(candidate: Path, target: Path, target_rel: str) -> int:
     }
     rows_to_append: list[list[str]] = []
     conflicting_keys: list[str] = []
+    seen_keys: set[str] = set()
     for row in candidate_rows:
         if not row:
             continue
         key = row_key(target_rel, candidate_header, row)
+        if not key or key in seen_keys:
+            raise ValueError(f"Candidate has missing/repeated Date/Key: {key!r}")
+        seen_keys.add(key)
         existing = existing_by_key.get(key)
         if existing is None:
             rows_to_append.append(row)
@@ -382,6 +566,11 @@ def append_candidate(candidate: Path, target: Path, target_rel: str) -> int:
         raise ValueError(
             f"Append refused: target already contains conflicting Date/Key {conflicting_keys}."
         )
+    if target_rel == DAILY_TARGET:
+        # An incremental candidate includes the already-governed formal prefix.
+        # Exact existing rows are proven above; trading-day/source validation
+        # applies to the rows that this publish operation will actually append.
+        validate_daily_price_publish_rows(candidate_header, rows_to_append)
     if not rows_to_append:
         return 0
 
@@ -399,6 +588,10 @@ def resolve_generated_file(package_root: Path, generated: str) -> tuple[Path, st
     name = candidate.name
     if name == "2317_daily_price_candidate.csv":
         return candidate, DAILY_TARGET, "daily"
+    if name == "2317_daily_price.incremental.candidate.csv":
+        return candidate, DAILY_TARGET, "daily"
+    if name == "2317_daily_market_activity.incremental.candidate.csv":
+        return candidate, MARKET_ACTIVITY_TARGET, "market_activity"
     if name == "macro_snapshot_candidate.csv":
         return candidate, MACRO_TARGET, "macro"
     if name == "macro_event_observations_candidate.csv":
@@ -513,15 +706,42 @@ def inspect_candidate_files(package_root: Path, generated_files: list[str]) -> t
             if item["rows"] <= 0:
                 blockers.append(f"Candidate has no data rows: {generated}")
 
-            existing_keys = {row_key(target_rel, target_header, row) for row in target_rows if row}
+            normalized_rows = normalize_candidate_rows_for_publish(
+                target_rel, candidate_header, candidate_rows
+            )
+            existing_by_key = {
+                row_key(target_rel, target_header, row): row for row in target_rows if row
+            }
+            incremental = candidate_path.name.endswith(".incremental.candidate.csv")
             duplicate_keys = [
                 row_key(target_rel, candidate_header, row)
-                for row in candidate_rows
-                if row and row_key(target_rel, candidate_header, row) in existing_keys
+                for row in normalized_rows
+                if row
+                and row_key(target_rel, candidate_header, row) in existing_by_key
+                and not incremental
             ]
             item["duplicateKeys"] = duplicate_keys
             if duplicate_keys:
                 blockers.append(f"Append would duplicate Date/Key {duplicate_keys}: {target_rel}")
+            conflicts = [
+                row_key(target_rel, candidate_header, row)
+                for row in normalized_rows
+                if row
+                and row_key(target_rel, candidate_header, row) in existing_by_key
+                and existing_by_key[row_key(target_rel, candidate_header, row)] != row
+            ]
+            if conflicts:
+                blockers.append(f"Append would conflict with Date/Key {conflicts}: {target_rel}")
+
+            new_rows = [
+                row
+                for row in normalized_rows
+                if row and row_key(target_rel, candidate_header, row) not in existing_by_key
+            ]
+            if target_rel == DAILY_TARGET:
+                validate_daily_price_publish_rows(candidate_header, new_rows)
+            elif target_rel == MARKET_ACTIVITY_TARGET:
+                _validate_market_activity_publish_rows(candidate_header, new_rows)
 
             if target_rel in OBSERVATION_ONLY_TARGETS:
                 actionable_errors = actionability_violations(candidate_header, candidate_rows)
@@ -544,7 +764,25 @@ def inspect_candidate_files(package_root: Path, generated_files: list[str]) -> t
 
 
 def build_publish_readiness(package_root: Path, dry_run: dict[str, Any]) -> dict[str, Any]:
-    generated_files = dry_run.get("generatedFiles", []) or []
+    generated_files = list(dry_run.get("generatedFiles", []) or [])
+    trade_plan: dict[str, Any] | None = None
+    trade_plan_error = ""
+    try:
+        trade_plan = resolve_trade_date_publish_plan(package_root, generated_files)
+        if trade_plan:
+            generated_files = [
+                item
+                for item in generated_files
+                if Path(item.replace("\\", "/")).name
+                != "2317_daily_price_candidate.csv"
+            ]
+            generated_files = [
+                trade_plan["dailyCandidate"],
+                trade_plan["marketCandidate"],
+                *generated_files,
+            ]
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        trade_plan_error = str(exc)
     already_published_targets = dry_run.get("alreadyPublishedTargets", []) or []
     critical_missing = dry_run.get("criticalMissingFields")
     if critical_missing is None:
@@ -571,6 +809,8 @@ def build_publish_readiness(package_root: Path, dry_run: dict[str, Any]) -> dict
     )
 
     blockers = list(candidate_blockers)
+    if trade_plan_error:
+        blockers.append(f"Trade-date publish plan failed: {trade_plan_error}")
     if critical_missing:
         blockers.append(f"Missing critical fields: {', '.join(critical_missing)}")
     if missing_sources:
@@ -596,6 +836,13 @@ def build_publish_readiness(package_root: Path, dry_run: dict[str, Any]) -> dict
         "optionalMissingFields": optional_missing,
         "unavailableCandidateFields": unavailable_candidate_fields,
         "warningsZh": dry_run.get("dataQualityWarningsZh", []) or [],
+        "publishFiles": generated_files,
+        "ownerApprovalDate": date.today().isoformat(),
+        "executionDate": date.today().isoformat(),
+        "candidateTradingDate": trade_plan["formalTargetDate"] if trade_plan else None,
+        "formalTargetDate": trade_plan["formalTargetDate"] if trade_plan else None,
+        "candidateTradingDates": trade_plan["candidateTradingDates"] if trade_plan else [],
+        "tradeCandidateLineage": trade_plan,
     }
 
 
@@ -656,18 +903,75 @@ def update_manifest(package_root: Path, touched_targets: list[str], approval_not
             if entry.get("path") != target_rel:
                 continue
             entry["sha256"] = digest
-            entry["fileSizeBytes"] = size
+            if "currentSha256" in entry:
+                entry["currentSha256"] = digest
+            if "fileSizeBytes" in entry:
+                entry["fileSizeBytes"] = size
+            if "size" in entry:
+                entry["size"] = size
             entry["rowCount"] = rows
             entry["lastPublishedAt"] = now
             entry["publishApprovalZh"] = "Owner approved append; MARKET INTELLIGENCE sidecar remains observation only; actionable:false."
-            if target_rel == DAILY_TARGET:
+            if isinstance(entry.get("dateRange"), dict) or "cutoffDate" in entry:
                 _, data_rows, _ = read_csv_header_and_rows(target_path)
                 if data_rows:
-                    entry.setdefault("dateRange", {})["end"] = data_rows[-1][0]
+                    date_range = entry.get("dateRange")
+                    if isinstance(date_range, dict):
+                        date_range["start"] = data_rows[0][0]
+                        date_range["end"] = data_rows[-1][0]
+                    if "cutoffDate" in entry:
+                        entry["cutoffDate"] = data_rows[-1][0]
             updated = True
         if not updated:
             raise ValueError(f"Manifest has no entry for {target_rel}.")
     write_json(manifest_path, manifest)
+
+
+def publish_generated_candidates_atomically(
+    package_root: Path,
+    generated_files: list[str],
+    backup_dir: Path,
+    approval_note: str,
+) -> tuple[list[str], int, list[tuple[Path, Path, int]]]:
+    """Publish CSV candidates and manifest as one rollback-protected unit."""
+    resolved: list[tuple[Path, Path, str]] = []
+    for generated in generated_files:
+        candidate_path, target_rel, _ = resolve_generated_file(package_root, generated)
+        target_path = package_root / target_rel
+        if not candidate_path.exists():
+            raise FileNotFoundError(candidate_path)
+        if not target_path.exists():
+            raise FileNotFoundError(target_path)
+        resolved.append((candidate_path, target_path, target_rel))
+    target_names = [target_rel for _, _, target_rel in resolved]
+    if len(target_names) != len(set(target_names)):
+        raise ValueError("Multiple candidates target the same formal CSV.")
+
+    manifest_path = package_root / MANIFEST_PATH
+    original_bytes = {target_path: target_path.read_bytes() for _, target_path, _ in resolved}
+    manifest_before = manifest_path.read_bytes()
+    backup_dir.mkdir(exist_ok=True)
+    for _, target_path, _ in resolved:
+        shutil.copy2(target_path, backup_dir / target_path.name)
+    shutil.copy2(manifest_path, backup_dir / manifest_path.name)
+
+    published: list[tuple[Path, Path, int]] = []
+    try:
+        total_rows = 0
+        touched_targets: list[str] = []
+        for candidate_path, target_path, target_rel in resolved:
+            rows_added = append_candidate(candidate_path, target_path, target_rel)
+            total_rows += rows_added
+            touched_targets.append(target_rel)
+            published.append((candidate_path, target_path, rows_added))
+        if total_rows:
+            update_manifest(package_root, touched_targets, approval_note.format(rows=total_rows))
+        return touched_targets, total_rows, published
+    except Exception:
+        for target_path, content in original_bytes.items():
+            _atomic_write_bytes(target_path, content)
+        _atomic_write_bytes(manifest_path, manifest_before)
+        raise
 
 
 def sync_runtime_snapshot_after_publish(
@@ -2505,6 +2809,308 @@ def publish_market_activity_append(
         raise RuntimeError("Market-activity append failed; CSV and manifest restored") from publish_error
 
 
+def market_activity_reconciliation_approval_phrase(
+    stock_id: str,
+    revision_date: str,
+    append_dates: list[str] | None = None,
+) -> str:
+    phrase = (
+        "OWNER_APPROVE_MARKET_ACTIVITY_RECONCILIATION_"
+        f"{stock_id}_{revision_date.replace('-', '')}"
+    )
+    dates = append_dates or []
+    if dates:
+        phrase += f"_APPEND_{dates[0].replace('-', '')}_{dates[-1].replace('-', '')}"
+    return phrase
+
+
+def publish_market_activity_historical_reconciliation(
+    package_root: Path,
+    reconciliation_path: Path,
+    output_dir: Path,
+    *,
+    stock_id: str,
+    replacement_values: dict[str, str],
+    approval_phrase: str | None = None,
+    append_candidate_path: Path | None = None,
+) -> dict[str, Any]:
+    """Atomically reconcile one evidenced historical row and optionally append later rows."""
+
+    package_root = package_root.resolve()
+    reconciliation_path = reconciliation_path.resolve()
+    output_dir = output_dir.resolve()
+    runtime_root = (package_root / "runtime").resolve()
+    if (
+        not reconciliation_path.is_relative_to(runtime_root)
+        or not output_dir.is_relative_to(runtime_root)
+    ):
+        raise ValueError("Market-activity reconciliation artifacts must remain under runtime/")
+    if append_candidate_path is not None:
+        append_candidate_path = append_candidate_path.resolve()
+        if not append_candidate_path.is_relative_to(runtime_root):
+            raise ValueError("Market-activity append candidate must remain under runtime/")
+    if output_dir.exists():
+        raise FileExistsError(output_dir)
+
+    evidence = read_json(reconciliation_path)
+    revisions = evidence.get("revisions")
+    if (
+        evidence.get("status") != "RECONCILIATION_REQUIRED"
+        or evidence.get("formal_rows_preserved") is not True
+        or evidence.get("actionable") is not False
+        or not isinstance(revisions, list)
+        or len(revisions) != 1
+    ):
+        raise ValueError("Historical publication requires exactly one RECONCILIATION_REQUIRED record")
+    revision = revisions[0]
+    if not isinstance(revision, dict):
+        raise ValueError("Historical reconciliation record is invalid")
+    revision_date = str(revision.get("date") or "")
+    changed_fields = revision.get("changed_fields")
+    allowed_fields = {"trade_volume", "trade_value", "transaction_count"}
+    if (
+        not revision_date
+        or not isinstance(changed_fields, dict)
+        or not changed_fields
+        or not set(changed_fields).issubset(allowed_fields)
+        or revision.get("formal_row_preserved") is not True
+        or revision.get("twse_close_matches_price_authority") is not True
+    ):
+        raise ValueError("Historical reconciliation evidence is incomplete or untrusted")
+    if set(replacement_values) != set(changed_fields):
+        raise ValueError("Replacement fields do not match recorded reconciliation evidence")
+    for field, values in changed_fields.items():
+        if not isinstance(values, dict) or "formal" not in values or "twse" not in values:
+            raise ValueError(f"Historical reconciliation evidence is incomplete for {field}")
+        if str(replacement_values[field]) != str(values["twse"]):
+            raise ValueError(f"Replacement value does not match recorded TWSE evidence for {field}")
+        if not str(values["formal"]).isdigit() or not str(values["twse"]).isdigit():
+            raise ValueError(f"Historical reconciliation values are not numeric for {field}")
+
+    formal_path = package_root / MARKET_ACTIVITY_TARGET
+    manifest_path = package_root / MANIFEST_PATH
+    formal_header, formal_rows, _ = read_csv_header_and_rows(formal_path)
+    if tuple(formal_header) != MARKET_ACTIVITY_FIELDS:
+        raise ValueError("Market-activity reconciliation schema mismatch")
+    matching = [
+        row for row in formal_rows
+        if row[0] == revision_date and row[1] == stock_id
+    ]
+    formal_identities = [(row[0], row[1]) for row in formal_rows]
+    if len(formal_identities) != len(set(formal_identities)):
+        raise ValueError("Formal market-activity primary identities are not unique")
+    if len(matching) != 1:
+        raise ValueError("Historical reconciliation identity must match exactly one formal row")
+    old_row = matching[0]
+    field_indexes = {field: formal_header.index(field) for field in allowed_fields}
+    for field, values in changed_fields.items():
+        if old_row[field_indexes[field]] != str(values["formal"]):
+            raise ValueError(f"Formal pre-reconciliation value changed unexpectedly for {field}")
+    revised_row = list(old_row)
+    for field, value in replacement_values.items():
+        revised_row[field_indexes[field]] = str(value)
+
+    append_rows: list[list[str]] = []
+    append_dates: list[str] = []
+    if append_candidate_path is not None:
+        candidate_header, append_rows, _ = read_csv_header_and_rows(append_candidate_path)
+        if candidate_header != formal_header or not append_rows:
+            raise ValueError("Historical reconciliation append candidate is empty or has the wrong schema")
+        append_dates = [row[0] for row in append_rows]
+        formal_dates = [row[0] for row in formal_rows]
+        if (
+            append_dates != sorted(set(append_dates))
+            or set(formal_dates) & set(append_dates)
+            or append_dates[0] <= formal_dates[-1]
+        ):
+            raise ValueError("Historical reconciliation append rows are not strictly later and unique")
+        for row in append_rows:
+            if row[1] != stock_id or not all(row[index].isdigit() for index in (2, 3, 4)):
+                raise ValueError(f"Invalid market-activity append row: {row}")
+            if not row[5].startswith("https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?"):
+                raise ValueError("Market-activity append source is not approved TWSE STOCK_DAY")
+            if row[6] != row[0][:7]:
+                raise ValueError("Market-activity append source_month does not match date")
+
+    expected_approval = market_activity_reconciliation_approval_phrase(
+        stock_id, revision_date, append_dates
+    )
+    if approval_phrase != expected_approval:
+        raise ValueError(
+            "Historical market-activity publication requires exact Owner approval phrase: "
+            + expected_approval
+        )
+
+    manifest = read_json(manifest_path)
+    entry = next(
+        (item for item in manifest.get("authoritativeFiles", [])
+         if item.get("path") == MARKET_ACTIVITY_TARGET),
+        None,
+    )
+    formal_sha = sha256_file(formal_path)
+    if entry is None or entry.get("sha256") != formal_sha or entry.get("rowCount") != len(formal_rows):
+        raise ValueError("Market-activity manifest does not match formal pre-reconciliation CSV")
+
+    formal_bytes = formal_path.read_bytes()
+    pre_hashes = {
+        MARKET_ACTIVITY_TARGET: formal_sha,
+        MANIFEST_PATH: sha256_file(manifest_path),
+    }
+    line_ending = "\r\n" if b"\r\n" in formal_bytes else "\n"
+
+    def render_row(row: list[str]) -> bytes:
+        output = io.StringIO(newline="")
+        csv.writer(output, lineterminator=line_ending).writerow(row)
+        return output.getvalue().encode("utf-8")
+
+    old_line = render_row(old_row)
+    if formal_bytes.count(old_line) != 1:
+        raise ValueError("Historical reconciliation target bytes are not uniquely present")
+    replacement_line = render_row(revised_row)
+    append_bytes = b"".join(render_row(row) for row in append_rows)
+    combined_bytes = formal_bytes.replace(old_line, replacement_line, 1) + append_bytes
+    combined_sha = hashlib.sha256(combined_bytes).hexdigest().upper()
+
+    output_dir.mkdir(parents=True)
+    backup_dir = output_dir / "backup"
+    staged_dir = output_dir / "staged"
+    manifest_workspace = staged_dir / "manifest_workspace"
+    (manifest_workspace / "data").mkdir(parents=True)
+    backup_dir.mkdir()
+    shutil.copy2(formal_path, backup_dir / formal_path.name)
+    shutil.copy2(manifest_path, backup_dir / manifest_path.name)
+    backup_hashes = {
+        MARKET_ACTIVITY_TARGET: sha256_file(backup_dir / formal_path.name),
+        MANIFEST_PATH: sha256_file(backup_dir / manifest_path.name),
+    }
+    if backup_hashes != pre_hashes:
+        raise ValueError("Historical market-activity reconciliation backup verification failed")
+    staged_csv = manifest_workspace / MARKET_ACTIVITY_TARGET
+    staged_manifest = manifest_workspace / MANIFEST_PATH
+    staged_csv.write_bytes(combined_bytes)
+    staged_manifest.write_bytes(manifest_path.read_bytes())
+    update_manifest(
+        manifest_workspace,
+        [MARKET_ACTIVITY_TARGET],
+        f"Owner-approved historical market-activity reconciliation {stock_id}/{revision_date}",
+    )
+    manifest_bytes = staged_manifest.read_bytes()
+    published_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    journal_path = output_dir / "PUBLISH_JOURNAL.json"
+    journal: dict[str, Any] = {
+        "mode": "MARKET_ACTIVITY_HISTORICAL_RECONCILIATION",
+        "status": "BACKUP_VERIFIED",
+        "created_at_utc": published_at,
+        "identity": {"date": revision_date, "stock_id": stock_id},
+        "changed_fields": changed_fields,
+        "replacement_values": replacement_values,
+        "append_dates": append_dates,
+        "reconciliation_path": str(reconciliation_path),
+        "pre_hashes": pre_hashes,
+        "backup_hashes": backup_hashes,
+        "staged_hashes": {
+            MARKET_ACTIVITY_TARGET: combined_sha,
+            MANIFEST_PATH: hashlib.sha256(manifest_bytes).hexdigest().upper(),
+        },
+        "actionable": False,
+    }
+    _atomic_write_json(journal_path, journal)
+    try:
+        _atomic_write_bytes(formal_path, combined_bytes)
+        _atomic_write_bytes(manifest_path, manifest_bytes)
+        published_header, published_rows, _ = read_csv_header_and_rows(formal_path)
+        published_manifest = read_json(manifest_path)
+        published_entry = next(
+            item for item in published_manifest.get("authoritativeFiles", [])
+            if item.get("path") == MARKET_ACTIVITY_TARGET
+        )
+        published_by_identity = {(row[0], row[1]): row for row in published_rows}
+        published_identities = [(row[0], row[1]) for row in published_rows]
+        unrelated_before = {
+            (row[0], row[1]): row for row in formal_rows
+            if (row[0], row[1]) != (revision_date, stock_id)
+        }
+        unrelated_after = {
+            identity: row for identity, row in published_by_identity.items()
+            if identity in unrelated_before
+        }
+        if (
+            tuple(published_header) != MARKET_ACTIVITY_FIELDS
+            or len(published_identities) != len(set(published_identities))
+            or published_by_identity.get((revision_date, stock_id)) != revised_row
+            or unrelated_after != unrelated_before
+            or (append_dates and [row[0] for row in published_rows[-len(append_dates):]] != append_dates)
+            or sha256_file(formal_path) != combined_sha
+            or published_entry.get("sha256") != combined_sha
+            or published_entry.get("rowCount") != len(published_rows)
+            or (
+                "fileSizeBytes" in published_entry
+                and published_entry.get("fileSizeBytes") != len(combined_bytes)
+            )
+            or (
+                "size" in published_entry
+                and published_entry.get("size") != len(combined_bytes)
+            )
+            or (
+                "currentSha256" in published_entry
+                and published_entry.get("currentSha256") != combined_sha
+            )
+            or published_entry.get("dateRange", {}).get("start") != published_rows[0][0]
+            or published_entry.get("dateRange", {}).get("end") != published_rows[-1][0]
+            or (
+                "cutoffDate" in published_entry
+                and published_entry.get("cutoffDate") != published_rows[-1][0]
+            )
+        ):
+            raise ValueError("Historical market-activity post-publish validation failed")
+        journal.update({
+            "status": "PUBLISHED",
+            "published_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "post_hashes": {
+                MARKET_ACTIVITY_TARGET: sha256_file(formal_path),
+                MANIFEST_PATH: sha256_file(manifest_path),
+            },
+            "total_rows": len(published_rows),
+            "last_date": published_rows[-1][0],
+            "rollback_available": True,
+            "rollback_performed": False,
+            "unrelated_rows_unchanged": True,
+        })
+        _atomic_write_json(journal_path, journal)
+        return journal
+    except Exception as publish_error:
+        rollback_errors: list[str] = []
+        for target, backup in (
+            (formal_path, backup_dir / formal_path.name),
+            (manifest_path, backup_dir / manifest_path.name),
+        ):
+            try:
+                _atomic_write_bytes(target, backup.read_bytes())
+            except Exception as rollback_error:
+                rollback_errors.append(f"{target}: {rollback_error}")
+        restored = {
+            MARKET_ACTIVITY_TARGET: sha256_file(formal_path),
+            MANIFEST_PATH: sha256_file(manifest_path),
+        }
+        rollback_ok = not rollback_errors and restored == pre_hashes
+        journal.update({
+            "status": "ROLLED_BACK" if rollback_ok else "ROLLBACK_FAILED",
+            "publish_error": str(publish_error),
+            "rollback_errors": rollback_errors,
+            "restored_hashes": restored,
+            "rollback_performed": True,
+            "rollback_verified": rollback_ok,
+        })
+        _atomic_write_json(journal_path, journal)
+        if not rollback_ok:
+            raise RuntimeError(
+                "Historical market-activity reconciliation rollback was incomplete"
+            ) from publish_error
+        raise RuntimeError(
+            "Historical market-activity reconciliation failed; CSV and manifest restored"
+        ) from publish_error
+
+
 def _macro_document_rows(payload: bytes) -> tuple[list[str], list[list[str]], int]:
     lines = payload.decode("utf-8-sig").splitlines()
     try:
@@ -3109,15 +3715,18 @@ def main() -> int:
         raise SystemExit(f"DRY_RUN not found: {dry_run_path}")
 
     dry_run = read_json(dry_run_path)
-    candidate_date = dry_run.get("candidateDate", staging_dir.name)
-    generated_files = dry_run.get("generatedFiles", []) or []
+    staging_candidate_date = str(dry_run.get("candidateDate", staging_dir.name))
+    execution_date = date.today().isoformat()
     readiness = build_publish_readiness(package_root, dry_run)
+    generated_files = readiness.get("publishFiles", []) or []
+    formal_target_date = str(readiness.get("formalTargetDate") or staging_candidate_date)
 
     print("===================================================")
     print("P1008 Owner formal CSV publish checkpoint")
     print("===================================================")
     print(f"Package root : {package_root}")
-    print(f"Candidate    : {candidate_date}")
+    print(f"Execution    : {execution_date}")
+    print(f"Formal target: {formal_target_date}")
     print(f"DRY_RUN      : {dry_run_path}")
     print(f"Generated    : {', '.join(generated_files) if generated_files else 'none'}")
     print(f"Critical miss: {', '.join(readiness['criticalMissingFields']) if readiness['criticalMissingFields'] else 'none'}")
@@ -3140,30 +3749,34 @@ def main() -> int:
 
     if not args.publish:
         print("[READY FOR OWNER REVIEW] No files were changed.")
-        print(f"To publish after review, rerun with --date {candidate_date} --publish")
+        print(f"To publish after review, rerun with --date {staging_dir.name} --publish")
         return 0
 
-    approval_phrase = f"APPROVE {candidate_date}"
+    approval_phrase = f"APPROVE {formal_target_date}"
     typed = input(f"Type exactly '{approval_phrase}' to append formal CSV: ").strip()
     if typed != approval_phrase:
         print("[CANCELLED] Approval phrase did not match. No files were changed.")
         return 5
 
+    revalidated = build_publish_readiness(package_root, read_json(dry_run_path))
+    if (
+        not revalidated["allowed"]
+        or str(revalidated.get("formalTargetDate") or execution_date)
+        != formal_target_date
+        or (revalidated.get("publishFiles", []) or []) != generated_files
+    ):
+        print("[BLOCKED] Candidate identity changed after Owner review; formal publish refused.")
+        return 3
+
     backup_dir = staging_dir / "owner_publish_backup"
-    backup_dir.mkdir(exist_ok=True)
-    touched_targets: list[str] = []
-    total_rows = 0
-    for generated in generated_files:
-        candidate_path, target_rel, _ = resolve_generated_file(package_root, generated)
-        target_path = package_root / target_rel
-        if not candidate_path.exists():
-            raise FileNotFoundError(candidate_path)
-        if not target_path.exists():
-            raise FileNotFoundError(target_path)
-        shutil.copy2(target_path, backup_dir / target_path.name)
-        rows_added = append_candidate(candidate_path, target_path, target_rel)
-        total_rows += rows_added
-        touched_targets.append(target_rel)
+    approval_note = (
+        f"Owner approval {execution_date}; formal target {formal_target_date} "
+        "via owner_publish_csv_v2.py; appended {rows} row(s)"
+    )
+    touched_targets, total_rows, published = publish_generated_candidates_atomically(
+        package_root, generated_files, backup_dir, approval_note
+    )
+    for candidate_path, target_path, rows_added in published:
         print(f"[APPENDED] {rows_added} row(s): {candidate_path} -> {target_path}")
 
     if total_rows == 0:
@@ -3171,31 +3784,33 @@ def main() -> int:
         print("                     Formal CSV and manifest were not modified.")
         return 0
 
-    approval_note = f"Owner approval {candidate_date} via owner_publish_csv_v2.py; appended {total_rows} row(s)"
-    update_manifest(package_root, touched_targets, approval_note)
     published_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     runtime_snapshot_synced = sync_runtime_snapshot_after_publish(
         package_root,
-        str(candidate_date),
+        staging_candidate_date,
         touched_targets,
         published_at,
     )
     news_scan_snapshot_synced = sync_news_scan_snapshot_after_publish(
         package_root,
-        str(candidate_date),
+        staging_candidate_date,
         touched_targets,
         published_at,
     )
     event_review_state_synced = sync_event_review_state_after_publish(
         package_root,
-        str(candidate_date),
+        staging_candidate_date,
         touched_targets,
         published_at,
     )
     dry_run_synced = sync_dry_run_after_publish(dry_run_path, touched_targets, published_at)
     report = {
         "publishedAt": published_at,
-        "candidateDate": candidate_date,
+        "candidateDate": formal_target_date,
+        "candidateTradingDate": formal_target_date,
+        "formalTargetDate": formal_target_date,
+        "ownerApprovalDate": date.today().isoformat(),
+        "executionDate": execution_date,
         "touchedTargets": touched_targets,
         "rowsAdded": total_rows,
         "runtimeSnapshotSynced": runtime_snapshot_synced,

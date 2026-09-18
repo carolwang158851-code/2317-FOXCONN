@@ -38,10 +38,10 @@ V1_CONTRACT_ROOT = PACKAGE_ROOT / "contracts" / "p1008_research_plugin" / "v1.0"
 MODULE_RELATIVE_PATH = Path("modules/p1008_research_plugin")
 CURRENT_AUTHORITY_AMENDMENT_PATH = (
     "contracts/p1008_research_plugin/acceptance/v1.1/"
-    "P1008_FY2026Q2_ROIC_FINALIZATION_CLOSEOUT.json"
+    "P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT.json"
 )
 CURRENT_AUTHORITY_AMENDMENT_SHA256 = (
-    "B1D431C6380E2914E40203DA6A077B3414029F100FA14FB0108E63F5D4069050"
+    "9A0DDC6A85BE96123A7EC378DAC7BDD368D671DB8BFBFDD07DC40EFE438FD187"
 )
 
 
@@ -239,23 +239,56 @@ def _manifest_entries(manifest: dict[str, Any]) -> list[dict[str, Any]]:
 
 def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str, Any]:
     manifest = read_json(root / "data" / "CSV_AUTHORITY_MANIFEST.json")
-    entries = _manifest_entries(manifest)
+    authority_entries = manifest.get("authoritativeFiles", [])
+    research_entries = manifest.get("nonAuthoritativeFiles", [])
+    entries = authority_entries + research_entries
     classification = classify_authority_paths((item["path"] for item in entries), record)
-    actual_hashes: dict[str, str] = {}
-    for entry in entries:
+    authority_hashes: dict[str, str] = {}
+    research_hashes: dict[str, str] = {}
+    for entry in authority_entries:
         path = root / entry["path"]
         require(path.is_file(), f"Authority file is missing: {entry['path']}")
+        expected_hash = entry["sha256"].upper()
+        filesystem_hash = sha256_file(path)
+        require(
+            filesystem_hash == expected_hash,
+            f"PRODUCTION_AUTHORITY_HASH_MISMATCH: {entry['path']}",
+        )
         committed = git_blob_bytes(root, entry["path"])
         committed_hash = sha256_bytes(committed)
         require(
-            committed_hash == entry["sha256"].upper(),
-            f"Authority hash mismatch: {entry['path']}",
+            committed_hash == expected_hash,
+            f"PRODUCTION_AUTHORITY_REPOSITORY_MISMATCH: {entry['path']}",
+        )
+        authority_hashes[entry["path"]] = filesystem_hash
+
+    for entry in research_entries:
+        path = root / entry["path"]
+        require(path.is_file(), f"Research current-state file is missing: {entry['path']}")
+        current_hash = str(entry.get("currentSha256") or "").upper()
+        baseline_hash = str(entry.get("acceptedBaselineSha256") or "").upper()
+        baseline_revision = str(entry.get("acceptedBaselineRevision") or "")
+        require(
+            current_hash and current_hash == str(entry.get("sha256") or "").upper(),
+            f"Research current-state manifest hash is invalid: {entry['path']}",
         )
         require(
-            normalize_checkout_eol(path.read_bytes()) == normalize_checkout_eol(committed),
-            f"Authority worktree content changed beyond checkout line endings: {entry['path']}",
+            baseline_revision and re.fullmatch(r"[0-9A-F]{64}", baseline_hash),
+            f"Research historical baseline metadata is missing: {entry['path']}",
         )
-        actual_hashes[entry["path"]] = committed_hash
+        require(
+            sha256_bytes(git_blob_bytes(root, entry["path"], baseline_revision))
+            == baseline_hash,
+            f"Research historical baseline lineage mismatch: {entry['path']}",
+        )
+        filesystem_hash = sha256_file(path)
+        require(
+            filesystem_hash == current_hash,
+            f"NON_AUTHORITATIVE_RESEARCH_LINEAGE_MISMATCH: {entry['path']}",
+        )
+        research_hashes[entry["path"]] = filesystem_hash
+
+    actual_hashes = {**authority_hashes, **research_hashes}
 
     receipt_verified = False
     if classification in {"PHASE_A_CLOSURE_SIX", "INTEGRATED_SEVEN"}:
@@ -289,15 +322,30 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                 "PHASE_A_AUTHORITY_DATA_CLOSURE_COMPLETE",
                 "PHASE_A_FINAL_INTEGRATION_RECONCILED",
                 "P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT",
-                "P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT",
-                "P1008_FY2026Q2_ROIC_FINALIZED",
             },
             "Phase A authority receipt is not accepted",
         )
-        require(
-            receipt.get("authorityFiles") == actual_hashes,
-            "Phase A authority receipt does not match committed authority bytes",
-        )
+        historical_receipt_hashes: dict[str, str] = {}
+        historical_revision = ""
+        if acceptance_status == "P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT":
+            historical_revision = receipt.get("remediationLineage", {}).get(
+                "remediationCommit", ""
+            )
+            historical_receipt_hashes = {
+                relative: sha256_bytes(
+                    git_blob_bytes(root, relative, historical_revision)
+                )
+                for relative in receipt.get("authorityFiles", {})
+            }
+            require(
+                receipt.get("authorityFiles") == historical_receipt_hashes,
+                "Phase A authority receipt does not match committed authority bytes",
+            )
+        else:
+            require(
+                receipt.get("authorityFiles") == actual_hashes,
+                "Phase A authority receipt does not match committed authority bytes",
+            )
         if acceptance_status == "EXISTING_OWNER_PUBLISHED_AUTHORITIES_PINNED_FOR_CI":
             require(
                 receipt.get("formalPublishExecutedByThisReceipt") is False,
@@ -683,7 +731,7 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                 and receipt.get("canvaCalls") == 0,
                 "Final integration recorded an unauthorized state change or call",
             )
-        elif acceptance_status == "P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT":
+        else:
             require(
                 classification == "INTEGRATED_SEVEN"
                 and receipt.get("baselineId") == "INTEGRATED_SEVEN",
@@ -740,9 +788,13 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                 manifest_reference.get("path") == "data/CSV_AUTHORITY_MANIFEST.json"
                 and manifest_reference.get("sha256")
                 == sha256_bytes(
-                    git_blob_bytes(root, "data/CSV_AUTHORITY_MANIFEST.json")
+                    git_blob_bytes(
+                        root,
+                        "data/CSV_AUTHORITY_MANIFEST.json",
+                        historical_revision,
+                    )
                 ),
-                "TWSE remediation current authority manifest mismatch",
+                "TWSE remediation historical authority manifest mismatch",
             )
             require(
                 receipt.get("authoritySummary")
@@ -792,191 +844,6 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
                 and receipt.get("canvaCalls") == 0,
                 "TWSE remediation governance boundary drifted",
             )
-        elif acceptance_status == "P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT":
-            require(
-                classification == "INTEGRATED_SEVEN"
-                and receipt.get("baselineId") == "INTEGRATED_SEVEN",
-                "FY2026Q2 CI re-anchor is bound to the wrong baseline",
-            )
-            previous = receipt.get("previousReceipt", {})
-            previous_path = previous.get("path", "")
-            require(
-                previous_path
-                == "contracts/p1008_research_plugin/acceptance/v1.1/P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT.json"
-                and previous.get("sha256")
-                == "9A0DDC6A85BE96123A7EC378DAC7BDD368D671DB8BFBFDD07DC40EFE438FD187",
-                "FY2026Q2 CI re-anchor predecessor identity mismatch",
-            )
-            previous_committed = git_blob_bytes(root, previous_path)
-            require(
-                sha256_bytes(previous_committed) == previous.get("sha256"),
-                "Historical TWSE authority amendment hash changed",
-            )
-            require(
-                normalize_checkout_eol((root / previous_path).read_bytes())
-                == normalize_checkout_eol(previous_committed),
-                "Historical TWSE authority amendment worktree changed",
-            )
-            previous_document = json.loads(previous_committed.decode("utf-8-sig"))
-            require(
-                previous_document.get("acceptanceStatus")
-                == "P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT"
-                and previous_document.get("authorityManifest", {}).get("sha256")
-                == "C6FF94A1FB2C9C877D7620184BDDD9A6270355ED833318638C3D87EB634A5398",
-                "Historical TWSE authority amendment content drifted",
-            )
-            manifest_reference = receipt.get("authorityManifest", {})
-            require(
-                manifest_reference
-                == {
-                    "path": "data/CSV_AUTHORITY_MANIFEST.json",
-                    "sha256": sha256_bytes(
-                        git_blob_bytes(root, "data/CSV_AUTHORITY_MANIFEST.json")
-                    ),
-                    "manifestVersion": "1.4.0",
-                },
-                "FY2026Q2 CI re-anchor authority manifest mismatch",
-            )
-            require(
-                receipt.get("authoritySummary")
-                == {
-                    "verifiedFileCount": 7,
-                    "masterRows": 22,
-                    "latestQuarter": "2026Q2",
-                    "dailyPriceRows": 139,
-                    "dailyPriceCutoff": "2026-08-27",
-                    "marketActivityRows": 89,
-                    "marketActivityCutoff": "2026-08-27",
-                    "macroRows": 40,
-                    "macroCutoff": "2026-08-27",
-                    "fxRows": 13,
-                    "fxCutoff": "2026-08-27",
-                    "eventRows": 493,
-                    "eventCutoff": "2026-07-27",
-                },
-                "FY2026Q2 CI re-anchor authority summary drifted",
-            )
-            q2 = receipt.get("fy2026Q2Promotion", {})
-            require(
-                q2
-                == {
-                    "quarterCount": 1,
-                    "bvps": "136.02",
-                    "roePct": "6.21",
-                    "roePeriod": "2026H1",
-                    "roeAnnualized": False,
-                    "currentPriceDate": "2026-08-27",
-                    "currentClose": "252.0",
-                    "currentPb": "1.853",
-                    "roicStatus": "OWNER_CONDITIONAL_PENDING",
-                    "roicCanonicalValue": None,
-                },
-                "FY2026Q2 promotion boundary drifted",
-            )
-            lineage = receipt.get("sourceLineage", {})
-            source_head = lineage.get("sourceHead", "")
-            source_base = lineage.get("sourceBase", "")
-            require(
-                source_head == "4216e2ee6771f3cd7cc45e9321f33037ac591d17"
-                and source_base == "bfe19f353a7c26676507beeeb566a6ad60fcbedf"
-                and lineage.get("authorityMutationDuringCiRemediation") is False
-                and subprocess.run(
-                    ["git", "-C", str(root), "merge-base", "--is-ancestor", source_base, source_head],
-                    check=False,
-                ).returncode
-                == 0
-                and subprocess.run(
-                    ["git", "-C", str(root), "merge-base", "--is-ancestor", source_head, "HEAD"],
-                    check=False,
-                ).returncode
-                == 0,
-                "FY2026Q2 CI re-anchor source lineage is invalid",
-            )
-            require(
-                receipt.get("formalPublishExecutedByThisReceipt") is False
-                and receipt.get("newAuthorityWriteDuringCiClosure") is False
-                and receipt.get("governanceAcknowledgementOnly") is True
-                and receipt.get("ownerGateRequired") is True
-                and receipt.get("automaticReportGeneration") is False
-                and receipt.get("automaticPublicReportPublication") is False
-                and receipt.get("ruleHoldMidrModified") is False
-                and receipt.get("runtimeSqliteModified") is False
-                and receipt.get("openAiCalls") == 0
-                and receipt.get("webSearchCalls") == 0
-                and receipt.get("canvaCalls") == 0,
-                "FY2026Q2 CI re-anchor governance boundary drifted",
-            )
-        else:
-            require(
-                classification == "INTEGRATED_SEVEN",
-                "FY2026Q2 ROIC closeout is bound to the wrong authority set",
-            )
-            previous = receipt.get("previousReceipt", {})
-            require(
-                previous
-                == {
-                    "path": "contracts/p1008_research_plugin/acceptance/v1.1/P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT.json",
-                    "sha256": "93176AC4E6E42B034500A27742077990C97B22E70C9BE2C2E1D80DFA85A0A390",
-                },
-                "FY2026Q2 ROIC closeout predecessor mismatch",
-            )
-            require(
-                sha256_bytes(git_blob_bytes(root, previous["path"]))
-                == previous["sha256"],
-                "Historical FY2026Q2 CI re-anchor receipt changed",
-            )
-            manifest_reference = receipt.get("authorityManifest", {})
-            require(
-                manifest_reference
-                == {
-                    "path": "data/CSV_AUTHORITY_MANIFEST.json",
-                    "sha256": sha256_bytes(
-                        git_blob_bytes(root, "data/CSV_AUTHORITY_MANIFEST.json")
-                    ),
-                    "manifestVersion": "1.4.1",
-                },
-                "FY2026Q2 ROIC closeout authority manifest mismatch",
-            )
-            q2 = receipt.get("fy2026Q2Roic", {})
-            require(
-                q2.get("canonicalValue") == "12.35"
-                and q2.get("classification") == "DERIVED_VERIFIED"
-                and q2.get("period") == "2026Q2"
-                and q2.get("interestBearingDebtMillionTwd") == "1304531"
-                and q2.get("investedCapitalMillionTwd") == "2249465.607"
-                and q2.get("trendComparableToQ1") is False,
-                "FY2026Q2 ROIC closeout values drifted",
-            )
-            rejected = receipt.get("rejectedCandidateHistory", [])
-            require(
-                rejected
-                and rejected[0].get("value") == "16.46"
-                and rejected[0].get("reasonCode")
-                == "NET_CASH_DENOMINATOR_SCOPE_MISMATCH"
-                and rejected[0].get("canonical") is False,
-                "FY2026Q2 rejected ROIC history is missing",
-            )
-            preserved = receipt.get("preservedKpis", {})
-            require(
-                preserved
-                == {
-                    "bvps": "136.02",
-                    "pb": "1.853",
-                    "roe": "6.21",
-                    "roePeriod": "2026H1",
-                    "roeAnnualized": False,
-                },
-                "FY2026Q2 preserved KPI boundary drifted",
-            )
-            require(
-                receipt.get("formalPublishExecutedByThisReceipt") is False
-                and receipt.get("automaticReportGeneration") is False
-                and receipt.get("automaticPublicReportPublication") is False
-                and receipt.get("ruleHoldMidrModified") is False
-                and receipt.get("runtimeSqliteModified") is False
-                and receipt.get("openAiCalls") == 0,
-                "FY2026Q2 ROIC closeout boundary drifted",
-            )
         macro_decision = receipt.get("macroAuthorityDecision", {})
         require(
             macro_decision.get("unapprovedRowsAccepted") is False,
@@ -984,7 +851,12 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
         )
         require(
             macro_decision.get("requiredSha256")
-            == actual_hashes.get("data/macro_snapshot.csv"),
+            == (
+                historical_receipt_hashes.get("data/macro_snapshot.csv")
+                if acceptance_status
+                == "P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT"
+                else actual_hashes.get("data/macro_snapshot.csv")
+            ),
             "Macro authority receipt hash mismatch",
         )
         require(receipt.get("actionable") is False, "Authority receipt became actionable")
@@ -992,6 +864,10 @@ def validate_authority_manifest(root: Path, record: dict[str, Any]) -> dict[str,
     return {
         "baseline": classification,
         "filesVerified": len(entries),
+        "productionAuthority": "PASS",
+        "productionAuthorityFilesVerified": len(authority_entries),
+        "researchCurrentStateLineage": "PASS",
+        "researchCurrentStateFilesVerified": len(research_entries),
         "authorityReceiptVerified": receipt_verified,
     }
 

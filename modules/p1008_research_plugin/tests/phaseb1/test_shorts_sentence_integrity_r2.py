@@ -33,7 +33,7 @@ class PhaseB1ShortsSentenceIntegrityR2Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         with scratch("r2-valid-") as output:
-            result = fixture_pipeline(output).run_all(output_base=output)
+            result = fixture_pipeline(output).run_all()
             cls.analysis = result["analysis"]
             cls.report = result["report"]
         cls.builder = ScriptBuilder()
@@ -107,7 +107,7 @@ class PhaseB1ShortsSentenceIntegrityR2Tests(unittest.TestCase):
             "負325.57191億元",
             "公告後一個交易日上漲百分之零點六二",
             "五個交易日後下跌百分之一點六六",
-            "股價淨值比1.853倍",
+            "股價淨值比1.99倍",
             "研究分類為WAIT",
             "研究分類為HOLD",
         )

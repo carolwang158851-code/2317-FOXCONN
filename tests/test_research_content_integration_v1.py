@@ -196,6 +196,10 @@ class ResearchContentIntegrationV1Tests(unittest.TestCase):
         self.assertEqual(result["evidence"]["qualified_count"], 1)
         self.assertEqual(result["display_state"], "WATCH")
         self.assertFalse(result["report_trigger_decision"]["report_trigger_valid"])
+        self.assertEqual(
+            result["validated_evidence_lineage_ledger"]["records"][0]["source_channel"],
+            "GOVERNED_ANYSEARCH",
+        )
         self.assert_zero_side_effects(result)
 
     def test_case_c_authority_conflict_requires_review_and_never_overwrites(self) -> None:
@@ -220,6 +224,11 @@ class ResearchContentIntegrationV1Tests(unittest.TestCase):
         self.assertEqual(result["display_state"], "REVIEW_REQUIRED")
         self.assertEqual(result["evidence"]["conflicts"], ["AUTHORITY_NEWS_CONFLICT"])
         self.assertFalse(result["handoff_eligible"])
+        channels = {
+            item["source_channel"]
+            for item in result["validated_evidence_lineage_ledger"]["records"]
+        }
+        self.assertIn("NEWS", channels)
         self.assert_zero_side_effects(result)
 
     def test_case_d_trigger_emits_handoff_but_does_not_generate_report(self) -> None:

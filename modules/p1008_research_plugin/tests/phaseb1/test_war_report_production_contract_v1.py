@@ -114,6 +114,36 @@ class WarReportProductionContractV1Tests(unittest.TestCase):
         self.assertIn("position:sticky", template)
         self.assertIn("@media print", template)
 
+    def test_l1_windows_crlf_normalizes_to_the_approved_lf_bytes(self) -> None:
+        approved = b"first line\nsecond line\n"
+        approved_sha = hashlib.sha256(approved).hexdigest().upper()
+        self.assertEqual(
+            contract._verified_template_bytes(
+                approved.replace(b"\n", b"\r\n"), approved_sha
+            ),
+            approved,
+        )
+
+    def test_l2_non_line_ending_change_remains_fail_closed(self) -> None:
+        approved = b"first line\nsecond line\n"
+        approved_sha = hashlib.sha256(approved).hexdigest().upper()
+        with self.assertRaisesRegex(
+            contract.WarReportContractError, "MOTHER_TEMPLATE_HASH_MISMATCH"
+        ):
+            contract._verified_template_bytes(
+                b"first line\r\nchanged line\r\n", approved_sha
+            )
+
+    def test_l3_lone_cr_is_not_accepted_as_portable_line_ending(self) -> None:
+        approved = b"first line\nsecond line\n"
+        approved_sha = hashlib.sha256(approved).hexdigest().upper()
+        with self.assertRaisesRegex(
+            contract.WarReportContractError, "MOTHER_TEMPLATE_HASH_MISMATCH"
+        ):
+            contract._verified_template_bytes(
+                b"first line\rsecond line\r", approved_sha
+            )
+
     def test_m_rendered_report_is_self_contained(self) -> None:
         rendered = self.render()
         contract.validate_reader_html(rendered)

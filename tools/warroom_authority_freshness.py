@@ -104,7 +104,7 @@ def _governed_result(
         or result.get("run_dir") is None
         or Path(str(result["run_dir"])).resolve() != resolved
         or result.get("status") != "DRY_RUN_READY"
-        or result.get("launcher_status") != "UPDATED"
+        or result.get("launcher_status") != "DRY_RUN_READY"
         or result.get("dry_run") is not True
         or result.get("exit_code") != EXIT_OK
         or result.get("actionable") is not False

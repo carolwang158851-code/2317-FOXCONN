@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://formula-registry/v1.0/formula_registry",
+  "type": "object",
+  "required": [
+    "formulaRegistryId",
+    "registryVersion",
+    "status",
+    "lifecycleClassifications",
+    "entries",
+    "actionable",
+    "formalDecision",
+    "holdChangeAllowed",
+    "ruleChangeAllowed",
+    "productionActivation"
+  ],
+  "properties": {
+    "$schema": {"type": "string"},
+    "formulaRegistryId": {"const": "P1008_FORMULA_REGISTRY"},
+    "registryVersion": {"const": "1.0"},
+    "status": {"const": "OWNER_APPROVED_GOVERNANCE_LINEAGE"},
+    "lifecycleClassifications": {
+      "const": ["CURRENT_PRODUCTION", "OWNER_APPROVED_CANDIDATE", "RESEARCH_ONLY", "REJECTED", "LEGACY"]
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "required": [
+          "formulaId",
+          "lifecycleClassification",
+          "formulaDefinition",
+          "dataProvenance",
+          "activationStatus",
+          "ownerApproval",
+          "backtestEvidence",
+          "implementationStatus"
+        ],
+        "properties": {
+          "formulaId": {"type": "string", "pattern": "^MIDR\\.[A-Z_]+$"},
+          "lifecycleClassification": {
+            "enum": ["CURRENT_PRODUCTION", "OWNER_APPROVED_CANDIDATE", "RESEARCH_ONLY", "REJECTED", "LEGACY"]
+          },
+          "formulaDefinition": {"type": "object"},
+          "dataProvenance": {"type": "object"},
+          "activationStatus": {"type": "object"},
+          "ownerApproval": {"type": "object"},
+          "backtestEvidence": {"type": "object"},
+          "implementationStatus": {"type": "object"}
+        },
+        "additionalProperties": true
+      }
+    },
+    "actionable": {"const": false},
+    "formalDecision": {"const": false},
+    "holdChangeAllowed": {"const": false},
+    "ruleChangeAllowed": {"const": false},
+    "productionActivation": {"const": false}
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,14 @@
+{
+  "reportId": "P1008-GFS1R-V2.1-BACKWARD-COMPATIBILITY",
+  "contractVersion": "2.1",
+  "status": "CANDIDATE",
+  "classification": "NON_BREAKING_ADDITIVE_GOVERNANCE_OVERLAY",
+  "v1Immutable": true,
+  "v1RootPreserved": "3370C4DBD6B564E2200D051AC07C8507442C130ADE64D770621107FA09D2924D",
+  "v2RootPreserved": "E056357A8A63A15BCF9FDC286BEE0BDB56E043AF26F4DDCD5624FDB3707BD782",
+  "historicalAcceptanceModified": false,
+  "existingReadSemanticsChanged": false,
+  "writeAuthorityBroadenedBeyondDeclaredRoots": false,
+  "ownerAcceptanceRequired": true,
+  "actionable": false
+}

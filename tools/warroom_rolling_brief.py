@@ -18,12 +18,15 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import warroom_authority_freshness as authority_freshness
+
 
 CURRENT_BRIEF_REL = "runtime/current_warroom_brief.json"
 LATEST_REPORT_REL = "reports/generated/latest_report.html"
 RUNTIME_MANIFEST_REL = "runtime/warroom_report_manifest.json"
 REPORT_MANIFEST_REL = "reports/P1008_REPORT_MANIFEST.json"
 AUTHORITY_MANIFEST_REL = "data/CSV_AUTHORITY_MANIFEST.json"
+FRESHNESS_STATUS_REL = "runtime/authority_freshness/latest_status.json"
 BRIEF_CONTENT_HASH_FIELD = "briefContentSha256"
 EMPTY_RUNTIME_MANIFEST_SCHEMA_VERSION = "2.0"
 EMPTY_RUNTIME_MANIFEST_TOOL_VERSION = "P1008_REPORT_LIFECYCLE_v1"
@@ -364,6 +367,57 @@ def _latest_csv_row(path: Path, date_field: str) -> dict[str, str]:
     return valid[-1]
 
 
+def _validated_candidate_overlay(
+    root: Path,
+) -> tuple[dict[str, str], dict[str, str], dict[str, Any]] | None:
+    """Return a revalidated same-run Price/Market overlay, or formal fallback."""
+    status_path = root / FRESHNESS_STATUS_REL
+    if not status_path.is_file():
+        return None
+    try:
+        status = _read_json(status_path)
+        if (
+            status.get("status") != "PASS_CANDIDATE_OVERLAY"
+            or status.get("freshness_scope") != "CANDIDATE_OVERLAY"
+            or status.get("actionable") is not False
+        ):
+            return None
+        daily_run_id = str(status["daily_price_run_id"])
+        market_run_id = str(status["market_activity_run_id"])
+        daily_run_dir = root / "runtime/daily_price_incremental" / daily_run_id
+        market_run_dir = root / "runtime/market_activity_incremental" / market_run_id
+        validated = authority_freshness.validate_candidate_overlay(
+            root,
+            daily_price_run_dir=daily_run_dir,
+            daily_price_run_id=daily_run_id,
+            market_activity_run_dir=market_run_dir,
+            market_activity_run_id=market_run_id,
+        )
+        if (
+            validated.get("status") != "PASS_CANDIDATE_OVERLAY"
+            or validated.get("actionable") is not False
+            or validated.get("candidate_validated_through")
+            != status.get("candidate_validated_through")
+        ):
+            return None
+        daily_result = _read_json(daily_run_dir / "RESULT.json")
+        market_result = _read_json(market_run_dir / "RESULT.json")
+        price = _latest_csv_row(Path(str(daily_result["candidate_path"])), "Date")
+        activity = _latest_csv_row(Path(str(market_result["candidate_path"])), "date")
+        candidate_date = str(validated["candidate_validated_through"])
+        if price.get("Date") != candidate_date or activity.get("date") != candidate_date:
+            return None
+        return price, activity, validated
+    except (
+        authority_freshness.FreshnessFailure,
+        KeyError,
+        OSError,
+        RollingBriefError,
+        ValueError,
+    ):
+        return None
+
+
 def _utc_timestamp(now: datetime | None) -> str:
     value = now or datetime.now(timezone.utc)
     if value.tzinfo is None:
@@ -419,6 +473,9 @@ def _brief_html(brief: dict[str, Any]) -> str:
     activity = brief["marketBaseline"].get("marketActivity") or {}
     generated = html.escape(str(brief["generatedAtUtc"]))
     authority_date = html.escape(str(brief["authorityDate"]))
+    formal_authority_date = html.escape(str(brief["formalAuthorityDate"]))
+    data_level = html.escape(str(brief["dataLevel"]))
+    source_statement = html.escape(str(brief["sourceStatement"]))
     brief_id = html.escape(str(brief["briefId"]))
     content_sha = html.escape(str(brief.get(BRIEF_CONTENT_HASH_FIELD) or ""))
     data_cutoffs = brief.get("dataCutoffs") or {}
@@ -457,7 +514,8 @@ def _brief_html(brief: dict[str, Any]) -> str:
 <body><main>
   <p class="muted">Rolling current brief｜不納入研報庫｜actionable=false</p>
   <h1>P1008 當前戰情快報</h1>
-  <p>價格資料截止：{price_date}｜市場活動截止：{activity_date}｜刷新時間：{generated}</p>
+  <p>市場資料截止：{authority_date}｜正式 Authority 截止：{formal_authority_date}｜資料層級：{data_level}</p>
+  <p class="muted">價格資料截止：{price_date}｜市場活動截止：{activity_date}｜刷新時間：{generated}</p>
   <p class="muted">資料對齊：{alignment_status}｜市場活動新鮮度：{freshness_status}</p>
   <section class="panel">
     <h2>市場資料基線</h2>
@@ -472,7 +530,7 @@ def _brief_html(brief: dict[str, Any]) -> str:
   {f'<section class="panel warning"><strong>市場活動資料未與價格資料同日。</strong> 本頁保留各自截止日，不補值、不前推；流動性解讀狀態為 {freshness_status}。</section>' if alignment_status != 'ALIGNED' else ''}
   <section class="panel">
     <h2>說明</h2>
-    <p>此頁由 Launcher 預設更新流程以正式 authority 最新列重新整理；不建立研報卡片、不追加歸檔，也不改變正式資料或治理狀態。</p>
+    <p>{source_statement} 本頁不建立研報卡片、不追加歸檔，也不改變正式資料或治理狀態。</p>
   </section>
 </main></body></html>
 """
@@ -488,9 +546,26 @@ def refresh_current_brief(
         raise RollingBriefError(f"Missing authority manifest: {AUTHORITY_MANIFEST_REL}")
     # Parse the manifest as a fail-closed format check before trusting its hash.
     _read_json(authority_manifest)
-    price = _latest_csv_row(root / "data/2317_daily_price.csv", "Date")
+    formal_price = _latest_csv_row(root / "data/2317_daily_price.csv", "Date")
     activity_path = root / "data/2317_daily_market_activity.csv"
-    activity = _latest_csv_row(activity_path, "date") if activity_path.is_file() else {}
+    formal_activity = _latest_csv_row(activity_path, "date") if activity_path.is_file() else {}
+    formal_authority_date = str(formal_price["Date"])
+    overlay = _validated_candidate_overlay(root)
+    if overlay is None:
+        price, activity = formal_price, formal_activity
+        data_level = "正式資料"
+        source_statement = "目前無有效且同日同源的 Price/Market 候選，已明確退回正式 Authority。"
+        candidate_lineage = None
+    else:
+        price, activity, validated = overlay
+        data_level = "候選已驗證"
+        source_statement = "本頁採用最新且已重驗通過的同次 Price/Market 候選；候選並非正式 Authority。"
+        candidate_lineage = {
+            "status": validated["status"],
+            "dailyPriceRunId": validated["daily_price_run_id"],
+            "marketActivityRunId": validated["market_activity_run_id"],
+            "receiptPaths": validated["receipt_paths"],
+        }
     authority_date = str(price["Date"])
     activity_date = str(activity.get("date") or "")
     alignment_status, activity_freshness = _data_alignment(
@@ -499,11 +574,15 @@ def refresh_current_brief(
     generated_at = _utc_timestamp(now)
     brief_id = f"P1008-CURRENT-{authority_date.replace('-', '')}"
     brief: dict[str, Any] = {
-        "schemaVersion": "1.1",
+        "schemaVersion": "1.2",
         "briefId": brief_id,
         "recordType": "ROLLING_CURRENT_BRIEF",
         "generatedAtUtc": generated_at,
         "authorityDate": authority_date,
+        "formalAuthorityDate": formal_authority_date,
+        "dataLevel": data_level,
+        "sourceStatement": source_statement,
+        "candidateLineage": candidate_lineage,
         "dataCutoffs": {
             "dailyPrice": authority_date,
             "marketActivity": activity_date or None,

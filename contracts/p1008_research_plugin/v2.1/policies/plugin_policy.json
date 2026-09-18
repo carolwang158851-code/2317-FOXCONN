@@ -1,0 +1,63 @@
+{
+  "policyId": "P1008_RESEARCH_PLUGIN_POLICY",
+  "version": "2.1",
+  "status": "OWNER_ACCEPTANCE_REQUIRED",
+  "contractForm": "ADDITIVE_GOVERNANCE_OVERLAY",
+  "extendsPolicyVersion": "1.0",
+  "extendsContractVersion": "2.0",
+  "ownerAcceptanceRequired": true,
+  "productionPromotionAuthorized": false,
+  "actionable": false,
+  "writeRootsAdditions": [
+    "runtime/report_production/",
+    "runtime/phaseb1_final_owner_review/",
+    "runtime/owner_communication/",
+    "runtime/official_ir_evidence/",
+    "runtime/anysearch_staging/"
+  ],
+  "filesystemCapabilities": {
+    "RESEARCH_PLUGIN_STAGING": ["staging/research_plugin/"],
+    "RESEARCH_PLUGIN_RUNTIME": ["runtime/research_plugin/"],
+    "RESEARCH_PLUGIN_LEDGER": ["runtime/research_plugin/ledgers/"],
+    "REPORT_PRODUCTION": [
+      "runtime/report_production/"
+    ],
+    "OWNER_COMMUNICATION": ["runtime/owner_communication/"],
+    "MAINTENANCE_CAPABILITY": ["runtime/phaseb1_final_owner_review/"],
+    "OFFICIAL_IR_EVIDENCE": ["runtime/official_ir_evidence/"],
+    "ANYSEARCH_STAGING": ["runtime/anysearch_staging/"],
+    "RESEARCH_PLUGIN_REPORTS": ["reports/generated/research_plugin/"],
+    "RESEARCH_PLUGIN_LOGS": ["logs/research_plugin/"]
+  },
+  "forbiddenWriteRootsAdditions": [
+    ".git/",
+    "ui/",
+    "contracts/",
+    "modules/",
+    "_archive/",
+    "_inventory/",
+    "P1008_APP.bat",
+    "%LOCALAPPDATA%/P1008/data/",
+    "%TEMP%/",
+    "%ONEDRIVE%/"
+  ],
+  "filesystemBoundary": {
+    "failClosed": true,
+    "packageRelativeCapabilitiesOnly": true,
+    "denyPackageRootFiles": true,
+    "denySiblingPackages": true,
+    "denyArbitraryExternalPaths": true,
+    "denyCallerProvidedUnlistedRoots": true,
+    "denyTraversal": true,
+    "denySymlinkJunctionReparse": true
+  },
+  "forbiddenCapabilitiesAdditions": [
+    "GIT_MUTATION",
+    "REPOSITORY_LIFECYCLE",
+    "CREATE_WORKTREE",
+    "REMOVE_WORKTREE",
+    "MOVE_PACKAGE",
+    "COPY_PACKAGE",
+    "DELETE_PACKAGE"
+  ]
+}

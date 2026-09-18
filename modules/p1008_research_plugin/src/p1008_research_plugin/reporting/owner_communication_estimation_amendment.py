@@ -8,16 +8,17 @@ the calculations back to authority or the research pack.
 from __future__ import annotations
 
 import csv
+import json
 import re
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
+from ..quarterly_authority import ROIC_UNAVAILABLE, validate_quarterly_authority_row
 from .owner_communication_renderer import OwnerCommunicationRenderer, _escape, _sha
 
 
 EXPECTED_PACK_SHA = "72B33BD7040F3B55870FC3CA707FB069E9B21DA56C7C153F8541CEADC0114EEE"
-EXPECTED_MASTER_SHA = "0BB2FEC6FA3035AC642738BC12EA6959C81C8A79D5221E694BF780427051CF79"
 HISTORICAL_ROIC = {
     "2024Q3": Decimal("10.51"), "2024Q4": Decimal("13.16"),
     "2025Q1": Decimal("7.91"), "2025Q2": Decimal("10.66"),
@@ -59,7 +60,16 @@ class OwnerCommunicationEstimationAmendmentRenderer(OwnerCommunicationRenderer):
         if self.pack_sha != EXPECTED_PACK_SHA:
             raise ValueError("frozen Research Pack SHA is not the accepted baseline")
         self.master_path = master_path.resolve()
-        if _sha(self.master_path) != EXPECTED_MASTER_SHA:
+        manifest_path = self.master_path.with_name("CSV_AUTHORITY_MANIFEST.json")
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+        entry = next(
+            (
+                item for item in manifest.get("authoritativeFiles", [])
+                if item.get("path") == "data/2317_master_v9.csv"
+            ),
+            None,
+        )
+        if entry is None or _sha(self.master_path) != entry.get("sha256"):
             raise ValueError("governed master SHA is not the accepted authority input")
         self.master_rows = self._read_master(self.master_path)
         self._validate_roic_lineage()
@@ -74,6 +84,10 @@ class OwnerCommunicationEstimationAmendmentRenderer(OwnerCommunicationRenderer):
         return {row["Quarter"]: row for row in csv.DictReader(lines[header:])}
 
     def _validate_roic_lineage(self) -> None:
+        for row in self.master_rows.values():
+            validate_quarterly_authority_row(row)
+            if row["ROIC_Status"] == ROIC_UNAVAILABLE:
+                continue
         for quarter, expected in HISTORICAL_ROIC.items():
             row = self.master_rows.get(quarter)
             if row is None or Decimal(row["ROIC_Precise_Pct"]) != expected:

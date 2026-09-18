@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import unittest
 from copy import deepcopy
@@ -10,7 +9,12 @@ from pathlib import Path
 from uuid import uuid4
 
 try:
-    from .helpers import GOVERNED_Q2_EVIDENCE_ROOT, GOVERNED_Q2_SOURCE_MOTHER, PACKAGE_ROOT, SRC_ROOT
+    from .helpers import (
+        GOVERNED_Q2_EVIDENCE_ROOT,
+        GOVERNED_Q2_SOURCE_MOTHER,
+        PACKAGE_ROOT,
+        SRC_ROOT,
+    )
 except ImportError:
     from helpers import GOVERNED_Q2_EVIDENCE_ROOT, GOVERNED_Q2_SOURCE_MOTHER, PACKAGE_ROOT, SRC_ROOT
 
@@ -39,12 +43,7 @@ from p1008_research_plugin.reporting.war_report_production_runtime import (
 )
 
 
-EVIDENCE_ROOT = Path(
-    os.environ.get(
-        "P1008_GOVERNED_EVIDENCE_ROOT",
-        GOVERNED_Q2_EVIDENCE_ROOT,
-    )
-).resolve()
+EVIDENCE_ROOT = GOVERNED_Q2_EVIDENCE_ROOT.resolve()
 SOURCE_MOTHER = GOVERNED_Q2_SOURCE_MOTHER.resolve()
 
 
@@ -61,10 +60,8 @@ class WarReportProductionRuntimeV1Tests(unittest.TestCase):
             "evidenceIds": trigger["qualifying_evidence_ids"], "authorityCutoffs": trigger["authority_cutoffs"],
             "actionable": False,
         }
-        parent = PACKAGE_ROOT / "runtime" / "phaseb1_test_scratch"
-        parent.mkdir(parents=True, exist_ok=True)
+        parent = PACKAGE_ROOT / "runtime" / "report_production" / "test_scratch"
         cls.output = parent / f"war-report-runtime-v1-{uuid4().hex}"
-        cls.output.mkdir(parents=False, exist_ok=False)
         cls.before = protected_state_hashes(PACKAGE_ROOT)
         cls.result = run_war_report_production(
             package_root=PACKAGE_ROOT, trigger_context=cls.lineage, output_base=cls.output,
@@ -88,9 +85,8 @@ class WarReportProductionRuntimeV1Tests(unittest.TestCase):
         self.assertEqual(sum(self.html.count(f'<section id="s{i}"') for i in range(1, 12)), 11)
 
     def test_r3a_launcher_pipeline_mode_materializes_enterprise_value_candidate(self) -> None:
-        parent = PACKAGE_ROOT / "runtime" / "phaseb1_test_scratch"
+        parent = PACKAGE_ROOT / "runtime" / "report_production" / "test_scratch"
         output = parent / f"launcher-enterprise-value-{uuid4().hex}"
-        output.mkdir(parents=False, exist_ok=False)
         pipeline = PhaseB1Pipeline(PACKAGE_ROOT, governed_evidence_root=EVIDENCE_ROOT)
         analysis = pipeline.build_analysis(output_base=output, trigger_lineage=self.lineage)
         result = pipeline.build_report(
@@ -106,7 +102,13 @@ class WarReportProductionRuntimeV1Tests(unittest.TestCase):
         self.assertEqual(manifest["reportRuntime"], "ENTERPRISE_VALUE_WAR_REPORT_V1")
         self.assertEqual(manifest["reportChapterCount"], 11)
         self.assertEqual(sum(rendered.count(f'<section id="s{i}"') for i in range(1, 12)), 11)
-        self.assertIn("Q2 ROIC 12.35%（推算）", rendered)
+        self.assertIn("Q2 單季同口徑 ROIC 待補", rendered)
+        self.assertEqual(
+            analysis["analysis"].quarterly_earnings.valuation_scenarios[
+                "valuationTimeBasis"
+            ]["postEventValuation"]["status"],
+            "AVAILABLE",
+        )
         self.assertTrue(result["protected_state_unchanged"])
 
     def test_r4_quarterly_requires_fcf_conversion(self) -> None:
@@ -150,7 +152,7 @@ class WarReportProductionRuntimeV1Tests(unittest.TestCase):
     def test_r11_q2_same_basis_roic_remains_missing(self) -> None:
         roic = resolve_quarterly_roic(official_same_basis_quarterly=None)
         self.assertIsNone(roic["value"])
-        self.assertIn("Q2 ROIC 12.35%（推算）", self.html)
+        self.assertIn("Q2 單季同口徑 ROIC 待補", self.html)
 
     def test_r12_third_party_ttm_cannot_fill_quarterly_roic(self) -> None:
         self.assertIsNone(resolve_quarterly_roic(official_same_basis_quarterly=None, third_party_ttm=18.2)["value"])
@@ -324,8 +326,20 @@ class WarReportProductionRuntimeV1Tests(unittest.TestCase):
     def test_r41_valuation_timepoints_and_chart_basis_are_explicit(self) -> None:
         valuation = self.result["analysis"].quarterly_earnings.valuation_scenarios["valuationTimeBasis"]
         self.assertEqual(valuation["preEventValuation"]["date"], "2026-08-11")
-        self.assertEqual(valuation["postEventValuation"]["status"], "AVAILABLE")
-        self.assertIn("本地正式行情已涵蓋事件後時點", self.html)
+        self.assertEqual(
+            valuation["postEventValuation"],
+            {
+                "status": "AVAILABLE",
+                "date": "2026-09-16",
+                "price": "248.0",
+                "ps": "0.37",
+                "pe": "16.31",
+                "pb": "1.823",
+                "sourceId": "AUTH-PRICE-20260916",
+            },
+        )
+        self.assertNotIn("事件後P/S、P/E與P/B均不可得", self.html)
+        self.assertIn("2026-09-16", self.html)
         self.assertIn("歷史季度序列只到2026Q1", self.html)
         self.assertIn("獨立尺度", self.html)
 

@@ -14,7 +14,7 @@ Launcher 已經整合下列流程：
 
 - `P1008_1_UPDATE_DATA.bat` 的 staging/runtime 更新能力。
 - `P1008_4_NEWS_SCAN.bat` 的 v2 觀察型新聞掃描能力，可抓取 Owner-approved 公開來源並回報逐來源 health。
-- `P1008_5_GENERATE_REPORTS.bat` 的日報產生能力。
+- Rolling Current Brief 更新能力；預設 Launcher 不建立每日正式報告，也不把 Current Brief 追加到正式研報庫。
 - `P1008_2_OPEN_WARROOM.bat` 的本機 App server 啟動能力。
 
 仍需人工保留或高門檻確認的流程：
@@ -23,6 +23,8 @@ Launcher 已經整合下列流程：
 - `P1008_3_OWNER_PUBLISH_CSV.bat`：正式 CSV append 的備援路徑。
 - `P1008_4_REGISTER_NEWS_SCHEDULE.bat`：只有 Owner 決定要建立 Windows 排程時才執行。
 - Git baseline commit：Owner 驗收 Launcher、SOP/docs 與正式 CSV hash 後，才在 `CODEX_P1008_PACKAGE` 資料夾內手動執行；細節見 `docs/GIT_VERSIONING.md`。
+
+`POST /api/p1008/run/report` 會重新評估受治理的重大事件觸發條件；沒有合格的 MONTHLY／QUARTERLY／MAJOR_EVENT 觸發時，只能維持或更新 Rolling Current Brief，不得建立正式報告 lineage。`DAILY` 不是正式報告觸發類型。
 
 ## 根目錄檔案怎麼看
 
@@ -41,6 +43,7 @@ Launcher 已經整合下列流程：
 
 - 一鍵資料流程不會正式發布 CSV。
 - 正式 CSV 發布只能由 Launcher 的 Owner Formal Publish Gate 或備援 BAT 完成。
+- 正式 CSV 發布必須以最新一次 Price→Market 同一 run 的 publish-ready 狀態為準；最新 run 失敗時，不得退回較早成功 candidate 繞過失敗。Formal Authority promotion 必須另有 Owner Approval。
 - Launcher 一鍵資料流程不會改 HOLD 主 IC。
 - Launcher 一鍵資料流程不會啟用 KEEP_DISABLED 規則。
 - Launcher App 只允許白名單 API，不接受任意 shell command。

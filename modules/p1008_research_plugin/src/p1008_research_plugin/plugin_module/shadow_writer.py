@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .contracts import FinancialBriefReport, ShadowFailureManifest, canonical_json_ready
+from ..phaseb1_common import PhaseB1BoundaryError, atomic_write
 
 
 class ShadowWriteError(RuntimeError):
@@ -34,13 +35,15 @@ class ShadowWriter:
 
     def _write_atomic(self, path: Path, raw: bytes, *, replace: bool) -> None:
         self._assert_shadow_path(path)
-        if not replace and path.exists():
-            raise ShadowWriteError("Shadow run artifact already exists")
-        path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = path.with_suffix(path.suffix + ".tmp")
-        self._assert_shadow_path(temporary)
-        temporary.write_bytes(raw)
-        temporary.replace(path)
+        try:
+            atomic_write(
+                path,
+                raw,
+                overwrite=replace,
+                capability="RESEARCH_PLUGIN_RUNTIME",
+            )
+        except PhaseB1BoundaryError as exc:
+            raise ShadowWriteError(f"Shadow artifact write denied: {exc}") from exc
 
     def write(self, report: FinancialBriefReport) -> dict[str, Any]:
         if report.actionable or not report.manual_shadow:
