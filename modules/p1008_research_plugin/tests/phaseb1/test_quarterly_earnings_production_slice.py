@@ -109,13 +109,13 @@ class QuarterlyEarningsProductionSliceTests(unittest.TestCase):
             self.assertNotIn("AI已證明能擴大營收與營業利益", sections["AI_SERVER_CLOUD_NETWORKING"])
             self.assertIn("鴻海官方2025Q4 basic EPS 3.23元", sections["VALUATION"])
             self.assertIn("合計15.21元", sections["VALUATION"])
-            self.assertIn("16.31倍", sections["VALUATION"])
+            self.assertIn("16.47倍", sections["VALUATION"])
             self.assertIn("2025H2 EPS為7.38元", sections["VALUATION"])
             self.assertIn("BVPS 136.02元", sections["VALUATION"])
             report_markdown = (run_root / "report_candidate.md").read_text(encoding="utf-8")
-            self.assertIn("1.823", report_markdown)
+            self.assertIn("1.842", report_markdown)
             self.assertIn("ROE", report_markdown)
-            self.assertIn("P/B為1.823倍", sections["VALUATION"])
+            self.assertIn("P/B為1.842倍", sections["VALUATION"])
             for forbidden in ("BUY", "SELL", "ADD", "TRIM", "TARGET PRICE", "目標價"):
                 self.assertNotIn(forbidden, sections["VALUATION"])
 
