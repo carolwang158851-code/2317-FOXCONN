@@ -129,7 +129,10 @@ console.log(JSON.stringify({latest:$('latest-report').textContent, next:$('trigg
         script = script.replace("__TEST_APP_STATE__", json.dumps({"app": {
             "latestReport": state, "pendingOwnerReview": owner,
             "reportTrigger": {"reportGenerated": True}}}))
-        rendered = subprocess.run([shutil.which("node") or "node", "-"], input=script,
+        node = shutil.which("node")
+        if node is None:
+            self.skipTest("node is required for launcher projection")
+        rendered = subprocess.run([node, "-"], input=script,
                                   capture_output=True, text=True, encoding="utf-8", timeout=15)
         self.assertEqual(rendered.returncode, 0, rendered.stderr)
         labels = json.loads(rendered.stdout)

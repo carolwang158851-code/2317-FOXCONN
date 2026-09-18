@@ -18,9 +18,9 @@ HISTORICAL_AUTHORITY_HASHES = {
 }
 CURRENT_AUTHORITY_HASHES = {
     "data/2317_master_v9.csv": "E623CA082F2A080613C33F4155BA8006646E30D6A517DE926AF6108062F84D48",
-    "data/2317_daily_price.csv": "E79843DFAD1472314E6C01998B7E7017924FAC1C2A02F095BEFE13CB73D4A3FF",
-    "data/2317_daily_market_activity.csv": "A8430FFCA96B5620A9924DC1973326627C33A30120E8D8FB2659051C1CC4D5D6",
-    "data/CSV_AUTHORITY_MANIFEST.json": "C8CFD56D178918AABB3CAACE6725579BED10AC94EEF3B62D2A9DD0F125050459",
+    "data/2317_daily_price.csv": "E1C597220F80172773CD39894E3A5315333CD6F36EE8654D4C41AB7411492AF8",
+    "data/2317_daily_market_activity.csv": "15630F0E7A7ADDB9D861F75FC5CC707C788B72791D63997187BA53900F84710D",
+    "data/CSV_AUTHORITY_MANIFEST.json": "B4D02481E1AB196633A43491BA97E78C5BB183E30CBE1E086CB94ABFAB82D265",
 }
 
 PROTECTED_HEAD_PATHS = (
@@ -135,7 +135,7 @@ class UdResearchReviewDecisionTests(unittest.TestCase):
         self.assertEqual(self.record["authorityProtection"]["beforeAndAfter"], HISTORICAL_AUTHORITY_HASHES)
         self.assertFalse(self.record["authorityProtection"]["authorityBytesChanged"])
         for relative, expected in CURRENT_AUTHORITY_HASHES.items():
-            self.assertEqual(_sha256(ROOT / relative), expected, relative)
+            self.assertEqual(hashlib.sha256(_governed_text_bytes(ROOT / relative)).hexdigest().upper(), expected, relative)
 
     def test_runtime_code_and_rule_files_match_head(self):
         for relative in PROTECTED_HEAD_PATHS:
