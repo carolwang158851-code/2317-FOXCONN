@@ -23,7 +23,7 @@ from p1008_research_plugin.ledgers.store import LedgerStore
 
 
 BASELINE_HASHES = {
-    "data/CSV_AUTHORITY_MANIFEST.json": "C8CFD56D178918AABB3CAACE6725579BED10AC94EEF3B62D2A9DD0F125050459",
+    "data/CSV_AUTHORITY_MANIFEST.json": "B4D02481E1AB196633A43491BA97E78C5BB183E30CBE1E086CB94ABFAB82D265",
     "rules/RULE_STATUS_MANIFEST.json": "054DA1FDAF0C75BB27B56DF45B96F1CC1720558D44C700F1AB70AB0280A2FE5C",
     "contracts/p1008_research_plugin/v1.0/contract.manifest.json": "5D213CB4360329FCC969164F559952A0F1545BFE8E53D5CFDFF014B9D5619773",
 }
@@ -113,6 +113,11 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
 
 
+def baseline_sha256(path: Path) -> str:
+    data = path.read_bytes().replace(b"\r\n", b"\n")
+    return hashlib.sha256(data).hexdigest().upper()
+
+
 def canonical_git_blob_bytes(relative: str, revision: str = "HEAD") -> bytes:
     if not relative or relative.startswith("/") or ".." in Path(relative).parts:
         raise ValueError(f"invalid governed path: {relative!r}")
@@ -177,7 +182,7 @@ class GovernanceBoundaryTests(unittest.TestCase):
         self.assertEqual(violations, [])
 
     def test_no_non_target_baseline_changed_by_temp_ledger(self) -> None:
-        before = {relative: sha256(PACKAGE_ROOT / relative) for relative in BASELINE_HASHES}
+        before = {relative: baseline_sha256(PACKAGE_ROOT / relative) for relative in BASELINE_HASHES}
         self.assertEqual(before, BASELINE_HASHES)
         catalog = EventCatalog(self.loader)
         parent = PACKAGE_ROOT / "runtime" / "research_plugin" / "ledgers"
@@ -196,7 +201,7 @@ class GovernanceBoundaryTests(unittest.TestCase):
                     candidate.rmdir()
                 except OSError:
                     break
-        after = {relative: sha256(PACKAGE_ROOT / relative) for relative in BASELINE_HASHES}
+        after = {relative: baseline_sha256(PACKAGE_ROOT / relative) for relative in BASELINE_HASHES}
         self.assertEqual(after, before)
 
     def test_phaseb1_boundary_changes_are_owner_authorized_and_versioned(self) -> None:

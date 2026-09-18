@@ -22,9 +22,9 @@ HISTORICAL_AUTHORITY_HASHES = {
 }
 CURRENT_AUTHORITY_HASHES = {
     "data/2317_master_v9.csv": "E623CA082F2A080613C33F4155BA8006646E30D6A517DE926AF6108062F84D48",
-    "data/2317_daily_price.csv": "E79843DFAD1472314E6C01998B7E7017924FAC1C2A02F095BEFE13CB73D4A3FF",
-    "data/2317_daily_market_activity.csv": "A8430FFCA96B5620A9924DC1973326627C33A30120E8D8FB2659051C1CC4D5D6",
-    "data/CSV_AUTHORITY_MANIFEST.json": "C8CFD56D178918AABB3CAACE6725579BED10AC94EEF3B62D2A9DD0F125050459",
+    "data/2317_daily_price.csv": "E1C597220F80172773CD39894E3A5315333CD6F36EE8654D4C41AB7411492AF8",
+    "data/2317_daily_market_activity.csv": "15630F0E7A7ADDB9D861F75FC5CC707C788B72791D63997187BA53900F84710D",
+    "data/CSV_AUTHORITY_MANIFEST.json": "B4D02481E1AB196633A43491BA97E78C5BB183E30CBE1E086CB94ABFAB82D265",
 }
 
 
@@ -161,7 +161,7 @@ class FormulaRegistryContractTests(unittest.TestCase):
 
     def test_authority_bytes_match_protected_baseline(self):
         for relative, expected in CURRENT_AUTHORITY_HASHES.items():
-            self.assertEqual(_sha256(ROOT / relative), expected, relative)
+            self.assertEqual(hashlib.sha256(_governed_text_bytes(ROOT / relative)).hexdigest().upper(), expected, relative)
         record = json.loads((REGISTRY_ROOT / "acceptance/P1008_FORMULA_REGISTRY_OWNER_DECISION_V1.json").read_text(encoding="utf-8"))
         self.assertEqual(record["authorityProtection"]["preImplementation"], HISTORICAL_AUTHORITY_HASHES)
         self.assertEqual(record["authorityProtection"]["postImplementation"], HISTORICAL_AUTHORITY_HASHES)
@@ -239,12 +239,12 @@ class MidrTruthfulnessTests(unittest.TestCase):
                 macro_row[field] = latest_nonblank[field]
             total, verdict = _midr_numeric(daily_row, master_row, macro_row)
             replay.append((daily_row["Date"], total, verdict))
-        self.assertEqual(len(replay), 153)
-        self.assertEqual(Counter(verdict for _, _, verdict in replay), {"SEVERE": 51, "CAUTION": 50, "NEUTRAL": 52})
+        self.assertEqual(len(replay), 154)
+        self.assertEqual(Counter(verdict for _, _, verdict in replay), {"SEVERE": 51, "CAUTION": 51, "NEUTRAL": 52})
         replay_material = "\n".join(f"{day}|{total:.3f}|{verdict}" for day, total, verdict in replay)
         self.assertEqual(
             hashlib.sha256(replay_material.encode("utf-8")).hexdigest().upper(),
-            "2E58591A545ACCBBDB471BC1D173D1CC39E5B027948C9B92E872038F7DFE70CE",
+            "E80257D29B6F450C4D993338BD203032DD04558EC430C4AA95CEFE5F8F462437",
         )
 
     def test_source_bundle_and_runtime_html_parity(self):

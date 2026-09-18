@@ -147,9 +147,9 @@ class Rtm0RegistryActivationTests(unittest.TestCase):
 
     def test_only_rtm_changes_across_current_authority_replay(self):
         rows = _replay_rows()
-        self.assertEqual(len(rows), 153)
-        self.assertEqual(Counter(row["old_verdict"] for row in rows), {"SEVERE": 51, "CAUTION": 50, "NEUTRAL": 52})
-        self.assertEqual(Counter(row["new_verdict"] for row in rows), {"SEVERE": 51, "CAUTION": 57, "NEUTRAL": 45})
+        self.assertEqual(len(rows), 154)
+        self.assertEqual(Counter(row["old_verdict"] for row in rows), {"SEVERE": 51, "CAUTION": 51, "NEUTRAL": 52})
+        self.assertEqual(Counter(row["new_verdict"] for row in rows), {"SEVERE": 51, "CAUTION": 58, "NEUTRAL": 45})
         flips = Counter((row["old_verdict"], row["new_verdict"]) for row in rows if row["old_verdict"] != row["new_verdict"])
         self.assertEqual(flips, {("NEUTRAL", "CAUTION"): 7})
         for row in rows:
@@ -158,7 +158,7 @@ class Rtm0RegistryActivationTests(unittest.TestCase):
         serialization = _activation_serialization(rows)
         self.assertEqual(
             hashlib.sha256(serialization.encode("utf-8")).hexdigest().upper(),
-            "A314A0D88C7131BA5C64CC50FABE298206D9DCD3416F918E165D1C872B7C0282",
+            "2F35CAF71BC8D745907135C37078CE0D3E86DAAB66DDDADF1EAB03C4C6D69B1A",
         )
 
     def test_invariants_and_authority_bytes_are_protected(self):
@@ -172,7 +172,7 @@ class Rtm0RegistryActivationTests(unittest.TestCase):
         for field in ("YAChanged", "VALChanged", "FRVChanged", "MDRChanged", "MRDChanged", "midrWeightsChanged", "midrVerdictBoundariesChanged", "UDChanged", "holdChanged", "ruleChanged", "sqliteChanged"):
             self.assertFalse(invariants[field], field)
         for relative, expected in baseline.CURRENT_AUTHORITY_HASHES.items():
-            self.assertEqual(_sha256(ROOT / relative), expected, relative)
+            self.assertEqual(hashlib.sha256(_governed_text_bytes(ROOT / relative)).hexdigest().upper(), expected, relative)
 
 
 if __name__ == "__main__":

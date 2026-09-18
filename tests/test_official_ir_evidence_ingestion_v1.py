@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import stat
 import sys
+import tempfile
 import unittest
 from uuid import uuid4
 from unittest import mock
@@ -55,6 +56,11 @@ def pdf(body: bytes, url: str) -> FetchResponse:
     return FetchResponse(b"%PDF-1.7\n" + body, url, 200, "application/pdf")
 
 
+def remove_readonly(func, path: str, _error: BaseException) -> None:
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
+
 class FixtureTransport:
     def __init__(self, values: dict[str, FetchResponse | Exception]) -> None:
         self.values = values
@@ -70,10 +76,7 @@ class FixtureTransport:
 
 class OfficialIREvidenceIngestionTests(unittest.TestCase):
     def setUp(self) -> None:
-        scratch = ROOT / "runtime" / "official_ir_test_scratch"
-        scratch.mkdir(parents=True, exist_ok=True)
-        self.root = scratch / f"p1008-official-ir-{uuid4().hex}"
-        self.root.mkdir()
+        self.root = Path(tempfile.mkdtemp(prefix=f"p1008-official-ir-{uuid4().hex}-"))
         shutil.copytree(ROOT / "contracts", self.root / "contracts")
         shutil.copytree(ROOT / "data", self.root / "data")
         shutil.copytree(ROOT / "rules", self.root / "rules")
@@ -81,16 +84,7 @@ class OfficialIREvidenceIngestionTests(unittest.TestCase):
         shutil.copy2(ROOT / "tools" / "warroom_report_governance.py", self.root / "tools")
 
     def tearDown(self) -> None:
-        def clear_read_only(function, target, _error):
-            os.chmod(target, stat.S_IWRITE)
-            function(target)
-
-        shutil.rmtree(self.root, onexc=clear_read_only)
-        try:
-            self.root.parent.rmdir()
-            self.root.parent.parent.rmdir()
-        except OSError:
-            pass
+        shutil.rmtree(self.root, onexc=remove_readonly)
 
     def mapping(self, *, conference: str = "", quarterly: str = "", press: str = "", mops: str = "", documents: dict[str, bytes] | None = None) -> dict[str, FetchResponse | Exception]:
         values: dict[str, FetchResponse | Exception] = {

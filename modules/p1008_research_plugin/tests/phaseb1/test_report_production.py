@@ -122,7 +122,7 @@ class PhaseB1ReportProductionTests(unittest.TestCase):
             )
             self.assertEqual(
                 (current_price["Date"], current_price["PB_daily"]),
-                ("2026-09-16", "1.823"),
+                ("2026-09-17", "1.842"),
             )
 
     def test_run_manifest_records_zero_external_calls(self) -> None:

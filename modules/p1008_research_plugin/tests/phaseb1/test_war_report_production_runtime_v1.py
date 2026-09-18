@@ -330,16 +330,16 @@ class WarReportProductionRuntimeV1Tests(unittest.TestCase):
             valuation["postEventValuation"],
             {
                 "status": "AVAILABLE",
-                "date": "2026-09-16",
-                "price": "248.0",
-                "ps": "0.37",
-                "pe": "16.31",
-                "pb": "1.823",
-                "sourceId": "AUTH-PRICE-20260916",
+                "date": "2026-09-17",
+                "price": "250.5",
+                "ps": "0.38",
+                "pe": "16.47",
+                "pb": "1.842",
+                "sourceId": "AUTH-PRICE-20260917",
             },
         )
         self.assertNotIn("事件後P/S、P/E與P/B均不可得", self.html)
-        self.assertIn("2026-09-16", self.html)
+        self.assertIn("2026-09-17", self.html)
         self.assertIn("歷史季度序列只到2026Q1", self.html)
         self.assertIn("獨立尺度", self.html)
 
