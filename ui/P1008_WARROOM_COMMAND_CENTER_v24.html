@@ -3407,15 +3407,15 @@
           <div class="section-title"><h2>決策輸出</h2><span>Decision Output</span></div>
           <div class="decision-copy">
             <small>決策結論</small>
-            <div class="hold-word">HOLD</div>
-            <h4>維持觀察，不構成交易建議。</h4>
-            <p>估值偏高但基本面仍具支撐，維持中立持有；持續觀察匯率、AI 需求與毛利率復甦強度。</p>
+            <div class="hold-word">HOLD / 觀察</div>
+            <h4>正式 IC 分數未完整</h4>
+            <p>Fail-closed 保守狀態，不是六大 IC 計算後的正式投資評等。</p>
             <div class="decision-foot">僅供決策參考 ｜ actionable:false</div>
           </div>
         </section>
 
         <section class="panel">
-          <div class="section-title"><h3>正式發布可用度</h3><span>Publish Readiness</span></div>
+          <div class="section-title"><h3>資料發布可用度</h3><span>Data / Publication Readiness</span></div>
           <div class="confidence-body">
             <div class="confidence-top">
               <div class="confidence-ring"><strong>N/A</strong></div>
@@ -3430,6 +3430,8 @@
               <div class="q-row"><span>驗證分數</span><span class="q-track"><i style="--v:0%"></i></span><b>N/A</b></div>
               <div class="q-row"><span>候選檔案</span><span class="q-track"><i style="--v:0%"></i></span><b>N/A</b></div>
               <div class="q-row"><span>事件同步</span><span class="q-track"><i style="--v:0%"></i></span><b>N/A</b></div>
+              <div class="q-row"><span>正式 IC 分數</span><span class="q-track"><i style="--v:0%"></i></span><b>N/A</b></div>
+              <div class="q-row"><span>Decision Scoring</span><span class="q-track"><i style="--v:0%"></i></span><b>N/A</b></div>
             </div>
           </div>
         </section>
@@ -3469,25 +3471,25 @@
           </g>
         </svg>
 
-        <section class="chip fund"><i class="pin-left"></i><i class="pin-right"></i><small>01</small><h3>基本面 IC</h3><em>Fundamentals</em><b>N/A</b><span>資料不足</span></section>
-        <section class="chip val"><i class="pin-left"></i><i class="pin-right"></i><small>02</small><h3>估值 IC</h3><em>Valuation</em><b>N/A</b><span>資料不足</span></section>
-        <section class="chip quality"><i class="pin-left"></i><i class="pin-right"></i><small>06</small><h3>資料品質 IC</h3><em>Data Quality</em><b>N/A</b><span>資料不足</span></section>
-        <section class="chip cash"><i class="pin-left"></i><i class="pin-right"></i><small>03</small><h3>現金流 IC</h3><em>Cash Flow</em><b>N/A</b><span>資料不足</span></section>
-        <section class="chip ai"><i class="pin-left"></i><i class="pin-right"></i><small>05</small><h3>產業 / AI IC</h3><em>Industry & AI</em><b>N/A</b><span>資料不足</span></section>
-        <section class="chip macro"><i class="pin-left"></i><i class="pin-right"></i><small>04</small><h3>宏觀 / 匯率 IC</h3><em>Macro / FX</em><b>N/A</b><span>資料不足</span></section>
+        <section class="chip fund"><i class="pin-left"></i><i class="pin-right"></i><small>01</small><h3>基本面 IC</h3><em>Fundamentals</em><b>N/A</b><span>未提供正式分數</span></section>
+        <section class="chip val"><i class="pin-left"></i><i class="pin-right"></i><small>02</small><h3>估值 IC</h3><em>Valuation</em><b>N/A</b><span>未提供正式分數</span></section>
+        <section class="chip quality"><i class="pin-left"></i><i class="pin-right"></i><small>06</small><h3>資料品質 IC</h3><em>Data Quality</em><b>N/A</b><span>未提供正式分數</span></section>
+        <section class="chip cash"><i class="pin-left"></i><i class="pin-right"></i><small>03</small><h3>現金流 IC</h3><em>Cash Flow</em><b>N/A</b><span>未提供正式分數</span></section>
+        <section class="chip ai"><i class="pin-left"></i><i class="pin-right"></i><small>05</small><h3>產業 / AI IC</h3><em>Industry & AI</em><b>N/A</b><span>未提供正式分數</span></section>
+        <section class="chip macro"><i class="pin-left"></i><i class="pin-right"></i><small>04</small><h3>宏觀 / 匯率 IC</h3><em>Macro / FX</em><b>N/A</b><span>未提供正式分數</span></section>
 
         <section class="decision-core">
           <small>Decision Core</small>
-          <b>HOLD</b>
-          <span>維持觀察</span>
+          <b>HOLD / 觀察</b>
+          <span>Fail-closed 保守狀態</span>
           <em>actionable:false</em>
-          <div class="strength">信號強度：中等</div>
+          <div class="strength">Decision Scoring：N/A</div>
         </section>
 
         <div class="neutral-core-overlay" aria-label="Decision Core HOLD">
           <small>Decision Core</small>
-          <strong>HOLD</strong>
-          <span>維持觀察</span>
+          <strong>HOLD / 觀察</strong>
+          <span>Fail-closed 保守狀態</span>
           <em>actionable:false</em>
         </div>
 
@@ -3524,10 +3526,10 @@
     </main>
 
     <section class="bottom">
-      <section class="bottom-panel pulse-alert">
-        <div class="section-title"><h3>風險熱度排名</h3><span>Risk Heat Ranking</span></div>
+      <section class="bottom-panel">
+        <div class="section-title"><h3>六大系統監控狀態</h3><span>Six-System Monitoring Status</span></div>
         <table class="table">
-          <thead><tr><th>排名</th><th>系統</th><th>壓力分數</th><th>狀態</th><th>趨勢</th></tr></thead>
+          <thead><tr><th>序</th><th>系統</th><th>正式分數</th><th>狀態</th><th>依據</th></tr></thead>
           <tbody>
             <tr><td>1</td><td>估值 IC</td><td>N/A <span class="mini-bar"><i style="--v:0%"></i></span></td><td>資料不足</td><td>—</td></tr>
             <tr><td>2</td><td>現金流 IC</td><td>N/A <span class="mini-bar"><i style="--v:0%"></i></span></td><td>資料不足</td><td>—</td></tr>
@@ -3637,9 +3639,9 @@
         bottom.classList.add("v18-bottom");
         bottom.innerHTML = `
           <section class="bottom-panel">
-            <div class="section-title"><h3>風險熱度排名</h3><span>Risk Heat Ranking</span></div>
+            <div class="section-title"><h3>六大系統監控狀態</h3><span>Six-System Monitoring Status</span></div>
             <table class="table">
-              <thead><tr><th>排名</th><th>系統</th><th>壓力</th><th>狀態</th><th>趨勢</th></tr></thead>
+              <thead><tr><th>序</th><th>系統</th><th>正式分數</th><th>狀態</th><th>依據</th></tr></thead>
               <tbody>
                 <tr><td>1</td><td>估值 IC</td><td>N/A</td><td>資料不足</td><td>—</td></tr>
                 <tr><td>2</td><td>現金流 IC</td><td>N/A</td><td>資料不足</td><td>—</td></tr>
@@ -3728,9 +3730,9 @@
         bottom.className = "bottom v19-bottom v20-bottom";
         bottom.innerHTML = `
           <section class="bottom-panel">
-            <div class="section-title"><h3>風險熱度排名</h3><span>Risk Heat Ranking</span></div>
+            <div class="section-title"><h3>六大系統監控狀態</h3><span>Six-System Monitoring Status</span></div>
             <table class="table">
-              <thead><tr><th>排名</th><th>系統</th><th>壓力</th><th>狀態</th><th>趨勢</th></tr></thead>
+              <thead><tr><th>序</th><th>系統</th><th>正式分數</th><th>狀態</th><th>依據</th></tr></thead>
               <tbody>
                 <tr><td>1</td><td>估值 IC</td><td>N/A</td><td>資料不足</td><td>—</td></tr>
                 <tr><td>2</td><td>現金流 IC</td><td>N/A</td><td>資料不足</td><td>—</td></tr>
@@ -4469,7 +4471,7 @@
         if (h3) h3.textContent = item.label;
         if (em) em.textContent = item.en;
         if (b) {
-          b.textContent = item.score;
+          b.textContent = item.score === null ? "N/A" : item.score;
           b.className = item.tone;
         }
         if (span) {
@@ -4478,7 +4480,7 @@
         }
       }
 
-      function renderConfidence(readiness, news, formalSynced) {
+      function renderConfidence(readiness, news, formalSynced, systems) {
         const rawScore = toNumber(readiness?.score);
         const score = rawScore === null ? null : Math.round(rawScore);
         const body = document.querySelector(".left-stack .panel:nth-child(2) .confidence-body");
@@ -4493,13 +4495,18 @@
         const validation = metricScore(readiness?.validationScore);
         const candidateScore = metricScore(readiness?.candidateFileScore);
         const eventRows = toNumber(news?.candidateRowCount) ?? 0;
+        const systemList = Object.values(systems || {});
+        const formalScoreCount = systemList.filter((item) => Number.isFinite(item?.score)).length;
+        const formalScoreTotal = systemList.length;
+        const decisionScoring = formalScoreTotal > 0 && formalScoreCount === formalScoreTotal ? "可用" : "N/A";
         body.className = "confidence-body v21-confidence-body";
         body.innerHTML = `
           <div class="v21-confidence-top">
-            <div class="confidence-score-card"><strong>${displayScore(score)}</strong><span>正式發布</span></div>
+            <div class="confidence-score-card"><strong>${displayScore(score)}</strong><span>資料發布可用度</span></div>
             <div class="v21-confidence-text">
               <h4>${formalSynced ? "正式 CSV 已核准" : "候選資料未達發布門檻"}</h4>
-              <p>${formalSynced ? "此分數代表正式 CSV 與來源稽核狀態，不是買賣建議。" : "此分數是 Owner publish gate 的正式發布門檻；runtime 沿用值可供觀察，但不能升格正式 CSV。"}</p>
+              <p>${formalSynced ? "此百分比只代表正式 CSV 與來源稽核狀態，不是 decision confidence。" : "此百分比只代表 Owner publish gate；runtime 沿用值不能升格正式 CSV。"}</p>
+              <p><strong>正式 IC 分數：${formalScoreCount} / ${formalScoreTotal || "N/A"}</strong><br />Decision Scoring：${decisionScoring}</p>
             </div>
           </div>
           <div class="quality-bars">
@@ -4509,6 +4516,8 @@
             <div class="q-row"><span>候選檔案</span><span class="q-track"><i style="--v:${candidateScore ?? 0}%"></i></span><b>${displayScore(candidateScore)}</b></div>
             <div class="q-row"><span>事件同步</span><span class="q-track"><i style="--v:${formalSynced ? 100 : 0}%"></i></span><b>${eventRows}列</b></div>
             <div class="q-row"><span>註記</span><span class="q-track"><i style="--v:${formalSynced ? 100 : 0}%"></i></span><b>${formalSynced ? "已發布" : "觀察值"}</b></div>
+            <div class="q-row"><span>正式 IC 分數</span><span class="q-track"><i style="--v:${formalScoreTotal ? formalScoreCount / formalScoreTotal * 100 : 0}%"></i></span><b>${formalScoreCount} / ${formalScoreTotal || "N/A"}</b></div>
+            <div class="q-row"><span>Decision Scoring</span><span class="q-track"><i style="--v:${decisionScoring === "可用" ? 100 : 0}%"></i></span><b>${decisionScoring}</b></div>
           </div>
         `;
       }
@@ -4672,13 +4681,8 @@
       function renderBottom(state, appState, eventState, news) {
         if (!bottom) return;
         const { systems, published, latestDate, nextReview } = state;
-        const rank = ["macro", "ai", "cash", "val", "fund", "quality"]
-          .map((key) => ({ key, ...systems[key] }))
-          .sort((a, b) => {
-            if (a.score === null) return 1;
-            if (b.score === null) return -1;
-            return Number(a.score) - Number(b.score);
-          });
+        const monitoringOrder = ["val", "cash", "fund", "macro", "quality", "ai"]
+          .map((key) => ({ key, ...systems[key] }));
         const newsRows = news?.candidateRowCount ?? 0;
         const ownerRows = published ? [
           ["低", "正式 CSV 發布", "Owner", shortDate(latestDate), "已完成", "green"],
@@ -4691,11 +4695,11 @@
         bottom.className = "bottom v19-bottom v20-bottom v24-dynamic-bottom";
         bottom.innerHTML = `
           <section class="bottom-panel">
-            <div class="section-title"><h3>六大系統風險排序</h3><span>Risk Heat Ranking</span></div>
+            <div class="section-title"><h3>六大系統監控狀態</h3><span>Six-System Monitoring Status</span></div>
             <table class="table">
-              <thead><tr><th>排序</th><th>系統</th><th>分數</th><th>狀態</th><th>依據</th></tr></thead>
+              <thead><tr><th>序</th><th>系統</th><th>正式分數</th><th>狀態</th><th>依據</th></tr></thead>
               <tbody>
-                ${rank.map((item, index) => `
+                ${monitoringOrder.map((item, index) => `
                   <tr data-system="${item.key}">
                     <td>${index + 1}</td>
                     <td>${escapeHtml(item.label)}</td>
@@ -4723,7 +4727,7 @@
           </section>
         `;
         bottom.querySelectorAll(".table tbody tr").forEach((row) => {
-          row.addEventListener("click", () => selectSystem(row.dataset.system, "風險排序"));
+          row.addEventListener("click", () => selectSystem(row.dataset.system, "監控狀態"));
         });
       }
 
@@ -4750,8 +4754,8 @@
         const paragraph = decisionBrief.querySelector("p");
         const foot = decisionBrief.querySelector(".decision-foot");
         if (status) status.textContent = `${item.label}：${item.state}`;
-        if (heading) heading.textContent = item.headline;
-        if (paragraph) paragraph.textContent = item.evidence;
+        if (heading) heading.textContent = "HOLD / 觀察｜正式 IC 分數未完整";
+        if (paragraph) paragraph.textContent = `Fail-closed 保守狀態；非六大 IC 計分後的正式投資評等。${item.evidence}`;
         if (foot) foot.textContent = `正式 CSV ${state.published ? "已核准" : "待審"}；${state.latestDate || "N/A"}；actionable:false`;
       }
 
@@ -4795,8 +4799,8 @@
           const span = core.querySelector("span");
           const em = core.querySelector("em");
           if (small) small.textContent = item.label;
-          if (strong) strong.textContent = "HOLD";
-          if (span) span.textContent = item.state;
+          if (strong) strong.textContent = "HOLD / 觀察";
+          if (span) span.textContent = "Fail-closed 保守狀態";
           if (em) em.textContent = "actionable:false";
         }
         updateDecisionBrief(item, state);
@@ -4890,7 +4894,7 @@
         window.__p1008DynamicState = state;
         if (shell) shell.classList.add("p1008-runtime-bound");
         renderDecisionHeader(state, appState, news);
-        renderConfidence(appState?.reviewPackage?.readiness || {}, news, state.published);
+        renderConfidence(appState?.reviewPackage?.readiness || {}, news, state.published, state.systems);
         renderRightPanel(state);
         renderBottom(state, appState, eventState, news);
         renderGovernance(state, appState);

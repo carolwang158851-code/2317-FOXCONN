@@ -941,13 +941,28 @@ function calculateRadarPackage({
     source: 'PB 參考區間換算',
     note: '避免主觀情緒分數'
   }];
+  const scoredDimensions = dimensions.filter(item => Number.isFinite(item.score));
+  const missingDimensions = dimensions.filter(item => !Number.isFinite(item.score));
+  const availableWeight = scoredDimensions.reduce((sum, item) => sum + item.weight, 0);
+  const knownContribution = scoredDimensions.reduce((sum, item) => sum + item.score * item.weight, 0);
+  const coverage = {
+    scoredCount: scoredDimensions.length,
+    dimensionCount: dimensions.length,
+    completenessPct: Math.round(availableWeight * 100),
+    knownContribution,
+    missingReasons: missingDimensions.map(item => ({
+      label: item.label,
+      reason: item.key === 'industry' ? 'AI_Revenue_Pct 無合格正式 authority' : `${item.source} 缺少合格正式輸入`
+    }))
+  };
 
-  if (dimensions.some(item => !Number.isFinite(item.score))) {
+  if (missingDimensions.length) {
     return {
       radarValues: null,
       dimensions,
       total: null,
-      missing: dimensions.filter(item => !Number.isFinite(item.score)).map(item => item.label),
+      missing: missingDimensions.map(item => item.label),
+      ...coverage,
       methodologyZh: '五維度分數只使用 CSV 或 runtime 快照可追溯欄位；缺值不補假分數。',
       actionable: false
     };
@@ -959,6 +974,7 @@ function calculateRadarPackage({
     dimensions,
     total,
     missing: [],
+    ...coverage,
     methodologyZh: '五維度為可追溯欄位換算的模型分數，不是原始官方指標；僅供觀察，actionable:false。',
     actionable: false
   };
@@ -4615,7 +4631,7 @@ const App = () => {
     note: marketFxPressure.note,
     weight: 0.20,
     sourceField: 'TWD_USD',
-      sourceNote: '取自正式匯率趨勢觀察檔的美元兌新台幣欄位，用來觀察匯率偏離壓力。'
+    sourceNote: '取自正式匯率趨勢觀察檔的美元兌新台幣欄位，用來觀察匯率偏離壓力。'
   }, {
     key: 'dxy',
     label: '美元',
@@ -4626,13 +4642,13 @@ const App = () => {
     note: marketDxyPressure.note,
     weight: 0.15,
     sourceField: 'DXY',
-      sourceNote: '取自正式匯率趨勢觀察檔的美元指數欄位，用來觀察美元流動性偏離。'
+    sourceNote: '取自正式匯率趨勢觀察檔的美元指數欄位，用來觀察美元流動性偏離。'
   }, {
     key: 'vix',
     label: 'VIX',
     fullLabel: 'VIX 波動壓力',
     value: Number.isFinite(coreData?.vix) ? formatNumber(coreData.vix, 2) : 'N/A',
-      score: Number.isFinite(coreData?.vix) ? clampPercent(coreData.vix / 30 * 100) : null,
+    score: Number.isFinite(coreData?.vix) ? clampPercent(coreData.vix / 30 * 100) : null,
     status: !Number.isFinite(coreData?.vix) ? '資料不足' : coreData.vix >= 27 ? '高壓觸發' : coreData.vix >= 22 ? '波動升溫' : '正常觀察',
     note: !Number.isFinite(coreData?.vix) ? '缺少 VIX 時，只能依其他總經欄位判讀。' : coreData.vix >= 22 ? '市場避險需求升高，戰情室應提高風險折價與資料重審頻率。' : '波動尚未形成主要限制。',
     weight: 0.20,
@@ -4648,13 +4664,13 @@ const App = () => {
     note: !Number.isFinite(coreData?.us10y) ? '缺少利率資料，總經壓力分保守處理。' : coreData.us10y >= 4.2 ? '利率偏高會壓低高股利與高估值的安全邊際，因此提高重審頻率。' : '利率未達警戒線，暫不形成額外壓力。',
     weight: 0.25,
     sourceField: 'US_10Y_Yield',
-      sourceNote: '取自正式匯率趨勢觀察檔的美債10年利率欄位，保留該檔日期。'
+    sourceNote: '取自正式匯率趨勢觀察檔的美債10年利率欄位，保留該檔日期。'
   }, {
     key: 'fed',
     label: 'Fed',
     fullLabel: 'Fed 政策機率',
     value: Number.isFinite(coreData?.fedProb) ? `${formatNumber(coreData.fedProb, 1)}%` : 'N/A',
-      score: Number.isFinite(coreData?.fedProb) ? clampPercent(coreData.fedProb) : null,
+    score: Number.isFinite(coreData?.fedProb) ? clampPercent(coreData.fedProb) : null,
     status: !Number.isFinite(coreData?.fedProb) ? '資料不足' : coreData.fedProb >= 70 ? '重審觸發' : coreData.fedProb >= 60 ? '政策壓力' : '未觸發',
     note: !Number.isFinite(coreData?.fedProb) ? '升息機率缺值時，不得用模型補假資料。' : coreData.fedProb >= 70 ? '政策路徑偏鷹，需檢查估值是否仍能被 EPS 與現金流支撐。' : coreData.fedProb >= 60 ? '政策壓力偏高，但尚不足以單獨改變 HOLD。' : '政策壓力未達重審門檻。',
     weight: 0.20,
@@ -6099,9 +6115,18 @@ const App = () => {
     const dimensions = (batch4Data?.dimensions || []).filter(item => Number.isFinite(item.score));
 
     if (!dimensions.length || !Number.isFinite(batch4Data?.total)) {
+      const missingReasons = batch4Data?.missingReasons || [];
       return React.createElement("div", {
         className: "mb-4 rounded-lg border border-amber-500/30 bg-amber-950/20 px-4 py-3 readable-copy text-amber-100"
-      }, "\u7D50\u8AD6\uFF1A\u8CC7\u6599\u4E0D\u8DB3\uFF0C\u4E94\u7DAD\u5EA6\u63A8\u5C0E\u66AB\u4E0D\u8F38\u51FA\u7D50\u8AD6\u3002");
+      }, React.createElement("div", {
+        className: "panel-title text-[16px]"
+      }, "\u4E94\u7DAD\u8A55\u5206\u5C1A\u672A\u5B8C\u6574"), React.createElement("div", {
+        className: "mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-1"
+      }, React.createElement("span", null, "\u6B63\u5F0F\u53EF\u8A55\u5206\uFF1A", React.createElement("strong", null, batch4Data?.scoredCount ?? 0, " / ", batch4Data?.dimensionCount ?? 5)), React.createElement("span", null, "\u8CC7\u6599\u5B8C\u6574\u5EA6\uFF1A", React.createElement("strong", null, batch4Data?.completenessPct ?? 0, "%")), React.createElement("span", null, "\u7F3A\u5C11\uFF1A", React.createElement("strong", null, batch4Data?.missing?.join('、') || 'N/A')), React.createElement("span", null, "\u5B8C\u6574\u7E3D\u5206\uFF1A", React.createElement("strong", null, "N/A"))), React.createElement("div", {
+        className: "mt-2 text-[12px]"
+      }, "\u539F\u56E0\uFF1A", missingReasons.map(item => `${item.label}：${item.reason}`).join('；') || '缺少合格正式輸入'), React.createElement("div", {
+        className: "mt-2 font-bold text-amber-200"
+      }, "\u5DF2\u77E5\u52A0\u6B0A\u8CA2\u737B\uFF0C\u4E0D\u7B49\u65BC\u5B8C\u6574\u7E3D\u5206\uFF1B\u4E0D\u5F97\u91CD\u65B0\u6B63\u898F\u5316\u3002"));
     }
 
     const ranked = [...dimensions].sort((a, b) => a.score - b.score);
@@ -6129,8 +6154,23 @@ const App = () => {
     dataValues: batch4Data.radarValues,
     dimensions: batch4Data.dimensions
   }) : React.createElement("div", {
-    className: "text-sm text-slate-500 text-center leading-relaxed"
-  }, "\u8CC7\u6599\u4E0D\u8DB3\uFF0C\u96F7\u9054\u5716\u4E0D\u88DC\u5047\u5206\u6578", React.createElement("br", null), "\u7F3A\u503C\uFF1A", batch4Data?.missing?.join('、') || 'N/A')), React.createElement("div", {
+    className: "w-full rounded-xl border border-amber-500/30 bg-slate-950/45 px-6 py-7 text-left"
+  }, React.createElement("div", {
+    className: "panel-kicker text-amber-300"
+  }, "Incomplete Five-Dimension View"), React.createElement("h4", {
+    className: "panel-title mt-1 text-amber-100"
+  }, "\u4E94\u7DAD\u8A55\u5206\u5C1A\u672A\u5B8C\u6574"), React.createElement("div", {
+    className: "mt-4 h-2 overflow-hidden rounded-full bg-slate-800"
+  }, React.createElement("div", {
+    className: "h-full bg-amber-400",
+    style: {
+      width: `${batch4Data?.completenessPct ?? 0}%`
+    }
+  })), React.createElement("div", {
+    className: "mt-3 text-sm text-slate-300"
+  }, "\u6B63\u5F0F\u53EF\u8A55\u5206 ", batch4Data?.scoredCount ?? 0, " / ", batch4Data?.dimensionCount ?? 5, "\uFF1B\u5B8C\u6574\u7E3D\u5206 N/A\u3002"), React.createElement("div", {
+    className: "mt-2 text-sm text-slate-400"
+  }, "\u7F3A\u5C11\uFF1A", batch4Data?.missing?.join('、') || 'N/A', "\u3002\u672C\u5340\u4E0D\u7E6A\u88FD\u5047 radar score\u3002"))), React.createElement("div", {
     className: "w-full flex flex-col justify-center"
   }, React.createElement("table", {
     className: "w-full text-left text-[13px]"
@@ -6155,14 +6195,14 @@ const App = () => {
     className: "mt-0.5 data-note leading-snug"
   }, item.source)), React.createElement("td", {
     className: "py-3 text-center font-num text-white text-[14px]"
-  }, Number.isFinite(item.score) ? item.score : '缺值'), React.createElement("td", {
+  }, Number.isFinite(item.score) ? item.score : 'N/A'), React.createElement("td", {
     className: "py-3 text-right font-num text-sky-100 text-[13px]"
-  }, Number.isFinite(item.score) ? `${item.score} × ${item.weight.toFixed(2)} = ${(item.score * item.weight).toFixed(2)}` : '不補分')))), React.createElement("tfoot", null, React.createElement("tr", null, React.createElement("td", {
+  }, Number.isFinite(item.score) ? `${item.score} × ${item.weight.toFixed(2)} = ${(item.score * item.weight).toFixed(2)}` : 'N/A（不補分）')))), React.createElement("tfoot", null, React.createElement("tr", null, React.createElement("td", {
     colSpan: "3",
     className: "pt-3 text-right text-[12px] text-slate-400"
   }, React.createElement("div", {
     className: "flex flex-wrap justify-end gap-1 items-center"
-  }, React.createElement("span", null, batch4Data?.methodologyZh || '五維度資料不足，未產生推導分數。'), React.createElement("span", {
+  }, React.createElement("span", null, Number.isFinite(batch4Data?.total) ? batch4Data?.methodologyZh || '五維度資料完整。' : `已知加權貢獻 ${Number(batch4Data?.knownContribution || 0).toFixed(2)}；不等於完整總分`), React.createElement("span", {
     className: "mx-1"
   }, "="), React.createElement("strong", {
     className: "text-[14px] text-white bg-sky-900/50 px-2 py-0.5 rounded border border-sky-500/30"

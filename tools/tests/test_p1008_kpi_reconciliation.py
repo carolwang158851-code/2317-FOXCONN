@@ -94,6 +94,59 @@ class KpiReconciliationTests(unittest.TestCase):
             self.assertNotIn("coreData?.vix) ? clampPercent(coreData.vix / 30 * 100) : 45", text)
             self.assertNotIn("coreData?.fedProb) ? clampPercent(coreData.fedProb) : 50", text)
 
+    def test_old_ui_five_dimension_incomplete_state_is_explicit_and_not_renormalized(self):
+        for text in (self.old_source, self.old_bundle):
+            block = text[text.index("function calculateRadarPackage"):text.index("const RadarChart")]
+            self.assertIn("radarValues: null", block)
+            self.assertIn("total: null", block)
+            self.assertIn("availableWeight", block)
+            self.assertIn("knownContribution", block)
+            self.assertNotIn("knownContribution / availableWeight", block)
+        self.assertIn("AI_Revenue_Pct 無合格正式 authority", self.old_source)
+        self.assertIn("五維評分尚未完整", self.old_source)
+        self.assertIn("正式可評分", self.old_source)
+        self.assertIn("資料完整度", self.old_source)
+        self.assertIn("完整總分", self.old_source)
+        self.assertIn("已知加權貢獻，不等於完整總分", self.old_source)
+        self.assertIn("不得重新正規化", self.old_source)
+        self.assertNotIn("46.35 / 0.75", self.old_source)
+
+    def test_old_ui_complete_five_dimension_path_keeps_radar_and_total(self):
+        for text in (self.old_source, self.old_bundle):
+            block = text[text.index("function calculateRadarPackage"):text.index("const RadarChart")]
+            self.assertIn("const total = Math.round(dimensions.reduce", block)
+            self.assertIn("radarValues: dimensions.map(item => item.score)", block)
+            self.assertTrue("<RadarChart" in text or "React.createElement(RadarChart" in text)
+
+    def test_new_ui_separates_monitoring_publication_and_decision_scoring(self):
+        self.assertIn("六大系統監控狀態", self.new_ui)
+        self.assertIn("Six-System Monitoring Status", self.new_ui)
+        self.assertNotIn("六大系統風險排序", self.new_ui)
+        self.assertNotIn("Risk Heat Ranking", self.new_ui)
+        self.assertNotIn("<th>排序</th>", self.new_ui)
+        self.assertNotIn("<th>排名</th>", self.new_ui)
+        self.assertIn("<th>序</th>", self.new_ui)
+        self.assertIn("資料發布可用度", self.new_ui)
+        self.assertIn("Data / Publication Readiness", self.new_ui)
+        self.assertIn("formalScoreCount", self.new_ui)
+        self.assertIn("Decision Scoring", self.new_ui)
+        self.assertNotIn("信號強度：中等", self.new_ui)
+        self.assertIn("HOLD / 觀察", self.new_ui)
+        self.assertIn("Fail-closed 保守狀態", self.new_ui)
+        self.assertIn("非六大 IC 計分後的正式投資評等", self.new_ui)
+        self.assertIn("actionable:false", self.new_ui)
+
+    def test_ui_remediation_does_not_invent_ai_share_or_six_ic_scores(self):
+        systems = self.new_ui[self.new_ui.index("function buildSystems"):self.new_ui.index("function renderRightPanel")]
+        self.assertEqual(6, systems.count("score: null"))
+        self.assertNotIn("AI_Revenue_Pct = 40", self.new_ui)
+        self.assertNotIn("AI_Revenue_Pct = 51", self.new_ui)
+        self.assertNotIn("cloudAndNetworkingRevenueSharePct", systems)
+        for text in (self.old_source, self.old_bundle):
+            self.assertIn("authoritySupported ? value : null", text)
+            self.assertNotIn("AI_Revenue_Pct = 40", text)
+            self.assertNotIn("AI_Revenue_Pct = 51", text)
+
     def test_old_ui_uses_formal_fx_sidecar_for_shared_fx_metrics(self):
         for text in (self.old_source, self.old_bundle):
             self.assertIn("const latestFormalFxTrend = validFxTrendCsv[validFxTrendCsv.length - 1] || null", text)
