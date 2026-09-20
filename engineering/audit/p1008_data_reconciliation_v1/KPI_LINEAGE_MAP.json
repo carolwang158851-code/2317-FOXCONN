@@ -133,7 +133,7 @@
       "kpi_id": "FIN.ROE_H1",
       "display_name": "2026H1 ROE（未年化）",
       "semantic_layer": "P0_FINANCIAL",
-      "source_path": "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json",
+      "source_path": "modules/p1008_research_plugin/config/normalized_evidence/FY2026_H1_ROE.json",
       "source_field": "governedMetrics.roeH1.value",
       "formula": "DIRECT",
       "unit": "%",

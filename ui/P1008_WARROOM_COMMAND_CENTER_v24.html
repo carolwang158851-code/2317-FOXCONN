@@ -4542,13 +4542,13 @@
         };
       }
 
-      function buildSystems({ appState, eventState, news, daily, master, quarterly, fx, macro }) {
+      function buildSystems({ appState, eventState, news, daily, master, quarterlyEvidence, fx, macro }) {
         const readiness = appState?.reviewPackage?.readiness || {};
         const published = eventState?.status === "OWNER_PUBLISHED" || news?.formalSynced === true;
         const close = toNumber(daily.Close);
         const bvps = toNumber(daily.BVPS_ref);
         const pb = toNumber(daily.PB_daily);
-        const roeEvidence = quarterly?.governedMetrics?.roeH1 || {};
+        const roeEvidence = quarterlyEvidence?.governedMetrics?.roeH1 || {};
         const governedH1Roe = roeEvidence?.classification === "OFFICIAL_REPORTED"
           && roeEvidence?.period === "2026H1"
           && roeEvidence?.annualized === false
@@ -4880,13 +4880,13 @@
       }
 
       async function init() {
-        const [appState, eventState, news, dailyRows, masterRows, quarterly, fxRows, macroRows] = await Promise.all([
+        const [appState, eventState, news, dailyRows, masterRows, quarterlyEvidence, fxRows, macroRows] = await Promise.all([
           fetchJson("runtime/p1008_app_state.json"),
           fetchJson("runtime/warroom_event_review_state.json"),
           fetchJson("runtime/warroom_news_scan_snapshot.json"),
           fetchCsv("data/2317_daily_price.csv"),
           fetchCsv("data/2317_master_v9.csv"),
-          fetchJson("modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json"),
+          fetchJson("modules/p1008_research_plugin/config/normalized_evidence/FY2026_H1_ROE.json"),
           fetchCsv("data/fx_trend_observations.csv"),
           fetchCsv("data/macro_snapshot.csv")
         ]);
@@ -4894,7 +4894,7 @@
         const master = latestByDate(masterRows, "QuarterEndDate");
         const fx = latestByDate(fxRows, "Date");
         const macro = latestByDate(macroRows, "Date");
-        const state = buildSystems({ appState, eventState, news, daily, master, quarterly, fx, macro });
+        const state = buildSystems({ appState, eventState, news, daily, master, quarterlyEvidence, fx, macro });
         applyIcTones(state.systems);
         window.__p1008DynamicState = state;
         if (shell) shell.classList.add("p1008-runtime-bound");

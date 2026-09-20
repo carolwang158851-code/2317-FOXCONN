@@ -59,7 +59,7 @@ KPI_ROWS = [
     _kpi("FIN.EPS_Q", "單季 EPS", "P0_FINANCIAL", "data/2317_master_v9.csv", "EPS_Q", "DIRECT", "元", "Owner authority CSV", "old UI;reports", "CSV_AUTHORITY", "AUTHORITATIVE_SOURCE_REPORTED"),
     _kpi("FIN.EPS_TTM", "近十二月 EPS", "P0_FINANCIAL", "data/2317_master_v9.csv", "EPS_TTM", "DIRECT", "元", "Owner authority CSV", "old UI;reports;new UI evidence", "CSV_AUTHORITY", "AUTHORITATIVE_SOURCE_REPORTED"),
     _kpi("FIN.EPS_YOY", "EPS 年增率", "P0_FINANCIAL", "data/2317_master_v9.csv", "EPS_YoY_Pct", "DIRECT", "%", "Owner authority CSV", "old UI;reports;new UI evidence", "CSV_AUTHORITY", "AUTHORITATIVE_SOURCE_REPORTED"),
-    _kpi("FIN.ROE_H1", "2026H1 ROE（未年化）", "P0_FINANCIAL", "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json", "governedMetrics.roeH1.value", "DIRECT", "%", "normalized quarterly authority interface", "old UI;reports;new UI evidence", "OFFICIAL_EVIDENCE", "OFFICIAL_REPORTED", notes="period=2026H1; annualized=false; icScoreEligible=false; official source and Owner acceptance receipts verified"),
+    _kpi("FIN.ROE_H1", "2026H1 ROE（未年化）", "P0_FINANCIAL", "modules/p1008_research_plugin/config/normalized_evidence/FY2026_H1_ROE.json", "governedMetrics.roeH1.value", "DIRECT", "%", "normalized quarterly authority interface", "old UI;reports;new UI evidence", "OFFICIAL_EVIDENCE", "OFFICIAL_REPORTED", notes="period=2026H1; annualized=false; icScoreEligible=false; official source and Owner acceptance receipts verified"),
     _kpi("FIN.ROIC", "精確 ROIC", "P0_FINANCIAL", "data/2317_master_v9.csv", "ROIC_Precise_Pct;ROIC_Status", "latest governed available period only", "%", "Owner authority CSV", "old UI;reports", "CSV_AUTHORITY", "DERIVED_VERIFIED", "INSUFFICIENT_DATA", "2026Q2 is unavailable with governed blank fields; latest available period is 2026Q1=12.57%; no Q1-to-Q2 trend"),
     _kpi("FIN.BVPS", "每股淨值", "P0_FINANCIAL", "data/2317_master_v9.csv", "BVPS", "DIRECT", "元", "Owner authority CSV", "daily PB reference", "CSV_AUTHORITY", "AUTHORITATIVE_SOURCE_REPORTED"),
     _kpi("MKT.CLOSE", "正式收盤價", "P0_MARKET", "data/2317_daily_price.csv", "Close", "DIRECT", "元", "TWSE authority pipeline", "old UI;reports;new UI evidence", "CSV_AUTHORITY", "OFFICIAL_REPORTED"),
@@ -135,7 +135,7 @@ def _rows(path: Path) -> list[dict[str, str]]:
 
 
 def _latest(root: Path, source: str) -> str:
-    if source.endswith("config/quarterly_earnings/FY2026_Q2.json"):
+    if source.endswith("config/quarterly_earnings/FY2026_Q2.json") or source.endswith("config/normalized_evidence/FY2026_H1_ROE.json"):
         return "2026H1_OR_2026Q2_FIELD_SPECIFIC"
     if " + " in source or not source.startswith("data/"):
         return "MULTI_SOURCE_OR_RUNTIME"

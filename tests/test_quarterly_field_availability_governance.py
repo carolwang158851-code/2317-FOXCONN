@@ -17,6 +17,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from p1008_research_plugin.quarterly_authority import (
+    NORMALIZED_QUARTERLY_EVIDENCE_RELATIVE_PATH,
     Q2_ACCEPTANCE_RECEIPT_RELATIVE_PATH,
     Q2_CONFIG_RELATIVE_PATH,
     Q2_SOURCE_RECEIPT_RELATIVE_PATH,
@@ -57,6 +58,7 @@ class QuarterlyFieldAvailabilityGovernanceTests(unittest.TestCase):
         shutil.copyfile(ROOT / PROMOTION.CONTRACT_RELATIVE_PATH, contract_target)
         for relative_path in (
             Q2_CONFIG_RELATIVE_PATH,
+            NORMALIZED_QUARTERLY_EVIDENCE_RELATIVE_PATH,
             Q2_SOURCE_RECEIPT_RELATIVE_PATH,
             Q2_ACCEPTANCE_RECEIPT_RELATIVE_PATH,
         ):
@@ -108,12 +110,23 @@ class QuarterlyFieldAvailabilityGovernanceTests(unittest.TestCase):
         self.assertEqual("Owner", roe["governance"]["acceptedBy"])
 
     def test_governed_h1_roe_interface_fails_closed_on_lineage_mismatch(self) -> None:
-        config_path = self.root / Q2_CONFIG_RELATIVE_PATH
-        config = json.loads(config_path.read_text(encoding="utf-8"))
-        config["governedMetrics"]["roeH1"]["value"] = "6.22"
-        config_path.write_text(json.dumps(config), encoding="utf-8")
+        evidence_path = self.root / NORMALIZED_QUARTERLY_EVIDENCE_RELATIVE_PATH
+        evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+        evidence["governedMetrics"]["roeH1"]["value"] = "6.22"
+        evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
         with self.assertRaisesRegex(
             QuarterlyAuthorityError, "QUARTERLY_H1_ROE_SOURCE_LINEAGE_MISMATCH"
+        ):
+            load_governed_quarterly_evidence(self.root)
+
+    def test_governed_h1_roe_interface_rejects_authority_expansion(self) -> None:
+        evidence_path = self.root / NORMALIZED_QUARTERLY_EVIDENCE_RELATIVE_PATH
+        evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+        evidence["authoritative"] = True
+        evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
+        with self.assertRaisesRegex(
+            QuarterlyAuthorityError,
+            "NORMALIZED_QUARTERLY_EVIDENCE_GOVERNANCE_INVALID",
         ):
             load_governed_quarterly_evidence(self.root)
 

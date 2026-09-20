@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "P1008_NORMALIZED_QUARTERLY_EVIDENCE_V1",
+  "recordType": "P1008_RECEIPT_BACKED_DERIVED_EVIDENCE",
+  "classification": "NON_AUTHORITATIVE_NORMALIZED_EVIDENCE",
+  "authoritative": false,
+  "formalAuthority": false,
+  "majorEventBaselineIdentity": false,
+  "publishAuthorized": false,
+  "actionable": false,
+  "governedMetrics": {
+    "schemaVersion": "P1008_QUARTERLY_EVIDENCE_V1",
+    "roeH1": {
+      "value": "6.21",
+      "unit": "PERCENT",
+      "period": "2026H1",
+      "annualized": false,
+      "comparablePeriod": "2025H1",
+      "comparableValue": "5.48",
+      "classification": "OFFICIAL_REPORTED",
+      "icScoreEligible": false,
+      "source": {
+        "sourceTier": "PRIMARY_OFFICIAL",
+        "sourceType": "OFFICIAL_COMPANY_PRESS_RELEASE",
+        "sourceLocator": "https://www.honhai.com/zh-tw/press-center/press-releases/latest-news/2094",
+        "publicationDate": "2026-08-12"
+      },
+      "governance": {
+        "sourceReceipt": "engineering/audit/p1008_q2_kpi_completion_v1/Q2_KPI_SOURCE_RECEIPT.json",
+        "acceptanceReceipt": "contracts/p1008_research_plugin/acceptance/v1.1/P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT.json",
+        "acceptanceStatus": "P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT",
+        "acceptedBy": "Owner"
+      }
+    }
+  }
+}

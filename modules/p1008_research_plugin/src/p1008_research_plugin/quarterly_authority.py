@@ -15,6 +15,9 @@ CONTRACT_RELATIVE_PATH = Path(
 Q2_CONFIG_RELATIVE_PATH = Path(
     "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json"
 )
+NORMALIZED_QUARTERLY_EVIDENCE_RELATIVE_PATH = Path(
+    "modules/p1008_research_plugin/config/normalized_evidence/FY2026_H1_ROE.json"
+)
 Q2_SOURCE_RECEIPT_RELATIVE_PATH = Path(
     "engineering/audit/p1008_q2_kpi_completion_v1/Q2_KPI_SOURCE_RECEIPT.json"
 )
@@ -23,6 +26,7 @@ Q2_ACCEPTANCE_RECEIPT_RELATIVE_PATH = Path(
     "P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT.json"
 )
 QUARTERLY_EVIDENCE_SCHEMA = "P1008_QUARTERLY_EVIDENCE_V1"
+NORMALIZED_QUARTERLY_EVIDENCE_SCHEMA = "P1008_NORMALIZED_QUARTERLY_EVIDENCE_V1"
 ROIC_STATUS_FIELD = "ROIC_Status"
 ROIC_UNAVAILABLE = "INSUFFICIENT_DATA"
 ROIC_VALUE_FIELDS = (
@@ -58,11 +62,22 @@ def load_quarterly_authority_contract(package_root: Path) -> dict[str, Any]:
 
 
 def load_governed_quarterly_evidence(package_root: Path) -> dict[str, Any]:
-    """Load the normalized Q2 evidence interface and verify its existing lineage."""
+    """Load the separate normalized evidence artifact and verify its lineage."""
 
     root = package_root.resolve()
-    config = _load_json(root / Q2_CONFIG_RELATIVE_PATH)
-    evidence = config.get("governedMetrics")
+    artifact = _load_json(root / NORMALIZED_QUARTERLY_EVIDENCE_RELATIVE_PATH)
+    if not (
+        artifact.get("schemaVersion") == NORMALIZED_QUARTERLY_EVIDENCE_SCHEMA
+        and artifact.get("recordType") == "P1008_RECEIPT_BACKED_DERIVED_EVIDENCE"
+        and artifact.get("classification") == "NON_AUTHORITATIVE_NORMALIZED_EVIDENCE"
+        and artifact.get("authoritative") is False
+        and artifact.get("formalAuthority") is False
+        and artifact.get("majorEventBaselineIdentity") is False
+        and artifact.get("publishAuthorized") is False
+        and artifact.get("actionable") is False
+    ):
+        raise QuarterlyAuthorityError("NORMALIZED_QUARTERLY_EVIDENCE_GOVERNANCE_INVALID")
+    evidence = artifact.get("governedMetrics")
     if not isinstance(evidence, dict) or evidence.get("schemaVersion") != QUARTERLY_EVIDENCE_SCHEMA:
         raise QuarterlyAuthorityError("QUARTERLY_EVIDENCE_SCHEMA_INVALID")
     roe = evidence.get("roeH1")

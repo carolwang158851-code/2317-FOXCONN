@@ -1,4 +1,5 @@
 import csv
+import hashlib
 import importlib.util
 import json
 import sys
@@ -66,7 +67,7 @@ class KpiReconciliationTests(unittest.TestCase):
         block = self.new_ui[self.new_ui.index("function buildSystems"):self.new_ui.index("function renderRightPanel")]
         for token in (
             "const bvps = toNumber(daily.BVPS_ref)", "const pb = toNumber(daily.PB_daily)",
-            "const roeEvidence = quarterly?.governedMetrics?.roeH1 || {}", "toNumber(roeEvidence.value)", "const us10y = toNumber(fx.US_10Y_Yield)",
+            "const roeEvidence = quarterlyEvidence?.governedMetrics?.roeH1 || {}", "toNumber(roeEvidence.value)", "const us10y = toNumber(fx.US_10Y_Yield)",
             "const vix = toNumber(macro.VIX)", "const dxy = toNumber(fx.DXY)",
             "cashDividend / close * 100",
         ):
@@ -214,12 +215,22 @@ class KpiReconciliationTests(unittest.TestCase):
         self.assertEqual(float(row["free_cash_flow_core_100m_ntd"]), actual / 100000)
 
     def test_q2_uses_current_governed_interface_without_legacy_promotion(self):
-        q2 = json.loads((PACKAGE / "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json").read_text(encoding="utf-8"))
+        q2_path = PACKAGE / "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json"
+        q2 = json.loads(q2_path.read_text(encoding="utf-8"))
+        normalized_q2 = q2_path.read_bytes().replace(b"\r\n", b"\n")
         rows = csv_rows(PACKAGE / "data/2317_master_v9.csv")
         current = next(row for row in rows if row["Quarter"] == "2026Q2")
         evidence = load_governed_quarterly_evidence(PACKAGE)["roeH1"]
+        registry = json.loads((PACKAGE / "contracts/p1008_report_production/v1.1/P1008_MAJOR_EVENT_ANALYSIS_BASELINE_REGISTRY_V1.json").read_text(encoding="utf-8"))
+        pinned_hash = registry["baselines"][0]["contentSha256"]
+        self.assertEqual(
+            "2762F84E35849706B383E6FDEDDFE42F195AC11377139328869A295BE8B9C49B",
+            pinned_hash,
+        )
+        self.assertEqual(pinned_hash, hashlib.sha256(normalized_q2).hexdigest().upper())
         self.assertEqual("FY2026 Q2", q2["fiscalPeriod"])
         self.assertNotIn("canonicalPromotion", q2)
+        self.assertNotIn("governedMetrics", q2)
         self.assertEqual("6.21", evidence["value"])
         self.assertEqual("2026H1", evidence["period"])
         self.assertFalse(evidence["annualized"])
@@ -264,6 +275,7 @@ class KpiReconciliationTests(unittest.TestCase):
             by_id = {row["metric_id"]: row for row in csv.DictReader(handle)}
         self.assertEqual("2026H1_OR_2026Q2_FIELD_SPECIFIC", by_id["FIN.ROE_H1"]["as_of_date"])
         self.assertIn("annualized=false", by_id["FIN.ROE_H1"]["notes"])
+        self.assertEqual("modules/p1008_research_plugin/config/normalized_evidence/FY2026_H1_ROE.json", by_id["FIN.ROE_H1"]["source_path"])
         self.assertEqual("governedMetrics.roeH1.value", by_id["FIN.ROE_H1"]["source_field"])
         self.assertEqual("DERIVED_VERIFIED", by_id["FIN.ROIC"]["value_classification"])
         self.assertEqual("INSUFFICIENT_DATA", by_id["FIN.ROIC"]["status"])
