@@ -1,11 +1,24 @@
 import csv
 import importlib.util
 import json
+import sys
 import unittest
 from pathlib import Path
 
 
 PACKAGE = Path(__file__).resolve().parents[2]
+SRC = PACKAGE / "modules" / "p1008_research_plugin" / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from p1008_research_plugin.quarterly_authority import (
+    ROIC_UNAVAILABLE,
+    ROIC_VALUE_FIELDS,
+    latest_available_roic_row,
+    validate_quarterly_authority_row,
+)
+
+
 SPEC = importlib.util.spec_from_file_location("audit", PACKAGE / "tools/p1008_kpi_reconciliation_audit.py")
 audit = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(audit)
@@ -158,21 +171,39 @@ class KpiReconciliationTests(unittest.TestCase):
 
     def test_pb_formula_reproduces_authority_value(self):
         row = csv_rows(PACKAGE / "data/2317_daily_price.csv")[-1]
-        self.assertEqual("2026-08-27", row["Date"])
+        manifest = json.loads(
+            (PACKAGE / "data/CSV_AUTHORITY_MANIFEST.json").read_text(encoding="utf-8-sig")
+        )
+        daily_entry = next(
+            entry
+            for entry in manifest["authoritativeFiles"]
+            if entry["path"] == "data/2317_daily_price.csv"
+        )
+        self.assertEqual(daily_entry["dateRange"]["end"], row["Date"])
         self.assertEqual("2026Q2", row["QuarterKey"])
-        self.assertEqual(252.0, float(row["Close"]))
         self.assertEqual(136.02, float(row["BVPS_ref"]))
-        self.assertEqual(1.853, float(row["PB_daily"]))
         self.assertEqual(float(row["PB_daily"]), round(float(row["Close"]) / float(row["BVPS_ref"]), 3))
 
-    def test_roic_formula_reproduces_precise_value(self):
+    def test_roic_availability_uses_latest_governed_available_period(self):
         rows = csv_rows(PACKAGE / "data/2317_master_v9.csv")
-        row = rows[-1]
-        self.assertEqual("2026Q2", row["Quarter"])
-        self.assertEqual("12.35", row["ROIC_Precise_Pct"])
-        self.assertEqual("130453.10", row["InterestBearingDebt_100M"])
-        actual = round(float(row["NOPAT_Annual_100M"]) / float(row["InvestedCapital_100M"]) * 100, 2)
-        self.assertEqual(float(row["ROIC_Precise_Pct"]), actual)
+        current = rows[-1]
+        validate_quarterly_authority_row(current)
+        self.assertEqual("2026Q2", current["Quarter"])
+        self.assertEqual(ROIC_UNAVAILABLE, current["ROIC_Status"])
+        for field in ROIC_VALUE_FIELDS:
+            self.assertEqual("", current[field], field)
+
+        available = latest_available_roic_row(rows)
+        self.assertEqual("2026Q1", available["Quarter"])
+        self.assertEqual("12.57", available["ROIC_Precise_Pct"])
+        self.assertNotEqual(current["Quarter"], available["Quarter"])
+        actual = round(
+            float(available["NOPAT_Annual_100M"])
+            / float(available["InvestedCapital_100M"])
+            * 100,
+            2,
+        )
+        self.assertEqual(float(available["ROIC_Precise_Pct"]), actual)
 
     def test_fcf_formula_reproduces_authority_value(self):
         row = csv_rows(PACKAGE / "data/2317_cash_flow_authority.csv")[-1]
@@ -204,7 +235,9 @@ class KpiReconciliationTests(unittest.TestCase):
         self.assertEqual("40.0", master["AI_Revenue_Pct"])
         self.assertNotIn("AI_Revenue_Denominator", master)
         self.assertEqual("L3", master["DataSupportLevel"])
-        self.assertEqual("N/A", current["AI_Revenue_Pct"])
+        self.assertEqual("", current["AI_Revenue_Pct"])
+        self.assertIsNone(q2["productMix"]["aiSpecificRevenueSharePct"])
+        self.assertEqual("NOT_DISCLOSED", q2["productMix"]["aiSpecificShareStatus"])
         self.assertEqual("51", q2["productMix"]["cloudAndNetworkingRevenueSharePct"])
 
     def test_report_is_downstream_and_uses_same_sources(self):
