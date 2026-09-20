@@ -1,8 +1,8 @@
 {
   "manifestVersion": "1.6.0",
-  "approvedAt": "2026-09-17",
+  "approvedAt": "2026-09-18",
   "approvedBy": "Owner",
-  "approvalSource": "P1008 PHASE 4D Owner-authorized frozen Phase3A canonical authority promotion; external/public publication not authorized.; Owner approval 2026-09-06; formal target 2026-09-04 via owner_publish_csv_v2.py; appended 49 row(s); Owner approval 2026-09-07; formal target 2026-09-07 via owner_publish_csv_v2.py; appended 44 row(s); Owner approval 2026-09-08; formal target 2026-09-08 via owner_publish_csv_v2.py; appended 40 row(s); Owner approval 2026-09-09; formal target 2026-09-09 via owner_publish_csv_v2.py; appended 43 row(s); Owner approval 2026-09-13; formal target 2026-09-11 via owner_publish_csv_v2.py; appended 49 row(s); Owner approval 2026-09-14; formal target 2026-09-14 via owner_publish_csv_v2.py; appended 49 row(s); Owner-approved historical market-activity reconciliation 2317/2026-09-14; Owner-approved 2026-09-16 confirmed sidecar manifest reconciliation; Owner approval 2026-09-17; formal target 2026-09-17 via owner_publish_csv_v2.py; appended 50 row(s)",
+  "approvalSource": "P1008 PHASE 4D Owner-authorized frozen Phase3A canonical authority promotion; external/public publication not authorized.; Owner approval 2026-09-06; formal target 2026-09-04 via owner_publish_csv_v2.py; appended 49 row(s); Owner approval 2026-09-07; formal target 2026-09-07 via owner_publish_csv_v2.py; appended 44 row(s); Owner approval 2026-09-08; formal target 2026-09-08 via owner_publish_csv_v2.py; appended 40 row(s); Owner approval 2026-09-09; formal target 2026-09-09 via owner_publish_csv_v2.py; appended 43 row(s); Owner approval 2026-09-13; formal target 2026-09-11 via owner_publish_csv_v2.py; appended 49 row(s); Owner approval 2026-09-14; formal target 2026-09-14 via owner_publish_csv_v2.py; appended 49 row(s); Owner-approved historical market-activity reconciliation 2317/2026-09-14; Owner-approved 2026-09-16 confirmed sidecar manifest reconciliation; Owner approval 2026-09-17; formal target 2026-09-17 via owner_publish_csv_v2.py; appended 50 row(s); Owner approval 2026-09-19; formal target 2026-09-18 via owner_publish_csv_v2.py; appended 50 row(s)",
   "authorityPolicy": {
     "hashAlgorithm": "SHA-256",
     "hashMismatchStatus": "APPROVAL_EXPIRED",
@@ -227,13 +227,13 @@
       "fileName": "2317_daily_price.csv",
       "fileVersion": "daily-v1.0",
       "schemaVersion": "daily-price-v1-7-columns",
-      "sha256": "E1C597220F80172773CD39894E3A5315333CD6F36EE8654D4C41AB7411492AF8",
-      "fileSizeBytes": 8729,
-      "rowCount": 154,
+      "sha256": "91EEBDB6BC6FD0E85CA2BF537056CAF941246F13412417EDFAE96B16D6DD02D1",
+      "fileSizeBytes": 8786,
+      "rowCount": 155,
       "columnCount": 7,
       "dateRange": {
         "start": "2026-01-28",
-        "end": "2026-09-17"
+        "end": "2026-09-18"
       },
       "validationStatus": "PASS",
       "validationStatusZh": "欄位完整、日期未重複、PB_daily已依Close/BVPS_ref三位小數重算通過",
@@ -337,7 +337,7 @@
           "zh": "此權威資格只代表檔案版本與PB計算被核准，不代表任何買賣規則啟用"
         }
       ],
-      "lastPublishedAt": "2026-09-17T12:49:06Z",
+      "lastPublishedAt": "2026-09-18T16:19:07Z",
       "publishApprovalZh": "Owner approved append; MARKET INTELLIGENCE sidecar remains observation only; actionable:false.",
       "statusNormalizationAt": "2026-06-30T06:29:29Z",
       "statusNormalizationZh": "Owner ???????? append ???? Status ? STAGING_CANDIDATE ???? OK??????? PB ???",
@@ -387,13 +387,13 @@
       "fileName": "2317_daily_market_activity.csv",
       "fileVersion": "market-activity-v1.0",
       "schemaVersion": "daily-market-activity-v1-7-columns",
-      "sha256": "15630F0E7A7ADDB9D861F75FC5CC707C788B72791D63997187BA53900F84710D",
-      "fileSizeBytes": 15165,
-      "rowCount": 104,
+      "sha256": "747D4C3BFA40C239B9E2EBB4F39D695F88F186020D19DE310B57CD3D8D432F01",
+      "fileSizeBytes": 15310,
+      "rowCount": 105,
       "columnCount": 7,
       "dateRange": {
         "start": "2026-04-22",
-        "end": "2026-09-17"
+        "end": "2026-09-18"
       },
       "validationStatus": "PASS",
       "fileAuthority": "CSV_AUTHORITY",
@@ -422,7 +422,7 @@
         "stock_id"
       ],
       "analysisStatus": "MARKET_LIQUIDITY_ANALYSIS_READY",
-      "lastPublishedAt": "2026-09-17T12:49:06Z",
+      "lastPublishedAt": "2026-09-18T16:19:07Z",
       "publisher": "P1008_PHASE4D_OWNER_PROMOTION",
       "publishMode": "MARKET_ACTIVITY_INITIAL_ATOMIC_PUBLISH",
       "actionable": false,
@@ -537,14 +537,14 @@
       "publishRuleZh": "正式macro_snapshot.csv原則上僅能append新日期行；歷史格式修正須由Owner明確核准，並同步更新SHA-256與manifest",
       "actionable": false,
       "zh": "使用者整理資料，尚未完成CSV_AUTHORITY權威驗證；可供市場情報觀察，不啟用交易規則；2026-06-29已由Owner核准修正7筆歷史欄位錯位",
-      "sha256": "FAF0BA2F378C28ACD00BEFE36B827FC25768D418B13424E40CC2391DC021D46B",
-      "currentSha256": "FAF0BA2F378C28ACD00BEFE36B827FC25768D418B13424E40CC2391DC021D46B",
+      "sha256": "6BD02B0894139D00D881FF53A6EEEEED404DED21EC782CF54F716665EB25123B",
+      "currentSha256": "6BD02B0894139D00D881FF53A6EEEEED404DED21EC782CF54F716665EB25123B",
       "acceptedBaselineRevision": "28537440c9bfd1cfbe89cbbe7cae51803c6aa9dc",
       "acceptedBaselineSha256": "30A4755E87CECD4230FA8A521DF485385A89AC2A4E1E2B5726CBFD14AB96C86F",
-      "fileSizeBytes": 17684,
-      "rowCount": 61,
-      "cutoffDate": "2026-09-17",
-      "lastPublishedAt": "2026-09-17T12:49:06Z",
+      "fileSizeBytes": 18136,
+      "rowCount": 62,
+      "cutoffDate": "2026-09-19",
+      "lastPublishedAt": "2026-09-18T16:19:07Z",
       "publishApprovalZh": "Owner approved append; MARKET INTELLIGENCE sidecar remains observation only; actionable:false.",
       "columnCount": 18,
       "columns": [
@@ -569,7 +569,7 @@
       ],
       "dateRange": {
         "start": "2021-03-31",
-        "end": "2026-09-17"
+        "end": "2026-09-19"
       },
       "validationStatus": "PASS_WITH_QUARANTINE",
       "promotionProvenance": "OWNER_CONFLICT_BASE_PLUS_LEGACY_AND_CURRENT_UNIQUE_DATES",
@@ -600,19 +600,19 @@
         "DecisionImpactZh",
         "Actionable"
       ],
-      "sha256": "3E3E4E569B241E2D4F03D91203EA504C1CF721193568F0B66AF6429AC8E772FC",
-      "currentSha256": "3E3E4E569B241E2D4F03D91203EA504C1CF721193568F0B66AF6429AC8E772FC",
+      "sha256": "4A8E1D8079D9E1F9F210222C5383DD69AF17B2F731A2AA5D38485BC07277A64F",
+      "currentSha256": "4A8E1D8079D9E1F9F210222C5383DD69AF17B2F731A2AA5D38485BC07277A64F",
       "acceptedBaselineRevision": "28537440c9bfd1cfbe89cbbe7cae51803c6aa9dc",
       "acceptedBaselineSha256": "76B93F8932BA606390D44D68BD0D57D0BE7CB5D1D1364183F192A062D8B94BF2",
-      "fileSizeBytes": 657910,
-      "rowCount": 1025,
-      "cutoffDate": "2026-09-17",
+      "fileSizeBytes": 686318,
+      "rowCount": 1071,
+      "cutoffDate": "2026-09-19",
       "publishApprovalZh": "Owner approved append; MARKET INTELLIGENCE sidecar remains observation only; actionable:false.",
-      "lastPublishedAt": "2026-09-17T12:49:06Z",
+      "lastPublishedAt": "2026-09-18T16:19:07Z",
       "columnCount": 14,
       "dateRange": {
         "start": "2026-07-05",
-        "end": "2026-09-17"
+        "end": "2026-09-19"
       },
       "validationStatus": "PASS_WITH_QUARANTINE",
       "promotionProvenance": "PROVENANCE_PRESERVING_OWNER_LEGACY_CURRENT_UNION",
@@ -644,19 +644,19 @@
         "SummaryZh",
         "Actionable"
       ],
-      "sha256": "627BF42D1B7C9949C64EAD64E720FCF8750A50A7A28645B4C06DE8B2264E75AA",
-      "currentSha256": "627BF42D1B7C9949C64EAD64E720FCF8750A50A7A28645B4C06DE8B2264E75AA",
+      "sha256": "4F16E86F09F5B9594407084081C81E4D95853DDD30EA3C24B9D9815AAB0F02E6",
+      "currentSha256": "4F16E86F09F5B9594407084081C81E4D95853DDD30EA3C24B9D9815AAB0F02E6",
       "acceptedBaselineRevision": "28537440c9bfd1cfbe89cbbe7cae51803c6aa9dc",
       "acceptedBaselineSha256": "BFEC53845C68D689D20CC29972550279E3A4AE8D473816EFDB0855FF0DD091CD",
-      "fileSizeBytes": 13114,
-      "rowCount": 27,
-      "cutoffDate": "2026-09-17",
+      "fileSizeBytes": 13571,
+      "rowCount": 28,
+      "cutoffDate": "2026-09-19",
       "publishApprovalZh": "Owner approved append; MARKET INTELLIGENCE sidecar remains observation only; actionable:false.",
-      "lastPublishedAt": "2026-09-17T12:49:06Z",
+      "lastPublishedAt": "2026-09-18T16:19:07Z",
       "columnCount": 15,
       "dateRange": {
         "start": "2026-07-05",
-        "end": "2026-09-17"
+        "end": "2026-09-19"
       },
       "validationStatus": "PASS_WITH_QUARANTINE",
       "promotionProvenance": "PROVENANCE_PRESERVING_OWNER_LEGACY_CURRENT_UNION",
