@@ -17,8 +17,13 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from p1008_research_plugin.quarterly_authority import (
+    NORMALIZED_QUARTERLY_EVIDENCE_RELATIVE_PATH,
+    Q2_ACCEPTANCE_RECEIPT_RELATIVE_PATH,
+    Q2_CONFIG_RELATIVE_PATH,
+    Q2_SOURCE_RECEIPT_RELATIVE_PATH,
     QuarterlyAuthorityError,
     latest_available_roic_row,
+    load_governed_quarterly_evidence,
     quarterly_metric_availability,
     validate_quarterly_authority_row,
 )
@@ -51,6 +56,15 @@ class QuarterlyFieldAvailabilityGovernanceTests(unittest.TestCase):
         shutil.copyfile(ROOT / PROMOTION.MASTER_RELATIVE, self.root / PROMOTION.MASTER_RELATIVE)
         shutil.copyfile(ROOT / PROMOTION.MANIFEST_RELATIVE, self.root / PROMOTION.MANIFEST_RELATIVE)
         shutil.copyfile(ROOT / PROMOTION.CONTRACT_RELATIVE_PATH, contract_target)
+        for relative_path in (
+            Q2_CONFIG_RELATIVE_PATH,
+            NORMALIZED_QUARTERLY_EVIDENCE_RELATIVE_PATH,
+            Q2_SOURCE_RECEIPT_RELATIVE_PATH,
+            Q2_ACCEPTANCE_RECEIPT_RELATIVE_PATH,
+        ):
+            target = self.root / relative_path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / relative_path, target)
         # This suite exercises the one-time Q2 promotion transition.  Build its
         # historical pre-promotion input explicitly instead of depending on the
         # live Master, which now correctly contains the promoted Q2 authority.
@@ -86,6 +100,35 @@ class QuarterlyFieldAvailabilityGovernanceTests(unittest.TestCase):
         self.assertEqual(availability["roe"]["values"][-1], "12.61")
         self.assertEqual(availability["roic"]["values"][-1], "12.57")
         self.assertEqual(availability["unavailableRoicQuarters"], ["2026Q2"])
+
+    def test_governed_h1_roe_interface_preserves_period_and_provenance(self) -> None:
+        roe = load_governed_quarterly_evidence(self.root)["roeH1"]
+        self.assertEqual((roe["value"], roe["period"]), ("6.21", "2026H1"))
+        self.assertFalse(roe["annualized"])
+        self.assertFalse(roe["icScoreEligible"])
+        self.assertEqual("OFFICIAL_COMPANY_PRESS_RELEASE", roe["source"]["sourceType"])
+        self.assertEqual("Owner", roe["governance"]["acceptedBy"])
+
+    def test_governed_h1_roe_interface_fails_closed_on_lineage_mismatch(self) -> None:
+        evidence_path = self.root / NORMALIZED_QUARTERLY_EVIDENCE_RELATIVE_PATH
+        evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+        evidence["governedMetrics"]["roeH1"]["value"] = "6.22"
+        evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
+        with self.assertRaisesRegex(
+            QuarterlyAuthorityError, "QUARTERLY_H1_ROE_SOURCE_LINEAGE_MISMATCH"
+        ):
+            load_governed_quarterly_evidence(self.root)
+
+    def test_governed_h1_roe_interface_rejects_authority_expansion(self) -> None:
+        evidence_path = self.root / NORMALIZED_QUARTERLY_EVIDENCE_RELATIVE_PATH
+        evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+        evidence["authoritative"] = True
+        evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
+        with self.assertRaisesRegex(
+            QuarterlyAuthorityError,
+            "NORMALIZED_QUARTERLY_EVIDENCE_GOVERNANCE_INVALID",
+        ):
+            load_governed_quarterly_evidence(self.root)
 
     def test_missing_roic_status_with_blanks_fails_closed(self) -> None:
         row = PROMOTION.build_q2_row(list(PROMOTION.read_master((self.root / PROMOTION.MASTER_RELATIVE).read_bytes())[1]))

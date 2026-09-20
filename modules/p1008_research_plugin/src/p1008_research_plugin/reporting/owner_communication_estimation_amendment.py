@@ -217,7 +217,7 @@ class OwnerCommunicationEstimationAmendmentRenderer(OwnerCommunicationRenderer):
             ["Capital Productivity", "稅後獲利是否跑贏資本", "NOPAT成長－投入資本成長", f"基準+{_q(e.capital_productivity_base_pp,'0.1'):f}個百分點", "方向性推論", "LOW"],
             ["增量ROIC", "新增資本效率", "ΔNOPAT÷Δ投入資本", "本期不可靠（基準Δ投入資本＝0）", "資料不足", "LOW"],
             ["CCC", "營運資金週轉", "存貨天數＋應收天數－應付天數", "42天", "官方資料衍生", "HIGH"],
-            ["ROE", "股東資本效率", "歸屬股東淨利÷平均股東權益", "2026H1 6.21%（官方）", "官方值", "HIGH"],
+            ["ROE", "股東資本效率", "歸屬股東淨利÷平均股東權益", f"{self.roe['currentPeriod']} {self.roe['currentPct']}%（官方）", "官方值", "HIGH"],
         ]
         table = self._md_table(["指標", "決策用途", "公式／原始輸入", "精確結果／Owner顯示", "數據性質", "信心"], rows)
         return "\n".join([
@@ -281,7 +281,7 @@ class OwnerCommunicationEstimationAmendmentRenderer(OwnerCommunicationRenderer):
             ["Capital Productivity", "稅後獲利是否跑贏資本", "NOPAT成長－投入資本成長", f"基準+{_q(e.capital_productivity_base_pp,'0.1'):f}個百分點", "方向性推論", "LOW"],
             ["增量ROIC", "新增資本效率", "ΔNOPAT÷Δ投入資本", "本期不可靠", "資料不足", "LOW"],
             ["CCC", "營運資金週轉", "存貨天數＋應收天數－應付天數", "42天", "官方資料衍生", "HIGH"],
-            ["ROE", "股東資本效率", "歸屬股東淨利÷平均股東權益", "2026H1 6.21%", "官方值", "HIGH"],
+            ["ROE", "股東資本效率", "歸屬股東淨利÷平均股東權益", f"{self.roe['currentPeriod']} {self.roe['currentPct']}%", "官方值", "HIGH"],
         ]
         calc_table = self._html_table(["指標", "決策用途", "公式／輸入", "結果／Owner顯示", "數據性質", "信心"], rows, "appendix calculation-table")
         sensitivity = self._html_table(["情境", "NOPAT假設", "投入資本假設", "ROIC", "理由"], [

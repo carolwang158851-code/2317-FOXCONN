@@ -52,6 +52,7 @@ class ChartDataBuilder:
             cash_id = self._authority_id(analysis, "AUTH-CASHFLOW-")
             history = q.quarterly_history
             analytics = q.enterprise_value_analytics
+            roe = analytics["roe"]
             valuation = q.valuation_scenarios
             periods = history["periods"]
             chain = analytics["valueChainEvidenceMatrix"]
@@ -272,7 +273,12 @@ class ChartDataBuilder:
                         ChartSeries(label_zh="每股淨值", unit="新台幣元", values=history["bvpsTwd"]),
                         ChartSeries(label_zh="ROE TTM", unit="%", values=history["roeTtmPct"]),
                     ],
-                    commentary_zh=[f"最新有效ROE季度為{history.get('latestValidRoeQuarter', periods[-1])}。", "BVPS與ROE採各期受治理值，不用舊期值外推。", "ROE約等於淨利率乘以資產周轉再乘以財務槓桿；目前僅能做部分杜邦分析，不能把ROE改善全歸因於營運。"],
+                    commentary_zh=[
+                        f"{roe['comparablePct']}% → {roe['currentPct']}%",
+                        f"{roe['comparablePeriod']} → {roe['currentPeriod']}；年增{roe['yoyChangePp']}個百分點；2025全年11.3%僅作全年脈絡，H1不年化",
+                        f"最新有效ROE季度為{history.get('latestValidRoeQuarter', periods[-1])}；BVPS與ROE採各期受治理值，不用舊期值外推。",
+                        "ROE約等於淨利率乘以資產周轉再乘以財務槓桿；目前僅能做部分杜邦分析，不能把ROE改善全歸因於營運。",
+                    ],
                     observation_zh="BVPS中期淨值較2024Q3提高，但期間波動明顯；可比H1 ROE同期改善，兩者以不同尺度分開呈現。",
                     interpretation_zh="受治理BVPS中期淨增加，且可比H1 ROE改善，支持股東資本累積與使用效率方向正面；完整股東複利仍須同時考慮BVPS變化與已分配股利。",
                     p1008_implication_zh="BVPS與ROE共同驗證股東資本累積及使用效率；分配股利會降低保留帳面權益，同時把價值移轉給股東，因此不得只用BVPS判斷完整股東複利。",

@@ -1,11 +1,26 @@
 import csv
+import hashlib
 import importlib.util
 import json
+import sys
 import unittest
 from pathlib import Path
 
 
 PACKAGE = Path(__file__).resolve().parents[2]
+SRC = PACKAGE / "modules" / "p1008_research_plugin" / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from p1008_research_plugin.quarterly_authority import (
+    ROIC_UNAVAILABLE,
+    ROIC_VALUE_FIELDS,
+    latest_available_roic_row,
+    load_governed_quarterly_evidence,
+    validate_quarterly_authority_row,
+)
+
+
 SPEC = importlib.util.spec_from_file_location("audit", PACKAGE / "tools/p1008_kpi_reconciliation_audit.py")
 audit = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(audit)
@@ -52,11 +67,12 @@ class KpiReconciliationTests(unittest.TestCase):
         block = self.new_ui[self.new_ui.index("function buildSystems"):self.new_ui.index("function renderRightPanel")]
         for token in (
             "const bvps = toNumber(daily.BVPS_ref)", "const pb = toNumber(daily.PB_daily)",
-            "const promoted = quarterly?.canonicalPromotion || {}", "toNumber(promoted.roe.value)", "const us10y = toNumber(fx.US_10Y_Yield)",
+            "const roeEvidence = quarterlyEvidence?.governedMetrics?.roeH1 || {}", "toNumber(roeEvidence.value)", "const us10y = toNumber(fx.US_10Y_Yield)",
             "const vix = toNumber(macro.VIX)", "const dxy = toNumber(fx.DXY)",
             "cashDividend / close * 100",
         ):
             self.assertIn(token, block)
+        self.assertIn('roeEvidence?.icScoreEligible === false', block)
         self.assertNotIn("|| toNumber(", block)
         self.assertNotIn("?? toNumber(", block)
 
@@ -94,6 +110,59 @@ class KpiReconciliationTests(unittest.TestCase):
             self.assertNotIn("coreData?.vix) ? clampPercent(coreData.vix / 30 * 100) : 45", text)
             self.assertNotIn("coreData?.fedProb) ? clampPercent(coreData.fedProb) : 50", text)
 
+    def test_old_ui_five_dimension_incomplete_state_is_explicit_and_not_renormalized(self):
+        for text in (self.old_source, self.old_bundle):
+            block = text[text.index("function calculateRadarPackage"):text.index("const RadarChart")]
+            self.assertIn("radarValues: null", block)
+            self.assertIn("total: null", block)
+            self.assertIn("availableWeight", block)
+            self.assertIn("knownContribution", block)
+            self.assertNotIn("knownContribution / availableWeight", block)
+        self.assertIn("AI_Revenue_Pct 無合格正式 authority", self.old_source)
+        self.assertIn("五維評分尚未完整", self.old_source)
+        self.assertIn("正式可評分", self.old_source)
+        self.assertIn("資料完整度", self.old_source)
+        self.assertIn("完整總分", self.old_source)
+        self.assertIn("已知加權貢獻，不等於完整總分", self.old_source)
+        self.assertIn("不得重新正規化", self.old_source)
+        self.assertNotIn("46.35 / 0.75", self.old_source)
+
+    def test_old_ui_complete_five_dimension_path_keeps_radar_and_total(self):
+        for text in (self.old_source, self.old_bundle):
+            block = text[text.index("function calculateRadarPackage"):text.index("const RadarChart")]
+            self.assertIn("const total = Math.round(dimensions.reduce", block)
+            self.assertIn("radarValues: dimensions.map(item => item.score)", block)
+            self.assertTrue("<RadarChart" in text or "React.createElement(RadarChart" in text)
+
+    def test_new_ui_separates_monitoring_publication_and_decision_scoring(self):
+        self.assertIn("六大系統監控狀態", self.new_ui)
+        self.assertIn("Six-System Monitoring Status", self.new_ui)
+        self.assertNotIn("六大系統風險排序", self.new_ui)
+        self.assertNotIn("Risk Heat Ranking", self.new_ui)
+        self.assertNotIn("<th>排序</th>", self.new_ui)
+        self.assertNotIn("<th>排名</th>", self.new_ui)
+        self.assertIn("<th>序</th>", self.new_ui)
+        self.assertIn("資料發布可用度", self.new_ui)
+        self.assertIn("Data / Publication Readiness", self.new_ui)
+        self.assertIn("formalScoreCount", self.new_ui)
+        self.assertIn("Decision Scoring", self.new_ui)
+        self.assertNotIn("信號強度：中等", self.new_ui)
+        self.assertIn("HOLD / 觀察", self.new_ui)
+        self.assertIn("Fail-closed 保守狀態", self.new_ui)
+        self.assertIn("非六大 IC 計分後的正式投資評等", self.new_ui)
+        self.assertIn("actionable:false", self.new_ui)
+
+    def test_ui_remediation_does_not_invent_ai_share_or_six_ic_scores(self):
+        systems = self.new_ui[self.new_ui.index("function buildSystems"):self.new_ui.index("function renderRightPanel")]
+        self.assertEqual(6, systems.count("score: null"))
+        self.assertNotIn("AI_Revenue_Pct = 40", self.new_ui)
+        self.assertNotIn("AI_Revenue_Pct = 51", self.new_ui)
+        self.assertNotIn("cloudAndNetworkingRevenueSharePct", systems)
+        for text in (self.old_source, self.old_bundle):
+            self.assertIn("authoritySupported ? value : null", text)
+            self.assertNotIn("AI_Revenue_Pct = 40", text)
+            self.assertNotIn("AI_Revenue_Pct = 51", text)
+
     def test_old_ui_uses_formal_fx_sidecar_for_shared_fx_metrics(self):
         for text in (self.old_source, self.old_bundle):
             self.assertIn("const latestFormalFxTrend = validFxTrendCsv[validFxTrendCsv.length - 1] || null", text)
@@ -105,21 +174,39 @@ class KpiReconciliationTests(unittest.TestCase):
 
     def test_pb_formula_reproduces_authority_value(self):
         row = csv_rows(PACKAGE / "data/2317_daily_price.csv")[-1]
-        self.assertEqual("2026-08-27", row["Date"])
+        manifest = json.loads(
+            (PACKAGE / "data/CSV_AUTHORITY_MANIFEST.json").read_text(encoding="utf-8-sig")
+        )
+        daily_entry = next(
+            entry
+            for entry in manifest["authoritativeFiles"]
+            if entry["path"] == "data/2317_daily_price.csv"
+        )
+        self.assertEqual(daily_entry["dateRange"]["end"], row["Date"])
         self.assertEqual("2026Q2", row["QuarterKey"])
-        self.assertEqual(252.0, float(row["Close"]))
         self.assertEqual(136.02, float(row["BVPS_ref"]))
-        self.assertEqual(1.853, float(row["PB_daily"]))
         self.assertEqual(float(row["PB_daily"]), round(float(row["Close"]) / float(row["BVPS_ref"]), 3))
 
-    def test_roic_formula_reproduces_precise_value(self):
+    def test_roic_availability_uses_latest_governed_available_period(self):
         rows = csv_rows(PACKAGE / "data/2317_master_v9.csv")
-        row = rows[-1]
-        self.assertEqual("2026Q2", row["Quarter"])
-        self.assertEqual("12.35", row["ROIC_Precise_Pct"])
-        self.assertEqual("130453.10", row["InterestBearingDebt_100M"])
-        actual = round(float(row["NOPAT_Annual_100M"]) / float(row["InvestedCapital_100M"]) * 100, 2)
-        self.assertEqual(float(row["ROIC_Precise_Pct"]), actual)
+        current = rows[-1]
+        validate_quarterly_authority_row(current)
+        self.assertEqual("2026Q2", current["Quarter"])
+        self.assertEqual(ROIC_UNAVAILABLE, current["ROIC_Status"])
+        for field in ROIC_VALUE_FIELDS:
+            self.assertEqual("", current[field], field)
+
+        available = latest_available_roic_row(rows)
+        self.assertEqual("2026Q1", available["Quarter"])
+        self.assertEqual("12.57", available["ROIC_Precise_Pct"])
+        self.assertNotEqual(current["Quarter"], available["Quarter"])
+        actual = round(
+            float(available["NOPAT_Annual_100M"])
+            / float(available["InvestedCapital_100M"])
+            * 100,
+            2,
+        )
+        self.assertEqual(float(available["ROIC_Precise_Pct"]), actual)
 
     def test_fcf_formula_reproduces_authority_value(self):
         row = csv_rows(PACKAGE / "data/2317_cash_flow_authority.csv")[-1]
@@ -127,19 +214,30 @@ class KpiReconciliationTests(unittest.TestCase):
         self.assertEqual(float(row["free_cash_flow_core_thousand_ntd"]), actual)
         self.assertEqual(float(row["free_cash_flow_core_100m_ntd"]), actual / 100000)
 
-    def test_q2_is_promoted_without_inventing_ai_share(self):
-        q2 = json.loads((PACKAGE / "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json").read_text(encoding="utf-8"))
-        quarters = {row["Quarter"] for row in csv_rows(PACKAGE / "data/2317_master_v9.csv")}
-        self.assertEqual("FY2026 Q2", q2["fiscalPeriod"])
-        self.assertIn("2026Q2", quarters)
-        self.assertEqual("PASS", q2["canonicalPromotion"]["status"])
-        self.assertEqual("12.35", q2["canonicalPromotion"]["roic"]["canonicalValue"])
-        self.assertEqual("DERIVED_VERIFIED", q2["canonicalPromotion"]["roic"]["classification"])
-        self.assertEqual("16.46", q2["canonicalPromotion"]["roic"]["rejectedCandidateHistory"][0]["value"])
+    def test_q2_uses_current_governed_interface_without_legacy_promotion(self):
+        q2_path = PACKAGE / "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json"
+        q2 = json.loads(q2_path.read_text(encoding="utf-8"))
+        normalized_q2 = q2_path.read_bytes().replace(b"\r\n", b"\n")
+        rows = csv_rows(PACKAGE / "data/2317_master_v9.csv")
+        current = next(row for row in rows if row["Quarter"] == "2026Q2")
+        evidence = load_governed_quarterly_evidence(PACKAGE)["roeH1"]
+        registry = json.loads((PACKAGE / "contracts/p1008_report_production/v1.1/P1008_MAJOR_EVENT_ANALYSIS_BASELINE_REGISTRY_V1.json").read_text(encoding="utf-8"))
+        pinned_hash = registry["baselines"][0]["contentSha256"]
         self.assertEqual(
-            "NET_CASH_DENOMINATOR_SCOPE_MISMATCH",
-            q2["canonicalPromotion"]["roic"]["rejectedCandidateHistory"][0]["reasonCode"],
+            "2762F84E35849706B383E6FDEDDFE42F195AC11377139328869A295BE8B9C49B",
+            pinned_hash,
         )
+        self.assertEqual(pinned_hash, hashlib.sha256(normalized_q2).hexdigest().upper())
+        self.assertEqual("FY2026 Q2", q2["fiscalPeriod"])
+        self.assertNotIn("canonicalPromotion", q2)
+        self.assertNotIn("governedMetrics", q2)
+        self.assertEqual("6.21", evidence["value"])
+        self.assertEqual("2026H1", evidence["period"])
+        self.assertFalse(evidence["annualized"])
+        self.assertFalse(evidence["icScoreEligible"])
+        self.assertEqual(ROIC_UNAVAILABLE, current["ROIC_Status"])
+        for field in ROIC_VALUE_FIELDS:
+            self.assertEqual("", current[field], field)
         self.assertEqual("NOT_DISCLOSED", q2["productMix"]["aiSpecificShareStatus"])
         self.assertIsNone(q2["productMix"]["aiSpecificRevenueSharePct"])
 
@@ -151,7 +249,9 @@ class KpiReconciliationTests(unittest.TestCase):
         self.assertEqual("40.0", master["AI_Revenue_Pct"])
         self.assertNotIn("AI_Revenue_Denominator", master)
         self.assertEqual("L3", master["DataSupportLevel"])
-        self.assertEqual("N/A", current["AI_Revenue_Pct"])
+        self.assertEqual("", current["AI_Revenue_Pct"])
+        self.assertIsNone(q2["productMix"]["aiSpecificRevenueSharePct"])
+        self.assertEqual("NOT_DISCLOSED", q2["productMix"]["aiSpecificShareStatus"])
         self.assertEqual("51", q2["productMix"]["cloudAndNetworkingRevenueSharePct"])
 
     def test_report_is_downstream_and_uses_same_sources(self):
@@ -170,14 +270,16 @@ class KpiReconciliationTests(unittest.TestCase):
         classes = {row["value_classification"] for row in rows}
         self.assertTrue({"OFFICIAL_REPORTED", "AUTHORITATIVE_SOURCE_REPORTED", "DERIVED_VERIFIED", "RESEARCH_ESTIMATE", "STALE", "UNVERIFIED", "INVALID"}.issubset(classes))
 
-    def test_q2_inventory_preserves_field_specific_periods_and_final_roic(self):
+    def test_q2_inventory_preserves_field_specific_periods_and_roic_availability(self):
         with (self.out / "KPI_INVENTORY.csv").open(encoding="utf-8", newline="") as handle:
             by_id = {row["metric_id"]: row for row in csv.DictReader(handle)}
         self.assertEqual("2026H1_OR_2026Q2_FIELD_SPECIFIC", by_id["FIN.ROE_H1"]["as_of_date"])
         self.assertIn("annualized=false", by_id["FIN.ROE_H1"]["notes"])
+        self.assertEqual("modules/p1008_research_plugin/config/normalized_evidence/FY2026_H1_ROE.json", by_id["FIN.ROE_H1"]["source_path"])
+        self.assertEqual("governedMetrics.roeH1.value", by_id["FIN.ROE_H1"]["source_field"])
         self.assertEqual("DERIVED_VERIFIED", by_id["FIN.ROIC"]["value_classification"])
-        self.assertEqual("ACTIVE", by_id["FIN.ROIC"]["status"])
-        self.assertIn("NET_CASH_DENOMINATOR_SCOPE_MISMATCH", by_id["FIN.ROIC"]["notes"])
+        self.assertEqual("INSUFFICIENT_DATA", by_id["FIN.ROIC"]["status"])
+        self.assertIn("latest available period is 2026Q1=12.57%", by_id["FIN.ROIC"]["notes"])
         self.assertEqual("INSUFFICIENT_DATA", by_id["MODEL5.CHIP"]["status"])
         for metric_id in ("FIN.OCF_H1", "FIN.CAPEX_H1", "FIN.FCF_H1"):
             self.assertEqual("OFFICIAL_REPORTED", by_id[metric_id]["value_classification"])

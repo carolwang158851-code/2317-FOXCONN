@@ -766,12 +766,29 @@
                 { key: 'macro', label: '總經面', weight: 0.20, score: macroScore, source: 'DIMAS CAP 反向換算', note: '由 VIX / US10Y / Fed / EPS 條件推導' },
                 { key: 'valuation', label: '估值面', weight: 0.15, score: valuationScore, source: 'PB 參考區間換算', note: '避免主觀情緒分數' },
             ];
-            if (dimensions.some(item => !Number.isFinite(item.score))) {
+            const scoredDimensions = dimensions.filter(item => Number.isFinite(item.score));
+            const missingDimensions = dimensions.filter(item => !Number.isFinite(item.score));
+            const availableWeight = scoredDimensions.reduce((sum, item) => sum + item.weight, 0);
+            const knownContribution = scoredDimensions.reduce((sum, item) => sum + item.score * item.weight, 0);
+            const coverage = {
+                scoredCount: scoredDimensions.length,
+                dimensionCount: dimensions.length,
+                completenessPct: Math.round(availableWeight * 100),
+                knownContribution,
+                missingReasons: missingDimensions.map(item => ({
+                    label: item.label,
+                    reason: item.key === 'industry'
+                        ? 'AI_Revenue_Pct 無合格正式 authority'
+                        : `${item.source} 缺少合格正式輸入`,
+                })),
+            };
+            if (missingDimensions.length) {
                 return {
                     radarValues: null,
                     dimensions,
                     total: null,
-                    missing: dimensions.filter(item => !Number.isFinite(item.score)).map(item => item.label),
+                    missing: missingDimensions.map(item => item.label),
+                    ...coverage,
                     methodologyZh: '五維度分數只使用 CSV 或 runtime 快照可追溯欄位；缺值不補假分數。',
                     actionable: false,
                 };
@@ -782,6 +799,7 @@
                 dimensions,
                 total,
                 missing: [],
+                ...coverage,
                 methodologyZh: '五維度為可追溯欄位換算的模型分數，不是原始官方指標；僅供觀察，actionable:false。',
                 actionable: false,
             };
@@ -4414,7 +4432,22 @@
                             {(() => {
                                 const dimensions = (batch4Data?.dimensions || []).filter(item => Number.isFinite(item.score));
                                 if (!dimensions.length || !Number.isFinite(batch4Data?.total)) {
-                                    return <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-950/20 px-4 py-3 readable-copy text-amber-100">結論：資料不足，五維度推導暫不輸出結論。</div>;
+                                    const missingReasons = batch4Data?.missingReasons || [];
+                                    return (
+                                        <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-950/20 px-4 py-3 readable-copy text-amber-100">
+                                            <div className="panel-title text-[16px]">五維評分尚未完整</div>
+                                            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-1">
+                                                <span>正式可評分：<strong>{batch4Data?.scoredCount ?? 0} / {batch4Data?.dimensionCount ?? 5}</strong></span>
+                                                <span>資料完整度：<strong>{batch4Data?.completenessPct ?? 0}%</strong></span>
+                                                <span>缺少：<strong>{batch4Data?.missing?.join('、') || 'N/A'}</strong></span>
+                                                <span>完整總分：<strong>N/A</strong></span>
+                                            </div>
+                                            <div className="mt-2 text-[12px]">
+                                                原因：{missingReasons.map(item => `${item.label}：${item.reason}`).join('；') || '缺少合格正式輸入'}
+                                            </div>
+                                            <div className="mt-2 font-bold text-amber-200">已知加權貢獻，不等於完整總分；不得重新正規化。</div>
+                                        </div>
+                                    );
                                 }
                                 const ranked = [...dimensions].sort((a, b) => a.score - b.score);
                                 const weakest = ranked[0];
@@ -4435,7 +4468,19 @@
                             
                             <div className="radar-detail-grid flex-grow">
                                 <div className="relative w-full max-w-[460px] min-h-[380px] mx-auto shrink-0 flex items-center justify-center">
-                                    {batch4Data?.radarValues ? <RadarChart dataValues={batch4Data.radarValues} dimensions={batch4Data.dimensions} /> : <div className="text-sm text-slate-500 text-center leading-relaxed">資料不足，雷達圖不補假分數<br />缺值：{batch4Data?.missing?.join('、') || 'N/A'}</div>}
+                                    {batch4Data?.radarValues ? (
+                                        <RadarChart dataValues={batch4Data.radarValues} dimensions={batch4Data.dimensions} />
+                                    ) : (
+                                        <div className="w-full rounded-xl border border-amber-500/30 bg-slate-950/45 px-6 py-7 text-left">
+                                            <div className="panel-kicker text-amber-300">Incomplete Five-Dimension View</div>
+                                            <h4 className="panel-title mt-1 text-amber-100">五維評分尚未完整</h4>
+                                            <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-800">
+                                                <div className="h-full bg-amber-400" style={{ width: `${batch4Data?.completenessPct ?? 0}%` }}></div>
+                                            </div>
+                                            <div className="mt-3 text-sm text-slate-300">正式可評分 {batch4Data?.scoredCount ?? 0} / {batch4Data?.dimensionCount ?? 5}；完整總分 N/A。</div>
+                                            <div className="mt-2 text-sm text-slate-400">缺少：{batch4Data?.missing?.join('、') || 'N/A'}。本區不繪製假 radar score。</div>
+                                        </div>
+                                    )}
                                 </div>
                                 
                                 <div className="w-full flex flex-col justify-center">
@@ -4454,8 +4499,8 @@
                                                         <div className={['text-emerald-400','text-sky-400','text-purple-400','text-amber-400','text-rose-400'][index] || 'text-slate-300'}>{item.label}({Math.round(item.weight * 100)}%)</div>
                                                         <div className="mt-0.5 data-note leading-snug">{item.source}</div>
                                                     </td>
-                                                    <td className="py-3 text-center font-num text-white text-[14px]">{Number.isFinite(item.score) ? item.score : '缺值'}</td>
-                                                    <td className="py-3 text-right font-num text-sky-100 text-[13px]">{Number.isFinite(item.score) ? `${item.score} × ${item.weight.toFixed(2)} = ${(item.score * item.weight).toFixed(2)}` : '不補分'}</td>
+                                                    <td className="py-3 text-center font-num text-white text-[14px]">{Number.isFinite(item.score) ? item.score : 'N/A'}</td>
+                                                    <td className="py-3 text-right font-num text-sky-100 text-[13px]">{Number.isFinite(item.score) ? `${item.score} × ${item.weight.toFixed(2)} = ${(item.score * item.weight).toFixed(2)}` : 'N/A（不補分）'}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -4463,7 +4508,9 @@
                                             <tr>
                                                 <td colSpan="3" className="pt-3 text-right text-[12px] text-slate-400">
                                                     <div className="flex flex-wrap justify-end gap-1 items-center">
-                                                        <span>{batch4Data?.methodologyZh || '五維度資料不足，未產生推導分數。'}</span>
+                                                        <span>{Number.isFinite(batch4Data?.total)
+                                                            ? (batch4Data?.methodologyZh || '五維度資料完整。')
+                                                            : `已知加權貢獻 ${Number(batch4Data?.knownContribution || 0).toFixed(2)}；不等於完整總分`}</span>
                                                         <span className="mx-1">=</span>
                                                         <strong className="text-[14px] text-white bg-sky-900/50 px-2 py-0.5 rounded border border-sky-500/30">{Number.isFinite(batch4Data?.total) ? `${batch4Data.total}.00 分` : 'N/A'}</strong>
                                                     </div>

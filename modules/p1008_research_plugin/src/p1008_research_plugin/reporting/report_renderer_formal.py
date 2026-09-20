@@ -277,8 +277,8 @@ class FormalPreviewRenderer:
     def _roe_bvps_visual(cls, chart: ChartData) -> str:
         return (
             cls._line_svg(chart, series_limit=1)
-            + '<div class="roe-callout"><span>可比H1 ROE</span><strong>5.48% → 6.21%</strong>'
-            + '<small>年增 +0.73個百分點；2025全年11.3%僅作全年脈絡，H1不年化</small></div>'
+            + f'<div class="roe-callout"><span>可比H1 ROE</span><strong>{html.escape(chart.commentary_zh[0])}</strong>'
+            + f'<small>{html.escape(chart.commentary_zh[1])}</small></div>'
         )
 
     @classmethod
@@ -724,7 +724,7 @@ class FormalPreviewRenderer:
                 if chart.chart_id == "working_capital_3period":
                     result.append(KeepTogether([*title_block, line_drawing(chart, 3), callout("現金循環週期", "48天 → 44天 → 42天", "獨立KPI，不與指數共用尺度")]))
                 elif chart.chart_id == "roe_equity_compounding":
-                    result.append(KeepTogether([*title_block, line_drawing(chart, 1), callout("可比H1 ROE", "5.48% → 6.21%", "年增+0.73個百分點；2025全年11.3%僅作全年脈絡，H1不年化")]))
+                    result.append(KeepTogether([*title_block, line_drawing(chart, 1), callout("可比H1 ROE", chart.commentary_zh[0], chart.commentary_zh[1])]))
                 elif chart.chart_id == "full_history_valuation":
                     result.extend(title_block)
                     for series in chart.series:
