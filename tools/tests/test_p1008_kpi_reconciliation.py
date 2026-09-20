@@ -15,6 +15,7 @@ from p1008_research_plugin.quarterly_authority import (
     ROIC_UNAVAILABLE,
     ROIC_VALUE_FIELDS,
     latest_available_roic_row,
+    load_governed_quarterly_evidence,
     validate_quarterly_authority_row,
 )
 
@@ -65,11 +66,12 @@ class KpiReconciliationTests(unittest.TestCase):
         block = self.new_ui[self.new_ui.index("function buildSystems"):self.new_ui.index("function renderRightPanel")]
         for token in (
             "const bvps = toNumber(daily.BVPS_ref)", "const pb = toNumber(daily.PB_daily)",
-            "const promoted = quarterly?.canonicalPromotion || {}", "toNumber(promoted.roe.value)", "const us10y = toNumber(fx.US_10Y_Yield)",
+            "const roeEvidence = quarterly?.governedMetrics?.roeH1 || {}", "toNumber(roeEvidence.value)", "const us10y = toNumber(fx.US_10Y_Yield)",
             "const vix = toNumber(macro.VIX)", "const dxy = toNumber(fx.DXY)",
             "cashDividend / close * 100",
         ):
             self.assertIn(token, block)
+        self.assertIn('roeEvidence?.icScoreEligible === false', block)
         self.assertNotIn("|| toNumber(", block)
         self.assertNotIn("?? toNumber(", block)
 
@@ -211,19 +213,20 @@ class KpiReconciliationTests(unittest.TestCase):
         self.assertEqual(float(row["free_cash_flow_core_thousand_ntd"]), actual)
         self.assertEqual(float(row["free_cash_flow_core_100m_ntd"]), actual / 100000)
 
-    def test_q2_is_promoted_without_inventing_ai_share(self):
+    def test_q2_uses_current_governed_interface_without_legacy_promotion(self):
         q2 = json.loads((PACKAGE / "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json").read_text(encoding="utf-8"))
-        quarters = {row["Quarter"] for row in csv_rows(PACKAGE / "data/2317_master_v9.csv")}
+        rows = csv_rows(PACKAGE / "data/2317_master_v9.csv")
+        current = next(row for row in rows if row["Quarter"] == "2026Q2")
+        evidence = load_governed_quarterly_evidence(PACKAGE)["roeH1"]
         self.assertEqual("FY2026 Q2", q2["fiscalPeriod"])
-        self.assertIn("2026Q2", quarters)
-        self.assertEqual("PASS", q2["canonicalPromotion"]["status"])
-        self.assertEqual("12.35", q2["canonicalPromotion"]["roic"]["canonicalValue"])
-        self.assertEqual("DERIVED_VERIFIED", q2["canonicalPromotion"]["roic"]["classification"])
-        self.assertEqual("16.46", q2["canonicalPromotion"]["roic"]["rejectedCandidateHistory"][0]["value"])
-        self.assertEqual(
-            "NET_CASH_DENOMINATOR_SCOPE_MISMATCH",
-            q2["canonicalPromotion"]["roic"]["rejectedCandidateHistory"][0]["reasonCode"],
-        )
+        self.assertNotIn("canonicalPromotion", q2)
+        self.assertEqual("6.21", evidence["value"])
+        self.assertEqual("2026H1", evidence["period"])
+        self.assertFalse(evidence["annualized"])
+        self.assertFalse(evidence["icScoreEligible"])
+        self.assertEqual(ROIC_UNAVAILABLE, current["ROIC_Status"])
+        for field in ROIC_VALUE_FIELDS:
+            self.assertEqual("", current[field], field)
         self.assertEqual("NOT_DISCLOSED", q2["productMix"]["aiSpecificShareStatus"])
         self.assertIsNone(q2["productMix"]["aiSpecificRevenueSharePct"])
 
@@ -256,14 +259,15 @@ class KpiReconciliationTests(unittest.TestCase):
         classes = {row["value_classification"] for row in rows}
         self.assertTrue({"OFFICIAL_REPORTED", "AUTHORITATIVE_SOURCE_REPORTED", "DERIVED_VERIFIED", "RESEARCH_ESTIMATE", "STALE", "UNVERIFIED", "INVALID"}.issubset(classes))
 
-    def test_q2_inventory_preserves_field_specific_periods_and_final_roic(self):
+    def test_q2_inventory_preserves_field_specific_periods_and_roic_availability(self):
         with (self.out / "KPI_INVENTORY.csv").open(encoding="utf-8", newline="") as handle:
             by_id = {row["metric_id"]: row for row in csv.DictReader(handle)}
         self.assertEqual("2026H1_OR_2026Q2_FIELD_SPECIFIC", by_id["FIN.ROE_H1"]["as_of_date"])
         self.assertIn("annualized=false", by_id["FIN.ROE_H1"]["notes"])
+        self.assertEqual("governedMetrics.roeH1.value", by_id["FIN.ROE_H1"]["source_field"])
         self.assertEqual("DERIVED_VERIFIED", by_id["FIN.ROIC"]["value_classification"])
-        self.assertEqual("ACTIVE", by_id["FIN.ROIC"]["status"])
-        self.assertIn("NET_CASH_DENOMINATOR_SCOPE_MISMATCH", by_id["FIN.ROIC"]["notes"])
+        self.assertEqual("INSUFFICIENT_DATA", by_id["FIN.ROIC"]["status"])
+        self.assertIn("latest available period is 2026Q1=12.57%", by_id["FIN.ROIC"]["notes"])
         self.assertEqual("INSUFFICIENT_DATA", by_id["MODEL5.CHIP"]["status"])
         for metric_id in ("FIN.OCF_H1", "FIN.CAPEX_H1", "FIN.FCF_H1"):
             self.assertEqual("OFFICIAL_REPORTED", by_id[metric_id]["value_classification"])

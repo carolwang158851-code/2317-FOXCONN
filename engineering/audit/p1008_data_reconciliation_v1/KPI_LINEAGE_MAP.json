@@ -4,7 +4,7 @@
   "rootCause": "The principal score collision was caused by overlapping UI-derived scoring and legacy fallback/hardcoded values. Report generation is downstream and was not the source of War Room KPI truth.",
   "authorityManifest": {
     "path": "data/CSV_AUTHORITY_MANIFEST.json",
-    "sha256": "C54056B72AEBF25ED1B2AE106AF86E761CE57D79F1999922E4B6487FE2381191"
+    "sha256": "B4D02481E1AB196633A43491BA97E78C5BB183E30CBE1E086CB94ABFAB82D265"
   },
   "authorityPaths": [
     "data/2317_cash_flow_authority.csv",
@@ -12,6 +12,31 @@
     "data/2317_daily_price.csv",
     "data/2317_master_v9.csv"
   ],
+  "governedQuarterlyEvidence": {
+    "schemaVersion": "P1008_QUARTERLY_EVIDENCE_V1",
+    "roeH1": {
+      "value": "6.21",
+      "unit": "PERCENT",
+      "period": "2026H1",
+      "annualized": false,
+      "comparablePeriod": "2025H1",
+      "comparableValue": "5.48",
+      "classification": "OFFICIAL_REPORTED",
+      "icScoreEligible": false,
+      "source": {
+        "sourceTier": "PRIMARY_OFFICIAL",
+        "sourceType": "OFFICIAL_COMPANY_PRESS_RELEASE",
+        "sourceLocator": "https://www.honhai.com/zh-tw/press-center/press-releases/latest-news/2094",
+        "publicationDate": "2026-08-12"
+      },
+      "governance": {
+        "sourceReceipt": "engineering/audit/p1008_q2_kpi_completion_v1/Q2_KPI_SOURCE_RECEIPT.json",
+        "acceptanceReceipt": "contracts/p1008_research_plugin/acceptance/v1.1/P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT.json",
+        "acceptanceStatus": "P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT",
+        "acceptedBy": "Owner"
+      }
+    }
+  },
   "reportRole": "DOWNSTREAM_OUTPUT_ONLY",
   "registry": [
     {
@@ -109,30 +134,30 @@
       "display_name": "2026H1 ROE（未年化）",
       "semantic_layer": "P0_FINANCIAL",
       "source_path": "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json",
-      "source_field": "canonicalPromotion.roe.value",
+      "source_field": "governedMetrics.roeH1.value",
       "formula": "DIRECT",
       "unit": "%",
-      "producer": "Owner-approved official Q2 packet",
+      "producer": "normalized quarterly authority interface",
       "consumers": "old UI;reports;new UI evidence",
       "authority": "OFFICIAL_EVIDENCE",
       "classification": "OFFICIAL_REPORTED",
       "status": "ACTIVE",
-      "notes": "period=2026H1; annualized=false; 不得標為Q2/TTM/年化"
+      "notes": "period=2026H1; annualized=false; icScoreEligible=false; official source and Owner acceptance receipts verified"
     },
     {
       "kpi_id": "FIN.ROIC",
       "display_name": "精確 ROIC",
       "semantic_layer": "P0_FINANCIAL",
       "source_path": "data/2317_master_v9.csv",
-      "source_field": "ROIC_Precise_Pct",
-      "formula": "NOPAT_Annual_100M/InvestedCapital_100M*100",
+      "source_field": "ROIC_Precise_Pct;ROIC_Status",
+      "formula": "latest governed available period only",
       "unit": "%",
       "producer": "Owner authority CSV",
       "consumers": "old UI;reports",
       "authority": "CSV_AUTHORITY",
       "classification": "DERIVED_VERIFIED",
-      "status": "ACTIVE",
-      "notes": "2026Q2=12.35%；直接有息負債組成；16.46%因NET_CASH_DENOMINATOR_SCOPE_MISMATCH遭拒；不得宣稱Q1至Q2趨勢"
+      "status": "INSUFFICIENT_DATA",
+      "notes": "2026Q2 is unavailable with governed blank fields; latest available period is 2026Q1=12.57%; no Q1-to-Q2 trend"
     },
     {
       "kpi_id": "FIN.BVPS",
@@ -535,19 +560,19 @@
   },
   "sourceDates": {
     "financial": "2026Q2",
-    "price": "2026-08-27",
+    "price": "2026-09-17",
     "cashFlow": "2026Q1",
-    "macro": "2026-08-27",
-    "fx": "2026-08-27"
+    "macro": "2026-09-17",
+    "fx": "2026-09-17"
   },
   "reproducibility": {
     "PB": [
-      1.853,
-      1.853
+      1.842,
+      1.842
     ],
     "ROIC": [
-      12.35,
-      12.35
+      12.57,
+      12.57
     ],
     "ROIC_CURRENT_PERIOD": [
       null,

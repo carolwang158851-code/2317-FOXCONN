@@ -8,7 +8,16 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import sys
 from pathlib import Path
+
+
+PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+PLUGIN_SRC = PACKAGE_ROOT / "modules" / "p1008_research_plugin" / "src"
+if str(PLUGIN_SRC) not in sys.path:
+    sys.path.insert(0, str(PLUGIN_SRC))
+
+from p1008_research_plugin.quarterly_authority import load_governed_quarterly_evidence
 
 
 OUTPUT_DIR = Path("engineering/audit/p1008_data_reconciliation_v1")
@@ -50,8 +59,8 @@ KPI_ROWS = [
     _kpi("FIN.EPS_Q", "單季 EPS", "P0_FINANCIAL", "data/2317_master_v9.csv", "EPS_Q", "DIRECT", "元", "Owner authority CSV", "old UI;reports", "CSV_AUTHORITY", "AUTHORITATIVE_SOURCE_REPORTED"),
     _kpi("FIN.EPS_TTM", "近十二月 EPS", "P0_FINANCIAL", "data/2317_master_v9.csv", "EPS_TTM", "DIRECT", "元", "Owner authority CSV", "old UI;reports;new UI evidence", "CSV_AUTHORITY", "AUTHORITATIVE_SOURCE_REPORTED"),
     _kpi("FIN.EPS_YOY", "EPS 年增率", "P0_FINANCIAL", "data/2317_master_v9.csv", "EPS_YoY_Pct", "DIRECT", "%", "Owner authority CSV", "old UI;reports;new UI evidence", "CSV_AUTHORITY", "AUTHORITATIVE_SOURCE_REPORTED"),
-    _kpi("FIN.ROE_H1", "2026H1 ROE（未年化）", "P0_FINANCIAL", "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json", "canonicalPromotion.roe.value", "DIRECT", "%", "Owner-approved official Q2 packet", "old UI;reports;new UI evidence", "OFFICIAL_EVIDENCE", "OFFICIAL_REPORTED", notes="period=2026H1; annualized=false; 不得標為Q2/TTM/年化"),
-    _kpi("FIN.ROIC", "精確 ROIC", "P0_FINANCIAL", "data/2317_master_v9.csv", "ROIC_Precise_Pct", "NOPAT_Annual_100M/InvestedCapital_100M*100", "%", "Owner authority CSV", "old UI;reports", "CSV_AUTHORITY", "DERIVED_VERIFIED", "ACTIVE", "2026Q2=12.35%；直接有息負債組成；16.46%因NET_CASH_DENOMINATOR_SCOPE_MISMATCH遭拒；不得宣稱Q1至Q2趨勢"),
+    _kpi("FIN.ROE_H1", "2026H1 ROE（未年化）", "P0_FINANCIAL", "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json", "governedMetrics.roeH1.value", "DIRECT", "%", "normalized quarterly authority interface", "old UI;reports;new UI evidence", "OFFICIAL_EVIDENCE", "OFFICIAL_REPORTED", notes="period=2026H1; annualized=false; icScoreEligible=false; official source and Owner acceptance receipts verified"),
+    _kpi("FIN.ROIC", "精確 ROIC", "P0_FINANCIAL", "data/2317_master_v9.csv", "ROIC_Precise_Pct;ROIC_Status", "latest governed available period only", "%", "Owner authority CSV", "old UI;reports", "CSV_AUTHORITY", "DERIVED_VERIFIED", "INSUFFICIENT_DATA", "2026Q2 is unavailable with governed blank fields; latest available period is 2026Q1=12.57%; no Q1-to-Q2 trend"),
     _kpi("FIN.BVPS", "每股淨值", "P0_FINANCIAL", "data/2317_master_v9.csv", "BVPS", "DIRECT", "元", "Owner authority CSV", "daily PB reference", "CSV_AUTHORITY", "AUTHORITATIVE_SOURCE_REPORTED"),
     _kpi("MKT.CLOSE", "正式收盤價", "P0_MARKET", "data/2317_daily_price.csv", "Close", "DIRECT", "元", "TWSE authority pipeline", "old UI;reports;new UI evidence", "CSV_AUTHORITY", "OFFICIAL_REPORTED"),
     _kpi("VAL.PB_DAILY", "每日股價淨值比", "P0_VALUATION", "data/2317_daily_price.csv", "PB_daily", "round(Close/BVPS_ref,3)", "倍", "daily price authority pipeline", "old UI;reports;new UI evidence", "CSV_AUTHORITY", "DERIVED_VERIFIED"),
@@ -153,6 +162,7 @@ def generate(package_root: Path) -> dict:
     out = root / OUTPUT_DIR
     out.mkdir(parents=True, exist_ok=True)
     manifest = json.loads((root / AUTHORITY_MANIFEST).read_text(encoding="utf-8-sig"))
+    governed_evidence = load_governed_quarterly_evidence(root)
     inventory = []
     for row in KPI_ROWS:
         consumers = row["consumers"]
@@ -196,6 +206,7 @@ def generate(package_root: Path) -> dict:
         "schemaVersion": "1.1", "baseline": BASELINE_SHA, "rootCause": ROOT_CAUSE,
         "authorityManifest": {"path": AUTHORITY_MANIFEST, "sha256": _sha(root / AUTHORITY_MANIFEST)},
         "authorityPaths": sorted(x["path"] for x in manifest["authoritativeFiles"]),
+        "governedQuarterlyEvidence": governed_evidence,
         "reportRole": "DOWNSTREAM_OUTPUT_ONLY", "registry": KPI_ROWS,
         "sixIcNumericStatus": {row["kpi_id"]: "N/A_NO_CANONICAL_EXACT_SCORE" for row in KPI_ROWS if row["semantic_layer"] == "SIX_IC"},
         "sourceDates": {"financial": _latest(root, "data/2317_master_v9.csv"), "price": _latest(root, "data/2317_daily_price.csv"), "cashFlow": _latest(root, "data/2317_cash_flow_authority.csv"), "macro": _latest(root, "data/macro_snapshot.csv"), "fx": _latest(root, "data/fx_trend_observations.csv")},

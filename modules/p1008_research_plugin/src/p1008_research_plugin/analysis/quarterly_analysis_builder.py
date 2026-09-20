@@ -10,7 +10,11 @@ from pathlib import Path
 from ..adapters.authority_adapter import AuthorityAdapter
 from ..phaseb1_common import canonical_json_bytes, sha256_bytes, sha256_file
 from ..plugin_module.contracts import ValidatedEvidence
-from ..quarterly_authority import latest_available_roic_row, quarterly_metric_availability
+from ..quarterly_authority import (
+    latest_available_roic_row,
+    load_governed_quarterly_evidence,
+    quarterly_metric_availability,
+)
 from ..quarterly_earnings import QuarterlyEarningsPacket
 from .analysis_contracts import (
     AnalysisPacket,
@@ -154,6 +158,10 @@ class QuarterlyAnalysisBuilder:
             for packet in validated_evidence.packets
         }
         q = quarterly_packet.values
+        roe_evidence = load_governed_quarterly_evidence(self.package_root)["roeH1"]
+        roe_current = _d(roe_evidence["value"])
+        roe_comparable = _d(roe_evidence["comparableValue"])
+        roe_change_pp = roe_current - roe_comparable
         f = q["financials"]
         cf = q["cashFlow"]
         prior = q["priorYearQuarterFinancials"]
@@ -427,7 +435,7 @@ class QuarterlyAnalysisBuilder:
             {"metric": "CFO／歸母淨利警示代理值", "whyItMatters": "辨識獲利與營運現金的嚴重背離。", "formula": "期間必須一致才可計算", "currentInputs": "2026H1 CFO可得；2026H1歸母淨利未在本欄位綁定", "currentResult": "INSUFFICIENT_DATA", "plainLanguage": "不以H1現金流除以Q2單季歸母淨利。", "decisionUse": "避免期間不一致的現金轉化率。", "limitation": "缺同期間、同範圍分母。"},
             {"metric": "ROIC", "whyItMatters": "衡量投入資本使用效率。", "formula": "NOPAT／平均部分營運投入資本", "currentInputs": f"Q2 NOPAT {q2_nopat.quantize(Decimal('1'))}百萬元；Q1/Q2部分營運投入資本平均{average_partial_operating_ic.quantize(Decimal('1'))}百萬元", "currentResult": f"單季估算{q2_partial_roic.quantize(Decimal('0.01'))}%", "plainLanguage": "以應收、存貨、營運用PP&E減應付帳款重建部分投入資本；回答這些可辨識營運資本使用效率。", "decisionUse": "作為部分營運投入資本估算，不取代官方同口徑ROIC。", "limitation": "所得稅率採本季帳面有效稅率，並非正常化營運稅率；未揭露的其他營運資產與無息負債未插補；單季年化不是TTM。"},
             {"metric": "增量ROIC", "whyItMatters": "衡量最近新增資本帶來多少新增稅後營業利益。", "formula": "NOPAT變化／投入資本變化", "currentInputs": "可比投入資本變化未提供", "currentResult": "INSUFFICIENT_DATA", "plainLanguage": "最近新增投入的資本，到底創造多少新的稅後營業利益。", "decisionUse": "驗證AI擴張的新增資本效率。", "limitation": "缺可比投入資本分母，不能估算。"},
-            {"metric": "股東權益報酬率 ROE", "whyItMatters": "衡量累積股東資本創造淨利的效率。", "formula": "歸屬股東淨利／平均股東權益", "currentInputs": "官方2026H1 ROE 6.21%；2025H1 5.48%", "currentResult": "+0.73個百分點", "plainLanguage": "公司每使用1元股東自己的資本，能替股東創造多少淨利。", "decisionUse": "檢查BVPS增加是否同時帶來足夠獲利，並評估P/B的經濟支持。", "limitation": "ROE可能受利潤率、資產周轉或槓桿影響；缺完整DuPont時不能全歸因於營運改善。"},
+            {"metric": "股東權益報酬率 ROE", "whyItMatters": "衡量累積股東資本創造淨利的效率。", "formula": "歸屬股東淨利／平均股東權益", "currentInputs": f"官方{roe_evidence['period']} ROE {roe_evidence['value']}%；{roe_evidence['comparablePeriod']} {roe_evidence['comparableValue']}%", "currentResult": f"{roe_change_pp:+.2f}個百分點", "plainLanguage": "公司每使用1元股東自己的資本，能替股東創造多少淨利。", "decisionUse": "檢查BVPS增加是否同時帶來足夠獲利，並評估P/B的經濟支持。", "limitation": "ROE可能受利潤率、資產周轉或槓桿影響；缺完整DuPont時不能全歸因於營運改善。"},
             {"metric": "本益比", "whyItMatters": "描述市場為每1元盈餘支付多少價格。", "formula": "股價／每股盈餘", "currentInputs": f"{price_value}元／TTM EPS {ttm_eps}元", "currentResult": f"{(price_value / ttm_eps).quantize(Decimal('0.01'))}倍", "plainLanguage": "TTM本益比反映市場為過去12個月每1元EPS支付多少價格；Forward本益比是情境。", "decisionUse": "比較估值敏感度。", "limitation": "無Owner核准估值門檻，不判定便宜或昂貴。"},
             {"metric": "股價淨值比", "whyItMatters": "連結市場對股東資本的評價與ROE。", "formula": "股價／每股淨值", "currentInputs": f"股價{price_value}元；受治理BVPS {governed_bvps}元；正式P/B {pb_value}倍", "currentResult": f"{pb_value}倍", "plainLanguage": "P/B只有在ROE可持續且資本效率改善時，才獲得更強的經濟支持。", "decisionUse": "檢查BVPS累積與ROE是否同向改善。", "limitation": "無Owner核准門檻，不判定便宜、昂貴或形成交易規則。"},
             {"metric": "股息殖利率", "whyItMatters": "連結估值與退休現金流收益。", "formula": "年度股利／股價", "currentInputs": f"{dividend}元／{price_value}元", "currentResult": f"{dividend / price_value * 100:.2f}%", "plainLanguage": f"衡量{price_reader_label}對應的現金股利收益率。", "decisionUse": "評估退休現金流基線。", "limitation": "殖利率不等於股利可持續性；仍需FCF支持。"},
@@ -566,11 +574,11 @@ class QuarterlyAnalysisBuilder:
             },
             "incrementalRoic": "INSUFFICIENT_DATA_COMPARABLE_INVESTED_CAPITAL",
             "roe": {
-                "currentPeriod": "2026H1",
-                "currentPct": "6.21",
-                "comparablePeriod": "2025H1",
-                "comparablePct": "5.48",
-                "yoyChangePp": "+0.73",
+                "currentPeriod": roe_evidence["period"],
+                "currentPct": roe_evidence["value"],
+                "comparablePeriod": roe_evidence["comparablePeriod"],
+                "comparablePct": roe_evidence["comparableValue"],
+                "yoyChangePp": f"{roe_change_pp:+.2f}",
                 "fullYearBaselinePeriod": "2025FY",
                 "fullYearBaselinePct": "11.3",
                 "targetStatus": "NOT_VERIFIED",
@@ -625,7 +633,7 @@ class QuarterlyAnalysisBuilder:
                 "whatNotProven": "Q2尚未證明AI特定利潤率、Q2 ROIC、完整DuPont、正向自由現金流、正常化股利能力或退休現金流安全邊際上升。",
                 "governanceDelivery": "管理層規模、整合與效率敘事已在營業利益端獲得部分兌現；3+3六支柱已核對，第三組『3』仍是獨立證據缺口。",
                 "strategyValueCreation": "人工智慧已到營收證據，公司整體營業利益方向亦改善；但AI專屬營業利益、ROIC、現金轉化與FCF尚未揭露。",
-                "roeBvpsCompounding": "官方2026H1 ROE 6.21%，高於2025H1的5.48%；2026Q2官方BVPS為136.02元。這支持股東資本效率改善方向，但完整DuPont仍缺，不能把ROE改善全部歸因於營運。",
+                "roeBvpsCompounding": f"官方{roe_evidence['period']} ROE {roe_evidence['value']}%，高於{roe_evidence['comparablePeriod']}的{roe_evidence['comparableValue']}%；2026Q2官方BVPS為136.02元。這支持股東資本效率改善方向，但完整DuPont仍缺，不能把ROE改善全部歸因於營運。",
                 "cashOpenQuestion": "2026H1官方CFO與FCF為負，但Q2期末CCC由48天降至44天再降至42天；現有證據較符合高速擴張造成的營運資金占用加上資本支出，而非已證實的週轉效率惡化，後續現金回收仍未證明。",
                 "enterpriseValueProgress": "企業價值論點已由營收推進至營業利益與可比H1 ROE證據，但尚未完整通過ROIC、自由現金流、股利能力及退休現金流安全。",
                 "invalidationConditions": "若AI相關出貨成長而毛利率與營益率同步惡化、營運資金長期快於營收、Capex上升卻未改善增量ROIC，或CFO／FCF持續未跟上獲利，則目前『規模開始轉為營運槓桿』的解讀失效。",
@@ -659,8 +667,8 @@ class QuarterlyAnalysisBuilder:
                 {"link": "NOPAT", "grade": "INSUFFICIENT_DATA", "evidence": "尚無可用標準化稅率", "limitation": "不能以歸屬淨利替代", "enterpriseValueImplication": "無法計算稅後營業報酬", "nextCheckpoint": "正式Q2財務報告"},
                 {"link": "ROIC", "grade": "INSUFFICIENT_DATA", "evidence": "缺Q2同口徑投入資本", "limitation": "舊期ROIC不可外推", "enterpriseValueImplication": "資本效率改善未證實", "nextCheckpoint": "正式Q2資產負債表"},
                 {"link": "Net Income", "grade": "PROVEN", "evidence": "Q2歸屬母公司淨利59,974百萬元", "limitation": "不等同NOPAT或現金", "enterpriseValueImplication": "股東獲利端改善", "nextCheckpoint": "FY2026 Q3淨利"},
-                {"link": "ROE", "grade": "PROVEN", "evidence": "官方2026H1 ROE 6.21%，2025H1 5.48%", "limitation": "缺完整DuPont，不能全歸因營運", "enterpriseValueImplication": "股東資本效率同比改善", "nextCheckpoint": "FY2026全年ROE與DuPont分解"},
-                {"link": "BVPS / Equity Compounding", "grade": "PROVEN", "evidence": "2026Q2官方BVPS 136.02元；2026H1官方ROE 6.21%且未年化", "limitation": "完整DuPont與股利後總報酬仍待核對", "enterpriseValueImplication": "股東資本累積與H1使用效率方向改善", "nextCheckpoint": "FY2026全年ROE與完整DuPont"},
+                {"link": "ROE", "grade": "PROVEN", "evidence": f"官方{roe_evidence['period']} ROE {roe_evidence['value']}%，{roe_evidence['comparablePeriod']} {roe_evidence['comparableValue']}%", "limitation": "缺完整DuPont，不能全歸因營運", "enterpriseValueImplication": "股東資本效率同比改善", "nextCheckpoint": "FY2026全年ROE與DuPont分解"},
+                {"link": "BVPS / Equity Compounding", "grade": "PROVEN", "evidence": f"2026Q2官方BVPS 136.02元；{roe_evidence['period']}官方ROE {roe_evidence['value']}%且未年化", "limitation": "完整DuPont與股利後總報酬仍待核對", "enterpriseValueImplication": "股東資本累積與H1使用效率方向改善", "nextCheckpoint": "FY2026全年ROE與完整DuPont"},
                 {"link": "CFO", "grade": "PROVEN", "evidence": f"官方2026H1 CFO {h1_cfo}百萬元", "limitation": "此為H1累計值，不是Q2單季", "enterpriseValueImplication": "上半年獲利未轉為正向營運現金", "nextCheckpoint": "FY2026 Q3／全年CFO"},
                 {"link": "FCF", "grade": "PROVEN", "evidence": f"官方2026H1 FCF {h1_fcf}百萬元（CFO {h1_cfo}減Capex {h1_capex}）", "limitation": "此為H1累計值，不是Q2單季", "enterpriseValueImplication": "現金治理尚未通過", "nextCheckpoint": "FY2026 Q3／全年FCF"},
                 {"link": "Dividend Capacity", "grade": "UNPROVEN", "evidence": "既有股利輸入可得", "limitation": "缺正常化FCF與資本需求橋接", "enterpriseValueImplication": "股利能力不可上修", "nextCheckpoint": "FY2026全年FCF與股利政策"},
@@ -734,7 +742,7 @@ class QuarterlyAnalysisBuilder:
             operating_margin=self._metric(f["operatingMarginPct"], "%", q["fiscalPeriod"], TrendStatus.IMPROVING, official_ids),
             eps=self._metric(f["epsTwd"], "元", q["fiscalPeriod"], TrendStatus.IMPROVING, official_ids),
             eps_ttm=self._metric(latest_master["EPS_TTM"], "元", f"正式authority至{latest_master['Quarter']}", TrendStatus.STABLE, [authority_ids["master"]], ["TTM EPS已納入FY2026 Q2；估值仍只作描述，不形成交易門檻。"]),
-            roe=self._metric("6.21", "%", "2026H1", TrendStatus.IMPROVING, official_ids),
+            roe=self._metric(roe_evidence["value"], "%", roe_evidence["period"], TrendStatus.IMPROVING, official_ids),
             roic=self._metric(latest_roic_master["ROIC_Precise_Pct"], "%", str(latest_roic_master["Quarter"]), TrendStatus.STABLE, [authority_ids["master"]], [f"最新正式ROIC季度為{latest_roic_master['Quarter']}；較新季度若為INSUFFICIENT_DATA不得外推。"]),
             operating_cash_flow=self._metric(str(q2_cfo), "新台幣百萬元", q["fiscalPeriod"], TrendStatus.WEAKENING, official_ids + [authority_ids["cash"]], ["DERIVED_FROM_OFFICIAL: 2026H1 CFO minus 2026Q1 CFO under the same consolidated TWD scope."]),
             free_cash_flow=self._metric(str(q2_fcf_direct), "新台幣百萬元", q["fiscalPeriod"], TrendStatus.WEAKENING, official_ids + [authority_ids["cash"]], [f"DERIVED_FROM_OFFICIAL; cumulative-path reconciliation difference {q2_fcf_rounding_difference} million TWD within documented rounding tolerance."]),

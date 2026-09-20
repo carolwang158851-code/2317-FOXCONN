@@ -4548,9 +4548,14 @@
         const close = toNumber(daily.Close);
         const bvps = toNumber(daily.BVPS_ref);
         const pb = toNumber(daily.PB_daily);
-        const promoted = quarterly?.canonicalPromotion || {};
-        const roe = promoted?.roe?.period === "2026H1" && promoted?.roe?.annualized === false
-          ? toNumber(promoted.roe.value)
+        const roeEvidence = quarterly?.governedMetrics?.roeH1 || {};
+        const governedH1Roe = roeEvidence?.classification === "OFFICIAL_REPORTED"
+          && roeEvidence?.period === "2026H1"
+          && roeEvidence?.annualized === false
+          && roeEvidence?.icScoreEligible === false
+          && Boolean(roeEvidence?.source?.sourceLocator);
+        const roe = governedH1Roe
+          ? toNumber(roeEvidence.value)
           : null;
         const epsYoY = toNumber(master.EPS_YoY_Pct);
         const epsTtm = toNumber(master.EPS_TTM);
@@ -4575,7 +4580,7 @@
           published,
           latestDate,
           nextReview,
-          metrics: { close, bvps, pb, roe, roePeriod: promoted?.roe?.period || "N/A", roeAnnualized: promoted?.roe?.annualized, epsYoY, epsTtm, dividendYield, us10y, vix, wti, dxy, twdUsd, sourceReady },
+          metrics: { close, bvps, pb, roe, roePeriod: governedH1Roe ? roeEvidence.period : "N/A", roeAnnualized: governedH1Roe ? roeEvidence.annualized : null, epsYoY, epsTtm, dividendYield, us10y, vix, wti, dxy, twdUsd, sourceReady },
           systems: {
             val: {
               label: "估值 IC",
@@ -4595,8 +4600,8 @@
               state: "未提供正式分數",
               tone: "derived",
               color: "",
-              headline: `ROE ${pct(roe)}（${promoted?.roe?.period || "N/A"}官方值，未年化）、EPS YoY ${pct(epsYoY)}、EPS TTM ${fixed(epsTtm, 2)}。`,
-              evidence: `正式季度 ${master.Quarter || "N/A"}；ROE保留${promoted?.roe?.period || "N/A"}期間，不改稱Q2、TTM或年化值。`,
+              headline: `ROE ${pct(roe)}（${governedH1Roe ? roeEvidence.period : "N/A"}官方值，未年化）、EPS YoY ${pct(epsYoY)}、EPS TTM ${fixed(epsTtm, 2)}。`,
+              evidence: `正式季度 ${master.Quarter || "N/A"}；ROE保留${governedH1Roe ? roeEvidence.period : "N/A"}期間，不改稱Q2、TTM或年化值。`,
               owner: "Owner 動作：依既有戰情室治理規則查核基本面證據。"
             },
             cash: {

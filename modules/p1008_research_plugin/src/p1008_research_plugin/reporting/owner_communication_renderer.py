@@ -104,6 +104,10 @@ class OwnerCommunicationRenderer:
             "fcf": a["q2StandaloneFcfMillionTwd"],
         }
 
+    @property
+    def roe(self) -> dict[str, str]:
+        return self.analytics["roe"]
+
     @staticmethod
     def _glossary_rows() -> list[tuple[str, str]]:
         return [
@@ -134,7 +138,7 @@ class OwnerCommunicationRenderer:
             ["現金轉化｜CFO", "約-723億元", "Q2同口徑推導", "🔴 重大負向", "獲利與現金背離", "現金回收未完成", "Q3 CFO"],
             ["現金轉化｜FCF", "約-1,175億元", "CFO－Capex", "🔴 重大負向", "負CFO與Capex雙重壓力", "股利能力不上修", "Q3／全年FCF"],
             ["資本效率｜ROIC", "資料不足", "2026Q1 12.57%", "⚪ 證據缺口", "不是0%", "新增資本價值尚未可算", "標準化NOPAT與平均投入資本"],
-            ["股東資本效率｜ROE", "6.21%", "2025H1 5.48%", "🟢 正向", "+0.73個百分點", "股東資本使用效率改善", "Q2 BVPS與完整杜邦分析"],
+            ["股東資本效率｜ROE", f"{self.roe['currentPct']}%", f"{self.roe['comparablePeriod']} {self.roe['comparablePct']}%", "🟢 正向", f"{self.roe['yoyChangePp']}個百分點", "股東資本使用效率改善", "Q2 BVPS與完整杜邦分析"],
             ["策略價值｜AI", "營收獲支持", "專屬獲利／ROIC／FCF未證實", "🟡 混合訊號", "價值鏈不完整", "成長尚未完整轉為價值", "Q3 AI獲利與現金"],
             ["股利／退休安全", "尚未升級", "正常化FCF不足", "🟡 觀察", "現金證據不足", "核心論點存續但安全邊際不上修", "全年FCF與股利政策"],
         ]
@@ -151,7 +155,7 @@ class OwnerCommunicationRenderer:
             ["CFO", "約-723億元", "Q2推導", "重大負向", "現金回收未跟上獲利", "Q3 CFO", "單季轉正", "持續為負"],
             ["FCF", "約-1,175億元", "CFO－Capex", "重大負向", "自由資源不足", "Q3／全年FCF", "TTM轉正且非一次性", "全年仍為負"],
             ["ROIC", "資料不足", "2026Q1 12.57%", "證據缺口", "資本效率未知", "Q2／TTM ROIC", "資料完備且改善", "投入資本增速高於NOPAT"],
-            ["ROE", "6.21%", "2025H1 5.48%", "正向", "股東資本效率改善", "全年ROE／BVPS", "可比基礎續升", "ROE下降或槓桿驅動"],
+            ["ROE", f"{self.roe['currentPct']}%", f"{self.roe['comparablePeriod']} {self.roe['comparablePct']}%", "正向", "股東資本效率改善", "全年ROE／BVPS", "可比基礎續升", "ROE下降或槓桿驅動"],
             ["AI價值轉化", "營收獲支持", "獲利方向部分支持", "混合訊號", "ROIC／FCF未證實", "Q3 AI拆分", "正式獲利與現金證據", "成長伴隨毛利、ROIC、FCF惡化"],
         ]
 
@@ -160,7 +164,7 @@ class OwnerCommunicationRenderer:
             {"title": "營運槓桿差", "acronym": "Operating Leverage Spread", "question": "規模成長是否轉成更快的營業利益？", "formula": "營業利益成長率－營收成長率", "terms": "營收是規模；營業利益是扣除營業成本與費用後的本業成果。", "input": "67.51%－40.84%", "result": "+26.67個百分點", "read": "新增營收正轉成較高比例的營業利益。", "limit": "可能由規模吸收、成本、費用、產品組合、定價或匯率共同造成，不能鎖定單一原因。", "value": "營運治理改善，但仍須由ROIC與FCF確認是否形成完整價值。"},
             {"title": "自由現金流", "acronym": "FCF", "question": "帳面獲利最後留下多少可自由運用的現金？", "formula": "FCF＝CFO－Capex", "terms": "營業現金流（CFO）是本業實際產生或使用的現金；資本支出（Capex）是維持或擴張長期產能的投入。", "input": "約-723億元－約451億元", "result": "約-1,175億元", "read": "每股盈餘（EPS）增加，但現金尚未跟上；帳面獲利未充分變成可分配資源。", "limit": "Q2為官方H1減Q1的同口徑推導，整數揭露有1百萬元四捨五入差。", "value": "負FCF使股利能力與退休現金流安全不能升級。"},
             {"title": "投入資本報酬率", "acronym": "ROIC", "question": "每1元營運投入資本創造多少稅後營業報酬？", "formula": "ROIC＝NOPAT÷平均投入資本", "terms": "稅後營業利益（NOPAT）概念上約等於營業利益×（1－正常化稅率）；平均投入資本須依統一治理口徑，以期初與期末真正投入營運且被綁住的資本計算。", "input": "Q2缺標準化NOPAT與同口徑平均投入資本", "result": "資料不足，不是0%", "read": "ROIC上升代表同樣資本創造更多營運報酬；下降代表新增資本回報可能不足。", "limit": "不發明投入資本公式，也不以單季年化冒充TTM；精確資金成本未受治理。", "value": "這是AI與擴產能否真正創造企業價值的最大資料缺口。"},
-            {"title": "股東權益報酬率", "acronym": "ROE", "question": "每1元股東資本替股東創造多少淨利？", "formula": "歸屬股東淨利÷平均股東權益", "terms": "歸屬股東淨利是普通股股東可歸屬的獲利；平均股東權益是期初與期末股東資本的平均。", "input": "2025H1 5.48%→2026H1 6.21%", "result": "+0.73個百分點", "read": "可比H1股東資本使用效率改善。", "limit": "ROE也受利潤率、資產周轉與財務槓桿影響；缺完整杜邦分析，不能全歸因於營運。", "value": "為P/B提供方向性支持，但仍需ROIC、BVPS與FCF共同驗證。"},
+            {"title": "股東權益報酬率", "acronym": "ROE", "question": "每1元股東資本替股東創造多少淨利？", "formula": "歸屬股東淨利÷平均股東權益", "terms": "歸屬股東淨利是普通股股東可歸屬的獲利；平均股東權益是期初與期末股東資本的平均。", "input": f"{self.roe['comparablePeriod']} {self.roe['comparablePct']}%→{self.roe['currentPeriod']} {self.roe['currentPct']}%", "result": f"{self.roe['yoyChangePp']}個百分點", "read": "可比H1股東資本使用效率改善。", "limit": "ROE也受利潤率、資產周轉與財務槓桿影響；缺完整杜邦分析，不能全歸因於營運。", "value": "為P/B提供方向性支持，但仍需ROIC、BVPS與FCF共同驗證。"},
             {"title": "現金循環週期", "acronym": "CCC", "question": "投入現金到銷售回收現金大約需要幾天？", "formula": "存貨天數＋應收天數－應付天數", "terms": "天數越低通常表示營運資金回收越快。", "input": "48天→44天→42天", "result": "持續改善", "read": "應收與存貨金額增加，但週轉效率反而改善。", "limit": "較低CCC不代表現金已回收完成，仍須看CFO。", "value": "目前較支持成長驅動的資金吸收，而非已證實的週轉效率惡化。"},
             {"title": "股價淨值比與ROE", "acronym": "P/B × ROE", "question": "市場為每1元股東淨值支付的價格是否有基本面支持？", "formula": "P/B＝股價÷每股淨值（BVPS）", "terms": "BVPS是每股背後的帳面股東權益；ROE是這些權益創造淨利的效率。", "input": "263元÷127.12元", "result": "2.069倍", "read": "P/B不能單獨判斷，必須連結ROE、ROIC與FCF。", "limit": "沒有Owner核准估值門檻，不判定便宜或昂貴。", "value": "市場定價只是結果，企業價值證據才是因果層；本報告不產生目標價。"},
         ]
@@ -265,7 +269,7 @@ class OwnerCommunicationRenderer:
             "## 資本效率：ROIC", "",
             "**Q2證據缺口，不是0%。** 沒有治理合格的標準化NOPAT與平均投入資本，不能計算Q2 ROIC，也不能把單季數字年化。", "",
             "## 股東資本效率：ROE／BVPS", "",
-            "股東權益報酬率（ROE）由2025H1的5.48%升至2026H1的6.21%，增加0.73個百分點。每股淨值（BVPS）由2024Q3的115.16元至2026Q1的127.12元中期淨增加，但2025Q2曾降至105.14元，**明顯下降，原因待驗證**。完整股東複利仍須合併BVPS變化與已分配股利。", "",
+            f"股東權益報酬率（ROE）由{self.roe['comparablePeriod']}的{self.roe['comparablePct']}%升至{self.roe['currentPeriod']}的{self.roe['currentPct']}%，增加{self.roe['yoyChangePp'].lstrip('+')}個百分點。每股淨值（BVPS）由2024Q3的115.16元至2026Q1的127.12元中期淨增加，但2025Q2曾降至105.14元，**明顯下降，原因待驗證**。完整股東複利仍須合併BVPS變化與已分配股利。", "",
             "## 六個企業價值公式解釋", "", *explainers,
             "## AI與3+3價值轉化", "",
             "AI營收獲官方證據支持，公司整體營業利益改善方向提供部分支持；但AI專屬營業利益、ROIC與FCF均未證實。3+3六項支柱已核對，並不代表六項都已完成財務價值轉化。", "",
@@ -340,7 +344,7 @@ class OwnerCommunicationRenderer:
 <section><h2>利潤率與獲利品質</h2><p><strong>毛利率未擴張，營益率卻改善。</strong>現有證據顯示改善主要發生在毛利以下的費用吸收。</p>{chart_blocks['margin']}</section>
 <section><h2>現金轉化與營運資金</h2><p><strong>資金占用增加，但週轉效率反而改善。</strong>應收指數147.3、存貨146.4、應付152.2；現金循環週期（CCC）由48天降至42天。負CFO與FCF仍是最大負偏差。</p>{chart_blocks['wc']}</section>
 <section><h2>資本效率：ROIC</h2><p><strong>Q2證據缺口，不是0%。</strong>缺治理合格的標準化NOPAT與平均投入資本，不能計算Q2 ROIC。</p>{chart_blocks['roic']}</section>
-<section><h2>股東資本效率：ROE／BVPS</h2><p>股東權益報酬率（ROE）由2025H1的5.48%升至2026H1的6.21%。每股淨值（BVPS）中期淨增加，但2025Q2曾降至105.14元，<strong>明顯下降，原因待驗證</strong>。完整股東複利仍須合併BVPS與已分配股利。</p>{chart_blocks['bvps']}</section>
+<section><h2>股東資本效率：ROE／BVPS</h2><p>股東權益報酬率（ROE）由{self.roe['comparablePeriod']}的{self.roe['comparablePct']}%升至{self.roe['currentPeriod']}的{self.roe['currentPct']}%。每股淨值（BVPS）中期淨增加，但2025Q2曾降至105.14元，<strong>明顯下降，原因待驗證</strong>。完整股東複利仍須合併BVPS與已分配股利。</p>{chart_blocks['bvps']}</section>
 <section class="page-break"><h2>六個企業價值公式解釋</h2>{explainers}</section>
 <section><h2>AI與3+3價值轉化</h2><p>AI營收獲官方證據支持，公司整體營業利益改善方向提供部分支持；AI專屬營業利益、ROIC與FCF仍未證實。3+3六項支柱已核對，不代表六項都已完成財務價值轉化。</p></section>
 <section><h2>市場定價與基本面支持</h2><p>財報公布前收盤價263元（2026-08-11）、過去十二個月每股盈餘15.21元、財報前本益比（P/E）17.29倍；以最新直接揭露2026Q1 BVPS 127.12元計算的股價淨值比（P/B）為2.069倍。<sup>3</sup> 這些是財報前市場定價的次要脈絡；企業價值的因果層仍是ROE、ROIC與FCF。本報告不提供目標價或買賣價。</p></section>
