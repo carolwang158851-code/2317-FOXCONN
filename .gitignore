@@ -23,3 +23,6 @@ Desktop.ini
 # Keep formal CSV data visible to review unless Owner decides otherwise.
 !data/*.csv
 !data/*.json
+
+# Private Owner-review report candidates; local only, never publish to repository.
+reports/private_candidates/
