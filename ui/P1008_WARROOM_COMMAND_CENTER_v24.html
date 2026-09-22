@@ -4339,6 +4339,9 @@
       };
       const pct = (value, digits = 1) => value === null || value === undefined ? "N/A" : `${Number(value).toFixed(digits)}%`;
       const fixed = (value, digits = 2) => value === null || value === undefined ? "N/A" : Number(value).toFixed(digits);
+      const groupedFixed = (value, digits = 2) => value === null || value === undefined
+        ? "N/A"
+        : Number(value).toLocaleString("zh-TW", { minimumFractionDigits: digits, maximumFractionDigits: digits });
       const brief = (value, max = 44) => {
         const text = String(value ?? "").replace(/\s+/g, " ").trim();
         return text.length > max ? `${text.slice(0, max - 1)}...` : text;
@@ -4565,7 +4568,7 @@
         };
       }
 
-      function buildSystems({ appState, eventState, news, daily, master, quarterlyEvidence, quarterlyReport, historicalAi, taiexObservation, fx, macro }) {
+      function buildSystems({ appState, eventState, news, realtimeSnapshot, daily, master, quarterlyEvidence, quarterlyReport, historicalAi, taiexObservation, fx, macro }) {
         const readiness = appState?.reviewPackage?.readiness || {};
         const published = eventState?.status === "OWNER_PUBLISHED" || news?.formalSynced === true;
         const close = toNumber(daily.Close);
@@ -4591,8 +4594,32 @@
         const wti = toNumber(macro.WTI_Oil);
         const dxy = toNumber(fx.DXY);
         const twdUsd = toNumber(fx.TWD_USD);
+        const runtimeTaiex = realtimeSnapshot?.taiex || {};
+        const taiexOfficial = runtimeTaiex.sourceTier === "OFFICIAL_EXCHANGE"
+          && runtimeTaiex.status === "OBSERVATION_ONLY"
+          && toNumber(runtimeTaiex.close) !== null;
+        const taiexClose = taiexOfficial ? toNumber(runtimeTaiex.close) : null;
+        const taiex5dChange = taiexOfficial ? toNumber(runtimeTaiex.change5dPct) : null;
         const taiexWeeklyChange = toNumber(taiexObservation.TAIEX_Weekly_Chg);
         const productMix = quarterlyReport?.productMix || {};
+        const priorCloud = productMix.priorQuarterComparable || {};
+        const q2Revenue = toNumber(quarterlyReport?.financials?.revenueMillionTwd);
+        const q2CloudShare = toNumber(productMix.cloudAndNetworkingRevenueSharePct);
+        const q1Revenue = toNumber(priorCloud.totalRevenueMillionTwd);
+        const q1CloudShare = toNumber(priorCloud.cloudNetworkSharePct);
+        const exactCloudComparison = priorCloud.sourceClassification === "OFFICIAL_REPORTED"
+          && q2Revenue !== null && q2CloudShare !== null
+          && q1Revenue !== null && q1CloudShare !== null && q1Revenue !== 0 && q1CloudShare !== 0;
+        const cloudNetworkRevenueQoqPct = exactCloudComparison
+          ? ((q2Revenue * q2CloudShare / 100) / (q1Revenue * q1CloudShare / 100) - 1) * 100
+          : null;
+        const cloudNetworkTrend = cloudNetworkRevenueQoqPct === null
+          ? "N/A"
+          : cloudNetworkRevenueQoqPct > 5 ? "UP" : cloudNetworkRevenueQoqPct < -5 ? "DOWN" : "FLAT";
+        const officialDemandOutlook = [...(quarterlyReport?.businessDisclosures || []), ...(quarterlyReport?.aiCloudNetworking || [])]
+          .some((item) => /strong|grow|increase/i.test(String(item)))
+          ? "需求強勁"
+          : "N/A";
         const aiSpecificStatus = String(productMix.aiSpecificShareStatus || "DATA_MISSING").trim().toUpperCase();
         const aiSpecificShare = aiSpecificStatus === "NOT_DISCLOSED"
           ? null
@@ -4618,8 +4645,18 @@
             roePeriod: governedH1Roe ? roeEvidence.period : "N/A",
             roeAnnualized: governedH1Roe ? roeEvidence.annualized : null,
             epsYoY, epsTtm, dividendYield, us10y, vix, wti, dxy, twdUsd, sourceReady,
+            taiexOfficial,
+            taiexClose,
+            taiex5dChange,
+            taiexSourceDate: runtimeTaiex.sourceDate || "N/A",
             taiexWeeklyChange,
             taiexObservationDate: taiexObservation.Date || "N/A",
+            cloudNetworkSharePct: q2CloudShare,
+            cloudNetworkRevenueQoqPct,
+            cloudNetworkTrend,
+            cloudNetworkQoqReason: exactCloudComparison ? "同口徑官方數值" : "前季可比較精確分母未治理",
+            officialDemandOutlook,
+            aiSourceClassification: "HON_HAI_OFFICIAL_EARNINGS",
             aiSpecificShare,
             aiSpecificStatus,
             aiPeriod,
@@ -4706,10 +4743,10 @@
           { id: "PB", value: metrics.pb === null ? "N/A" : `${fixed(metrics.pb, 3)}x`, status: "正式衍生", note: `PB_daily = Close ${fixed(metrics.close, 1)} / BVPS_ref ${fixed(metrics.bvps, 2)}。`, key: "val", color: systems.val.color, meter: 0 },
           { id: "ROE", value: pct(metrics.roe), status: `${metrics.roePeriod}官方／未年化`, note: `EPS YoY ${pct(metrics.epsYoY)}；ROE不是Q2單季、TTM或年化值，也不轉成IC分數。`, key: "fund", color: systems.fund.color, meter: 0 },
           { id: "殖利率 / US10Y", value: `${pct(metrics.dividendYield)} / ${pct(metrics.us10y)}`, status: "不同期別", note: "殖利率為正式資料推算；US10Y 是觀察資料，保留各自日期。", key: "cash", color: systems.cash.color, meter: 0 },
-          { id: "TAIEX 週變動", value: metrics.taiexWeeklyChange === null ? "N/A" : `${metrics.taiexWeeklyChange >= 0 ? "+" : ""}${fixed(metrics.taiexWeeklyChange, 2)}%`, status: metrics.taiexWeeklyChange === null ? "資料未提供" : `最近可得 ${metrics.taiexObservationDate}`, note: "來源：macro_snapshot.csv.TAIEX_Weekly_Chg；總經觀察／週變動百分比，非 TAIEX 指數點位；actionable:false。", key: "macro", color: systems.macro.color, meter: 0 },
+          { id: metrics.taiexOfficial ? "台灣加權指數" : "TAIEX", value: metrics.taiexOfficial ? groupedFixed(metrics.taiexClose, 2) : "N/A", status: metrics.taiexOfficial ? `TWSE 官方 ${metrics.taiexSourceDate}` : "本次官方來源未取得", note: metrics.taiexOfficial ? `近5交易日 ${metrics.taiex5dChange === null ? "N/A" : `${metrics.taiex5dChange >= 0 ? "+" : ""}${fixed(metrics.taiex5dChange, 2)}%`}；OFFICIAL_EXCHANGE / OBSERVATION_ONLY；actionable:false。` : `${metrics.taiexWeeklyChange === null ? "無可用歷史觀察" : `最近歷史觀察 ${metrics.taiexObservationDate} ${metrics.taiexWeeklyChange >= 0 ? "+" : ""}${fixed(metrics.taiexWeeklyChange, 2)}%`}；不得視為 current；actionable:false。`, key: "macro", color: systems.macro.color, meter: 0 },
           { id: "USD/TWD", value: fixed(metrics.twdUsd, 3), status: "匯率觀察資料", note: "只顯示匯率趨勢觀察檔的最新列，不跨來源補值。", key: "macro", color: systems.macro.color, meter: 0 },
           { id: "VIX / DXY", value: `${fixed(metrics.vix, 2)} / ${fixed(metrics.dxy, 2)}`, status: "不同觀察來源", note: "VIX 來自總經觀察；DXY 來自匯率觀察；不換算 IC 分數。", key: "macro", color: systems.macro.color, meter: 0 },
-          { id: "AI 營收占比", value: metrics.aiSpecificShare === null ? "N/A" : pct(metrics.aiSpecificShare), status: metrics.aiSpecificStatus === "NOT_DISCLOSED" ? `${metrics.aiPeriod} 官方未揭露` : metrics.aiSpecificStatus, note: `最近觀察：${metrics.historicalAiPeriod} ${pct(metrics.historicalAiShare)}；${metrics.historicalAiSource} / ${metrics.historicalAiSupport} / observation only；denominator 未治理；actionable:false。`, key: "ai", color: systems.ai.color, meter: 0 }
+          { id: "AI需求代理", value: `Cloud & Networking ${pct(metrics.cloudNetworkSharePct, 0)}`, status: `${metrics.aiPeriod} / Hon Hai Official Earnings`, note: `QoQ Trend ${metrics.cloudNetworkTrend}${metrics.cloudNetworkRevenueQoqPct === null ? `（${metrics.cloudNetworkQoqReason}）` : ` ${pct(metrics.cloudNetworkRevenueQoqPct, 2)}`}；AI-specific ${metrics.aiSpecificShare === null ? "N/A" : pct(metrics.aiSpecificShare)} / ${metrics.aiSpecificStatus === "NOT_DISCLOSED" ? "官方未揭露" : metrics.aiSpecificStatus}；官方展望 ${metrics.officialDemandOutlook}；actionable:false。`, key: "ai", color: systems.ai.color, meter: 0 }
         ];
         rightPanel.className = "panel right-panel v24-dynamic-panel has-seven-signals";
         rightPanel.innerHTML = `
@@ -4929,10 +4966,11 @@
       }
 
       async function init() {
-        const [appState, eventState, news, dailyRows, masterRows, quarterlyEvidence, quarterlyReport, fxRows, macroRows] = await Promise.all([
+        const [appState, eventState, news, realtimeSnapshot, dailyRows, masterRows, quarterlyEvidence, quarterlyReport, fxRows, macroRows] = await Promise.all([
           fetchJson("runtime/p1008_app_state.json"),
           fetchJson("runtime/warroom_event_review_state.json"),
           fetchJson("runtime/warroom_news_scan_snapshot.json"),
+          fetchJson("runtime/warroom_realtime_snapshot.json"),
           fetchCsv("data/2317_daily_price.csv"),
           fetchCsv("data/2317_master_v9.csv"),
           fetchJson("modules/p1008_research_plugin/config/normalized_evidence/FY2026_H1_ROE.json"),
@@ -4946,7 +4984,7 @@
         const fx = latestByDate(fxRows, "Date");
         const macro = latestByDate(macroRows, "Date");
         const taiexObservation = latestNumericObservation(macroRows, "TAIEX_Weekly_Chg");
-        const state = buildSystems({ appState, eventState, news, daily, master, quarterlyEvidence, quarterlyReport, historicalAi, taiexObservation, fx, macro });
+        const state = buildSystems({ appState, eventState, news, realtimeSnapshot, daily, master, quarterlyEvidence, quarterlyReport, historicalAi, taiexObservation, fx, macro });
         applyIcTones(state.systems);
         window.__p1008DynamicState = state;
         if (shell) shell.classList.add("p1008-runtime-bound");
