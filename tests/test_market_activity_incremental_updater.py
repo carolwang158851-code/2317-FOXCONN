@@ -27,6 +27,54 @@ def hash_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
 
 
+class _FetchResponse:
+    def __init__(self, status: int, body: bytes, location: str | None = None) -> None:
+        self.status = status
+        self.body = body
+        self.location = location
+
+    def read(self) -> bytes:
+        return self.body
+
+    def getheader(self, name: str) -> str | None:
+        return self.location if name == "Location" else None
+
+
+class _FetchSocket:
+    def version(self) -> str:
+        return "TLSv1.3"
+
+    def getpeercert(self) -> dict[str, object]:
+        return {}
+
+
+class _FetchConnection:
+    def __init__(
+        self,
+        response: _FetchResponse | None = None,
+        request_error: Exception | None = None,
+    ) -> None:
+        self.response = response
+        self.request_error = request_error
+        self.sock = _FetchSocket()
+        self.requested_path = ""
+        self.closed = False
+
+    def request(self, _method: str, path: str, headers: dict[str, str]) -> None:
+        self.requested_path = path
+        self.headers = headers
+        if self.request_error is not None:
+            raise self.request_error
+
+    def getresponse(self) -> _FetchResponse:
+        if self.response is None:
+            raise AssertionError("response was not configured")
+        return self.response
+
+    def close(self) -> None:
+        self.closed = True
+
+
 class MarketActivityIncrementalUpdaterTests(unittest.TestCase):
     def setUp(self) -> None:
         self.root = (
@@ -326,10 +374,105 @@ class MarketActivityIncrementalUpdaterTests(unittest.TestCase):
         self.assertEqual(result["status"], "DRY_RUN_READY")
         self.assertIsNone(result["price_validation_provenance"])
 
-    def test_https_failure_has_no_fallback(self) -> None:
-        with mock.patch.object(updater.http.client, "HTTPSConnection", side_effect=OSError("TLS failed")):
-            with self.assertRaises(updater.UpdateFailure):
+    def test_transient_transport_failure_retries_same_governed_request(self) -> None:
+        failed = _FetchConnection(request_error=OSError("getaddrinfo failed"))
+        succeeded = _FetchConnection(_FetchResponse(200, b"governed-csv"))
+        with (
+            mock.patch.object(
+                updater.http.client,
+                "HTTPSConnection",
+                side_effect=[failed, succeeded],
+            ) as connection_factory,
+            mock.patch.object(updater.time, "sleep") as sleep,
+        ):
+            sleep.side_effect = lambda delay: self.assertTrue(
+                failed.closed, f"connection was open before {delay}s retry delay"
+            )
+            body, metadata = updater.fetch_twse_month("2026-07")
+
+        expected_path = "/rwd/zh/afterTrading/STOCK_DAY?date=20260701&stockNo=2317&response=csv"
+        self.assertEqual(body, b"governed-csv")
+        self.assertEqual(failed.requested_path, expected_path)
+        self.assertEqual(succeeded.requested_path, expected_path)
+        self.assertTrue(failed.closed)
+        self.assertTrue(succeeded.closed)
+        self.assertEqual(connection_factory.call_count, 2)
+        self.assertTrue(all(call.args[0] == updater.TWSE_HOST for call in connection_factory.call_args_list))
+        sleep.assert_called_once_with(1)
+        self.assertEqual(metadata["attempt_count"], 2)
+        self.assertEqual(metadata["retry_count"], 1)
+        self.assertEqual(metadata["max_attempts"], 3)
+        self.assertEqual(metadata["https_get_count"], 2)
+
+    def test_three_transport_failures_exhaust_attempts_and_fail_closed(self) -> None:
+        connections = [
+            _FetchConnection(request_error=OSError("getaddrinfo failed"))
+            for _ in range(3)
+        ]
+        with (
+            mock.patch.object(
+                updater.http.client,
+                "HTTPSConnection",
+                side_effect=connections,
+            ) as connection_factory,
+            mock.patch.object(updater.time, "sleep") as sleep,
+        ):
+            sleep.side_effect = lambda delay: self.assertTrue(
+                connections[delay - 1].closed,
+                f"connection was open before {delay}s retry delay",
+            )
+            with self.assertRaisesRegex(
+                updater.UpdateFailure,
+                r"TWSE 2026-07 transport failure after 3 attempts exhausted: OSError: getaddrinfo failed",
+            ):
                 updater.fetch_twse_month("2026-07")
+
+        expected_path = "/rwd/zh/afterTrading/STOCK_DAY?date=20260701&stockNo=2317&response=csv"
+        self.assertEqual(connection_factory.call_count, 3)
+        self.assertEqual([item.requested_path for item in connections], [expected_path] * 3)
+        self.assertTrue(all(item.closed for item in connections))
+        self.assertEqual([call.args for call in sleep.call_args_list], [(1,), (2,)])
+
+    def test_first_attempt_success_records_no_retry(self) -> None:
+        connection = _FetchConnection(_FetchResponse(200, b"governed-csv"))
+        with (
+            mock.patch.object(updater.http.client, "HTTPSConnection", return_value=connection),
+            mock.patch.object(updater.time, "sleep") as sleep,
+        ):
+            body, metadata = updater.fetch_twse_month("2026-07")
+
+        self.assertEqual(body, b"governed-csv")
+        self.assertEqual(metadata["attempt_count"], 1)
+        self.assertEqual(metadata["retry_count"], 0)
+        self.assertEqual(metadata["max_attempts"], 3)
+        self.assertEqual(metadata["https_get_count"], 1)
+        self.assertTrue(connection.closed)
+        sleep.assert_not_called()
+
+    def test_unapproved_redirect_is_immediate_failure_without_retry(self) -> None:
+        rejected = _FetchConnection(
+            _FetchResponse(
+                302,
+                b"",
+                "https://example.com/rwd/zh/afterTrading/STOCK_DAY?date=20260701&stockNo=2317&response=csv",
+            )
+        )
+        unused = _FetchConnection(_FetchResponse(200, b"must-not-be-used"))
+        with (
+            mock.patch.object(
+                updater.http.client,
+                "HTTPSConnection",
+                side_effect=[rejected, unused],
+            ) as connection_factory,
+            mock.patch.object(updater.time, "sleep") as sleep,
+        ):
+            with self.assertRaisesRegex(updater.UpdateFailure, "not approved"):
+                updater.fetch_twse_month("2026-07")
+
+        self.assertEqual(connection_factory.call_count, 1)
+        self.assertTrue(rejected.closed)
+        self.assertFalse(unused.closed)
+        sleep.assert_not_called()
 
     def test_same_request_official_twse_redirect_is_approved(self) -> None:
         requested = updater.source_url("2026-07")

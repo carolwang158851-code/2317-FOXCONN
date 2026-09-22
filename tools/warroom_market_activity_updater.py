@@ -1,7 +1,8 @@
 """Incrementally update P1008 formal market activity from official TWSE monthly CSVs.
 
-The updater is fail-closed, uses at most three monthly requests, never retries,
-and delegates formal CSV/manifest mutation to owner_publish_csv_v2.
+The updater is fail-closed, uses at most three monthly requests, applies only
+bounded transport retries, and delegates formal CSV/manifest mutation to
+owner_publish_csv_v2.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ import json
 import os
 import ssl
 import sys
+import time
 from contextlib import contextmanager
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -47,6 +49,8 @@ EXIT_OK = 0
 EXIT_BLOCKED = 20
 EXIT_FAIL_CLOSED = 30
 EXIT_LOCKED = 31
+MAX_TRANSPORT_ATTEMPTS = 3
+TRANSPORT_RETRY_DELAYS_SECONDS = (1, 2)
 
 
 class UpdateFailure(RuntimeError):
@@ -173,13 +177,26 @@ def fetch_twse_month(month: str, timeout_seconds: int = 30) -> tuple[bytes, dict
     context = ssl.create_default_context()
     path = f"{TWSE_PATH}?{urlencode({'date': month.replace('-', '') + '01', 'stockNo': '2317', 'response': 'csv'})}"
     request_url = source_url(month)
-    connection: http.client.HTTPSConnection | None = None
-    try:
-        def request_once(request_path: str) -> tuple[Any, bytes, str, dict[str, Any]]:
+    https_get_count = 0
+    for attempt_count in range(1, MAX_TRANSPORT_ATTEMPTS + 1):
+        connection: http.client.HTTPSConnection | None = None
+
+        def close_connection() -> None:
             nonlocal connection
+            if connection is not None:
+                try:
+                    connection.close()
+                except (OSError, http.client.HTTPException):
+                    pass
+                finally:
+                    connection = None
+
+        def request_once(request_path: str) -> tuple[Any, bytes, str, dict[str, Any]]:
+            nonlocal connection, https_get_count
             connection = http.client.HTTPSConnection(
                 TWSE_HOST, timeout=timeout_seconds, context=context
             )
+            https_get_count += 1
             connection.request(
                 "GET",
                 request_path,
@@ -191,57 +208,66 @@ def fetch_twse_month(month: str, timeout_seconds: int = 30) -> tuple[bytes, dict
             cert = sock.getpeercert() if sock else {}
             return response, response.read(), tls, cert
 
-        response, content, tls_version, certificate = request_once(path)
-        final_url = request_url
-        redirect_status: int | None = None
-        redirect_location: str | None = None
-        canonical_direct_fallback = False
-        if 300 <= response.status < 400:
-            redirect_status = response.status
-            redirect_location = response.getheader("Location")
-            connection.close()
-            connection = None
-            if isinstance(redirect_location, str) and redirect_location.strip():
-                final_url = approved_redirect_url(redirect_location.strip(), request_url)
-                target = urlsplit(final_url)
-                next_path = target.path + (f"?{target.query}" if target.query else "")
-            else:
-                # TWSE occasionally emits a redirect-like response without a usable
-                # Location.  Reissue only the already-governed direct STOCK_DAY URL;
-                # do not accept the 3xx body or broaden the approved destination set.
-                canonical_direct_fallback = True
-                next_path = path
-            response, content, tls_version, certificate = request_once(next_path)
-        if response.status != 200:
-            raise UpdateFailure(f"TWSE {month} HTTP status {response.status}")
-        issuer = ", ".join("=".join(item) for group in certificate.get("issuer", ()) for item in group)
-        subject = ", ".join("=".join(item) for group in certificate.get("subject", ()) for item in group)
-        metadata = {
-            "month": month,
-            "request_url": request_url,
-            "final_url": final_url,
-            "http_status": response.status,
-            "https_get_count": 2 if redirect_status is not None else 1,
-            "redirect_status": redirect_status,
-            "redirect_location": redirect_location,
-            "canonical_direct_fallback": canonical_direct_fallback,
-            "max_retries": 0,
-            "tls_version": tls_version,
-            "certificate_issuer": issuer,
-            "certificate_subject": subject,
-            "certificate_not_before": certificate.get("notBefore", "NOT_AVAILABLE"),
-            "certificate_not_after": certificate.get("notAfter", "NOT_AVAILABLE"),
-            "response_encoding": "cp950",
-            "response_bytes": len(content),
-            "raw_sha256": sha256_bytes(content),
-            "status": "SUCCESS",
-        }
-        return content, metadata
-    except (OSError, ssl.SSLError, http.client.HTTPException) as exc:
-        raise UpdateFailure(f"TWSE {month} HTTPS/TLS failure: {type(exc).__name__}: {exc}") from exc
-    finally:
-        if connection is not None:
-            connection.close()
+        try:
+            response, content, tls_version, certificate = request_once(path)
+            final_url = request_url
+            redirect_status: int | None = None
+            redirect_location: str | None = None
+            canonical_direct_fallback = False
+            if 300 <= response.status < 400:
+                redirect_status = response.status
+                redirect_location = response.getheader("Location")
+                close_connection()
+                if isinstance(redirect_location, str) and redirect_location.strip():
+                    final_url = approved_redirect_url(redirect_location.strip(), request_url)
+                    target = urlsplit(final_url)
+                    next_path = target.path + (f"?{target.query}" if target.query else "")
+                else:
+                    # TWSE occasionally emits a redirect-like response without a usable
+                    # Location.  Reissue only the already-governed direct STOCK_DAY URL;
+                    # do not accept the 3xx body or broaden the approved destination set.
+                    canonical_direct_fallback = True
+                    next_path = path
+                response, content, tls_version, certificate = request_once(next_path)
+            if response.status != 200:
+                raise UpdateFailure(f"TWSE {month} HTTP status {response.status}")
+            issuer = ", ".join("=".join(item) for group in certificate.get("issuer", ()) for item in group)
+            subject = ", ".join("=".join(item) for group in certificate.get("subject", ()) for item in group)
+            metadata = {
+                "month": month,
+                "request_url": request_url,
+                "final_url": final_url,
+                "http_status": response.status,
+                "https_get_count": https_get_count,
+                "redirect_status": redirect_status,
+                "redirect_location": redirect_location,
+                "canonical_direct_fallback": canonical_direct_fallback,
+                "attempt_count": attempt_count,
+                "retry_count": attempt_count - 1,
+                "max_attempts": MAX_TRANSPORT_ATTEMPTS,
+                "tls_version": tls_version,
+                "certificate_issuer": issuer,
+                "certificate_subject": subject,
+                "certificate_not_before": certificate.get("notBefore", "NOT_AVAILABLE"),
+                "certificate_not_after": certificate.get("notAfter", "NOT_AVAILABLE"),
+                "response_encoding": "cp950",
+                "response_bytes": len(content),
+                "raw_sha256": sha256_bytes(content),
+                "status": "SUCCESS",
+            }
+            return content, metadata
+        except (OSError, http.client.HTTPException) as exc:
+            close_connection()
+            if attempt_count == MAX_TRANSPORT_ATTEMPTS:
+                raise UpdateFailure(
+                    f"TWSE {month} transport failure after {attempt_count} attempts exhausted: "
+                    f"{type(exc).__name__}: {exc}"
+                ) from exc
+            time.sleep(TRANSPORT_RETRY_DELAYS_SECONDS[attempt_count - 1])
+        finally:
+            close_connection()
+
+    raise AssertionError("unreachable")
 
 
 def load_offline_month(receipt_dir: Path, month: str) -> tuple[bytes, dict[str, Any]]:
@@ -262,7 +288,9 @@ def load_offline_month(receipt_dir: Path, month: str) -> tuple[bytes, dict[str, 
         "request_url": source_url(month),
         "http_status": receipt.get("http_status", 200),
         "https_get_count": 0,
-        "max_retries": 0,
+        "attempt_count": 0,
+        "retry_count": 0,
+        "max_attempts": 0,
         "tls_version": receipt.get("tls_version", "OFFLINE_RECEIPT"),
         "certificate_issuer": receipt.get("certificate_issuer", "OFFLINE_RECEIPT"),
         "certificate_subject": receipt.get("certificate_subject", "OFFLINE_RECEIPT"),
