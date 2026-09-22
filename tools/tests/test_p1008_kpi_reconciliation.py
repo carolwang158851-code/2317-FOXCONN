@@ -157,11 +157,70 @@ class KpiReconciliationTests(unittest.TestCase):
         self.assertEqual(6, systems.count("score: null"))
         self.assertNotIn("AI_Revenue_Pct = 40", self.new_ui)
         self.assertNotIn("AI_Revenue_Pct = 51", self.new_ui)
-        self.assertNotIn("cloudAndNetworkingRevenueSharePct", systems)
+        self.assertIn("cloudAndNetworkingRevenueSharePct", systems)
+        self.assertIn("aiSpecificRevenueSharePct", systems)
         for text in (self.old_source, self.old_bundle):
             self.assertIn("authoritySupported ? value : null", text)
             self.assertNotIn("AI_Revenue_Pct = 40", text)
             self.assertNotIn("AI_Revenue_Pct = 51", text)
+
+    def test_new_ui_prefers_official_taiex_runtime_and_labels_history_as_fallback(self):
+        panel = self.new_ui[self.new_ui.index("function renderRightPanel"):self.new_ui.index("function renderBottom")]
+        self.assertIn('"台灣加權指數"', panel)
+        self.assertIn("TWSE 官方", panel)
+        self.assertIn("近5交易日", panel)
+        self.assertIn("OFFICIAL_EXCHANGE / OBSERVATION_ONLY", panel)
+        self.assertIn('"本次官方來源未取得"', panel)
+        self.assertIn("最近歷史觀察", panel)
+        self.assertIn("不得視為 current", panel)
+        self.assertIn('fetchJson("runtime/warroom_realtime_snapshot.json")', self.new_ui)
+        self.assertIn('latestNumericObservation(macroRows, "TAIEX_Weekly_Chg")', self.new_ui)
+
+    def test_new_ui_ai_demand_proxy_keeps_q2_ai_not_disclosed(self):
+        q2 = json.loads(
+            (PACKAGE / "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json")
+            .read_text(encoding="utf-8")
+        )
+        product_mix = q2["productMix"]
+        self.assertIsNone(product_mix["aiSpecificRevenueSharePct"])
+        self.assertEqual("NOT_DISCLOSED", product_mix["aiSpecificShareStatus"])
+        self.assertEqual("51", product_mix["cloudAndNetworkingRevenueSharePct"])
+
+        panel = self.new_ui[self.new_ui.index("function renderRightPanel"):self.new_ui.index("function renderBottom")]
+        self.assertIn('id: "AI需求代理"', panel)
+        self.assertIn("Cloud & Networking", panel)
+        self.assertIn("QoQ Trend", panel)
+        self.assertIn("前季可比較精確分母未治理", self.new_ui)
+        self.assertIn("AI-specific", panel)
+        self.assertIn("官方未揭露", panel)
+        self.assertIn("Hon Hai Official Earnings", panel)
+        self.assertNotIn("AI Revenue Share 51", panel)
+        self.assertNotIn("51 / 40", self.new_ui)
+        self.assertNotIn("接近五成", self.new_ui)
+
+        historical = [row for row in csv_rows(PACKAGE / "data/2317_master_v9.csv") if row["AI_Revenue_Pct"]][-1]
+        self.assertEqual("2026Q1", historical["Quarter"])
+        self.assertEqual("40.0", historical["AI_Revenue_Pct"])
+        self.assertEqual("USER_CURATED_WEB_DATA", historical["DataSource"])
+        self.assertEqual("L3", historical["DataSupportLevel"])
+
+    def test_cloud_network_qoq_requires_exact_comparable_governed_numbers(self):
+        systems = self.new_ui[self.new_ui.index("function buildSystems"):self.new_ui.index("function renderRightPanel")]
+        self.assertIn('priorCloud.sourceClassification === "OFFICIAL_REPORTED"', systems)
+        self.assertIn("q1Revenue !== null && q1CloudShare !== null", systems)
+        self.assertIn("cloudNetworkRevenueQoqPct = exactCloudComparison", systems)
+        self.assertIn('cloudNetworkTrend = cloudNetworkRevenueQoqPct === null', systems)
+        self.assertNotIn("nearly", systems.lower())
+
+    def test_new_ui_monitor_addition_preserves_decision_core(self):
+        systems = self.new_ui[self.new_ui.index("function buildSystems"):self.new_ui.index("function renderRightPanel")]
+        panel = self.new_ui[self.new_ui.index("function renderRightPanel"):self.new_ui.index("function renderBottom")]
+        self.assertEqual(6, systems.count("score: null"))
+        self.assertEqual(7, panel.count("{ id:"))
+        self.assertIn("formalScoreCount", self.new_ui)
+        self.assertIn("Decision Scoring", self.new_ui)
+        self.assertIn("HOLD / 觀察", self.new_ui)
+        self.assertIn("actionable:false", panel)
 
     def test_old_ui_uses_formal_fx_sidecar_for_shared_fx_metrics(self):
         for text in (self.old_source, self.old_bundle):

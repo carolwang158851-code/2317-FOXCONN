@@ -188,6 +188,7 @@ MARKET_PROXY_MANIFEST = [
 TWSE_DAILY_ALL_URL = "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"
 TWSE_STOCK_DAY_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY"
 TWSE_MIS_URL = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp"
+TWSE_TAIEX_HISTORY_URL = "https://www.twse.com.tw/rwd/zh/TAIEX/MI_5MINS_HIST"
 YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
 STOOQ_QUOTE_URL = "https://stooq.com/q/l/"
 FRED_DFF_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DFF"
@@ -535,6 +536,96 @@ def parse_twse_date(raw: Any) -> str | None:
     except ValueError:
         return None
     return None
+
+
+def parse_twse_taiex_history(payload: Any) -> list[dict[str, Any]]:
+    """Parse one official TWSE monthly TAIEX history response."""
+
+    if not isinstance(payload, dict) or payload.get("stat") != "OK":
+        return []
+    observations: dict[str, dict[str, Any]] = {}
+    for row in payload.get("data", []) or []:
+        if not isinstance(row, list) or len(row) < 5:
+            continue
+        source_date = parse_twse_date(row[0])
+        close = parse_float(row[4])
+        if source_date and close is not None:
+            observations[source_date] = {"date": source_date, "close": close}
+    return [observations[key] for key in sorted(observations)]
+
+
+def calculate_taiex_5d_change(observations: list[dict[str, Any]]) -> float | None:
+    """Return close-to-close change versus five trading observations earlier."""
+
+    valid = [
+        item
+        for item in observations
+        if item.get("date") and parse_float(item.get("close")) is not None
+    ]
+    valid.sort(key=lambda item: str(item["date"]))
+    if len(valid) < 6:
+        return None
+    latest_close = parse_float(valid[-1]["close"])
+    prior_close = parse_float(valid[-6]["close"])
+    if latest_close is None or prior_close is None or prior_close == 0:
+        return None
+    return round((latest_close / prior_close - 1) * 100, 4)
+
+
+def taiex_unavailable_observation() -> dict[str, Any]:
+    return {
+        "close": None,
+        "sourceDate": "",
+        "change5dPct": None,
+        "sourceName": "TWSE",
+        "sourceUrl": TWSE_TAIEX_HISTORY_URL,
+        "sourceTier": "OFFICIAL_EXCHANGE",
+        "status": "SOURCE_UNAVAILABLE",
+        "actionable": False,
+    }
+
+
+def fetch_twse_taiex_observation(candidate_date: str) -> dict[str, Any]:
+    """Fetch official TAIEX closes and compute a five-trading-session change."""
+
+    target = parse_iso_date(candidate_date)
+    if target is None:
+        return taiex_unavailable_observation()
+    month_start = target.replace(day=1)
+    current_payload = fetch_json(
+        TWSE_TAIEX_HISTORY_URL,
+        {"date": month_start.strftime("%Y%m%d"), "response": "json"},
+    )
+    current = [
+        item
+        for item in parse_twse_taiex_history(current_payload)
+        if str(item["date"]) <= candidate_date
+    ]
+    if not current:
+        return taiex_unavailable_observation()
+
+    observations = list(current)
+    if len(observations) < 6:
+        prior_month_end = month_start - timedelta(days=1)
+        prior_payload = fetch_json(
+            TWSE_TAIEX_HISTORY_URL,
+            {"date": prior_month_end.replace(day=1).strftime("%Y%m%d"), "response": "json"},
+        )
+        observations = parse_twse_taiex_history(prior_payload) + observations
+
+    by_date = {str(item["date"]): item for item in observations}
+    ordered = [by_date[key] for key in sorted(by_date)]
+    latest = ordered[-1]
+    return {
+        "close": round(float(latest["close"]), 2),
+        "sourceDate": latest["date"],
+        "change5dPct": calculate_taiex_5d_change(ordered),
+        "sourceName": "TWSE",
+        "sourceUrl": TWSE_TAIEX_HISTORY_URL,
+        "sourceTier": "OFFICIAL_EXCHANGE",
+        "status": "OBSERVATION_ONLY",
+        "actionable": False,
+    }
 
 
 def source_result(
@@ -1418,6 +1509,7 @@ def main() -> int:
     latest_daily = load_latest_csv_row(package_root, "data/2317_daily_price.csv") or {}
 
     if args.no_fetch:
+        taiex_observation = taiex_unavailable_observation()
         fetched_macro = {
             "vix": None,
             "wti": None,
@@ -1429,6 +1521,7 @@ def main() -> int:
             "jpy_usd": None,
         }
     else:
+        taiex_observation = fetch_twse_taiex_observation(candidate_date)
         fetched_macro = {
             "vix": fetch_macro_vix(),
             "wti": fetch_macro_wti(),
@@ -1823,6 +1916,7 @@ def main() -> int:
         "dailyRow": daily_row,
         "fxTrendRow": fx_trend_row,
         "macroEventRow": macro_event_row,
+        "taiex": taiex_observation,
         "sidecarObservationOnly": True,
         "ownerConfirmationRequired": True,
         "ownerConfirmationRequiredZh": "候選 CSV 通過檢核後仍需 Owner 在 3_OWNER 核准流程輸入明確發布指令。",
