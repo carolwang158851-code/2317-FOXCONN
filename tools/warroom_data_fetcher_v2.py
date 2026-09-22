@@ -1982,6 +1982,7 @@ def main() -> int:
         "macroRow": macro_row,
         "fxTrendRow": fx_trend_row,
         "macroEventRow": macro_event_row,
+        "taiex": taiex_observation,
         "sidecarObservationOnly": True,
         "missingFields": dry_run["missingFields"],
         "optionalMissingFields": dry_run["optionalMissingFields"],

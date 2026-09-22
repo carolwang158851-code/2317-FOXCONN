@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import csv
+import json
+import shutil
 import sys
 import unittest
+import uuid
 from pathlib import Path
 from unittest import mock
 
@@ -184,11 +187,63 @@ class DataFreshnessRemediationTests(unittest.TestCase):
         }
         with mock.patch.object(fetcher, "fetch_json", return_value=payload):
             result = fetcher.fetch_twse_taiex_observation("2026-09-21")
+        self.assertEqual(result["close"], 47021.0)
+        self.assertEqual(result["sourceDate"], "2026-09-21")
+        self.assertEqual(result["change5dPct"], round((47021 / 47014 - 1) * 100, 4))
         self.assertEqual(result["sourceName"], "TWSE")
         self.assertEqual(result["sourceTier"], "OFFICIAL_EXCHANGE")
         self.assertEqual(result["status"], "OBSERVATION_ONLY")
         self.assertFalse(result["actionable"])
         self.assertIn("MI_5MINS_HIST", result["sourceUrl"])
+
+    def test_generated_runtime_snapshot_contains_fail_closed_taiex(self) -> None:
+        package_root = (
+            PACKAGE_ROOT
+            / "runtime"
+            / "taiex_runtime_wiring_test_scratch"
+            / uuid.uuid4().hex
+        )
+        try:
+            shutil.copytree(PACKAGE_ROOT / "data", package_root / "data")
+            contract = Path(
+                "contracts/p1008_quarterly_authority/v1.0/"
+                "P1008_QUARTERLY_FIELD_AVAILABILITY_CONTRACT_V1.json"
+            )
+            (package_root / contract).parent.mkdir(parents=True)
+            shutil.copy2(PACKAGE_ROOT / contract, package_root / contract)
+            with mock.patch.object(
+                sys,
+                "argv",
+                [
+                    "warroom_data_fetcher_v2.py",
+                    "--package-root",
+                    str(package_root),
+                    "--date",
+                    "2026-09-22",
+                    "--no-fetch",
+                ],
+            ):
+                self.assertEqual(fetcher.main(), 0)
+
+            runtime_snapshot = json.loads(
+                (package_root / "runtime/warroom_realtime_snapshot.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            dry_run = json.loads(
+                (package_root / "staging/2026-09-22/DRY_RUN.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+        finally:
+            shutil.rmtree(package_root, ignore_errors=True)
+        self.assertIn("taiex", runtime_snapshot)
+        self.assertEqual(runtime_snapshot["taiex"], dry_run["taiex"])
+        self.assertIsNone(runtime_snapshot["taiex"]["close"])
+        self.assertIsNone(runtime_snapshot["taiex"]["change5dPct"])
+        self.assertEqual(runtime_snapshot["taiex"]["status"], "SOURCE_UNAVAILABLE")
+        self.assertEqual(runtime_snapshot["taiex"]["sourceTier"], "OFFICIAL_EXCHANGE")
+        self.assertFalse(runtime_snapshot["taiex"]["actionable"])
 
     def test_fetcher_keeps_macro_fx_source_ownership(self) -> None:
         source = (TOOLS / "warroom_data_fetcher_v2.py").read_text(encoding="utf-8")
