@@ -163,6 +163,49 @@ class KpiReconciliationTests(unittest.TestCase):
             self.assertNotIn("AI_Revenue_Pct = 40", text)
             self.assertNotIn("AI_Revenue_Pct = 51", text)
 
+    def test_new_ui_adds_taiex_weekly_observation_without_point_semantics(self):
+        panel = self.new_ui[self.new_ui.index("function renderRightPanel"):self.new_ui.index("function renderBottom")]
+        self.assertIn('id: "TAIEX 週變動"', panel)
+        self.assertIn("macro_snapshot.csv.TAIEX_Weekly_Chg", panel)
+        self.assertIn("週變動百分比，非 TAIEX 指數點位", panel)
+        self.assertIn('metrics.taiexWeeklyChange === null ? "N/A"', panel)
+        self.assertIn('latestNumericObservation(macroRows, "TAIEX_Weekly_Chg")', self.new_ui)
+        self.assertNotIn('id: "台股加權指數"', panel)
+
+    def test_new_ui_ai_share_is_current_not_disclosed_with_l3_history_only(self):
+        q2 = json.loads(
+            (PACKAGE / "modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json")
+            .read_text(encoding="utf-8")
+        )
+        product_mix = q2["productMix"]
+        self.assertIsNone(product_mix["aiSpecificRevenueSharePct"])
+        self.assertEqual("NOT_DISCLOSED", product_mix["aiSpecificShareStatus"])
+        self.assertEqual("51", product_mix["cloudAndNetworkingRevenueSharePct"])
+
+        panel = self.new_ui[self.new_ui.index("function renderRightPanel"):self.new_ui.index("function renderBottom")]
+        self.assertIn('id: "AI 營收占比"', panel)
+        self.assertIn('metrics.aiSpecificShare === null ? "N/A"', panel)
+        self.assertIn('metrics.aiSpecificStatus === "NOT_DISCLOSED"', panel)
+        self.assertIn("observation only", panel)
+        self.assertIn("denominator 未治理", panel)
+        self.assertNotIn("cloudAndNetworkingRevenueSharePct", panel)
+
+        historical = [row for row in csv_rows(PACKAGE / "data/2317_master_v9.csv") if row["AI_Revenue_Pct"]][-1]
+        self.assertEqual("2026Q1", historical["Quarter"])
+        self.assertEqual("40.0", historical["AI_Revenue_Pct"])
+        self.assertEqual("USER_CURATED_WEB_DATA", historical["DataSource"])
+        self.assertEqual("L3", historical["DataSupportLevel"])
+
+    def test_new_ui_monitor_addition_preserves_decision_core(self):
+        systems = self.new_ui[self.new_ui.index("function buildSystems"):self.new_ui.index("function renderRightPanel")]
+        panel = self.new_ui[self.new_ui.index("function renderRightPanel"):self.new_ui.index("function renderBottom")]
+        self.assertEqual(6, systems.count("score: null"))
+        self.assertEqual(7, panel.count("{ id:"))
+        self.assertIn("formalScoreCount", self.new_ui)
+        self.assertIn("Decision Scoring", self.new_ui)
+        self.assertIn("HOLD / 觀察", self.new_ui)
+        self.assertIn("actionable:false", panel)
+
     def test_old_ui_uses_formal_fx_sidecar_for_shared_fx_metrics(self):
         for text in (self.old_source, self.old_bundle):
             self.assertIn("const latestFormalFxTrend = validFxTrendCsv[validFxTrendCsv.length - 1] || null", text)
