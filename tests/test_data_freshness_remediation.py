@@ -61,6 +61,77 @@ class _CrossHostRedirectConnection(_Connection):
 
 
 class DataFreshnessRemediationTests(unittest.TestCase):
+    def test_metric_fallback_chain_stops_at_explicit_budget(self) -> None:
+        now = [0.0]
+        calls: list[str] = []
+
+        def timed_out(label: str, elapsed: float):
+            def run(_budget: fetcher.FallbackBudget):
+                calls.append(label)
+                now[0] += elapsed
+                return None
+
+            return run
+
+        result = fetcher.first_available_source(
+            "vix",
+            [
+                ("FRED VIXCLS", timed_out("fred", 40.0)),
+                ("Stooq VIX", timed_out("stooq", 25.0)),
+                ("Yahoo VIX", timed_out("yahoo", 1.0)),
+            ],
+            fallback_budget_seconds=60.0,
+            clock=lambda: now[0],
+        )
+        self.assertIsNone(result)
+        self.assertEqual(calls, ["fred", "stooq"])
+
+    def test_yahoo_fallback_success_preserves_source_priority(self) -> None:
+        calls: list[str] = []
+
+        def unavailable(label: str):
+            def run(_budget: fetcher.FallbackBudget):
+                calls.append(label)
+                return None
+
+            return run
+
+        def yahoo(_budget: fetcher.FallbackBudget):
+            calls.append("yahoo")
+            return fetcher.source_result(
+                14.75,
+                "YAHOO_FINANCE_VIX",
+                support_level="PUBLIC_MARKET_DATA",
+            )
+
+        result = fetcher.first_available_source(
+            "vix",
+            [
+                ("FRED VIXCLS", unavailable("fred")),
+                ("Stooq VIX", unavailable("stooq")),
+                ("Yahoo VIX", yahoo),
+            ],
+            fallback_budget_seconds=60.0,
+        )
+        self.assertEqual(calls, ["fred", "stooq", "yahoo"])
+        self.assertIsNotNone(result)
+        self.assertEqual(result["source"], "YAHOO_FINANCE_VIX")
+        self.assertEqual(result["supportLevel"], "PUBLIC_MARKET_DATA")
+
+    def test_exhausted_fallback_keeps_governed_carry_forward_semantics(self) -> None:
+        result = fetcher.choose_value(
+            None,
+            None,
+            carry_value="31.732",
+            carry_source="CONNECTOR_SOURCE_UNAVAILABLE_CARRY_FORWARD",
+            carry_note_zh="connector unavailable; observation only",
+        )
+        self.assertEqual(result["value"], 31.732)
+        self.assertEqual(
+            result["source"], "CONNECTOR_SOURCE_UNAVAILABLE_CARRY_FORWARD"
+        )
+        self.assertEqual(result["supportLevel"], "CARRY_FORWARD")
+
     def test_daily_price_wrapper_creates_log_directory_before_redirect(self) -> None:
         wrapper = (TOOLS / "p1008_update_daily_price.cmd").read_text(encoding="utf-8")
         mkdir_at = wrapper.index('if not exist "%LOG_DIR%" mkdir')

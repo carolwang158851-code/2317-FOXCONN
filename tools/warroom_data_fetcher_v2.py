@@ -26,9 +26,10 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
@@ -117,6 +118,7 @@ REQUEST_RETRIES = 1
 REQUEST_RETRY_DELAY_SECONDS = 2
 POWERSHELL_TIMEOUT_SECONDS = 20
 HTTP_CLIENT_TIMEOUT_SECONDS = 10
+FALLBACK_BUDGET_SECONDS = 60.0
 
 MACRO_SOURCE_LABELS = {
     "stock_price": "2317 close",
@@ -198,7 +200,60 @@ CME_FEDWATCH_PAGE_URL = "https://www.cmegroup.com/markets/interest-rates/cme-fed
 
 def log(message: str, level: str = "INFO") -> None:
     timestamp = datetime.now().strftime("%H:%M:%S")
-    print(f"[{timestamp}] [{level}] {message}")
+    print(f"[{timestamp}] [{level}] {message}", flush=True)
+
+
+@dataclass
+class FallbackBudget:
+    """One monotonic deadline shared by every provider/transport for a metric."""
+
+    metric: str
+    total_seconds: float = FALLBACK_BUDGET_SECONDS
+    clock: Callable[[], float] = time.monotonic
+    started_at: float = field(init=False)
+
+    def __post_init__(self) -> None:
+        if self.total_seconds <= 0:
+            raise ValueError("fallback budget must be positive")
+        self.started_at = self.clock()
+
+    def remaining(self) -> float:
+        return max(0.0, self.total_seconds - (self.clock() - self.started_at))
+
+    def exhausted(self) -> bool:
+        return self.remaining() <= 0.0
+
+
+def log_fallback_progress(
+    budget: FallbackBudget,
+    provider: str,
+    transport: str,
+    event: str,
+    detail: str = "",
+) -> None:
+    message = (
+        f"[PROGRESS] metric={budget.metric} provider={provider} transport={transport} "
+        f"event={event} fallback_budget_remaining={budget.remaining():.2f}s"
+    )
+    if detail:
+        message += f" detail={detail}"
+    log(message, "WARN" if event in {"timeout_or_failure", "budget_exhausted"} else "INFO")
+
+
+def bounded_transport_timeout(
+    budget: FallbackBudget | None,
+    provider: str,
+    transport: str,
+    configured_timeout: float,
+) -> float | None:
+    if budget is None:
+        return configured_timeout
+    remaining = budget.remaining()
+    if remaining <= 0.0:
+        log_fallback_progress(budget, provider, transport, "budget_exhausted")
+        return None
+    log_fallback_progress(budget, provider, transport, "attempt_start")
+    return min(configured_timeout, remaining)
 
 
 def sha256_file(path: Path) -> str:
@@ -375,7 +430,13 @@ def load_latest_csv_row(package_root: Path, relative_path: str, date_key: str = 
     return latest_row_by_date(rows, date_key=date_key)
 
 
-def fetch_bytes(url: str, params: dict[str, str] | None = None) -> bytes | None:
+def fetch_bytes_with_urllib(
+    url: str,
+    params: dict[str, str] | None = None,
+    *,
+    budget: FallbackBudget | None = None,
+    provider: str = "UNSCOPED",
+) -> bytes | None:
     if params:
         url = f"{url}?{urllib.parse.urlencode(params)}"
     headers = {
@@ -384,10 +445,22 @@ def fetch_bytes(url: str, params: dict[str, str] | None = None) -> bytes | None:
     }
     request = urllib.request.Request(url, headers=headers)
     for attempt in range(REQUEST_RETRIES):
+        timeout = bounded_transport_timeout(
+            budget, provider, "urllib", REQUEST_TIMEOUT_SECONDS
+        )
+        if timeout is None:
+            return None
         try:
-            with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
-                return response.read()
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                content = response.read()
+                if budget is not None:
+                    log_fallback_progress(budget, provider, "urllib", "success")
+                return content
         except (urllib.error.URLError, TimeoutError, ValueError) as error:
+            if budget is not None:
+                log_fallback_progress(
+                    budget, provider, "urllib", "timeout_or_failure", str(error)
+                )
             if attempt < REQUEST_RETRIES - 1:
                 time.sleep(REQUEST_RETRY_DELAY_SECONDS)
             else:
@@ -395,7 +468,7 @@ def fetch_bytes(url: str, params: dict[str, str] | None = None) -> bytes | None:
     return None
 
 
-_fetch_bytes_urllib_only = fetch_bytes
+_fetch_bytes_urllib_only = fetch_bytes_with_urllib
 
 
 def build_url(url: str, params: dict[str, str] | None = None) -> str:
@@ -404,7 +477,13 @@ def build_url(url: str, params: dict[str, str] | None = None) -> str:
     return url
 
 
-def fetch_bytes_with_http_client(url: str, redirects_remaining: int = 3) -> bytes | None:
+def fetch_bytes_with_http_client(
+    url: str,
+    redirects_remaining: int = 3,
+    *,
+    budget: FallbackBudget | None = None,
+    provider: str = "UNSCOPED",
+) -> bytes | None:
     """Use a direct verified HTTPS transport when urllib/proxy routing is unavailable."""
 
     parsed = urllib.parse.urlsplit(url)
@@ -412,12 +491,17 @@ def fetch_bytes_with_http_client(url: str, redirects_remaining: int = 3) -> byte
         log(f"Python HTTPS fallback rejected non-HTTPS URL: {url}", "WARN")
         return None
     target = urllib.parse.urlunsplit(("", "", parsed.path or "/", parsed.query, ""))
+    timeout = bounded_transport_timeout(
+        budget, provider, "python_https", HTTP_CLIENT_TIMEOUT_SECONDS
+    )
+    if timeout is None:
+        return None
     connection: http.client.HTTPSConnection | None = None
     try:
         connection = http.client.HTTPSConnection(
             parsed.hostname,
             port=parsed.port,
-            timeout=HTTP_CLIENT_TIMEOUT_SECONDS,
+            timeout=timeout,
             context=ssl.create_default_context(),
         )
         connection.request(
@@ -440,28 +524,54 @@ def fetch_bytes_with_http_client(url: str, redirects_remaining: int = 3) -> byte
             if redirected_host != parsed.hostname:
                 log(f"Python HTTPS fallback cross-host redirect rejected: {url}", "WARN")
                 return None
-            return fetch_bytes_with_http_client(redirected, redirects_remaining - 1)
+            return fetch_bytes_with_http_client(
+                redirected,
+                redirects_remaining - 1,
+                budget=budget,
+                provider=provider,
+            )
         content = response.read()
         if response.status != 200:
             log(f"Python HTTPS fallback HTTP {response.status}: {url}", "WARN")
+            if budget is not None:
+                log_fallback_progress(
+                    budget, provider, "python_https", "timeout_or_failure", f"HTTP_{response.status}"
+                )
             return None
         log(f"Python HTTPS fallback succeeded: {url}")
+        if budget is not None:
+            log_fallback_progress(budget, provider, "python_https", "success")
         return content
     except (OSError, TimeoutError, ssl.SSLError, http.client.HTTPException) as error:
         log(f"Python HTTPS fallback failed: {url} ({error})", "WARN")
+        if budget is not None:
+            log_fallback_progress(
+                budget, provider, "python_https", "timeout_or_failure", str(error)
+            )
         return None
     finally:
         if connection is not None:
             connection.close()
 
 
-def fetch_bytes_with_powershell(url: str) -> bytes | None:
+def fetch_bytes_with_powershell(
+    url: str,
+    *,
+    budget: FallbackBudget | None = None,
+    provider: str = "UNSCOPED",
+) -> bytes | None:
+    timeout = bounded_transport_timeout(
+        budget, provider, "powershell", POWERSHELL_TIMEOUT_SECONDS
+    )
+    if timeout is None:
+        return None
+    invoke_timeout = max(1, min(15, int(timeout)))
     script = (
         "$ProgressPreference='SilentlyContinue'; "
         "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); "
         "$Url = $env:P1008_FETCH_URL; "
         "try { "
-        "$r = Invoke-WebRequest -UseBasicParsing -Uri $Url -TimeoutSec 15 -MaximumRedirection 5; "
+        f"$r = Invoke-WebRequest -UseBasicParsing -Uri $Url -TimeoutSec {invoke_timeout} -MaximumRedirection 5; "
         "[Console]::Out.Write($r.Content); exit 0 "
         "} catch { "
         "[Console]::Error.Write($_.Exception.Message); exit 1 "
@@ -476,34 +586,74 @@ def fetch_bytes_with_powershell(url: str) -> bytes | None:
             encoding="utf-8",
             errors="replace",
             capture_output=True,
-            timeout=POWERSHELL_TIMEOUT_SECONDS,
+            timeout=timeout,
             check=False,
             env=env,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
         log(f"PowerShell connector fallback unavailable: {url} ({error})", "WARN")
+        if budget is not None:
+            log_fallback_progress(
+                budget, provider, "powershell", "timeout_or_failure", str(error)
+            )
         return None
     if completed.returncode != 0 or not completed.stdout:
         error_text = (completed.stderr or "").strip()
         log(f"PowerShell connector fallback failed: {url} ({error_text or completed.returncode})", "WARN")
+        if budget is not None:
+            log_fallback_progress(
+                budget,
+                provider,
+                "powershell",
+                "timeout_or_failure",
+                error_text or str(completed.returncode),
+            )
         return None
     log(f"PowerShell connector fallback succeeded: {url}")
+    if budget is not None:
+        log_fallback_progress(budget, provider, "powershell", "success")
     return completed.stdout.encode("utf-8")
 
 
-def fetch_bytes(url: str, params: dict[str, str] | None = None) -> bytes | None:
-    data = _fetch_bytes_urllib_only(url, params)
+def fetch_bytes(
+    url: str,
+    params: dict[str, str] | None = None,
+    *,
+    budget: FallbackBudget | None = None,
+    provider: str = "UNSCOPED",
+) -> bytes | None:
+    if budget is None:
+        data = _fetch_bytes_urllib_only(url, params)
+    else:
+        data = _fetch_bytes_urllib_only(
+            url, params, budget=budget, provider=provider
+        )
     if data is not None:
         return data
     full_url = build_url(url, params)
-    data = fetch_bytes_with_http_client(full_url)
+    if budget is None:
+        data = fetch_bytes_with_http_client(full_url)
+    else:
+        data = fetch_bytes_with_http_client(
+            full_url, budget=budget, provider=provider
+        )
     if data is not None:
         return data
-    return fetch_bytes_with_powershell(full_url)
+    if budget is None:
+        return fetch_bytes_with_powershell(full_url)
+    return fetch_bytes_with_powershell(
+        full_url, budget=budget, provider=provider
+    )
 
 
-def fetch_json(url: str, params: dict[str, str] | None = None) -> Any | None:
-    data = fetch_bytes(url, params)
+def fetch_json(
+    url: str,
+    params: dict[str, str] | None = None,
+    *,
+    budget: FallbackBudget | None = None,
+    provider: str = "UNSCOPED",
+) -> Any | None:
+    data = fetch_bytes(url, params, budget=budget, provider=provider)
     if data is None:
         return None
     try:
@@ -861,10 +1011,22 @@ def fetch_twse_realtime_close(candidate_date: str) -> dict[str, Any] | None:
     )
 
 
-def fetch_yahoo_chart_value(ticker: str, *, source_name: str, note_zh: str = "") -> dict[str, Any] | None:
+def fetch_yahoo_chart_value(
+    ticker: str,
+    *,
+    source_name: str,
+    note_zh: str = "",
+    fallback_budget: FallbackBudget | None = None,
+    provider_name: str = "Yahoo",
+) -> dict[str, Any] | None:
     encoded_ticker = urllib.parse.quote(ticker, safe="=.-")
     url = YAHOO_CHART_URL.format(ticker=encoded_ticker)
-    payload = fetch_json(url, {"interval": "1d", "range": "5d"})
+    payload = fetch_json(
+        url,
+        {"interval": "1d", "range": "5d"},
+        budget=fallback_budget,
+        provider=provider_name,
+    )
     try:
         result = payload["chart"]["result"][0]
     except (TypeError, KeyError, IndexError):
@@ -910,11 +1072,15 @@ def fetch_stooq_quote_value(
     *,
     source_name: str,
     note_zh: str,
+    fallback_budget: FallbackBudget | None = None,
+    provider_name: str = "Stooq",
 ) -> dict[str, Any] | None:
     for symbol in symbols:
         payload = fetch_bytes(
             STOOQ_QUOTE_URL,
             {"s": symbol, "f": "sd2t2ohlcv", "h": "", "e": "csv"},
+            budget=fallback_budget,
+            provider=f"{provider_name}/{symbol}",
         )
         if payload is None:
             continue
@@ -937,9 +1103,18 @@ def fetch_stooq_quote_value(
     return None
 
 
-def fetch_fred_series_latest(series_id: str) -> tuple[float, str] | None:
+def fetch_fred_series_latest(
+    series_id: str,
+    *,
+    fallback_budget: FallbackBudget | None = None,
+    provider_name: str | None = None,
+) -> tuple[float, str] | None:
     url = FRED_SERIES_URL.format(series_id=urllib.parse.quote(series_id, safe=""))
-    data = fetch_bytes(url)
+    data = fetch_bytes(
+        url,
+        budget=fallback_budget,
+        provider=provider_name or f"FRED {series_id}",
+    )
     if data is None:
         return None
     text = data.decode("utf-8-sig", errors="replace")
@@ -962,8 +1137,14 @@ def fetch_fred_public_series_value(
     source_name: str,
     note_zh: str,
     decimals: int = 3,
+    fallback_budget: FallbackBudget | None = None,
+    provider_name: str | None = None,
 ) -> dict[str, Any] | None:
-    latest = fetch_fred_series_latest(series_id)
+    latest = fetch_fred_series_latest(
+        series_id,
+        fallback_budget=fallback_budget,
+        provider_name=provider_name,
+    )
     if latest is None:
         return None
     latest_value, latest_date = latest
@@ -977,110 +1158,184 @@ def fetch_fred_public_series_value(
     )
 
 
-def first_available_source(fetchers: list[tuple[str, Any]]) -> dict[str, Any] | None:
+def first_available_source(
+    metric: str,
+    fetchers: list[tuple[str, Callable[[FallbackBudget], dict[str, Any] | None]]],
+    *,
+    fallback_budget_seconds: float = FALLBACK_BUDGET_SECONDS,
+    clock: Callable[[], float] = time.monotonic,
+) -> dict[str, Any] | None:
+    budget = FallbackBudget(metric, fallback_budget_seconds, clock)
     for label, fetcher in fetchers:
-        result = fetcher()
+        if budget.exhausted():
+            log_fallback_progress(budget, label, "provider", "budget_exhausted")
+            break
+        log_fallback_progress(budget, label, "provider", "attempt_start")
+        result = fetcher(budget)
         if result is not None and result.get("value") not in (None, ""):
+            log_fallback_progress(
+                budget,
+                label,
+                "provider",
+                "chosen_successful_source",
+                str(result.get("source") or ""),
+            )
             return result
         log(f"{label} 未取得資料，嘗試下一來源。", "WARN")
     return None
 
 
 def fetch_macro_vix() -> dict[str, Any] | None:
-    return first_available_source([
+    return first_available_source("vix", [
         (
             "FRED VIXCLS",
-            lambda: fetch_fred_public_series_value(
+            lambda budget: fetch_fred_public_series_value(
                 "VIXCLS",
                 source_name="FRED_VIXCLS_CBOE_VIX",
                 note_zh="FRED VIXCLS（CBOE VIX）作為 VIX 優先來源",
                 decimals=2,
+                fallback_budget=budget,
+                provider_name="FRED VIXCLS",
             ),
         ),
         (
             "Stooq VIX",
-            lambda: fetch_stooq_quote_value(
+            lambda budget: fetch_stooq_quote_value(
                 ["^vix", "vix"],
                 source_name="STOOQ_VIX_PUBLIC_MARKET",
                 note_zh="Stooq 公開市場 VIX 備援；正式發布前仍需來源註記",
+                fallback_budget=budget,
+                provider_name="Stooq VIX",
             ),
         ),
-        ("Yahoo VIX", lambda: fetch_yahoo_chart_value("^VIX", source_name="YAHOO_FINANCE_VIX")),
+        (
+            "Yahoo VIX",
+            lambda budget: fetch_yahoo_chart_value(
+                "^VIX",
+                source_name="YAHOO_FINANCE_VIX",
+                fallback_budget=budget,
+                provider_name="Yahoo VIX",
+            ),
+        ),
     ])
 
 
 def fetch_macro_wti() -> dict[str, Any] | None:
-    return first_available_source([
+    return first_available_source("wti", [
         (
             "FRED DCOILWTICO",
-            lambda: fetch_fred_public_series_value(
+            lambda budget: fetch_fred_public_series_value(
                 "DCOILWTICO",
                 source_name="FRED_DCOILWTICO_WTI",
                 note_zh="FRED DCOILWTICO 作為 WTI 優先來源",
                 decimals=2,
+                fallback_budget=budget,
+                provider_name="FRED DCOILWTICO",
             ),
         ),
         (
             "Stooq CL.F",
-            lambda: fetch_stooq_quote_value(
+            lambda budget: fetch_stooq_quote_value(
                 ["cl.f", "cl"],
                 source_name="STOOQ_WTI_PUBLIC_MARKET",
                 note_zh="Stooq WTI/CL 公開市場備援；正式發布前仍需來源註記",
+                fallback_budget=budget,
+                provider_name="Stooq CL.F",
             ),
         ),
-        ("Yahoo WTI", lambda: fetch_yahoo_chart_value("CL=F", source_name="YAHOO_FINANCE_WTI")),
+        (
+            "Yahoo WTI",
+            lambda budget: fetch_yahoo_chart_value(
+                "CL=F",
+                source_name="YAHOO_FINANCE_WTI",
+                fallback_budget=budget,
+                provider_name="Yahoo WTI",
+            ),
+        ),
     ])
 
 
 def fetch_macro_twd_usd() -> dict[str, Any] | None:
-    return first_available_source([
+    return first_available_source("twd_usd", [
         (
             "FRED DEXTAUS",
-            lambda: fetch_fred_public_series_value(
+            lambda budget: fetch_fred_public_series_value(
                 "DEXTAUS",
                 source_name="FRED_DEXTAUS_TWD_USD",
                 note_zh="FRED DEXTAUS 作為新台幣兌美元優先來源",
                 decimals=3,
+                fallback_budget=budget,
+                provider_name="FRED DEXTAUS",
             ),
         ),
         (
             "Stooq USDTWD",
-            lambda: fetch_stooq_quote_value(
+            lambda budget: fetch_stooq_quote_value(
                 ["usdtwd", "usdtwd.pl"],
                 source_name="STOOQ_USDTWD_PUBLIC_MARKET",
                 note_zh="Stooq USD/TWD 公開市場備援；正式發布前仍需來源註記",
+                fallback_budget=budget,
+                provider_name="Stooq USDTWD",
             ),
         ),
-        ("Yahoo TWD", lambda: fetch_yahoo_chart_value("TWD=X", source_name="YAHOO_FINANCE_TWD_USD")),
+        (
+            "Yahoo TWD",
+            lambda budget: fetch_yahoo_chart_value(
+                "TWD=X",
+                source_name="YAHOO_FINANCE_TWD_USD",
+                fallback_budget=budget,
+                provider_name="Yahoo TWD",
+            ),
+        ),
     ])
 
 
 def fetch_macro_us10y() -> dict[str, Any] | None:
-    return first_available_source([
+    return first_available_source("us10y", [
         (
             "FRED DGS10",
-            lambda: fetch_fred_public_series_value(
+            lambda budget: fetch_fred_public_series_value(
                 "DGS10",
                 source_name="FRED_DGS10_US10Y",
                 note_zh="FRED DGS10 作為美國 10 年期公債殖利率優先來源",
                 decimals=3,
+                fallback_budget=budget,
+                provider_name="FRED DGS10",
             ),
         ),
-        ("Yahoo TNX", lambda: fetch_yahoo_chart_value("^TNX", source_name="YAHOO_FINANCE_US10Y")),
+        (
+            "Yahoo TNX",
+            lambda budget: fetch_yahoo_chart_value(
+                "^TNX",
+                source_name="YAHOO_FINANCE_US10Y",
+                fallback_budget=budget,
+                provider_name="Yahoo TNX",
+            ),
+        ),
     ])
 
 
 def fetch_macro_dxy() -> dict[str, Any] | None:
-    return first_available_source([
+    return first_available_source("dxy", [
         (
             "Stooq DXY",
-            lambda: fetch_stooq_quote_value(
+            lambda budget: fetch_stooq_quote_value(
                 ["dx.f", "dxy", "usdidx"],
                 source_name="STOOQ_DXY_PUBLIC_MARKET",
                 note_zh="Stooq DXY 公開市場備援；ICE DXY 授權來源未接入前需標示來源限制",
+                fallback_budget=budget,
+                provider_name="Stooq DXY",
             ),
         ),
-        ("Yahoo DXY", lambda: fetch_yahoo_chart_value("DX-Y.NYB", source_name="YAHOO_FINANCE_DXY")),
+        (
+            "Yahoo DXY",
+            lambda budget: fetch_yahoo_chart_value(
+                "DX-Y.NYB",
+                source_name="YAHOO_FINANCE_DXY",
+                fallback_budget=budget,
+                provider_name="Yahoo DXY",
+            ),
+        ),
     ])
 
 
@@ -1099,15 +1354,29 @@ def fetch_fred_dff_rate() -> dict[str, Any] | None:
 
 
 def fetch_fred_target_rate_midpoint() -> dict[str, Any] | None:
-    upper = fetch_fred_series_latest("DFEDTARU")
-    lower = fetch_fred_series_latest("DFEDTARL")
+    budget = FallbackBudget("fed_rate")
+    upper = fetch_fred_series_latest(
+        "DFEDTARU",
+        fallback_budget=budget,
+        provider_name="FRED DFEDTARU",
+    )
+    if budget.exhausted():
+        log_fallback_progress(
+            budget, "FRED DFEDTARL", "provider", "budget_exhausted"
+        )
+        return None
+    lower = fetch_fred_series_latest(
+        "DFEDTARL",
+        fallback_budget=budget,
+        provider_name="FRED DFEDTARL",
+    )
     if upper is None or lower is None:
         return None
     upper_value, upper_date = upper
     lower_value, lower_date = lower
     midpoint = (upper_value + lower_value) / 2
     source_url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DFEDTARU,DFEDTARL"
-    return source_result(
+    result = source_result(
         round(midpoint, 3),
         "FRED_FOMC_TARGET_RANGE_MIDPOINT",
         source_url=source_url,
@@ -1117,6 +1386,14 @@ def fetch_fred_target_rate_midpoint() -> dict[str, Any] | None:
         ),
         support_level="PUBLIC_OFFICIAL_SERIES",
     )
+    log_fallback_progress(
+        budget,
+        "FRED DFEDTARU/DFEDTARL",
+        "provider",
+        "chosen_successful_source",
+        result["source"],
+    )
+    return result
 
 
 def fetch_cme_fedwatch_year_end_hike_probability() -> dict[str, Any] | None:

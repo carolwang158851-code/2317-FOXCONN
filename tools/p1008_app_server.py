@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import ctypes
 import csv
 import hashlib
 import http.server
@@ -18,6 +19,7 @@ import io
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import threading
@@ -26,6 +28,7 @@ import urllib.parse
 import uuid
 import zipfile
 from datetime import date, datetime, timezone
+from ctypes import wintypes
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -115,6 +118,135 @@ SOURCE_LABEL_ZH = {
 
 def now_iso() -> str:
     return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
+
+PROCESS_TREE_REAP_TIMEOUT_SECONDS = 5.0
+JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000
+JOB_OBJECT_EXTENDED_LIMIT_INFORMATION_CLASS = 9
+
+
+class _IoCounters(ctypes.Structure):
+    _fields_ = [
+        ("ReadOperationCount", ctypes.c_ulonglong),
+        ("WriteOperationCount", ctypes.c_ulonglong),
+        ("OtherOperationCount", ctypes.c_ulonglong),
+        ("ReadTransferCount", ctypes.c_ulonglong),
+        ("WriteTransferCount", ctypes.c_ulonglong),
+        ("OtherTransferCount", ctypes.c_ulonglong),
+    ]
+
+
+class _JobObjectBasicLimitInformation(ctypes.Structure):
+    _fields_ = [
+        ("PerProcessUserTimeLimit", ctypes.c_longlong),
+        ("PerJobUserTimeLimit", ctypes.c_longlong),
+        ("LimitFlags", wintypes.DWORD),
+        ("MinimumWorkingSetSize", ctypes.c_size_t),
+        ("MaximumWorkingSetSize", ctypes.c_size_t),
+        ("ActiveProcessLimit", wintypes.DWORD),
+        ("Affinity", ctypes.c_size_t),
+        ("PriorityClass", wintypes.DWORD),
+        ("SchedulingClass", wintypes.DWORD),
+    ]
+
+
+class _JobObjectExtendedLimitInformation(ctypes.Structure):
+    _fields_ = [
+        ("BasicLimitInformation", _JobObjectBasicLimitInformation),
+        ("IoInfo", _IoCounters),
+        ("ProcessMemoryLimit", ctypes.c_size_t),
+        ("JobMemoryLimit", ctypes.c_size_t),
+        ("PeakProcessMemoryUsed", ctypes.c_size_t),
+        ("PeakJobMemoryUsed", ctypes.c_size_t),
+    ]
+
+
+def create_kill_on_close_job(process: subprocess.Popen[str]) -> int | None:
+    if os.name != "nt":
+        return None
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
+    kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+    kernel32.SetInformationJobObject.argtypes = [
+        wintypes.HANDLE,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+    ]
+    kernel32.SetInformationJobObject.restype = wintypes.BOOL
+    kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+    kernel32.AssignProcessToJobObject.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+
+    job = kernel32.CreateJobObjectW(None, None)
+    if not job:
+        return None
+    information = _JobObjectExtendedLimitInformation()
+    information.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+    configured = kernel32.SetInformationJobObject(
+        job,
+        JOB_OBJECT_EXTENDED_LIMIT_INFORMATION_CLASS,
+        ctypes.byref(information),
+        ctypes.sizeof(information),
+    )
+    assigned = configured and kernel32.AssignProcessToJobObject(
+        job, wintypes.HANDLE(int(process._handle))  # type: ignore[attr-defined]
+    )
+    if not assigned:
+        kernel32.CloseHandle(job)
+        return None
+    return int(job)
+
+
+def close_owned_job(job_handle: int | None) -> None:
+    if os.name != "nt" or not job_handle:
+        return
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    kernel32.CloseHandle(wintypes.HANDLE(job_handle))
+
+
+def terminate_owned_process_tree(
+    process: subprocess.Popen[str], job_handle: int | None = None
+) -> None:
+    """Terminate only the process group/tree rooted at this server-owned child."""
+
+    if process.poll() is not None:
+        close_owned_job(job_handle)
+        return
+    if os.name == "nt":
+        close_owned_job(job_handle)
+        try:
+            process.wait(timeout=PROCESS_TREE_REAP_TIMEOUT_SECONDS)
+            return
+        except subprocess.TimeoutExpired:
+            pass
+        try:
+            completed = subprocess.run(
+                ["taskkill.exe", "/PID", str(process.pid), "/T", "/F"],
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                timeout=PROCESS_TREE_REAP_TIMEOUT_SECONDS,
+                check=False,
+            )
+            if completed.returncode != 0 and process.poll() is None:
+                process.kill()
+        except (OSError, subprocess.TimeoutExpired):
+            process.kill()
+    else:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except (OSError, ProcessLookupError):
+            process.kill()
+    try:
+        process.wait(timeout=PROCESS_TREE_REAP_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=PROCESS_TREE_REAP_TIMEOUT_SECONDS)
 
 
 def format_war_brief_market_numbers(document: str) -> str:
@@ -935,22 +1067,29 @@ class P1008JobManager:
         self._append_log(f"ERROR: {error}")
 
     def _run_job(self, job_type: str, job_id: str) -> None:
+        unhandled_error: Exception | None = None
         try:
             self._run_job_inner(job_type)
+        except Exception as error:  # noqa: BLE001 - preserve unexpected failures in state.
+            unhandled_error = error
+            self._add_error(f"UNHANDLED: {error}")
+        finally:
             with self.lock:
-                status, reasons = self._aggregate_current_run_status()
+                if unhandled_error is None:
+                    status, reasons = self._aggregate_current_run_status()
+                else:
+                    status = "FAILED"
+                    reasons = [{
+                        "source": "UNHANDLED",
+                        "status": "FAILED",
+                        "reason": str(unhandled_error),
+                    }]
                 self.state["status"] = status
                 self.state["overallStatus"] = status
                 self.state["failureReasons"] = reasons
                 self.state["finishedAt"] = now_iso()
                 self._persist_locked()
             self._append_log(f"JOB {job_id} finished with status={self.state['status']}")
-        except Exception as error:  # noqa: BLE001 - local app should preserve unexpected failures in state.
-            self._add_error(f"UNHANDLED: {error}")
-            with self.lock:
-                self.state["status"] = "FAILED"
-                self.state["finishedAt"] = now_iso()
-                self._persist_locked()
 
     def _aggregate_current_run_status(self) -> tuple[str, list[dict[str, str]]]:
         """Derive health only from this run's child states, never prior UI success."""
@@ -1777,26 +1916,135 @@ class P1008JobManager:
         command = [os.environ.get("COMSPEC", r"C:\Windows\System32\cmd.exe"), "/d", "/c", str(bat_path), *args]
         self._set_step(step_id, label, "RUNNING", command=command)
         started = time.monotonic()
+        started_wall = time.time()
         env = os.environ.copy()
         env["PYTHONUTF8"] = "1"
         env["P1008_APP_SERVER"] = "1"
         env["P1008_NO_PAUSE"] = "1"
+        process_options: dict[str, Any] = {}
+        if os.name == "nt":
+            process_options["creationflags"] = getattr(
+                subprocess, "CREATE_NEW_PROCESS_GROUP", 0
+            )
+        else:
+            process_options["start_new_session"] = True
+
+        stdout_lines: list[str] = []
+        output_path = (
+            self.package_root
+            / "logs"
+            / f".p1008_subprocess_{step_id}_{uuid.uuid4().hex}.log"
+        )
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_offset = 0
+
+        def relay_process_output() -> None:
+            nonlocal output_offset
+            try:
+                with output_path.open("r", encoding="utf-8", errors="replace") as handle:
+                    handle.seek(output_offset)
+                    lines = handle.readlines()
+                    output_offset = handle.tell()
+            except OSError:
+                return
+            for line in lines:
+                stdout_lines.append(line)
+                if line.strip():
+                    self._append_log(line.rstrip())
+
+        heartbeat_path = self.package_root / "logs" / "last_update_data.log"
+        heartbeat_offset = 0
+
+        def relay_heartbeat() -> None:
+            nonlocal heartbeat_offset
+            if step_id != "update-data" or not heartbeat_path.is_file():
+                return
+            try:
+                stat = heartbeat_path.stat()
+                if stat.st_mtime < started_wall - 1.0:
+                    return
+                if stat.st_size < heartbeat_offset:
+                    heartbeat_offset = 0
+                with heartbeat_path.open("r", encoding="utf-8", errors="replace") as handle:
+                    handle.seek(heartbeat_offset)
+                    lines = handle.readlines()
+                    heartbeat_offset = handle.tell()
+            except OSError:
+                return
+            for line in lines:
+                progress = line.strip()
+                if not progress or not (
+                    "[PROGRESS]" in progress
+                    or "Staging candidates written" in progress
+                    or "Runtime snapshot written" in progress
+                ):
+                    continue
+                with self.lock:
+                    steps = list(self.state.get("steps", []))
+                    for index, existing in enumerate(steps):
+                        if existing.get("id") == step_id:
+                            updated = dict(existing)
+                            updated.update(
+                                message=progress,
+                                heartbeatAt=now_iso(),
+                                progress=progress,
+                            )
+                            steps[index] = updated
+                            break
+                    self.state["steps"] = steps
+                    self._persist_locked()
+                self._append_log(f"{step_id}: PROGRESS {progress}")
+
+        output_handle = output_path.open("w", encoding="utf-8", errors="replace")
         try:
-            completed = subprocess.run(
+            process = subprocess.Popen(
                 command,
                 cwd=str(self.package_root),
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                capture_output=True,
-                timeout=timeout_seconds,
+                stdout=output_handle,
+                stderr=subprocess.STDOUT,
                 env=env,
-                check=False,
+                **process_options,
             )
-        except subprocess.TimeoutExpired as error:
-            output = (error.stdout or "") + (error.stderr or "")
-            if output.strip():
-                self._append_log(output.rstrip())
+        except OSError as error:
+            output_handle.close()
+            output_path.unlink(missing_ok=True)
+            self._set_step(
+                step_id,
+                label,
+                "FAILED",
+                exitCode="START_FAILED",
+                durationSeconds=round(time.monotonic() - started, 2),
+                message=str(error),
+                finishedAt=now_iso(),
+            )
+            return None
+        job_handle = create_kill_on_close_job(process)
+
+        deadline = started + timeout_seconds
+        timed_out = False
+        while process.poll() is None:
+            output_handle.flush()
+            relay_process_output()
+            relay_heartbeat()
+            if time.monotonic() >= deadline:
+                timed_out = True
+                terminate_owned_process_tree(process, job_handle)
+                break
+            time.sleep(0.1)
+
+        output_handle.flush()
+        output_handle.close()
+        relay_process_output()
+        relay_heartbeat()
+
+        if timed_out:
+            try:
+                output_path.unlink(missing_ok=True)
+            except OSError:
+                pass
             self._set_step(
                 step_id,
                 label,
@@ -1804,18 +2052,22 @@ class P1008JobManager:
                 exitCode="TIMEOUT",
                 durationSeconds=round(time.monotonic() - started, 2),
                 message=f"timed out after {timeout_seconds}s",
+                finishedAt=now_iso(),
+                processTreeTerminated=True,
             )
             return None
-        output = (completed.stdout or "") + (completed.stderr or "")
-        if output.strip():
-            self._append_log(output.rstrip())
-        status = "SUCCEEDED" if completed.returncode == 0 else "FAILED"
-        message = f"exit={completed.returncode}"
-        if completed.returncode != 0:
+
+        return_code = process.returncode
+        close_owned_job(job_handle)
+        output = "".join(stdout_lines)
+        output_path.unlink(missing_ok=True)
+        status = "SUCCEEDED" if return_code == 0 else "FAILED"
+        message = f"exit={return_code}"
+        if return_code != 0:
             message = command_failure_reason(output, message)
         runtime_result = None
         if step_id in {"analysis-candidate", "report-candidate"}:
-            for line in (completed.stdout or "").splitlines():
+            for line in "".join(stdout_lines).splitlines():
                 try:
                     value = json.loads(line)
                 except ValueError:
@@ -1826,12 +2078,13 @@ class P1008JobManager:
             step_id,
             label,
             status,
-            exitCode=completed.returncode,
+            exitCode=return_code,
             durationSeconds=round(time.monotonic() - started, 2),
             message=message,
             runtimeResult=runtime_result,
+            finishedAt=now_iso(),
         )
-        return completed.returncode
+        return return_code
 
     def _run_python_step(
         self,
