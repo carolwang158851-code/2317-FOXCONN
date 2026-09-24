@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import csv
+import http.client
 import json
+import socket
 import shutil
 import sys
 import unittest
+import urllib.response
 import uuid
 from pathlib import Path
 from unittest import mock
@@ -21,12 +24,17 @@ import warroom_data_fetcher_v2 as fetcher  # noqa: E402
 class _Response:
     status = 200
 
+    def __init__(self) -> None:
+        self._returned = False
+
     @staticmethod
     def getheader(_name: str) -> None:
         return None
 
-    @staticmethod
-    def read() -> bytes:
+    def read(self, _size: int = -1) -> bytes:
+        if self._returned:
+            return b""
+        self._returned = True
         return b"payload"
 
 
@@ -61,6 +69,494 @@ class _CrossHostRedirectConnection(_Connection):
 
 
 class DataFreshnessRemediationTests(unittest.TestCase):
+    def test_actual_urllib_http_response_wrapper_socket_is_deadline_bound(self) -> None:
+        body = b'{"chart":{"result":[]}}'
+        for wrapped in (False, True):
+            with self.subTest(wrapped=wrapped):
+                client, server = socket.socketpair()
+                try:
+                    server.sendall(
+                        b"HTTP/1.1 200 OK\r\n"
+                        + f"Content-Length: {len(body)}\r\n".encode("ascii")
+                        + b"Content-Type: application/json\r\n\r\n"
+                        + body
+                    )
+                    server.shutdown(socket.SHUT_WR)
+                    http_response = http.client.HTTPResponse(client)
+                    http_response.begin()
+                    response = (
+                        urllib.response.addinfourl(
+                            http_response,
+                            http_response.headers,
+                            "https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX",
+                            http_response.status,
+                        )
+                        if wrapped
+                        else http_response
+                    )
+                    budget = fetcher.FallbackBudget("vix", 5.0)
+
+                    result = fetcher.read_response_body_with_deadline(
+                        response,
+                        budget=budget,
+                        provider="Yahoo VIX",
+                        transport="urllib",
+                    )
+
+                    self.assertEqual(result, body)
+                finally:
+                    client.close()
+                    server.close()
+
+    def test_urllib_slow_stream_uses_one_master_deadline_for_every_read(self) -> None:
+        now = [0.0]
+
+        class Node:
+            pass
+
+        client, server = socket.socketpair()
+
+        class SlowResponse(http.client.HTTPResponse):
+            def __init__(self) -> None:
+                self.fp = Node()
+                self.fp.raw = Node()
+                self.fp.raw._sock = client
+                self.read_timeouts: list[float] = []
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args) -> None:
+                return None
+
+            def read(self, _size: int) -> bytes:
+                timeout = client.gettimeout()
+                self.read_timeouts.append(timeout)
+                if timeout < 3.0:
+                    now[0] += timeout
+                    raise TimeoutError("master deadline reached")
+                now[0] += 3.0
+                return b"x" * fetcher.RESPONSE_READ_CHUNK_BYTES
+
+        response = SlowResponse()
+        budget = fetcher.FallbackBudget(
+            "vix",
+            10.0,
+            clock=lambda: now[0],
+            route_deadline=10.0,
+        )
+        try:
+            with mock.patch.object(fetcher.urllib.request, "urlopen", return_value=response):
+                result = fetcher.fetch_bytes_with_urllib(
+                    "https://example.com/slow",
+                    budget=budget,
+                    provider="slow urllib",
+                )
+        finally:
+            client.close()
+            server.close()
+
+        self.assertIsNone(result)
+        self.assertLess(now[0], 10.0)
+        self.assertEqual(response.read_timeouts, [8.0, 5.0, 2.0])
+
+    def test_unsupported_urllib_wrapper_fails_closed_before_body_read(self) -> None:
+        class UnsupportedResponse:
+            def __init__(self) -> None:
+                self.read_calls = 0
+
+            def read(self, _size: int) -> bytes:
+                self.read_calls += 1
+                return b"unsafe"
+
+        response = UnsupportedResponse()
+        budget = fetcher.FallbackBudget("vix", 8.0)
+
+        with self.assertRaisesRegex(
+            TimeoutError, "response body transport cannot be deadline-bound"
+        ):
+            fetcher.read_response_body_with_deadline(
+                response,
+                budget=budget,
+                provider="Yahoo VIX",
+                transport="urllib",
+            )
+
+        self.assertEqual(response.read_calls, 0)
+
+    def test_direct_https_slow_body_uses_one_master_deadline(self) -> None:
+        now = [0.0]
+
+        class SlowSocket:
+            def __init__(self) -> None:
+                self.timeout = 0.0
+                self.read_timeouts: list[float] = []
+
+            def settimeout(self, timeout: float) -> None:
+                self.timeout = timeout
+                self.read_timeouts.append(timeout)
+
+        class SlowResponse:
+            status = 200
+
+            def __init__(self, sock: SlowSocket) -> None:
+                self.sock = sock
+
+            @staticmethod
+            def getheader(_name: str) -> None:
+                return None
+
+            def read(self, _size: int) -> bytes:
+                if self.sock.timeout < 3.0:
+                    now[0] += self.sock.timeout
+                    raise TimeoutError("master deadline reached")
+                now[0] += 3.0
+                return b"x" * fetcher.RESPONSE_READ_CHUNK_BYTES
+
+        class SlowConnection:
+            instance = None
+
+            def __init__(self, *_args, **_kwargs) -> None:
+                self.sock = SlowSocket()
+                SlowConnection.instance = self
+
+            @staticmethod
+            def request(*_args, **_kwargs) -> None:
+                return None
+
+            def getresponse(self) -> SlowResponse:
+                return SlowResponse(self.sock)
+
+            @staticmethod
+            def close() -> None:
+                return None
+
+        budget = fetcher.FallbackBudget(
+            "wti",
+            10.0,
+            clock=lambda: now[0],
+            route_deadline=10.0,
+        )
+        with mock.patch.object(fetcher.http.client, "HTTPSConnection", SlowConnection):
+            result = fetcher.fetch_bytes_with_http_client(
+                "https://example.com/slow",
+                budget=budget,
+                provider="slow direct https",
+            )
+
+        self.assertIsNone(result)
+        self.assertLess(now[0], 10.0)
+        self.assertEqual(SlowConnection.instance.sock.read_timeouts, [8.0, 5.0, 2.0])
+
+    def test_transport_overrun_stays_inside_master_route_deadline(self) -> None:
+        now = [0.0]
+
+        class OverrunningConnection:
+            def __init__(self, *_args, timeout: float, **_kwargs) -> None:
+                self.timeout = timeout
+
+            def request(self, *_args, **_kwargs) -> None:
+                now[0] += self.timeout + 0.5
+                raise TimeoutError("simulated scheduler and return overhead")
+
+            @staticmethod
+            def close() -> None:
+                return None
+
+        budget = fetcher.FallbackBudget(
+            "fed_rate",
+            60.0,
+            clock=lambda: now[0],
+            route_deadline=60.0,
+        )
+        with (
+            mock.patch.object(fetcher, "HTTP_CLIENT_TIMEOUT_SECONDS", 60),
+            mock.patch.object(fetcher.http.client, "HTTPSConnection", OverrunningConnection),
+        ):
+            result = fetcher.fetch_bytes_with_http_client(
+                "https://example.com/slow",
+                budget=budget,
+                provider="deadline overrun simulation",
+            )
+
+        self.assertIsNone(result)
+        self.assertEqual(now[0], 58.5)
+        self.assertLess(now[0], 60.0)
+        self.assertTrue(budget.blocking_exhausted())
+
+    def test_master_route_deadline_prevents_stooq_after_fred_and_yahoo_expire(self) -> None:
+        now = [0.0]
+        calls: list[str] = []
+
+        def fred(_budget: fetcher.FallbackBudget):
+            calls.append("fred")
+            now[0] += 52.0
+            return None
+
+        def yahoo(budget: fetcher.FallbackBudget):
+            calls.append("yahoo")
+            self.assertEqual(budget.route_remaining(), 8.0)
+            now[0] += 8.0
+            return None
+
+        def stooq(_budget: fetcher.FallbackBudget):
+            calls.append("stooq")
+            return fetcher.source_result(14.5, "STOOQ_VIX_PUBLIC_MARKET")
+
+        result = fetcher.first_available_source_with_yahoo_reserve(
+            "vix",
+            [
+                ("FRED VIXCLS", "VIXCLS", fetcher.BUDGET_CLASS_NON_YAHOO, fred),
+                ("Yahoo VIX", "^VIX", fetcher.BUDGET_CLASS_YAHOO_RESERVED, yahoo),
+                ("Stooq VIX", "^vix", fetcher.BUDGET_CLASS_NON_YAHOO, stooq),
+            ],
+            clock=lambda: now[0],
+        )
+
+        self.assertIsNone(result)
+        self.assertEqual(now[0], 60.0)
+        self.assertEqual(calls, ["fred", "yahoo"])
+
+    def test_powershell_timeout_cleanup_is_bounded_by_route_deadline(self) -> None:
+        now = [0.0]
+
+        class TimedOutProcess:
+            def __init__(self) -> None:
+                self.returncode = None
+                self.alive = True
+                self.killed = False
+                self.communicate_timeouts: list[float] = []
+
+            def communicate(self, timeout: float):
+                self.communicate_timeouts.append(timeout)
+                if len(self.communicate_timeouts) == 1:
+                    now[0] += timeout
+                    raise fetcher.subprocess.TimeoutExpired("powershell", timeout)
+                now[0] += min(timeout, 0.25)
+                self.alive = False
+                self.returncode = -9
+                return "", ""
+
+            def kill(self) -> None:
+                self.killed = True
+
+        process = TimedOutProcess()
+        budget = fetcher.FallbackBudget(
+            "dxy",
+            8.0,
+            clock=lambda: now[0],
+            route_deadline=8.0,
+        )
+        with mock.patch.object(fetcher.subprocess, "Popen", return_value=process):
+            result = fetcher.fetch_bytes_with_powershell(
+                "https://example.com/slow",
+                budget=budget,
+                provider="slow powershell",
+            )
+
+        self.assertIsNone(result)
+        self.assertTrue(process.killed)
+        self.assertFalse(process.alive)
+        self.assertEqual(process.communicate_timeouts, [5.0, 1.0])
+        self.assertLess(now[0], 8.0)
+
+    def test_owner_approved_macro_routing_order_and_success_short_circuit(self) -> None:
+        cases = [
+            ("vix", fetcher.fetch_macro_vix, ["FRED:VIXCLS", "YAHOO:^VIX"]),
+            ("wti", fetcher.fetch_macro_wti, ["FRED:DCOILWTICO", "YAHOO:CL=F"]),
+            ("twd_usd", fetcher.fetch_macro_twd_usd, ["FRED:DEXTAUS", "YAHOO:TWD=X"]),
+            ("us10y", fetcher.fetch_macro_us10y, ["FRED:DGS10", "YAHOO:^TNX"]),
+            ("dxy", fetcher.fetch_macro_dxy, ["YAHOO:DX-Y.NYB"]),
+        ]
+        for metric, runner, expected_calls in cases:
+            calls: list[str] = []
+
+            def fred(series_id: str, **_kwargs):
+                calls.append(f"FRED:{series_id}")
+                return None
+
+            def yahoo(ticker: str, **kwargs):
+                calls.append(f"YAHOO:{ticker}")
+                self.assertTrue(kwargs["urllib_only"])
+                return fetcher.source_result(
+                    1.0,
+                    f"YAHOO_TEST_{metric.upper()}",
+                    support_level="PUBLIC_MARKET_DATA",
+                )
+
+            def stooq(symbols: list[str], **_kwargs):
+                calls.append(f"STOOQ:{'/'.join(symbols)}")
+                return None
+
+            with (
+                self.subTest(metric=metric),
+                mock.patch.object(fetcher, "fetch_fred_public_series_value", side_effect=fred),
+                mock.patch.object(fetcher, "fetch_yahoo_chart_value", side_effect=yahoo),
+                mock.patch.object(fetcher, "fetch_stooq_quote_value", side_effect=stooq),
+            ):
+                result = runner()
+            self.assertIsNotNone(result)
+            self.assertEqual(calls, expected_calls)
+
+    def test_yahoo_failure_resumes_remaining_non_yahoo_budget(self) -> None:
+        now = [0.0]
+        calls: list[tuple[str, float, str]] = []
+
+        def fred(budget: fetcher.FallbackBudget):
+            calls.append(("fred", budget.total_seconds, budget.budget_class))
+            now[0] += 40.0
+            return None
+
+        def yahoo(budget: fetcher.FallbackBudget):
+            calls.append(("yahoo", budget.total_seconds, budget.budget_class))
+            now[0] += 8.0
+            return None
+
+        def stooq(budget: fetcher.FallbackBudget):
+            calls.append(("stooq", budget.total_seconds, budget.budget_class))
+            return fetcher.source_result(14.5, "STOOQ_VIX_PUBLIC_MARKET")
+
+        result = fetcher.first_available_source_with_yahoo_reserve(
+            "vix",
+            [
+                ("FRED VIXCLS", "VIXCLS", fetcher.BUDGET_CLASS_NON_YAHOO, fred),
+                ("Yahoo VIX", "^VIX", fetcher.BUDGET_CLASS_YAHOO_RESERVED, yahoo),
+                ("Stooq VIX", "^vix/vix", fetcher.BUDGET_CLASS_NON_YAHOO, stooq),
+            ],
+            clock=lambda: now[0],
+        )
+
+        self.assertEqual(result["source"], "STOOQ_VIX_PUBLIC_MARKET")
+        self.assertEqual(
+            calls,
+            [
+                ("fred", 52.0, "NON_YAHOO"),
+                ("yahoo", 8.0, "YAHOO_RESERVED"),
+                ("stooq", 12.0, "NON_YAHOO"),
+            ],
+        )
+
+    def test_reserved_yahoo_path_is_exactly_one_urllib_attempt(self) -> None:
+        payload = {
+            "chart": {
+                "result": [
+                    {
+                        "meta": {"exchangeTimezoneName": "UTC"},
+                        "timestamp": [1787788800],
+                        "indicators": {"quote": [{"close": [5.125]}]},
+                    }
+                ]
+            }
+        }
+        budget = fetcher.FallbackBudget(
+            "us10y",
+            fetcher.YAHOO_RESERVED_BUDGET_SECONDS,
+            budget_class=fetcher.BUDGET_CLASS_YAHOO_RESERVED,
+        )
+        with (
+            mock.patch.object(
+                fetcher,
+                "_fetch_bytes_urllib_only",
+                return_value=json.dumps(payload).encode("utf-8"),
+            ) as urllib_transport,
+            mock.patch.object(fetcher, "fetch_bytes_with_http_client") as direct_https,
+            mock.patch.object(fetcher, "fetch_bytes_with_powershell") as powershell,
+        ):
+            result = fetcher.fetch_yahoo_chart_value(
+                "^TNX",
+                source_name="YAHOO_FINANCE_US10Y",
+                fallback_budget=budget,
+                provider_name="Yahoo TNX",
+                urllib_only=True,
+            )
+
+        self.assertEqual(result["source"], "YAHOO_FINANCE_US10Y")
+        self.assertEqual(result["value"], 5.125)
+        urllib_transport.assert_called_once()
+        direct_https.assert_not_called()
+        powershell.assert_not_called()
+        self.assertEqual(fetcher.REQUEST_RETRIES, 1)
+        self.assertEqual(budget.total_seconds, 8.0)
+
+    def test_routing_metadata_and_semantic_mappings_are_unchanged(self) -> None:
+        self.assertEqual(
+            fetcher.MACRO_SOURCE_CANDIDATES["vix"],
+            ["FRED VIXCLS", "Yahoo ^VIX fallback", "Stooq VIX"],
+        )
+        self.assertEqual(
+            fetcher.MACRO_SOURCE_CANDIDATES["wti"],
+            ["FRED DCOILWTICO", "Yahoo CL=F fallback", "Stooq CL.F"],
+        )
+        self.assertEqual(
+            fetcher.MACRO_SOURCE_CANDIDATES["twd_usd"],
+            ["FRED DEXTAUS", "Yahoo TWD=X fallback", "Stooq USDTWD"],
+        )
+        self.assertEqual(
+            fetcher.MACRO_SOURCE_CANDIDATES["us10y"],
+            ["FRED DGS10", "Yahoo ^TNX fallback"],
+        )
+        self.assertEqual(
+            fetcher.MACRO_SOURCE_CANDIDATES["dxy"],
+            ["Yahoo DX-Y.NYB fallback", "Stooq DXY"],
+        )
+        source = (TOOLS / "warroom_data_fetcher_v2.py").read_text(encoding="utf-8")
+        self.assertIn('"CL=F",\n                source_name="YAHOO_FINANCE_WTI"', source)
+        self.assertIn('"^TNX",\n                source_name="YAHOO_FINANCE_US10Y"', source)
+        self.assertEqual(fetcher.NON_YAHOO_BUDGET_SECONDS, 52.0)
+        self.assertEqual(fetcher.YAHOO_RESERVED_BUDGET_SECONDS, 8.0)
+
+    def test_fed_rate_path_remains_fred_midpoint_without_yahoo(self) -> None:
+        with mock.patch.object(
+            fetcher,
+            "fetch_fred_series_latest",
+            side_effect=[(4.0, "2026-09-24"), (3.5, "2026-09-24")],
+        ) as fred:
+            result = fetcher.fetch_fred_target_rate_midpoint()
+        self.assertEqual(result["value"], 3.75)
+        self.assertEqual(result["source"], "FRED_FOMC_TARGET_RANGE_MIDPOINT")
+        self.assertEqual([call.args[0] for call in fred.call_args_list], ["DFEDTARU", "DFEDTARL"])
+
+    def test_fed_rate_final_attempt_preserves_hard_deadline_cleanup_reserve(self) -> None:
+        now = [0.0]
+        budget = fetcher.FallbackBudget(
+            "fed_rate",
+            60.0,
+            clock=lambda: now[0],
+            route_deadline=60.0,
+        )
+        requested_blocking_intervals: list[float] = []
+
+        def fred(series_id: str, *, fallback_budget, **_kwargs):
+            self.assertIs(fallback_budget, budget)
+            if series_id == "DFEDTARU":
+                now[0] += 45.0
+                return 4.0, "2026-09-24"
+            requested = fallback_budget.usable_blocking_remaining()
+            requested_blocking_intervals.append(requested)
+            now[0] += requested + 0.5
+            return None
+
+        with (
+            mock.patch.object(fetcher, "FallbackBudget", return_value=budget),
+            mock.patch.object(fetcher, "fetch_fred_series_latest", side_effect=fred),
+        ):
+            result = fetcher.fetch_fred_target_rate_midpoint()
+
+        carry = fetcher.choose_value(
+            result,
+            None,
+            carry_value="3.75",
+            carry_source="CONNECTOR_SOURCE_UNAVAILABLE_CARRY_FORWARD",
+            carry_note_zh="connector unavailable; observation only",
+        )
+        self.assertIsNone(result)
+        self.assertEqual(requested_blocking_intervals, [13.0])
+        self.assertEqual(now[0], 58.5)
+        self.assertLess(now[0], 60.0)
+        self.assertEqual(
+            carry["source"], "CONNECTOR_SOURCE_UNAVAILABLE_CARRY_FORWARD"
+        )
+
     def test_metric_fallback_chain_stops_at_explicit_budget(self) -> None:
         now = [0.0]
         calls: list[str] = []

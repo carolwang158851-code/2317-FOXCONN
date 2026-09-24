@@ -19,6 +19,7 @@ import hashlib
 import http.client
 import json
 import os
+import socket
 import ssl
 import subprocess
 import sys
@@ -26,6 +27,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import urllib.response
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -119,6 +121,15 @@ REQUEST_RETRY_DELAY_SECONDS = 2
 POWERSHELL_TIMEOUT_SECONDS = 20
 HTTP_CLIENT_TIMEOUT_SECONDS = 10
 FALLBACK_BUDGET_SECONDS = 60.0
+TOTAL_LOGICAL_BUDGET_SECONDS = FALLBACK_BUDGET_SECONDS
+YAHOO_RESERVED_BUDGET_SECONDS = float(REQUEST_TIMEOUT_SECONDS)
+NON_YAHOO_BUDGET_SECONDS = FALLBACK_BUDGET_SECONDS - YAHOO_RESERVED_BUDGET_SECONDS
+RESPONSE_READ_CHUNK_BYTES = 64 * 1024
+POWERSHELL_CLEANUP_RESERVE_SECONDS = 1.0
+HARD_DEADLINE_SAFETY_RESERVE_SECONDS = 2.0
+
+BUDGET_CLASS_NON_YAHOO = "NON_YAHOO"
+BUDGET_CLASS_YAHOO_RESERVED = "YAHOO_RESERVED"
 
 MACRO_SOURCE_LABELS = {
     "stock_price": "2317 close",
@@ -132,11 +143,11 @@ MACRO_SOURCE_LABELS = {
 
 MACRO_SOURCE_CANDIDATES = {
     "stock_price": ["TWSE STOCK_DAY", "TWSE MIS", "TWSE STOCK_DAY_ALL", "Yahoo 2317.TW fallback"],
-    "vix": ["FRED VIXCLS", "Stooq VIX", "Yahoo ^VIX fallback"],
-    "wti": ["FRED DCOILWTICO", "Stooq CL.F", "Yahoo CL=F fallback"],
-    "twd_usd": ["FRED DEXTAUS", "Stooq USDTWD", "Yahoo TWD=X fallback"],
+    "vix": ["FRED VIXCLS", "Yahoo ^VIX fallback", "Stooq VIX"],
+    "wti": ["FRED DCOILWTICO", "Yahoo CL=F fallback", "Stooq CL.F"],
+    "twd_usd": ["FRED DEXTAUS", "Yahoo TWD=X fallback", "Stooq USDTWD"],
     "us10y": ["FRED DGS10", "Yahoo ^TNX fallback"],
-    "dxy": ["Stooq DXY", "Yahoo DX-Y.NYB fallback"],
+    "dxy": ["Yahoo DX-Y.NYB fallback", "Stooq DXY"],
     "fed_rate": ["FRED DFEDTARU/DFEDTARL midpoint", "formal CSV carry-forward"],
 }
 
@@ -205,23 +216,44 @@ def log(message: str, level: str = "INFO") -> None:
 
 @dataclass
 class FallbackBudget:
-    """One monotonic deadline shared by every provider/transport for a metric."""
+    """One allocation bounded by the complete metric route's master deadline."""
 
     metric: str
     total_seconds: float = FALLBACK_BUDGET_SECONDS
     clock: Callable[[], float] = time.monotonic
+    budget_class: str = BUDGET_CLASS_NON_YAHOO
+    source_priority_position: int = 0
+    symbol: str = ""
+    route_deadline: float | None = None
     started_at: float = field(init=False)
+    allocation_deadline: float = field(init=False)
 
     def __post_init__(self) -> None:
         if self.total_seconds <= 0:
             raise ValueError("fallback budget must be positive")
         self.started_at = self.clock()
+        self.allocation_deadline = self.started_at + self.total_seconds
+        if self.route_deadline is None:
+            self.route_deadline = self.allocation_deadline
 
     def remaining(self) -> float:
-        return max(0.0, self.total_seconds - (self.clock() - self.started_at))
+        now = self.clock()
+        return max(
+            0.0,
+            min(self.allocation_deadline, float(self.route_deadline)) - now,
+        )
+
+    def route_remaining(self) -> float:
+        return max(0.0, float(self.route_deadline) - self.clock())
+
+    def usable_blocking_remaining(self) -> float:
+        return max(0.0, self.remaining() - HARD_DEADLINE_SAFETY_RESERVE_SECONDS)
 
     def exhausted(self) -> bool:
         return self.remaining() <= 0.0
+
+    def blocking_exhausted(self) -> bool:
+        return self.usable_blocking_remaining() <= 0.0
 
 
 def log_fallback_progress(
@@ -230,11 +262,25 @@ def log_fallback_progress(
     transport: str,
     event: str,
     detail: str = "",
+    *,
+    elapsed_seconds: float = 0.0,
+    selected_source: str = "",
+    stooq_skipped: bool | None = None,
 ) -> None:
     message = (
         f"[PROGRESS] metric={budget.metric} provider={provider} transport={transport} "
-        f"event={event} fallback_budget_remaining={budget.remaining():.2f}s"
+        f"symbol={budget.symbol or '-'} "
+        f"source_priority_position={budget.source_priority_position or '-'} "
+        f"budget_class={budget.budget_class} event={event} "
+        f"budget_remaining={budget.remaining():.2f}s "
+        f"route_deadline_remaining={budget.route_remaining():.2f}s "
+        f"fallback_budget_remaining={budget.remaining():.2f}s "
+        f"elapsed={elapsed_seconds:.2f}s"
     )
+    if selected_source:
+        message += f" selected_source={selected_source}"
+    if stooq_skipped is not None:
+        message += f" stooq_skipped={str(stooq_skipped).lower()}"
     if detail:
         message += f" detail={detail}"
     log(message, "WARN" if event in {"timeout_or_failure", "budget_exhausted"} else "INFO")
@@ -248,7 +294,7 @@ def bounded_transport_timeout(
 ) -> float | None:
     if budget is None:
         return configured_timeout
-    remaining = budget.remaining()
+    remaining = budget.usable_blocking_remaining()
     if remaining <= 0.0:
         log_fallback_progress(budget, provider, transport, "budget_exhausted")
         return None
@@ -430,6 +476,60 @@ def load_latest_csv_row(package_root: Path, relative_path: str, date_key: str = 
     return latest_row_by_date(rows, date_key=date_key)
 
 
+def _set_response_read_timeout(response: Any, timeout: float) -> None:
+    """Bind known urllib/http.client response wrappers to their owned socket."""
+
+    http_response: http.client.HTTPResponse | None = None
+    if isinstance(response, http.client.HTTPResponse):
+        http_response = response
+    elif isinstance(response, urllib.response.addbase) and isinstance(
+        response.fp, http.client.HTTPResponse
+    ):
+        http_response = response.fp
+
+    buffered_reader = getattr(http_response, "fp", None)
+    socket_io = getattr(buffered_reader, "raw", None)
+    owned_socket = getattr(socket_io, "_sock", None)
+    if not isinstance(owned_socket, socket.socket):
+        raise TimeoutError("response body transport cannot be deadline-bound")
+    owned_socket.settimeout(timeout)
+
+
+def read_response_body_with_deadline(
+    response: Any,
+    *,
+    budget: FallbackBudget | None,
+    provider: str,
+    transport: str,
+    timeout_setter: Callable[[float], None] | None = None,
+    timeout_ceiling: float | None = None,
+) -> bytes:
+    """Read a response incrementally, rebinding every read to one deadline."""
+
+    if budget is None:
+        return response.read()
+
+    chunks: list[bytes] = []
+    while True:
+        remaining = budget.usable_blocking_remaining()
+        if timeout_ceiling is not None:
+            remaining = min(remaining, timeout_ceiling)
+        if remaining <= 0.0:
+            raise TimeoutError(f"{provider} {transport} response body exceeded route deadline")
+        if timeout_setter is not None:
+            timeout_setter(remaining)
+        else:
+            _set_response_read_timeout(response, remaining)
+        chunk = response.read(RESPONSE_READ_CHUNK_BYTES)
+        if budget.usable_blocking_remaining() <= 0.0:
+            raise TimeoutError(f"{provider} {transport} response body exceeded route deadline")
+        if not chunk:
+            return b"".join(chunks)
+        chunks.append(chunk)
+        if len(chunk) < RESPONSE_READ_CHUNK_BYTES:
+            return b"".join(chunks)
+
+
 def fetch_bytes_with_urllib(
     url: str,
     params: dict[str, str] | None = None,
@@ -450,16 +550,34 @@ def fetch_bytes_with_urllib(
         )
         if timeout is None:
             return None
+        attempt_started = budget.clock() if budget is not None else time.monotonic()
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:
-                content = response.read()
+                content = read_response_body_with_deadline(
+                    response,
+                    budget=budget,
+                    provider=provider,
+                    transport="urllib",
+                    timeout_ceiling=timeout,
+                )
                 if budget is not None:
-                    log_fallback_progress(budget, provider, "urllib", "success")
+                    log_fallback_progress(
+                        budget,
+                        provider,
+                        "urllib",
+                        "success",
+                        elapsed_seconds=budget.clock() - attempt_started,
+                    )
                 return content
         except (urllib.error.URLError, TimeoutError, ValueError) as error:
             if budget is not None:
                 log_fallback_progress(
-                    budget, provider, "urllib", "timeout_or_failure", str(error)
+                    budget,
+                    provider,
+                    "urllib",
+                    "timeout_or_failure",
+                    str(error),
+                    elapsed_seconds=budget.clock() - attempt_started,
                 )
             if attempt < REQUEST_RETRIES - 1:
                 time.sleep(REQUEST_RETRY_DELAY_SECONDS)
@@ -496,6 +614,7 @@ def fetch_bytes_with_http_client(
     )
     if timeout is None:
         return None
+    attempt_started = budget.clock() if budget is not None else time.monotonic()
     connection: http.client.HTTPSConnection | None = None
     try:
         connection = http.client.HTTPSConnection(
@@ -513,9 +632,20 @@ def fetch_bytes_with_http_client(
             },
         )
         response = connection.getresponse()
+        content = read_response_body_with_deadline(
+            response,
+            budget=budget,
+            provider=provider,
+            transport="python_https",
+            timeout_setter=(
+                (lambda remaining: connection.sock.settimeout(remaining))
+                if getattr(connection, "sock", None) is not None
+                else None
+            ),
+            timeout_ceiling=timeout,
+        )
         if response.status in {301, 302, 303, 307, 308}:
             location = response.getheader("Location")
-            response.read()
             if not location or redirects_remaining <= 0:
                 log(f"Python HTTPS fallback redirect rejected: {url}", "WARN")
                 return None
@@ -530,7 +660,6 @@ def fetch_bytes_with_http_client(
                 budget=budget,
                 provider=provider,
             )
-        content = response.read()
         if response.status != 200:
             log(f"Python HTTPS fallback HTTP {response.status}: {url}", "WARN")
             if budget is not None:
@@ -540,13 +669,24 @@ def fetch_bytes_with_http_client(
             return None
         log(f"Python HTTPS fallback succeeded: {url}")
         if budget is not None:
-            log_fallback_progress(budget, provider, "python_https", "success")
+            log_fallback_progress(
+                budget,
+                provider,
+                "python_https",
+                "success",
+                elapsed_seconds=budget.clock() - attempt_started,
+            )
         return content
     except (OSError, TimeoutError, ssl.SSLError, http.client.HTTPException) as error:
         log(f"Python HTTPS fallback failed: {url} ({error})", "WARN")
         if budget is not None:
             log_fallback_progress(
-                budget, provider, "python_https", "timeout_or_failure", str(error)
+                budget,
+                provider,
+                "python_https",
+                "timeout_or_failure",
+                str(error),
+                elapsed_seconds=budget.clock() - attempt_started,
             )
         return None
     finally:
@@ -565,7 +705,10 @@ def fetch_bytes_with_powershell(
     )
     if timeout is None:
         return None
-    invoke_timeout = max(1, min(15, int(timeout)))
+    attempt_started = budget.clock() if budget is not None else time.monotonic()
+    cleanup_reserve = min(POWERSHELL_CLEANUP_RESERVE_SECONDS, timeout / 4.0)
+    operation_timeout = max(0.001, timeout - cleanup_reserve)
+    invoke_timeout = max(1, min(15, int(operation_timeout)))
     script = (
         "$ProgressPreference='SilentlyContinue'; "
         "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); "
@@ -579,40 +722,78 @@ def fetch_bytes_with_powershell(
     )
     env = os.environ.copy()
     env["P1008_FETCH_URL"] = url
+    process: subprocess.Popen[str] | None = None
     try:
-        completed = subprocess.run(
+        process = subprocess.Popen(
             ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
             text=True,
             encoding="utf-8",
             errors="replace",
-            capture_output=True,
-            timeout=timeout,
-            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             env=env,
         )
-    except (OSError, subprocess.TimeoutExpired) as error:
-        log(f"PowerShell connector fallback unavailable: {url} ({error})", "WARN")
-        if budget is not None:
-            log_fallback_progress(
-                budget, provider, "powershell", "timeout_or_failure", str(error)
+        stdout, stderr = process.communicate(timeout=operation_timeout)
+    except subprocess.TimeoutExpired as error:
+        if process is not None:
+            process.kill()
+            cleanup_timeout = (
+                budget.usable_blocking_remaining()
+                if budget is not None
+                else cleanup_reserve
             )
-        return None
-    if completed.returncode != 0 or not completed.stdout:
-        error_text = (completed.stderr or "").strip()
-        log(f"PowerShell connector fallback failed: {url} ({error_text or completed.returncode})", "WARN")
+            if cleanup_timeout > 0.0:
+                try:
+                    process.communicate(timeout=cleanup_timeout)
+                except subprocess.TimeoutExpired:
+                    pass
+        log(f"PowerShell connector fallback unavailable: {url} ({error})", "WARN")
         if budget is not None:
             log_fallback_progress(
                 budget,
                 provider,
                 "powershell",
                 "timeout_or_failure",
-                error_text or str(completed.returncode),
+                str(error),
+                elapsed_seconds=budget.clock() - attempt_started,
+            )
+        return None
+    except OSError as error:
+        log(f"PowerShell connector fallback unavailable: {url} ({error})", "WARN")
+        if budget is not None:
+            log_fallback_progress(
+                budget,
+                provider,
+                "powershell",
+                "timeout_or_failure",
+                str(error),
+                elapsed_seconds=budget.clock() - attempt_started,
+            )
+        return None
+    return_code = process.returncode if process is not None else None
+    if return_code != 0 or not stdout:
+        error_text = (stderr or "").strip()
+        log(f"PowerShell connector fallback failed: {url} ({error_text or return_code})", "WARN")
+        if budget is not None:
+            log_fallback_progress(
+                budget,
+                provider,
+                "powershell",
+                "timeout_or_failure",
+                error_text or str(return_code),
+                elapsed_seconds=budget.clock() - attempt_started,
             )
         return None
     log(f"PowerShell connector fallback succeeded: {url}")
     if budget is not None:
-        log_fallback_progress(budget, provider, "powershell", "success")
-    return completed.stdout.encode("utf-8")
+        log_fallback_progress(
+            budget,
+            provider,
+            "powershell",
+            "success",
+            elapsed_seconds=budget.clock() - attempt_started,
+        )
+    return stdout.encode("utf-8")
 
 
 def fetch_bytes(
@@ -654,6 +835,30 @@ def fetch_json(
     provider: str = "UNSCOPED",
 ) -> Any | None:
     data = fetch_bytes(url, params, budget=budget, provider=provider)
+    if data is None:
+        return None
+    try:
+        return json.loads(data.decode("utf-8-sig"))
+    except json.JSONDecodeError as error:
+        log(f"JSON 解析失敗：{url}；{error}", "WARN")
+        return None
+
+
+def fetch_json_with_urllib_only(
+    url: str,
+    params: dict[str, str] | None = None,
+    *,
+    budget: FallbackBudget,
+    provider: str,
+) -> Any | None:
+    """Run exactly one governed urllib attempt without transport fallback."""
+
+    data = _fetch_bytes_urllib_only(
+        url,
+        params,
+        budget=budget,
+        provider=provider,
+    )
     if data is None:
         return None
     try:
@@ -1018,15 +1223,28 @@ def fetch_yahoo_chart_value(
     note_zh: str = "",
     fallback_budget: FallbackBudget | None = None,
     provider_name: str = "Yahoo",
+    urllib_only: bool = False,
 ) -> dict[str, Any] | None:
     encoded_ticker = urllib.parse.quote(ticker, safe="=.-")
     url = YAHOO_CHART_URL.format(ticker=encoded_ticker)
-    payload = fetch_json(
-        url,
-        {"interval": "1d", "range": "5d"},
-        budget=fallback_budget,
-        provider=provider_name,
-    )
+    if fallback_budget is not None:
+        fallback_budget.symbol = ticker
+    if urllib_only:
+        if fallback_budget is None:
+            raise ValueError("urllib-only Yahoo attempt requires an isolated budget")
+        payload = fetch_json_with_urllib_only(
+            url,
+            {"interval": "1d", "range": "5d"},
+            budget=fallback_budget,
+            provider=provider_name,
+        )
+    else:
+        payload = fetch_json(
+            url,
+            {"interval": "1d", "range": "5d"},
+            budget=fallback_budget,
+            provider=provider_name,
+        )
     try:
         result = payload["chart"]["result"][0]
     except (TypeError, KeyError, IndexError):
@@ -1076,6 +1294,8 @@ def fetch_stooq_quote_value(
     provider_name: str = "Stooq",
 ) -> dict[str, Any] | None:
     for symbol in symbols:
+        if fallback_budget is not None:
+            fallback_budget.symbol = symbol
         payload = fetch_bytes(
             STOOQ_QUOTE_URL,
             {"s": symbol, "f": "sd2t2ohlcv", "h": "", "e": "csv"},
@@ -1109,6 +1329,8 @@ def fetch_fred_series_latest(
     fallback_budget: FallbackBudget | None = None,
     provider_name: str | None = None,
 ) -> tuple[float, str] | None:
+    if fallback_budget is not None:
+        fallback_budget.symbol = series_id
     url = FRED_SERIES_URL.format(series_id=urllib.parse.quote(series_id, safe=""))
     data = fetch_bytes(
         url,
@@ -1167,7 +1389,7 @@ def first_available_source(
 ) -> dict[str, Any] | None:
     budget = FallbackBudget(metric, fallback_budget_seconds, clock)
     for label, fetcher in fetchers:
-        if budget.exhausted():
+        if budget.blocking_exhausted():
             log_fallback_progress(budget, label, "provider", "budget_exhausted")
             break
         log_fallback_progress(budget, label, "provider", "attempt_start")
@@ -1185,10 +1407,116 @@ def first_available_source(
     return None
 
 
+def first_available_source_with_yahoo_reserve(
+    metric: str,
+    fetchers: list[
+        tuple[
+            str,
+            str,
+            str,
+            Callable[[FallbackBudget], dict[str, Any] | None],
+        ]
+    ],
+    *,
+    non_yahoo_budget_seconds: float = NON_YAHOO_BUDGET_SECONDS,
+    yahoo_reserved_budget_seconds: float = YAHOO_RESERVED_BUDGET_SECONDS,
+    clock: Callable[[], float] = time.monotonic,
+) -> dict[str, Any] | None:
+    """Preserve routing order while isolating one Yahoo urllib opportunity."""
+
+    if non_yahoo_budget_seconds + yahoo_reserved_budget_seconds > TOTAL_LOGICAL_BUDGET_SECONDS:
+        raise ValueError("combined fallback allocation exceeds the metric budget")
+
+    route_started = clock()
+    route_deadline = route_started + TOTAL_LOGICAL_BUDGET_SECONDS
+    non_yahoo_budget: FallbackBudget | None = None
+    non_yahoo_remaining = non_yahoo_budget_seconds
+
+    for position, (label, symbol, budget_class, fetcher) in enumerate(fetchers, start=1):
+        if clock() >= route_deadline:
+            break
+        is_yahoo = budget_class == BUDGET_CLASS_YAHOO_RESERVED
+        if is_yahoo:
+            if non_yahoo_budget is not None:
+                non_yahoo_remaining = non_yahoo_budget.remaining()
+            budget = FallbackBudget(
+                metric=metric,
+                total_seconds=yahoo_reserved_budget_seconds,
+                clock=clock,
+                budget_class=BUDGET_CLASS_YAHOO_RESERVED,
+                route_deadline=route_deadline,
+            )
+        else:
+            if non_yahoo_budget is None:
+                non_yahoo_budget = FallbackBudget(
+                    metric=metric,
+                    total_seconds=non_yahoo_remaining,
+                    clock=clock,
+                    budget_class=BUDGET_CLASS_NON_YAHOO,
+                    route_deadline=route_deadline,
+                )
+            budget = non_yahoo_budget
+
+        budget.source_priority_position = position
+        budget.symbol = symbol
+        if budget.blocking_exhausted():
+            log_fallback_progress(budget, label, "provider", "budget_exhausted")
+            continue
+
+        provider_started = clock()
+        log_fallback_progress(budget, label, "provider", "attempt_start")
+        result = fetcher(budget)
+        provider_elapsed = clock() - provider_started
+        if result is not None and result.get("value") not in (None, ""):
+            selected_source = str(result.get("source") or "")
+            if is_yahoo:
+                stooq_skipped = any(
+                    later_label.startswith("Stooq")
+                    for later_label, _symbol, _budget_class, _fetcher in fetchers[position:]
+                )
+                log_fallback_progress(
+                    budget,
+                    label,
+                    "provider",
+                    "yahoo_priority_fallback_success",
+                    elapsed_seconds=provider_elapsed,
+                    selected_source=selected_source,
+                    stooq_skipped=stooq_skipped,
+                )
+            else:
+                log_fallback_progress(
+                    budget,
+                    label,
+                    "provider",
+                    "chosen_successful_source",
+                    elapsed_seconds=provider_elapsed,
+                    selected_source=selected_source,
+                )
+            return result
+
+        if is_yahoo:
+            log_fallback_progress(
+                budget,
+                label,
+                "provider",
+                "yahoo_priority_fallback_failed",
+                elapsed_seconds=provider_elapsed,
+                stooq_skipped=False,
+            )
+            # Resume the non-Yahoo allocation without charging Yahoo elapsed time.
+            non_yahoo_budget = None
+        else:
+            non_yahoo_remaining = budget.remaining()
+        log(f"{label} 未取得資料，嘗試下一來源。", "WARN")
+    return None
+
+
 def fetch_macro_vix() -> dict[str, Any] | None:
-    return first_available_source("vix", [
+    return first_available_source_with_yahoo_reserve("vix", [
         (
             "FRED VIXCLS",
+            "VIXCLS",
+            BUDGET_CLASS_NON_YAHOO,
             lambda budget: fetch_fred_public_series_value(
                 "VIXCLS",
                 source_name="FRED_VIXCLS_CBOE_VIX",
@@ -1199,7 +1527,21 @@ def fetch_macro_vix() -> dict[str, Any] | None:
             ),
         ),
         (
+            "Yahoo VIX",
+            "^VIX",
+            BUDGET_CLASS_YAHOO_RESERVED,
+            lambda budget: fetch_yahoo_chart_value(
+                "^VIX",
+                source_name="YAHOO_FINANCE_VIX",
+                fallback_budget=budget,
+                provider_name="Yahoo VIX",
+                urllib_only=True,
+            ),
+        ),
+        (
             "Stooq VIX",
+            "^vix/vix",
+            BUDGET_CLASS_NON_YAHOO,
             lambda budget: fetch_stooq_quote_value(
                 ["^vix", "vix"],
                 source_name="STOOQ_VIX_PUBLIC_MARKET",
@@ -1208,22 +1550,15 @@ def fetch_macro_vix() -> dict[str, Any] | None:
                 provider_name="Stooq VIX",
             ),
         ),
-        (
-            "Yahoo VIX",
-            lambda budget: fetch_yahoo_chart_value(
-                "^VIX",
-                source_name="YAHOO_FINANCE_VIX",
-                fallback_budget=budget,
-                provider_name="Yahoo VIX",
-            ),
-        ),
     ])
 
 
 def fetch_macro_wti() -> dict[str, Any] | None:
-    return first_available_source("wti", [
+    return first_available_source_with_yahoo_reserve("wti", [
         (
             "FRED DCOILWTICO",
+            "DCOILWTICO",
+            BUDGET_CLASS_NON_YAHOO,
             lambda budget: fetch_fred_public_series_value(
                 "DCOILWTICO",
                 source_name="FRED_DCOILWTICO_WTI",
@@ -1234,7 +1569,21 @@ def fetch_macro_wti() -> dict[str, Any] | None:
             ),
         ),
         (
+            "Yahoo WTI",
+            "CL=F",
+            BUDGET_CLASS_YAHOO_RESERVED,
+            lambda budget: fetch_yahoo_chart_value(
+                "CL=F",
+                source_name="YAHOO_FINANCE_WTI",
+                fallback_budget=budget,
+                provider_name="Yahoo WTI",
+                urllib_only=True,
+            ),
+        ),
+        (
             "Stooq CL.F",
+            "cl.f/cl",
+            BUDGET_CLASS_NON_YAHOO,
             lambda budget: fetch_stooq_quote_value(
                 ["cl.f", "cl"],
                 source_name="STOOQ_WTI_PUBLIC_MARKET",
@@ -1243,22 +1592,15 @@ def fetch_macro_wti() -> dict[str, Any] | None:
                 provider_name="Stooq CL.F",
             ),
         ),
-        (
-            "Yahoo WTI",
-            lambda budget: fetch_yahoo_chart_value(
-                "CL=F",
-                source_name="YAHOO_FINANCE_WTI",
-                fallback_budget=budget,
-                provider_name="Yahoo WTI",
-            ),
-        ),
     ])
 
 
 def fetch_macro_twd_usd() -> dict[str, Any] | None:
-    return first_available_source("twd_usd", [
+    return first_available_source_with_yahoo_reserve("twd_usd", [
         (
             "FRED DEXTAUS",
+            "DEXTAUS",
+            BUDGET_CLASS_NON_YAHOO,
             lambda budget: fetch_fred_public_series_value(
                 "DEXTAUS",
                 source_name="FRED_DEXTAUS_TWD_USD",
@@ -1269,7 +1611,21 @@ def fetch_macro_twd_usd() -> dict[str, Any] | None:
             ),
         ),
         (
+            "Yahoo TWD",
+            "TWD=X",
+            BUDGET_CLASS_YAHOO_RESERVED,
+            lambda budget: fetch_yahoo_chart_value(
+                "TWD=X",
+                source_name="YAHOO_FINANCE_TWD_USD",
+                fallback_budget=budget,
+                provider_name="Yahoo TWD",
+                urllib_only=True,
+            ),
+        ),
+        (
             "Stooq USDTWD",
+            "usdtwd/usdtwd.pl",
+            BUDGET_CLASS_NON_YAHOO,
             lambda budget: fetch_stooq_quote_value(
                 ["usdtwd", "usdtwd.pl"],
                 source_name="STOOQ_USDTWD_PUBLIC_MARKET",
@@ -1278,22 +1634,15 @@ def fetch_macro_twd_usd() -> dict[str, Any] | None:
                 provider_name="Stooq USDTWD",
             ),
         ),
-        (
-            "Yahoo TWD",
-            lambda budget: fetch_yahoo_chart_value(
-                "TWD=X",
-                source_name="YAHOO_FINANCE_TWD_USD",
-                fallback_budget=budget,
-                provider_name="Yahoo TWD",
-            ),
-        ),
     ])
 
 
 def fetch_macro_us10y() -> dict[str, Any] | None:
-    return first_available_source("us10y", [
+    return first_available_source_with_yahoo_reserve("us10y", [
         (
             "FRED DGS10",
+            "DGS10",
+            BUDGET_CLASS_NON_YAHOO,
             lambda budget: fetch_fred_public_series_value(
                 "DGS10",
                 source_name="FRED_DGS10_US10Y",
@@ -1305,35 +1654,43 @@ def fetch_macro_us10y() -> dict[str, Any] | None:
         ),
         (
             "Yahoo TNX",
+            "^TNX",
+            BUDGET_CLASS_YAHOO_RESERVED,
             lambda budget: fetch_yahoo_chart_value(
                 "^TNX",
                 source_name="YAHOO_FINANCE_US10Y",
                 fallback_budget=budget,
                 provider_name="Yahoo TNX",
+                urllib_only=True,
             ),
         ),
     ])
 
 
 def fetch_macro_dxy() -> dict[str, Any] | None:
-    return first_available_source("dxy", [
+    return first_available_source_with_yahoo_reserve("dxy", [
+        (
+            "Yahoo DXY",
+            "DX-Y.NYB",
+            BUDGET_CLASS_YAHOO_RESERVED,
+            lambda budget: fetch_yahoo_chart_value(
+                "DX-Y.NYB",
+                source_name="YAHOO_FINANCE_DXY",
+                fallback_budget=budget,
+                provider_name="Yahoo DXY",
+                urllib_only=True,
+            ),
+        ),
         (
             "Stooq DXY",
+            "dx.f/dxy/usdidx",
+            BUDGET_CLASS_NON_YAHOO,
             lambda budget: fetch_stooq_quote_value(
                 ["dx.f", "dxy", "usdidx"],
                 source_name="STOOQ_DXY_PUBLIC_MARKET",
                 note_zh="Stooq DXY 公開市場備援；ICE DXY 授權來源未接入前需標示來源限制",
                 fallback_budget=budget,
                 provider_name="Stooq DXY",
-            ),
-        ),
-        (
-            "Yahoo DXY",
-            lambda budget: fetch_yahoo_chart_value(
-                "DX-Y.NYB",
-                source_name="YAHOO_FINANCE_DXY",
-                fallback_budget=budget,
-                provider_name="Yahoo DXY",
             ),
         ),
     ])
@@ -1360,7 +1717,7 @@ def fetch_fred_target_rate_midpoint() -> dict[str, Any] | None:
         fallback_budget=budget,
         provider_name="FRED DFEDTARU",
     )
-    if budget.exhausted():
+    if budget.blocking_exhausted():
         log_fallback_progress(
             budget, "FRED DFEDTARL", "provider", "budget_exhausted"
         )
