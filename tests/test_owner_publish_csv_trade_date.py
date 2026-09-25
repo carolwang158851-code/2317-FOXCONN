@@ -273,6 +273,225 @@ class OwnerPublishTradeDateTests(unittest.TestCase):
             "APPROVE 2026-09-25 DATASETS macro,fx_trend_observations",
         )
 
+        readiness = PUBLISHER.build_publish_readiness(
+            self.root,
+            self._stage_macro_fx_with_daily(),
+            selected_datasets=selected,
+        )
+        self.assertTrue(readiness["allowed"], readiness["blockers"])
+        self.assertEqual(readiness["selectedCandidateDate"], "2026-09-25")
+        self.assertEqual(
+            readiness["approvalPhraseRequired"],
+            "APPROVE 2026-09-25 DATASETS macro,fx_trend_observations",
+        )
+
+    def test_selected_already_published_scope_is_safe_no_action(self) -> None:
+        dry_run = self._stage_macro_fx_with_daily()
+        dry_run["generatedFiles"] = []
+        dry_run["alreadyPublishedTargets"] = [PUBLISHER.MACRO_TARGET]
+        selected = PUBLISHER.parse_dataset_selection("macro")
+        protected = [
+            self.root / PUBLISHER.MACRO_TARGET,
+            self.root / PUBLISHER.MANIFEST_PATH,
+        ]
+        before = {path: sha256(path) for path in protected}
+
+        readiness = PUBLISHER.build_publish_readiness(
+            self.root, dry_run, selected_datasets=selected
+        )
+
+        self.assertTrue(readiness["allowed"], readiness["blockers"])
+        self.assertTrue(readiness["noActionRequired"])
+        self.assertNotIn(
+            "Selected dataset has no generated candidate",
+            " ".join(readiness["blockers"]),
+        )
+        self.assertEqual(readiness["publishFiles"], [])
+        self.assertEqual(readiness["selectedCandidateDate"], "")
+        self.assertIsNone(readiness["approvalPhraseRequired"])
+        self.assertEqual(before, {path: sha256(path) for path in protected})
+
+    def test_mixed_already_published_and_pending_scope_keeps_only_pending(self) -> None:
+        dry_run = self._stage_macro_fx_with_daily()
+        dry_run["generatedFiles"] = [
+            item
+            for item in dry_run["generatedFiles"]
+            if Path(item).name != "macro_snapshot_candidate.csv"
+        ]
+        dry_run["alreadyPublishedTargets"] = [PUBLISHER.MACRO_TARGET]
+        dry_run["inputSources"]["vix"] = "DATA_MISSING"
+        selected = PUBLISHER.parse_dataset_selection(
+            "macro,fx_trend_observations"
+        )
+
+        readiness = PUBLISHER.build_publish_readiness(
+            self.root, dry_run, selected_datasets=selected
+        )
+
+        self.assertTrue(readiness["allowed"], readiness["blockers"])
+        self.assertFalse(readiness["noActionRequired"])
+        self.assertEqual(
+            [Path(item).name for item in readiness["publishFiles"]],
+            ["fx_trend_observations_candidate.csv"],
+        )
+        self.assertEqual(readiness["selectedTargets"], [PUBLISHER.FX_TREND_TARGET])
+        self.assertNotIn(
+            "Selected dataset has no generated candidate",
+            " ".join(readiness["blockers"]),
+        )
+
+    def test_macro_candidate_date_mismatch_fails_closed(self) -> None:
+        dry_run = self._stage_macro_fx_with_daily()
+        macro = self.root / next(
+            item
+            for item in dry_run["generatedFiles"]
+            if Path(item).name == "macro_snapshot_candidate.csv"
+        )
+        self._write_csv(macro, self.MACRO_HEADER, [["2026-09-24", "15.67"]])
+        selected = PUBLISHER.parse_dataset_selection("macro")
+
+        readiness = PUBLISHER.build_publish_readiness(
+            self.root, dry_run, selected_datasets=selected
+        )
+
+        self.assertFalse(readiness["allowed"])
+        self.assertIn("Selected candidate date mismatch", " ".join(readiness["blockers"]))
+        self.assertEqual(readiness["selectedCandidateDate"], "2026-09-24")
+
+    def test_fx_candidate_date_mismatch_fails_closed(self) -> None:
+        dry_run = self._stage_macro_fx_with_daily()
+        fx = self.root / next(
+            item
+            for item in dry_run["generatedFiles"]
+            if Path(item).name == "fx_trend_observations_candidate.csv"
+        )
+        self._write_csv(
+            fx,
+            self.FX_HEADER,
+            [["2026-09-24", "PUBLIC_MARKET_DATA", "false"]],
+        )
+        selected = PUBLISHER.parse_dataset_selection("fx_trend_observations")
+
+        readiness = PUBLISHER.build_publish_readiness(
+            self.root, dry_run, selected_datasets=selected
+        )
+
+        self.assertFalse(readiness["allowed"])
+        self.assertIn("Selected candidate date mismatch", " ".join(readiness["blockers"]))
+        self.assertEqual(readiness["selectedCandidateDate"], "2026-09-24")
+
+    def test_mixed_pending_candidate_dates_conflict_fails_closed(self) -> None:
+        dry_run = self._stage_macro_fx_with_daily()
+        fx = self.root / next(
+            item
+            for item in dry_run["generatedFiles"]
+            if Path(item).name == "fx_trend_observations_candidate.csv"
+        )
+        self._write_csv(
+            fx,
+            self.FX_HEADER,
+            [["2026-09-24", "PUBLIC_MARKET_DATA", "false"]],
+        )
+        selected = PUBLISHER.parse_dataset_selection(
+            "macro,fx_trend_observations"
+        )
+
+        readiness = PUBLISHER.build_publish_readiness(
+            self.root, dry_run, selected_datasets=selected
+        )
+
+        self.assertFalse(readiness["allowed"])
+        self.assertIn(
+            "Selected pending candidates resolve to conflicting dates",
+            " ".join(readiness["blockers"]),
+        )
+        self.assertEqual(readiness["selectedCandidateDate"], "")
+        self.assertIsNone(readiness["approvalPhraseRequired"])
+
+    def test_isolated_selective_publish_respects_noop_and_date_bound_approval(self) -> None:
+        dry_run = self._stage_macro_fx_with_daily()
+        dry_run["generatedFiles"] = [
+            item
+            for item in dry_run["generatedFiles"]
+            if Path(item).name != "macro_snapshot_candidate.csv"
+        ]
+        dry_run["alreadyPublishedTargets"] = [PUBLISHER.MACRO_TARGET]
+        dry_run_path = self.root / "staging" / "2026-09-06" / "DRY_RUN.json"
+        dry_run_path.write_text(json.dumps(dry_run), encoding="utf-8")
+        selected_targets = [
+            self.root / PUBLISHER.MACRO_TARGET,
+            self.root / PUBLISHER.FX_TREND_TARGET,
+        ]
+        unselected_targets = [
+            self.root / PUBLISHER.DAILY_TARGET,
+            self.root / PUBLISHER.MARKET_ACTIVITY_TARGET,
+        ]
+        before = {
+            path: sha256(path)
+            for path in [*selected_targets, *unselected_targets]
+        }
+        environment = dict(
+            os.environ,
+            PYTHONDONTWRITEBYTECODE="1",
+            PYTHONIOENCODING="utf-8",
+        )
+        command = [
+            sys.executable,
+            str(PUBLISHER_PATH),
+            "--package-root",
+            str(self.root),
+            "--date",
+            "2026-09-06",
+            "--datasets",
+            "macro,fx_trend_observations",
+        ]
+
+        review = subprocess.run(
+            command,
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=False,
+            env=environment,
+        )
+        self.assertEqual(review.returncode, 0, review.stdout + review.stderr)
+        self.assertEqual(
+            before,
+            {path: sha256(path) for path in [*selected_targets, *unselected_targets]},
+        )
+
+        wrong = subprocess.run(
+            [*command, "--publish"],
+            input="APPROVE 2026-09-24 DATASETS macro,fx_trend_observations\n",
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=False,
+            env=environment,
+        )
+        self.assertEqual(wrong.returncode, 5, wrong.stdout + wrong.stderr)
+        self.assertIn("Approval phrase did not match", wrong.stdout)
+        self.assertEqual(
+            before,
+            {path: sha256(path) for path in [*selected_targets, *unselected_targets]},
+        )
+
+        published = subprocess.run(
+            [*command, "--publish"],
+            input="APPROVE 2026-09-25 DATASETS macro,fx_trend_observations\n",
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=False,
+            env=environment,
+        )
+        self.assertEqual(published.returncode, 0, published.stdout + published.stderr)
+        self.assertIn("Formal CSV append completed", published.stdout)
+        self.assertEqual(sha256(self.root / PUBLISHER.MACRO_TARGET), before[self.root / PUBLISHER.MACRO_TARGET])
+        self.assertNotEqual(sha256(self.root / PUBLISHER.FX_TREND_TARGET), before[self.root / PUBLISHER.FX_TREND_TARGET])
+        for path in unselected_targets:
+            self.assertEqual(sha256(path), before[path])
+
     def test_selective_review_changes_no_formal_or_dry_run_files(self) -> None:
         dry_run = self._stage_macro_fx_with_daily()
         dry_run_path = self.root / "staging" / "2026-09-06" / "DRY_RUN.json"
@@ -370,6 +589,21 @@ class OwnerPublishTradeDateTests(unittest.TestCase):
         )
         self.assertFalse(readiness["allowed"])
         self.assertIn("date mismatch", " ".join(readiness["blockers"]))
+
+    def test_selected_trade_pair_approval_uses_governed_formal_target_date(self) -> None:
+        dry_run = self._stage_trade_pair("2026-09-04")
+        selected = PUBLISHER.parse_dataset_selection("daily,market_activity")
+        readiness = PUBLISHER.build_publish_readiness(
+            self.root, dry_run, selected_datasets=selected
+        )
+
+        self.assertTrue(readiness["allowed"], readiness["blockers"])
+        self.assertEqual(readiness["formalTargetDate"], "2026-09-04")
+        self.assertEqual(readiness["selectedCandidateDate"], "2026-09-04")
+        self.assertEqual(
+            readiness["approvalPhraseRequired"],
+            "APPROVE 2026-09-04 DATASETS daily,market_activity",
+        )
 
     def test_weekend_execution_uses_prior_validated_trading_date(self) -> None:
         readiness = PUBLISHER.build_publish_readiness(

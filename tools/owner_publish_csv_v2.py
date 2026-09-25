@@ -101,6 +101,7 @@ DATASET_TARGETS = {
     "macro_event_observations": MACRO_EVENT_TARGET,
     "fx_trend_observations": FX_TREND_TARGET,
 }
+TARGET_DATASETS = {target: dataset for dataset, target in DATASET_TARGETS.items()}
 GENERATED_FILE_DATASETS = {
     "2317_daily_price_candidate.csv": "daily",
     "2317_daily_price.incremental.candidate.csv": "daily",
@@ -711,6 +712,60 @@ def filter_generated_files(
     ]
 
 
+def pending_candidate_dates(
+    package_root: Path,
+    generated_files: list[str],
+    trade_plan: dict[str, Any] | None,
+) -> dict[str, list[str]]:
+    """Return actual Date values for rows that the selected publish would append."""
+    dates_by_dataset: dict[str, list[str]] = {}
+    if trade_plan:
+        trade_date = str(trade_plan["formalTargetDate"])
+        dates_by_dataset["daily"] = [trade_date]
+        dates_by_dataset["market_activity"] = [trade_date]
+
+    for generated in generated_files:
+        candidate_path, target_rel, dataset = resolve_generated_file(
+            package_root, generated
+        )
+        if trade_plan and dataset in {"daily", "market_activity"}:
+            continue
+        target_path = package_root / target_rel
+        candidate_header, candidate_rows, _ = read_csv_header_and_rows(candidate_path)
+        target_header, target_rows, _ = read_csv_header_and_rows(target_path)
+        if candidate_header != target_header:
+            raise ValueError(f"Schema mismatch: {generated} -> {target_rel}")
+        if "Date" not in candidate_header:
+            raise ValueError(
+                f"Selected candidate has no governed Date field: {generated}"
+            )
+        normalized_rows = normalize_candidate_rows_for_publish(
+            target_rel, candidate_header, candidate_rows
+        )
+        existing_by_key = {
+            row_key(target_rel, target_header, row): row for row in target_rows if row
+        }
+        date_index = candidate_header.index("Date")
+        pending_dates: set[str] = set()
+        for row in normalized_rows:
+            if not row:
+                continue
+            key = row_key(target_rel, candidate_header, row)
+            if key in existing_by_key:
+                continue
+            row_date = row[date_index].strip() if date_index < len(row) else ""
+            try:
+                date.fromisoformat(row_date)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Selected candidate has invalid Date {row_date!r}: {generated}"
+                ) from exc
+            pending_dates.add(row_date)
+        if pending_dates:
+            dates_by_dataset[dataset] = sorted(pending_dates)
+    return dates_by_dataset
+
+
 def scope_fields(
     fields: list[str], selected_datasets: tuple[str, ...] | None
 ) -> list[str]:
@@ -919,11 +974,30 @@ def build_publish_readiness(
         if selected_datasets is not None
         else ()
     )
+    already_published_targets = list(
+        dry_run.get("alreadyPublishedTargets", []) or []
+    )
+    if selected_datasets is not None:
+        selected_targets_for_scope = {
+            DATASET_TARGETS[item] for item in selected_datasets
+        }
+        already_published_targets = [
+            target
+            for target in already_published_targets
+            if target in selected_targets_for_scope
+        ]
     trade_plan: dict[str, Any] | None = None
     trade_plan_error = ""
     try:
         should_resolve_trade_plan = (
-            selected_datasets is None or "daily" in selected_datasets
+            selected_datasets is None
+            or (
+                "daily" in selected_datasets
+                and not {
+                    DATASET_TARGETS["daily"],
+                    DATASET_TARGETS["market_activity"],
+                }.issubset(set(already_published_targets))
+            )
         )
         if should_resolve_trade_plan:
             trade_plan = resolve_trade_date_publish_plan(package_root, generated_files)
@@ -941,46 +1015,60 @@ def build_publish_readiness(
             ]
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         trade_plan_error = str(exc)
-    already_published_targets = list(
-        dry_run.get("alreadyPublishedTargets", []) or []
+    already_published_datasets = {
+        TARGET_DATASETS[target]
+        for target in already_published_targets
+        if target in TARGET_DATASETS
+    }
+    effective_datasets = {
+        generated_file_dataset(item) for item in generated_files
+    }
+    selected_gate_datasets = (
+        tuple(
+            item
+            for item in selected_datasets
+            if item not in already_published_datasets
+            or item in effective_datasets
+        )
+        if selected_datasets is not None
+        else None
     )
-    if selected_datasets is not None:
-        selected_targets_for_scope = {
-            DATASET_TARGETS[item] for item in selected_datasets
-        }
-        already_published_targets = [
-            target
-            for target in already_published_targets
-            if target in selected_targets_for_scope
-        ]
+    if selected_datasets is None:
+        no_action_required = (
+            bool(dry_run.get("noPublishRequired"))
+            or bool(already_published_targets)
+        ) and not generated_files
+    else:
+        no_action_required = (
+            not generated_files
+            and bool(selected_datasets)
+            and set(selected_datasets).issubset(already_published_datasets)
+        )
     critical_missing = dry_run.get("criticalMissingFields")
     if critical_missing is None:
         critical_missing = dry_run.get("missingFields", []) or []
-    critical_missing = scope_fields(list(critical_missing), selected_datasets)
+    critical_missing = scope_fields(list(critical_missing), selected_gate_datasets)
     optional_missing = scope_fields(
-        list(dry_run.get("optionalMissingFields", []) or []), selected_datasets
+        list(dry_run.get("optionalMissingFields", []) or []), selected_gate_datasets
     )
     unavailable_candidate_fields = scope_fields(
         list(dry_run.get("unavailableCandidateFields", []) or []),
-        selected_datasets,
+        selected_gate_datasets,
     )
 
     source_score, source_available, source_total, missing_sources = source_coverage_score(
-        dry_run, selected_datasets
+        dry_run, selected_gate_datasets
     )
     validation_checks = list(dry_run.get("validationChecks", []) or [])
-    if selected_datasets is not None:
+    if selected_gate_datasets is not None:
         selected_checks = [
             check
             for check in validation_checks
-            if not check.get("dataset") or check.get("dataset") in selected_datasets
+            if not check.get("dataset")
+            or check.get("dataset") in selected_gate_datasets
         ]
         validation_checks = selected_checks
     checks_score = validation_score(validation_checks)
-    no_action_required = (
-        bool(dry_run.get("noPublishRequired"))
-        or bool(already_published_targets)
-    ) and not generated_files
     if no_action_required:
         candidate_diagnostics, candidate_blockers, candidate_score = [], [], 100
     else:
@@ -994,34 +1082,83 @@ def build_publish_readiness(
     )
 
     blockers = list(candidate_blockers)
-    effective_datasets = {
-        generated_file_dataset(item) for item in generated_files
-    }
     if selected_datasets is not None:
         missing_selected = [
-            item for item in selected_datasets if item not in effective_datasets
+            item
+            for item in selected_datasets
+            if item not in effective_datasets
+            and item not in already_published_datasets
         ]
         if missing_selected:
             blockers.append(
                 "Selected dataset has no generated candidate: "
                 + ", ".join(missing_selected)
             )
-    if trade_plan_error:
-        blockers.append(f"Trade-date publish plan failed: {trade_plan_error}")
-    if critical_missing:
-        blockers.append(f"Missing critical fields: {', '.join(critical_missing)}")
-    if missing_sources:
-        blockers.append(f"Missing required sources: {', '.join(missing_sources)}")
-    if score < MIN_PUBLISH_SCORE:
-        blockers.append(f"Readiness score {score}% is below required {MIN_PUBLISH_SCORE}%.")
-
     selected_candidate_date = str(dry_run.get("candidateDate") or "")
+    selected_candidate_dates: dict[str, list[str]] = {}
+    if selected_datasets is not None and not no_action_required:
+        try:
+            selected_candidate_dates = pending_candidate_dates(
+                package_root, generated_files, trade_plan
+            )
+            resolved_dates = sorted(
+                {
+                    item
+                    for dates in selected_candidate_dates.values()
+                    for item in dates
+                }
+            )
+            if len(resolved_dates) > 1:
+                details = ", ".join(
+                    f"{dataset}={','.join(dates)}"
+                    for dataset, dates in selected_candidate_dates.items()
+                )
+                blockers.append(
+                    "Selected pending candidates resolve to conflicting dates: "
+                    + details
+                )
+                selected_candidate_date = ""
+            elif len(resolved_dates) == 1:
+                actual_candidate_date = resolved_dates[0]
+                declared_candidate_date = str(dry_run.get("candidateDate") or "")
+                if (
+                    trade_plan is None
+                    and declared_candidate_date
+                    and declared_candidate_date != actual_candidate_date
+                ):
+                    blockers.append(
+                        "Selected candidate date mismatch: "
+                        f"DRY_RUN.candidateDate={declared_candidate_date}, "
+                        f"actual selected candidate Date={actual_candidate_date}"
+                    )
+                selected_candidate_date = actual_candidate_date
+            elif generated_files:
+                blockers.append(
+                    "Selected pending candidate has no new governed Date rows."
+                )
+                selected_candidate_date = ""
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            blockers.append(f"Selected candidate date validation failed: {exc}")
+            selected_candidate_date = ""
+    elif no_action_required:
+        selected_candidate_date = ""
+
+    if not no_action_required:
+        if trade_plan_error:
+            blockers.append(f"Trade-date publish plan failed: {trade_plan_error}")
+        if critical_missing:
+            blockers.append(f"Missing critical fields: {', '.join(critical_missing)}")
+        if missing_sources:
+            blockers.append(f"Missing required sources: {', '.join(missing_sources)}")
+        if score < MIN_PUBLISH_SCORE:
+            blockers.append(f"Readiness score {score}% is below required {MIN_PUBLISH_SCORE}%.")
+
     selected_targets = [
         resolve_generated_file(package_root, item)[1] for item in generated_files
     ]
     approval_phrase_required = (
         dataset_selection_approval_phrase(selected_candidate_date, selected_datasets)
-        if selected_datasets is not None
+        if selected_datasets is not None and selected_candidate_date
         else None
     )
     return {
@@ -1046,7 +1183,15 @@ def build_publish_readiness(
         "ownerApprovalDate": date.today().isoformat(),
         "executionDate": date.today().isoformat(),
         "candidateTradingDate": trade_plan["formalTargetDate"] if trade_plan else None,
-        "formalTargetDate": trade_plan["formalTargetDate"] if trade_plan else None,
+        "formalTargetDate": (
+            trade_plan["formalTargetDate"]
+            if trade_plan
+            else (
+                selected_candidate_date
+                if selected_datasets is not None and selected_candidate_date
+                else None
+            )
+        ),
         "candidateTradingDates": trade_plan["candidateTradingDates"] if trade_plan else [],
         "tradeCandidateLineage": trade_plan,
         "selectedDatasets": list(selected_datasets or []),
@@ -1054,6 +1199,7 @@ def build_publish_readiness(
         "selectedPublishFiles": list(generated_files),
         "selectedTargets": selected_targets,
         "selectedCandidateDate": selected_candidate_date,
+        "selectedCandidateDates": selected_candidate_dates,
         "approvalPhraseRequired": approval_phrase_required,
     }
 
@@ -4017,7 +4163,7 @@ def main() -> int:
         return 0
 
     approval_phrase = (
-        dataset_selection_approval_phrase(staging_candidate_date, selected_datasets)
+        str(readiness.get("approvalPhraseRequired") or "")
         if selected_datasets is not None
         else f"APPROVE {formal_target_date}"
     )
@@ -4043,6 +4189,8 @@ def main() -> int:
         )
         != formal_target_date
         or (revalidated.get("publishFiles", []) or []) != generated_files
+        or revalidated.get("approvalPhraseRequired")
+        != readiness.get("approvalPhraseRequired")
     ):
         print("[BLOCKED] Candidate identity changed after Owner review; formal publish refused.")
         return 3
