@@ -87,6 +87,58 @@ REMEDIATION_REMOVED_DATES = {
 MARKET_ACTIVITY_TARGET = "data/2317_daily_market_activity.csv"
 DAILY_PRICE_STATUS_PATH = "runtime/daily_price_incremental/latest_status.json"
 MARKET_ACTIVITY_STATUS_PATH = "runtime/market_activity_incremental/latest_status.json"
+SUPPORTED_DATASETS = (
+    "daily",
+    "market_activity",
+    "macro",
+    "macro_event_observations",
+    "fx_trend_observations",
+)
+DATASET_TARGETS = {
+    "daily": DAILY_TARGET,
+    "market_activity": MARKET_ACTIVITY_TARGET,
+    "macro": MACRO_TARGET,
+    "macro_event_observations": MACRO_EVENT_TARGET,
+    "fx_trend_observations": FX_TREND_TARGET,
+}
+TARGET_DATASETS = {target: dataset for dataset, target in DATASET_TARGETS.items()}
+GENERATED_FILE_DATASETS = {
+    "2317_daily_price_candidate.csv": "daily",
+    "2317_daily_price.incremental.candidate.csv": "daily",
+    "2317_daily_market_activity.incremental.candidate.csv": "market_activity",
+    "macro_snapshot_candidate.csv": "macro",
+    "macro_event_observations_candidate.csv": "macro_event_observations",
+    "fx_trend_observations_candidate.csv": "fx_trend_observations",
+}
+SOURCE_DATASET_HINTS = {
+    "stock_price": {"daily"},
+    "vix": {"macro"},
+    "wti": {"macro"},
+    "twd_usd": {"macro", "fx_trend_observations"},
+    "us10y": {"macro", "fx_trend_observations"},
+    "dxy": {"macro", "fx_trend_observations"},
+    "fed_rate": {"macro", "fx_trend_observations"},
+    "fed_prob": {"macro"},
+    "jpy_usd": {"fx_trend_observations"},
+    "boj_rate": {"fx_trend_observations"},
+}
+FIELD_DATASET_HINTS = {
+    "close": {"daily"},
+    "stock_price": {"daily"},
+    "twd_usd": {"macro", "fx_trend_observations"},
+    "vix": {"macro"},
+    "wti": {"macro"},
+    "wti_oil": {"macro"},
+    "us10y": {"macro", "fx_trend_observations"},
+    "us_10y_yield": {"macro", "fx_trend_observations"},
+    "fed_rate": {"macro", "fx_trend_observations"},
+    "fed_hike_prob_ye": {"macro"},
+    "dxy": {"macro", "fx_trend_observations"},
+    "risklevel": {"macro"},
+    "jpy_usd": {"fx_trend_observations"},
+    "boj_rate": {"fx_trend_observations"},
+    "ratespread_us_jp": {"fx_trend_observations"},
+}
 MARKET_ACTIVITY_PRICE_SHA256 = REMEDIATION_CANDIDATE_SHA256
 MARKET_ACTIVITY_FIELDS = (
     "date",
@@ -601,6 +653,133 @@ def resolve_generated_file(package_root: Path, generated: str) -> tuple[Path, st
     raise ValueError(f"Unsupported generated candidate: {generated}")
 
 
+def generated_file_dataset(generated: str) -> str:
+    name = Path(generated.replace("\\", "/")).name
+    try:
+        return GENERATED_FILE_DATASETS[name]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported generated candidate: {generated}") from exc
+
+
+def parse_dataset_selection(raw: str | None) -> tuple[str, ...] | None:
+    """Parse an explicit Owner scope without changing the legacy default path."""
+    if raw is None:
+        return None
+    requested = [item.strip() for item in raw.split(",") if item.strip()]
+    if not requested:
+        raise ValueError("--datasets requires at least one dataset identifier")
+    duplicates = sorted({item for item in requested if requested.count(item) > 1})
+    if duplicates:
+        raise ValueError(f"Duplicate dataset identifier(s): {', '.join(duplicates)}")
+    unknown = sorted(set(requested) - set(SUPPORTED_DATASETS))
+    if unknown:
+        raise ValueError(
+            f"Unknown dataset identifier(s): {', '.join(unknown)}; supported: "
+            + ", ".join(SUPPORTED_DATASETS)
+        )
+    selected = tuple(item for item in SUPPORTED_DATASETS if item in requested)
+    daily_selected = "daily" in selected
+    market_selected = "market_activity" in selected
+    if daily_selected != market_selected:
+        raise ValueError(
+            "daily and market_activity must be selected together to preserve "
+            "same-run TWSE lineage"
+        )
+    return selected
+
+
+def dataset_selection_approval_phrase(
+    candidate_date: str, selected_datasets: tuple[str, ...]
+) -> str:
+    return f"APPROVE {candidate_date} DATASETS {','.join(selected_datasets)}"
+
+
+def declared_datasets(generated_files: list[str]) -> tuple[str, ...]:
+    declared = {generated_file_dataset(item) for item in generated_files}
+    if "daily" in declared:
+        declared.add("market_activity")
+    return tuple(item for item in SUPPORTED_DATASETS if item in declared)
+
+
+def filter_generated_files(
+    generated_files: list[str], selected_datasets: tuple[str, ...] | None
+) -> list[str]:
+    if selected_datasets is None:
+        return list(generated_files)
+    selected = set(selected_datasets)
+    return [
+        item for item in generated_files if generated_file_dataset(item) in selected
+    ]
+
+
+def pending_candidate_dates(
+    package_root: Path,
+    generated_files: list[str],
+    trade_plan: dict[str, Any] | None,
+) -> dict[str, list[str]]:
+    """Return actual Date values for rows that the selected publish would append."""
+    dates_by_dataset: dict[str, list[str]] = {}
+    if trade_plan:
+        trade_date = str(trade_plan["formalTargetDate"])
+        dates_by_dataset["daily"] = [trade_date]
+        dates_by_dataset["market_activity"] = [trade_date]
+
+    for generated in generated_files:
+        candidate_path, target_rel, dataset = resolve_generated_file(
+            package_root, generated
+        )
+        if trade_plan and dataset in {"daily", "market_activity"}:
+            continue
+        target_path = package_root / target_rel
+        candidate_header, candidate_rows, _ = read_csv_header_and_rows(candidate_path)
+        target_header, target_rows, _ = read_csv_header_and_rows(target_path)
+        if candidate_header != target_header:
+            raise ValueError(f"Schema mismatch: {generated} -> {target_rel}")
+        if "Date" not in candidate_header:
+            raise ValueError(
+                f"Selected candidate has no governed Date field: {generated}"
+            )
+        normalized_rows = normalize_candidate_rows_for_publish(
+            target_rel, candidate_header, candidate_rows
+        )
+        existing_by_key = {
+            row_key(target_rel, target_header, row): row for row in target_rows if row
+        }
+        date_index = candidate_header.index("Date")
+        pending_dates: set[str] = set()
+        for row in normalized_rows:
+            if not row:
+                continue
+            key = row_key(target_rel, candidate_header, row)
+            if key in existing_by_key:
+                continue
+            row_date = row[date_index].strip() if date_index < len(row) else ""
+            try:
+                date.fromisoformat(row_date)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Selected candidate has invalid Date {row_date!r}: {generated}"
+                ) from exc
+            pending_dates.add(row_date)
+        if pending_dates:
+            dates_by_dataset[dataset] = sorted(pending_dates)
+    return dates_by_dataset
+
+
+def scope_fields(
+    fields: list[str], selected_datasets: tuple[str, ...] | None
+) -> list[str]:
+    if selected_datasets is None:
+        return list(fields)
+    selected = set(selected_datasets)
+    return [
+        field
+        for field in fields
+        if not FIELD_DATASET_HINTS.get(str(field).strip().lower())
+        or FIELD_DATASET_HINTS[str(field).strip().lower()] & selected
+    ]
+
+
 def manifest_has_target(package_root: Path, target_rel: str) -> bool:
     manifest = read_json(package_root / MANIFEST_PATH)
     entries = manifest.get("authoritativeFiles", []) + manifest.get("nonAuthoritativeFiles", [])
@@ -627,7 +806,10 @@ def generated_dataset_flags(generated_files: list[str]) -> dict[str, bool]:
     }
 
 
-def source_coverage_score(dry_run: dict[str, Any]) -> tuple[int, int, int, list[str]]:
+def source_coverage_score(
+    dry_run: dict[str, Any],
+    selected_datasets: tuple[str, ...] | None = None,
+) -> tuple[int, int, int, list[str]]:
     input_sources = dry_run.get("inputSources", {}) or {}
     source_meta = dry_run.get("sourceMeta", {}) or {}
     generated_files = dry_run.get("generatedFiles", []) or []
@@ -636,6 +818,20 @@ def source_coverage_score(dry_run: dict[str, Any]) -> tuple[int, int, int, list[
 
     for source_name, source_value in input_sources.items():
         meta = source_meta.get(source_name, {})
+        source_dataset = str(meta.get("dataset") or "").strip()
+        if (
+            selected_datasets is not None
+            and source_dataset
+            and source_dataset not in selected_datasets
+        ):
+            continue
+        if (
+            selected_datasets is not None
+            and not source_dataset
+            and source_name in SOURCE_DATASET_HINTS
+            and not (SOURCE_DATASET_HINTS[source_name] & set(selected_datasets))
+        ):
+            continue
         if "requiredForFormal" in meta:
             required = bool(meta.get("requiredForFormal"))
         elif source_name == "fed_prob":
@@ -763,12 +959,48 @@ def inspect_candidate_files(package_root: Path, generated_files: list[str]) -> t
     return diagnostics, blockers, 100 if diagnostics and not blockers else 0
 
 
-def build_publish_readiness(package_root: Path, dry_run: dict[str, Any]) -> dict[str, Any]:
-    generated_files = list(dry_run.get("generatedFiles", []) or [])
+def build_publish_readiness(
+    package_root: Path,
+    dry_run: dict[str, Any],
+    selected_datasets: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
+    declared_files = list(dry_run.get("generatedFiles", []) or [])
+    declared_scope = (
+        declared_datasets(declared_files) if selected_datasets is not None else ()
+    )
+    generated_files = filter_generated_files(declared_files, selected_datasets)
+    excluded_datasets = (
+        tuple(item for item in declared_scope if item not in selected_datasets)
+        if selected_datasets is not None
+        else ()
+    )
+    already_published_targets = list(
+        dry_run.get("alreadyPublishedTargets", []) or []
+    )
+    if selected_datasets is not None:
+        selected_targets_for_scope = {
+            DATASET_TARGETS[item] for item in selected_datasets
+        }
+        already_published_targets = [
+            target
+            for target in already_published_targets
+            if target in selected_targets_for_scope
+        ]
     trade_plan: dict[str, Any] | None = None
     trade_plan_error = ""
     try:
-        trade_plan = resolve_trade_date_publish_plan(package_root, generated_files)
+        should_resolve_trade_plan = (
+            selected_datasets is None
+            or (
+                "daily" in selected_datasets
+                and not {
+                    DATASET_TARGETS["daily"],
+                    DATASET_TARGETS["market_activity"],
+                }.issubset(set(already_published_targets))
+            )
+        )
+        if should_resolve_trade_plan:
+            trade_plan = resolve_trade_date_publish_plan(package_root, generated_files)
         if trade_plan:
             generated_files = [
                 item
@@ -783,19 +1015,60 @@ def build_publish_readiness(package_root: Path, dry_run: dict[str, Any]) -> dict
             ]
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         trade_plan_error = str(exc)
-    already_published_targets = dry_run.get("alreadyPublishedTargets", []) or []
+    already_published_datasets = {
+        TARGET_DATASETS[target]
+        for target in already_published_targets
+        if target in TARGET_DATASETS
+    }
+    effective_datasets = {
+        generated_file_dataset(item) for item in generated_files
+    }
+    selected_gate_datasets = (
+        tuple(
+            item
+            for item in selected_datasets
+            if item not in already_published_datasets
+            or item in effective_datasets
+        )
+        if selected_datasets is not None
+        else None
+    )
+    if selected_datasets is None:
+        no_action_required = (
+            bool(dry_run.get("noPublishRequired"))
+            or bool(already_published_targets)
+        ) and not generated_files
+    else:
+        no_action_required = (
+            not generated_files
+            and bool(selected_datasets)
+            and set(selected_datasets).issubset(already_published_datasets)
+        )
     critical_missing = dry_run.get("criticalMissingFields")
     if critical_missing is None:
         critical_missing = dry_run.get("missingFields", []) or []
-    optional_missing = dry_run.get("optionalMissingFields", []) or []
-    unavailable_candidate_fields = dry_run.get("unavailableCandidateFields", []) or []
+    critical_missing = scope_fields(list(critical_missing), selected_gate_datasets)
+    optional_missing = scope_fields(
+        list(dry_run.get("optionalMissingFields", []) or []), selected_gate_datasets
+    )
+    unavailable_candidate_fields = scope_fields(
+        list(dry_run.get("unavailableCandidateFields", []) or []),
+        selected_gate_datasets,
+    )
 
-    source_score, source_available, source_total, missing_sources = source_coverage_score(dry_run)
-    checks_score = validation_score(dry_run.get("validationChecks", []) or [])
-    no_action_required = (
-        bool(dry_run.get("noPublishRequired"))
-        or bool(already_published_targets)
-    ) and not generated_files
+    source_score, source_available, source_total, missing_sources = source_coverage_score(
+        dry_run, selected_gate_datasets
+    )
+    validation_checks = list(dry_run.get("validationChecks", []) or [])
+    if selected_gate_datasets is not None:
+        selected_checks = [
+            check
+            for check in validation_checks
+            if not check.get("dataset")
+            or check.get("dataset") in selected_gate_datasets
+        ]
+        validation_checks = selected_checks
+    checks_score = validation_score(validation_checks)
     if no_action_required:
         candidate_diagnostics, candidate_blockers, candidate_score = [], [], 100
     else:
@@ -809,15 +1082,85 @@ def build_publish_readiness(package_root: Path, dry_run: dict[str, Any]) -> dict
     )
 
     blockers = list(candidate_blockers)
-    if trade_plan_error:
-        blockers.append(f"Trade-date publish plan failed: {trade_plan_error}")
-    if critical_missing:
-        blockers.append(f"Missing critical fields: {', '.join(critical_missing)}")
-    if missing_sources:
-        blockers.append(f"Missing required sources: {', '.join(missing_sources)}")
-    if score < MIN_PUBLISH_SCORE:
-        blockers.append(f"Readiness score {score}% is below required {MIN_PUBLISH_SCORE}%.")
+    if selected_datasets is not None:
+        missing_selected = [
+            item
+            for item in selected_datasets
+            if item not in effective_datasets
+            and item not in already_published_datasets
+        ]
+        if missing_selected:
+            blockers.append(
+                "Selected dataset has no generated candidate: "
+                + ", ".join(missing_selected)
+            )
+    selected_candidate_date = str(dry_run.get("candidateDate") or "")
+    selected_candidate_dates: dict[str, list[str]] = {}
+    if selected_datasets is not None and not no_action_required:
+        try:
+            selected_candidate_dates = pending_candidate_dates(
+                package_root, generated_files, trade_plan
+            )
+            resolved_dates = sorted(
+                {
+                    item
+                    for dates in selected_candidate_dates.values()
+                    for item in dates
+                }
+            )
+            if len(resolved_dates) > 1:
+                details = ", ".join(
+                    f"{dataset}={','.join(dates)}"
+                    for dataset, dates in selected_candidate_dates.items()
+                )
+                blockers.append(
+                    "Selected pending candidates resolve to conflicting dates: "
+                    + details
+                )
+                selected_candidate_date = ""
+            elif len(resolved_dates) == 1:
+                actual_candidate_date = resolved_dates[0]
+                declared_candidate_date = str(dry_run.get("candidateDate") or "")
+                if (
+                    trade_plan is None
+                    and declared_candidate_date
+                    and declared_candidate_date != actual_candidate_date
+                ):
+                    blockers.append(
+                        "Selected candidate date mismatch: "
+                        f"DRY_RUN.candidateDate={declared_candidate_date}, "
+                        f"actual selected candidate Date={actual_candidate_date}"
+                    )
+                selected_candidate_date = actual_candidate_date
+            elif generated_files:
+                blockers.append(
+                    "Selected pending candidate has no new governed Date rows."
+                )
+                selected_candidate_date = ""
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            blockers.append(f"Selected candidate date validation failed: {exc}")
+            selected_candidate_date = ""
+    elif no_action_required:
+        selected_candidate_date = ""
 
+    if not no_action_required:
+        if trade_plan_error:
+            blockers.append(f"Trade-date publish plan failed: {trade_plan_error}")
+        if critical_missing:
+            blockers.append(f"Missing critical fields: {', '.join(critical_missing)}")
+        if missing_sources:
+            blockers.append(f"Missing required sources: {', '.join(missing_sources)}")
+        if score < MIN_PUBLISH_SCORE:
+            blockers.append(f"Readiness score {score}% is below required {MIN_PUBLISH_SCORE}%.")
+
+    selected_targets = [
+        resolve_generated_file(package_root, item)[1] for item in generated_files
+    ]
+    approval_phrase_required = (
+        dataset_selection_approval_phrase(selected_candidate_date, selected_datasets)
+        if selected_datasets is not None and selected_candidate_date
+        else None
+    )
     return {
         "score": score,
         "threshold": MIN_PUBLISH_SCORE,
@@ -840,9 +1183,24 @@ def build_publish_readiness(package_root: Path, dry_run: dict[str, Any]) -> dict
         "ownerApprovalDate": date.today().isoformat(),
         "executionDate": date.today().isoformat(),
         "candidateTradingDate": trade_plan["formalTargetDate"] if trade_plan else None,
-        "formalTargetDate": trade_plan["formalTargetDate"] if trade_plan else None,
+        "formalTargetDate": (
+            trade_plan["formalTargetDate"]
+            if trade_plan
+            else (
+                selected_candidate_date
+                if selected_datasets is not None and selected_candidate_date
+                else None
+            )
+        ),
         "candidateTradingDates": trade_plan["candidateTradingDates"] if trade_plan else [],
         "tradeCandidateLineage": trade_plan,
+        "selectedDatasets": list(selected_datasets or []),
+        "excludedDatasets": list(excluded_datasets),
+        "selectedPublishFiles": list(generated_files),
+        "selectedTargets": selected_targets,
+        "selectedCandidateDate": selected_candidate_date,
+        "selectedCandidateDates": selected_candidate_dates,
+        "approvalPhraseRequired": approval_phrase_required,
     }
 
 
@@ -883,6 +1241,24 @@ def print_readiness(readiness: dict[str, Any]) -> None:
         print("PUBLISH_ALLOWED: NO_ACTION_REQUIRED")
     else:
         print(f"PUBLISH_ALLOWED: {'YES' if readiness['allowed'] else 'NO'}")
+
+
+def print_dataset_selection(readiness: dict[str, Any]) -> None:
+    print(f"SELECTED_DATASETS = {'; '.join(readiness['selectedDatasets'])}")
+    print(
+        "EXCLUDED_DATASETS = "
+        + ("; ".join(readiness["excludedDatasets"]) or "none")
+    )
+    print(
+        "SELECTED_PUBLISH_FILES = "
+        + ("; ".join(readiness["selectedPublishFiles"]) or "none")
+    )
+    print(
+        "SELECTED_TARGETS = "
+        + ("; ".join(readiness["selectedTargets"]) or "none")
+    )
+    print(f"SELECTED_CANDIDATE_DATE = {readiness['selectedCandidateDate']}")
+    print(f"APPROVAL_PHRASE_REQUIRED = {readiness['approvalPhraseRequired']}")
 
 
 def update_manifest(package_root: Path, touched_targets: list[str], approval_note: str) -> None:
@@ -3532,6 +3908,13 @@ def main() -> int:
     parser.add_argument("--date", help="Staging date, for example 2026-06-29. Defaults to latest staging date.")
     parser.add_argument("--publish", action="store_true", help="Append candidate rows into formal CSV files.")
     parser.add_argument(
+        "--datasets",
+        help=(
+            "Optional comma-separated Owner publication scope. Supported: "
+            + ",".join(SUPPORTED_DATASETS)
+        ),
+    )
+    parser.add_argument(
         "--remediation-replace",
         action="store_true",
         help=(
@@ -3582,6 +3965,21 @@ def main() -> int:
     parser.add_argument("--macro-stage2b-dry-run-journal", type=Path)
     parser.add_argument("--approval-phrase")
     args = parser.parse_args()
+
+    try:
+        selected_datasets = parse_dataset_selection(args.datasets)
+    except ValueError as exc:
+        parser.error(str(exc))
+    if selected_datasets is not None and any(
+        (
+            args.remediation_replace,
+            args.market_activity_publish,
+            args.invalid_daily_price_removal,
+            args.daily_price_gaps_publish,
+            args.macro_stage2b_publish,
+        )
+    ):
+        parser.error("--datasets is supported only by the generic staging publisher")
 
     package_root = args.package_root.resolve()
     if args.macro_stage2b_publish:
@@ -3717,7 +4115,9 @@ def main() -> int:
     dry_run = read_json(dry_run_path)
     staging_candidate_date = str(dry_run.get("candidateDate", staging_dir.name))
     execution_date = date.today().isoformat()
-    readiness = build_publish_readiness(package_root, dry_run)
+    readiness = build_publish_readiness(
+        package_root, dry_run, selected_datasets=selected_datasets
+    )
     generated_files = readiness.get("publishFiles", []) or []
     formal_target_date = str(readiness.get("formalTargetDate") or staging_candidate_date)
 
@@ -3733,6 +4133,8 @@ def main() -> int:
     print("Review mode modifies formal CSV: NO")
     print("---------------------------------------------------")
     print_readiness(readiness)
+    if selected_datasets is not None:
+        print_dataset_selection(readiness)
     print()
 
     if not readiness["allowed"]:
@@ -3749,21 +4151,46 @@ def main() -> int:
 
     if not args.publish:
         print("[READY FOR OWNER REVIEW] No files were changed.")
-        print(f"To publish after review, rerun with --date {staging_dir.name} --publish")
+        datasets_option = (
+            f" --datasets {','.join(selected_datasets)}"
+            if selected_datasets is not None
+            else ""
+        )
+        print(
+            f"To publish after review, rerun with --date {staging_dir.name}"
+            f"{datasets_option} --publish"
+        )
         return 0
 
-    approval_phrase = f"APPROVE {formal_target_date}"
+    approval_phrase = (
+        str(readiness.get("approvalPhraseRequired") or "")
+        if selected_datasets is not None
+        else f"APPROVE {formal_target_date}"
+    )
     typed = input(f"Type exactly '{approval_phrase}' to append formal CSV: ").strip()
     if typed != approval_phrase:
         print("[CANCELLED] Approval phrase did not match. No files were changed.")
         return 5
 
-    revalidated = build_publish_readiness(package_root, read_json(dry_run_path))
+    revalidated = build_publish_readiness(
+        package_root,
+        read_json(dry_run_path),
+        selected_datasets=selected_datasets,
+    )
     if (
         not revalidated["allowed"]
-        or str(revalidated.get("formalTargetDate") or execution_date)
+        or str(
+            revalidated.get("formalTargetDate")
+            or (
+                staging_candidate_date
+                if selected_datasets is not None
+                else execution_date
+            )
+        )
         != formal_target_date
         or (revalidated.get("publishFiles", []) or []) != generated_files
+        or revalidated.get("approvalPhraseRequired")
+        != readiness.get("approvalPhraseRequired")
     ):
         print("[BLOCKED] Candidate identity changed after Owner review; formal publish refused.")
         return 3
@@ -3771,7 +4198,12 @@ def main() -> int:
     backup_dir = staging_dir / "owner_publish_backup"
     approval_note = (
         f"Owner approval {execution_date}; formal target {formal_target_date} "
-        "via owner_publish_csv_v2.py; appended {rows} row(s)"
+        + (
+            f"datasets {','.join(selected_datasets)}; "
+            if selected_datasets is not None
+            else ""
+        )
+        + "via owner_publish_csv_v2.py; appended {rows} row(s)"
     )
     touched_targets, total_rows, published = publish_generated_candidates_atomically(
         package_root, generated_files, backup_dir, approval_note
