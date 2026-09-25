@@ -12,6 +12,7 @@ import tempfile
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
+from unittest import mock
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
@@ -37,6 +38,8 @@ class OwnerPublishTradeDateTests(unittest.TestCase):
         "date", "stock_id", "trade_volume", "trade_value",
         "transaction_count", "source_url", "source_month",
     ]
+    MACRO_HEADER = ["Date", "VIX"]
+    FX_HEADER = ["Date", "SourceTier", "Actionable"]
 
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
@@ -54,11 +57,23 @@ class OwnerPublishTradeDateTests(unittest.TestCase):
             self.MARKET_HEADER,
             [["2026-08-31", "2317", "1", "200", "1", "https://twse.example", "2026-08"]],
         )
+        self._write_csv(
+            self.root / PUBLISHER.MACRO_TARGET,
+            self.MACRO_HEADER,
+            [["2026-08-31", "18"]],
+        )
+        self._write_csv(
+            self.root / PUBLISHER.FX_TREND_TARGET,
+            self.FX_HEADER,
+            [["2026-08-31", "PUBLIC_MARKET_DATA", "false"]],
+        )
         (self.root / PUBLISHER.MANIFEST_PATH).write_text(
             json.dumps({
                 "authoritativeFiles": [
                     {"path": PUBLISHER.DAILY_TARGET},
                     {"path": PUBLISHER.MARKET_ACTIVITY_TARGET},
+                    {"path": PUBLISHER.MACRO_TARGET},
+                    {"path": PUBLISHER.FX_TREND_TARGET},
                 ]
             }),
             encoding="utf-8",
@@ -144,6 +159,217 @@ class OwnerPublishTradeDateTests(unittest.TestCase):
             "validationChecks": [{"status": "PASS"}],
             "criticalMissingFields": [],
         }
+
+    def _stage_macro_fx_with_daily(self) -> dict:
+        dry_run = self._stage_trade_pair("2026-09-04")
+        staging = self.root / "staging" / "2026-09-06"
+        macro = staging / "macro_snapshot_candidate.csv"
+        fx = staging / "fx_trend_observations_candidate.csv"
+        self._write_csv(macro, self.MACRO_HEADER, [["2026-09-25", "15.67"]])
+        self._write_csv(
+            fx,
+            self.FX_HEADER,
+            [["2026-09-25", "PUBLIC_MARKET_DATA", "false"]],
+        )
+        dry_run.update({
+            "candidateDate": "2026-09-25",
+            "generatedFiles": [
+                *dry_run["generatedFiles"],
+                str(macro.relative_to(self.root)),
+                str(fx.relative_to(self.root)),
+            ],
+            "inputSources": {
+                "stock_price": "DATA_MISSING",
+                "vix": "YAHOO_FINANCE_VIX",
+                "jpy_usd": "YAHOO_FINANCE_JPY_USD",
+            },
+            "sourceMeta": {
+                "stock_price": {"dataset": "daily", "requiredForFormal": True},
+                "vix": {"dataset": "macro", "requiredForFormal": True},
+                "jpy_usd": {
+                    "dataset": "fx_trend_observations",
+                    "requiredForFormal": False,
+                },
+            },
+            "validationChecks": [
+                {"dataset": "daily", "status": "FAIL"},
+                {"dataset": "macro", "status": "PASS"},
+                {"dataset": "fx_trend_observations", "status": "PASS"},
+            ],
+            "criticalMissingFields": [],
+            "optionalMissingFields": ["BOJ_Rate", "RateSpread_US_JP"],
+        })
+        return dry_run
+
+    def test_default_behavior_unchanged_when_datasets_omitted(self) -> None:
+        dry_run = self._stage_macro_fx_with_daily()
+        legacy = PUBLISHER.build_publish_readiness(self.root, dry_run)
+        explicit_default = PUBLISHER.build_publish_readiness(
+            self.root, dry_run, selected_datasets=None
+        )
+        self.assertEqual(legacy, explicit_default)
+        self.assertIsNotNone(legacy["tradeCandidateLineage"])
+        self.assertEqual(
+            [Path(item).name for item in legacy["publishFiles"]],
+            [
+                "2317_daily_price.incremental.candidate.csv",
+                "2317_daily_market_activity.incremental.candidate.csv",
+                "macro_snapshot_candidate.csv",
+                "fx_trend_observations_candidate.csv",
+            ],
+        )
+
+    def test_macro_fx_selection_excludes_daily_trade_plan(self) -> None:
+        dry_run = self._stage_macro_fx_with_daily()
+        selected = PUBLISHER.parse_dataset_selection(
+            "macro,fx_trend_observations"
+        )
+        with mock.patch.object(
+            PUBLISHER,
+            "resolve_trade_date_publish_plan",
+            side_effect=AssertionError("trade plan must not be consulted"),
+        ):
+            readiness = PUBLISHER.build_publish_readiness(
+                self.root, dry_run, selected_datasets=selected
+            )
+        self.assertTrue(readiness["allowed"], readiness["blockers"])
+        self.assertEqual(
+            [Path(item).name for item in readiness["publishFiles"]],
+            ["macro_snapshot_candidate.csv", "fx_trend_observations_candidate.csv"],
+        )
+        self.assertEqual(
+            readiness["selectedTargets"],
+            [PUBLISHER.MACRO_TARGET, PUBLISHER.FX_TREND_TARGET],
+        )
+        self.assertEqual(readiness["excludedDatasets"], ["daily", "market_activity"])
+        self.assertIsNone(readiness["tradeCandidateLineage"])
+
+    def test_macro_only_and_fx_only_are_supported(self) -> None:
+        dry_run = self._stage_macro_fx_with_daily()
+        for dataset, expected_name in (
+            ("macro", "macro_snapshot_candidate.csv"),
+            ("fx_trend_observations", "fx_trend_observations_candidate.csv"),
+        ):
+            with self.subTest(dataset=dataset):
+                selected = PUBLISHER.parse_dataset_selection(dataset)
+                readiness = PUBLISHER.build_publish_readiness(
+                    self.root, dry_run, selected_datasets=selected
+                )
+                self.assertTrue(readiness["allowed"], readiness["blockers"])
+                self.assertEqual(
+                    [Path(item).name for item in readiness["publishFiles"]],
+                    [expected_name],
+                )
+                if dataset == "macro":
+                    self.assertEqual(readiness["optionalMissingFields"], [])
+
+    def test_selective_approval_phrase_binds_date_and_scope(self) -> None:
+        selected = PUBLISHER.parse_dataset_selection(
+            "fx_trend_observations,macro"
+        )
+        self.assertEqual(selected, ("macro", "fx_trend_observations"))
+        self.assertEqual(
+            PUBLISHER.dataset_selection_approval_phrase("2026-09-25", selected),
+            "APPROVE 2026-09-25 DATASETS macro,fx_trend_observations",
+        )
+
+    def test_selective_review_changes_no_formal_or_dry_run_files(self) -> None:
+        dry_run = self._stage_macro_fx_with_daily()
+        dry_run_path = self.root / "staging" / "2026-09-06" / "DRY_RUN.json"
+        dry_run_path.write_text(json.dumps(dry_run), encoding="utf-8")
+        protected = [
+            self.root / PUBLISHER.DAILY_TARGET,
+            self.root / PUBLISHER.MARKET_ACTIVITY_TARGET,
+            self.root / PUBLISHER.MACRO_TARGET,
+            self.root / PUBLISHER.FX_TREND_TARGET,
+            self.root / PUBLISHER.MANIFEST_PATH,
+            dry_run_path,
+        ]
+        before = {path: sha256(path) for path in protected}
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(PUBLISHER_PATH),
+                "--package-root",
+                str(self.root),
+                "--date",
+                "2026-09-06",
+                "--datasets",
+                "macro,fx_trend_observations",
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        self.assertIn("SELECTED_DATASETS = macro; fx_trend_observations", completed.stdout)
+        self.assertIn("EXCLUDED_DATASETS = daily; market_activity", completed.stdout)
+        self.assertIn(
+            "APPROVAL_PHRASE_REQUIRED = APPROVE 2026-09-25 DATASETS "
+            "macro,fx_trend_observations",
+            completed.stdout,
+        )
+        self.assertEqual(before, {path: sha256(path) for path in protected})
+
+    def test_excluded_ineligible_daily_does_not_block_macro_fx(self) -> None:
+        dry_run = self._stage_macro_fx_with_daily()
+        Path(self.root / dry_run["generatedFiles"][0]).unlink()
+        dry_run["criticalMissingFields"] = ["Close"]
+        selected = PUBLISHER.parse_dataset_selection(
+            "macro,fx_trend_observations"
+        )
+        readiness = PUBLISHER.build_publish_readiness(
+            self.root, dry_run, selected_datasets=selected
+        )
+        self.assertTrue(readiness["allowed"], readiness["blockers"])
+        self.assertEqual(readiness["criticalMissingFields"], [])
+        self.assertNotIn("daily", {item["dataset"] for item in readiness["candidateDiagnostics"]})
+
+    def test_macro_fx_atomicity_rolls_back_on_manifest_failure(self) -> None:
+        dry_run = self._stage_macro_fx_with_daily()
+        selected = PUBLISHER.parse_dataset_selection(
+            "macro,fx_trend_observations"
+        )
+        readiness = PUBLISHER.build_publish_readiness(
+            self.root, dry_run, selected_datasets=selected
+        )
+        protected = [
+            self.root / PUBLISHER.MACRO_TARGET,
+            self.root / PUBLISHER.FX_TREND_TARGET,
+            self.root / PUBLISHER.MANIFEST_PATH,
+        ]
+        before = {path: sha256(path) for path in protected}
+        with mock.patch.object(
+            PUBLISHER, "update_manifest", side_effect=RuntimeError("simulated failure")
+        ):
+            with self.assertRaisesRegex(RuntimeError, "simulated failure"):
+                PUBLISHER.publish_generated_candidates_atomically(
+                    self.root,
+                    readiness["publishFiles"],
+                    self.root / "backup",
+                    "test append {rows}",
+                )
+        self.assertEqual(before, {path: sha256(path) for path in protected})
+
+    def test_invalid_and_empty_dataset_selection_fail_closed(self) -> None:
+        for raw, message in (
+            ("unknown", "Unknown dataset"),
+            ("", "at least one dataset"),
+            ("daily", "must be selected together"),
+            ("market_activity", "must be selected together"),
+        ):
+            with self.subTest(raw=raw):
+                with self.assertRaisesRegex(ValueError, message):
+                    PUBLISHER.parse_dataset_selection(raw)
+
+    def test_selected_daily_market_keeps_trade_lineage_gate(self) -> None:
+        dry_run = self._stage_trade_pair("2026-09-04", "2026-09-03")
+        selected = PUBLISHER.parse_dataset_selection("daily,market_activity")
+        readiness = PUBLISHER.build_publish_readiness(
+            self.root, dry_run, selected_datasets=selected
+        )
+        self.assertFalse(readiness["allowed"])
+        self.assertIn("date mismatch", " ".join(readiness["blockers"]))
 
     def test_weekend_execution_uses_prior_validated_trading_date(self) -> None:
         readiness = PUBLISHER.build_publish_readiness(
