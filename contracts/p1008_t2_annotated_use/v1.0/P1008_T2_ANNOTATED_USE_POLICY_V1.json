@@ -1,0 +1,47 @@
+{
+  "policy_id": "P1008_T2_ANNOTATED_USE_POLICY_V1",
+  "owner_decision": "D-T2-ANNOTATED-USE=AUTHORIZED",
+  "default_state": "RESEARCH_ONLY",
+  "authority_effect": "NONE",
+  "formal_scoring_effect": "NONE",
+  "t1_behavior": "UNCHANGED",
+  "allowed_use_scopes": {
+    "REPORT_MAIN_TEXT": "ISOLATED_FORMATTER_READY",
+    "REPORT_KPI_TABLE": "ISOLATED_FORMATTER_READY",
+    "RESEARCH_APPENDIX": "ISOLATED_FORMATTER_READY",
+    "RESEARCH_DASHBOARD_DISPLAY": "NOT_WIRED"
+  },
+  "approval_binding": [
+    "candidate_id",
+    "candidate_hash",
+    "metric_id",
+    "period",
+    "point_estimate",
+    "estimate_range",
+    "formula_id",
+    "formula_version",
+    "approved_use_scope",
+    "approved_at",
+    "approved_by"
+  ],
+  "required_visible_annotations": [
+    "推估",
+    "非公司直接揭露",
+    "信心",
+    "基礎/假設",
+    "估計區間"
+  ],
+  "confidence_classes": ["HIGH", "MEDIUM", "LOW"],
+  "completed_t2_input_confidence_classes": ["MEDIUM", "LOW"],
+  "low_confidence_t2_main_kpi_eligibility": "UNDEFINED",
+  "reconciliation_states": [
+    "ESTIMATE_ACTIVE",
+    "OFFICIAL_REPLACEMENT_AVAILABLE",
+    "RECONCILED",
+    "ESTIMATE_REJECTED"
+  ],
+  "canonical_replacement_tiers": ["T0_DIRECT_OFFICIAL", "T1_EXACT_DERIVED"],
+  "semantic_substitution": "FORBIDDEN",
+  "formal_scoring": "ALWAYS_EXCLUDED",
+  "production_wiring": "NONE"
+}

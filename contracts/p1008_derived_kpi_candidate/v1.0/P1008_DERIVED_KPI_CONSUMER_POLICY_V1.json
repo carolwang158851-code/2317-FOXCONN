@@ -1,0 +1,47 @@
+{
+  "policy_id": "P1008_DERIVED_KPI_CONSUMER_POLICY_V1",
+  "status": "CANDIDATE_ONLY_OWNER_REVIEW_REQUIRED",
+  "bridge_status": "PARTIAL",
+  "t2_formal_kpi_eligibility": "RESEARCH_ONLY",
+  "decision_tree": [
+    "CHECK_T0_DIRECT_OFFICIAL",
+    "CHECK_T1_EXACT_DERIVABILITY",
+    "CHECK_T2_ESTIMATED_DERIVABILITY",
+    "CHECK_T3_RESEARCH_EVIDENCE",
+    "DATA_MISSING"
+  ],
+  "tier_policy": {
+    "T0_DIRECT_OFFICIAL": "Use only through existing formal authority rules.",
+    "T1_EXACT_DERIVED": "May be emitted only as a non-authoritative candidate after deterministic validation; formal promotion path is not defined by this contract.",
+    "T2_ESTIMATED_DERIVED": "Research-only under the current historical-research contract; must retain assumptions, sensitivity and lower confidence; cannot enter formal KPI authority through this prototype.",
+    "T3_EXTERNAL_CROSSCHECK": "Observation and validation only; cannot overwrite or impersonate T0/T1 and cannot be emitted under the derived-candidate schema.",
+    "T4_MODEL_SCENARIO": "Forward-looking scenario only; never a historical actual KPI.",
+    "DATA_MISSING": "Terminal state only after T0, T1, T2 and T3 checks are recorded as exhausted or ineligible."
+  },
+  "plugin_capabilities": [
+    "financial", "deep_research", "macro", "foreign_flow", "valuation", "evidence",
+    "knowledge_gap_registry", "research_agenda"
+  ],
+  "plugin_role": [
+    "locate_governed_inputs", "match_periods_and_units", "run_deterministic_calculation",
+    "bind_evidence", "generate_non_authoritative_candidate", "classify_gap"
+  ],
+  "forbidden": [
+    "formal_csv_write", "authority_manifest_write", "formal_authority_minting",
+    "owner_publish_state_change", "actionable_true", "production_scoring_enablement",
+    "investment_formula_change", "proxy_relabel_as_direct", "previous_period_carry",
+    "default_fill", "denominator_substitution", "semantic_substitution"
+  ],
+  "protected_paths": [
+    "data/2317_master_v9.csv", "data/2317_daily_price.csv",
+    "data/2317_daily_market_activity.csv", "data/2317_cash_flow_authority.csv",
+    "data/macro_snapshot.csv", "data/macro_event_observations.csv",
+    "data/fx_trend_observations.csv", "data/CSV_AUTHORITY_MANIFEST.json"
+  ],
+  "candidate_destination": "contracts/p1008_derived_kpi_candidate/v1.0/",
+  "formal_destination": null,
+  "owner_review_required": true,
+  "actionable": false,
+  "publication": false,
+  "production_scoring_enabled": false
+}

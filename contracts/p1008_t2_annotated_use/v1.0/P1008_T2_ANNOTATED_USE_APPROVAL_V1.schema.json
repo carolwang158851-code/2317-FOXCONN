@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "P1008_T2_ANNOTATED_USE_APPROVAL_V1.schema.json",
+  "title": "P1008 T2 annotated-use Owner approval",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "approval_id", "candidate_id", "candidate_hash", "metric_id", "period",
+    "point_estimate", "estimate_range", "formula_id", "formula_version", "approved_use_scope",
+    "scope_wiring_status", "approved_at", "approved_by", "approval_phrase_hash",
+    "owner_approved_for_annotated_use", "formal_authority", "formal_scoring_eligible",
+    "formal_publish_eligible", "research_only", "actionable"
+  ],
+  "properties": {
+    "schema_version": {"const": "P1008_T2_ANNOTATED_USE_APPROVAL_V1"},
+    "approval_id": {"type": "string", "minLength": 1},
+    "candidate_id": {"type": "string", "minLength": 1},
+    "candidate_hash": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+    "metric_id": {"type": "string", "minLength": 1},
+    "period": {"type": "string", "minLength": 1},
+    "point_estimate": {"type": "string"},
+    "estimate_range": {
+      "type": "object", "additionalProperties": false,
+      "required": ["lower_bound", "upper_bound", "unit"],
+      "properties": {"lower_bound": {"type": "string"}, "upper_bound": {"type": "string"}, "unit": {"type": "string"}}
+    },
+    "formula_id": {"type": "string", "minLength": 1},
+    "formula_version": {"type": "string", "minLength": 1},
+    "approved_use_scope": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": {"enum": ["REPORT_MAIN_TEXT", "REPORT_KPI_TABLE", "RESEARCH_APPENDIX"]}
+    },
+    "scope_wiring_status": {
+      "type": "object", "minProperties": 1, "additionalProperties": false,
+      "properties": {
+        "REPORT_MAIN_TEXT": {"const": "ISOLATED_FORMATTER_READY"},
+        "REPORT_KPI_TABLE": {"const": "ISOLATED_FORMATTER_READY"},
+        "RESEARCH_APPENDIX": {"const": "ISOLATED_FORMATTER_READY"}
+      }
+    },
+    "approved_at": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "approved_by": {"const": "Owner"},
+    "approval_phrase_hash": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+    "owner_approved_for_annotated_use": {"const": true},
+    "formal_authority": {"const": false},
+    "formal_scoring_eligible": {"const": false},
+    "formal_publish_eligible": {"const": false},
+    "research_only": {"const": true},
+    "actionable": {"const": false}
+  }
+}

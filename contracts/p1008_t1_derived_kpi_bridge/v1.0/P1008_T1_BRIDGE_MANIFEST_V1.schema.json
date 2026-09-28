@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://contracts/p1008_t1_derived_kpi_bridge/v1.0/P1008_T1_BRIDGE_MANIFEST_V1.schema.json",
+  "title": "P1008 T1 Bridge Manifest V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "manifest_id", "candidate_id", "candidate_sha256",
+    "candidate_schema_version", "validation_receipt_id", "validation_receipt_sha256",
+    "validation_receipt_schema_version", "source_candidate_id", "synthetic_fixture", "source_candidate_sha256",
+    "source_contract", "adapter_version", "adapter_sha256", "created_at",
+    "candidate_owner", "formal_authority", "owner_review_required", "actionable",
+    "publication", "production_scoring_enabled"
+  ],
+  "properties": {
+    "schema_version": {"const": "P1008_T1_BRIDGE_MANIFEST_V1"},
+    "manifest_id": {"type": "string", "pattern": "^T1BM-[A-F0-9]{16}$"},
+    "candidate_id": {"type": "string", "pattern": "^WR-T1-[A-F0-9]{16}-[A-F0-9]{12}$"},
+    "candidate_sha256": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+    "candidate_schema_version": {"const": "P1008_T1_WAR_ROOM_CANDIDATE_V1"},
+    "validation_receipt_id": {"type": "string", "pattern": "^T1VR-[A-F0-9]{16}-[A-F0-9]{12}$"},
+    "validation_receipt_sha256": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+    "validation_receipt_schema_version": {"const": "P1008_T1_VALIDATION_RECEIPT_V1"},
+    "source_candidate_id": {"type": "string", "minLength": 1},
+    "synthetic_fixture": {"type": "boolean"},
+    "source_candidate_sha256": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+    "source_contract": {"const": "P1008_DERIVED_KPI_CANDIDATE_V1"},
+    "adapter_version": {"const": "P1008_T1_DERIVED_KPI_ADAPTER_V1"},
+    "adapter_sha256": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+    "created_at": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "candidate_owner": {"const": "WAR_ROOM"},
+    "formal_authority": {"const": false},
+    "owner_review_required": {"const": true},
+    "actionable": {"const": false},
+    "publication": {"const": false},
+    "production_scoring_enabled": {"const": false}
+  }
+}

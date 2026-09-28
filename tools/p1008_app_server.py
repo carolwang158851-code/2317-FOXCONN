@@ -34,6 +34,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 import owner_publish_csv_v2 as owner_publish
+import p1008_kpi_supplement_v1 as kpi_supplement
 import warroom_report_governance as report_governance
 import warroom_report_trigger_runtime as report_trigger_runtime
 import warroom_rolling_brief as rolling_brief
@@ -768,6 +769,9 @@ class P1008JobManager:
         ) or {}
         state["reviewPackage"] = self.review_package()
         state["launcherGate"] = self.launcher_gate_status(state["reviewPackage"], state)
+        state["kpiSupplementProjection"] = kpi_supplement.build_ui_projection(
+            self.package_root
+        )
         return state
 
     def source_manifest_status(self) -> dict[str, Any]:

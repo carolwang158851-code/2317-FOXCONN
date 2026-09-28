@@ -40,6 +40,25 @@ def _load_report_governance():
 
 report_governance = _load_report_governance()
 
+
+def _load_kpi_supplement():
+    """Load the sibling supplement adapter without changing package setup."""
+    module_name = "p1008_kpi_supplement_v1"
+    existing = sys.modules.get(module_name)
+    if existing is not None:
+        return existing
+    module_path = Path(__file__).with_name(f"{module_name}.py")
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load KPI supplement module: {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+kpi_supplement = _load_kpi_supplement()
+
 from p1008_research_plugin.adapters.research_skill_governance_adapter import (
     ValidatedResearchSkillTrigger,
     _mint_validated_research_skill_trigger,
@@ -1863,6 +1882,66 @@ def write_report_html(path: Path, report_id: str, title: str, markdown: str) -> 
     path.write_text(body, encoding="utf-8", newline="\n")
 
 
+def _formal_t0_candidate(
+    record: dict[str, Any],
+    *,
+    package_root: Path,
+    data: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Bind known formal fields only; absence remains NULL."""
+    return kpi_supplement.build_formal_t0_candidate(
+        record,
+        package_root=package_root,
+        data=data,
+    )
+
+
+def append_kpi_supplement_markdown(
+    markdown: str,
+    *,
+    package_root: Path,
+    data: dict[str, Any],
+) -> str:
+    """Use the one resolver boundary; any supplement failure is non-blocking."""
+
+    try:
+        records, _errors = kpi_supplement.SupplementStore(package_root).load_all()
+        requests: dict[tuple[str, str, str, str, str], dict[str, Any]] = {}
+        for record in records:
+            key = (
+                str(record.get("metric_id", "")),
+                str(record.get("semantic_name", "")),
+                str(record.get("period", "")),
+                str(record.get("as_of_date", "")),
+                str(record.get("unit", "")),
+            )
+            requests[key] = record
+        resolutions = []
+        for record in requests.values():
+            request = kpi_supplement.KPIRequest(
+                metric_id=record["metric_id"],
+                semantic_name=record["semantic_name"],
+                period=record["period"],
+                as_of_date=record["as_of_date"],
+                unit=record["unit"],
+                display_scope="REPORT_KPI_TABLE",
+            )
+            direct = _formal_t0_candidate(
+                record, package_root=package_root, data=data
+            )
+            resolutions.append(
+                kpi_supplement.resolve_from_store(
+                    package_root,
+                    request,
+                    t0_candidates=([direct] if direct is not None else []),
+                )
+            )
+        rendered = kpi_supplement.render_report_rows(resolutions)
+    except Exception:
+        return markdown
+    return markdown.rstrip() + ("\n\n" + rendered if rendered else "") + "\n"
+
+
 def build_report(args: argparse.Namespace) -> int:
     package_root = Path(args.package_root).resolve()
     generated_at = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
@@ -1916,6 +1995,9 @@ def build_report(args: argparse.Namespace) -> int:
     html_path = report_dir / f"{report_id}.html"
     charts = write_report_charts(package_root, report_id, data)
     markdown = build_report_markdown(period, report_date, generated_at, data)
+    markdown = append_kpi_supplement_markdown(
+        markdown, package_root=package_root, data=data
+    )
     markdown = append_chart_markdown(markdown, charts)
     shadow_candidate = read_shadow_candidate(package_root, report_date)
     markdown = append_shadow_candidate(markdown, shadow_candidate)

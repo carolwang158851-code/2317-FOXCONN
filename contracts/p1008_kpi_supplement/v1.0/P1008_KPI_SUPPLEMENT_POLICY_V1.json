@@ -1,0 +1,27 @@
+{
+  "schema_version": "P1008_KPI_SUPPLEMENT_POLICY_V1",
+  "purpose": "Observation-only KPI consumption supplement",
+  "priority": [
+    "T0_DIRECT_OFFICIAL",
+    "T1_EXACT_DERIVED",
+    "T2_ESTIMATED_DERIVED",
+    "DATA_MISSING"
+  ],
+  "store": "runtime/kpi_supplements/v1/records/<metric_id>/<period>/<candidate_id>--<candidate_hash>.json",
+  "immutable_per_candidate_identity": true,
+  "same_semantic_only": true,
+  "exact_period_only": true,
+  "carry_forward_allowed": false,
+  "default_fill_allowed": false,
+  "proxy_substitution_allowed": false,
+  "t2_exact_owner_approval_required": true,
+  "formal_authority": false,
+  "formal_scoring_eligible": false,
+  "actionable": false,
+  "failure_mode": "FAIL_OPEN_TO_FORMAL_OR_NULL",
+  "report_annotations": {
+    "T1_EXACT_DERIVED": "精確推導",
+    "T2_ESTIMATED_DERIVED": "推估"
+  },
+  "ui_compatibility": "MINIMAL_BINDING_REQUIRED"
+}

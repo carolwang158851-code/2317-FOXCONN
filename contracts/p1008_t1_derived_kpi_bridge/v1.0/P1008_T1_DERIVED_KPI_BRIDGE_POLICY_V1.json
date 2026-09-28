@@ -1,0 +1,37 @@
+{
+  "policy_id": "P1008_T1_DERIVED_KPI_BRIDGE_POLICY_V1",
+  "owner_decision": "D-DERIVED-BRIDGE=AUTHORIZE_T1_EXACT_DERIVED_CANDIDATE_BRIDGE",
+  "t2_policy": "RESEARCH_ONLY",
+  "input_contract": "P1008_DERIVED_KPI_CANDIDATE_V1",
+  "accepted_data_tier": "T1_EXACT_DERIVED",
+  "candidate_destination": "NEW_ISOLATED_STAGING_REQUIRED",
+  "staging_root": "staging/t1_derived_kpi_candidates/",
+  "owner_publish_compatibility": "PUBLISHER_EXTENSION_REQUIRED",
+  "candidate_owner_before": "PLUGIN",
+  "candidate_owner_after": "WAR_ROOM",
+  "crossing_mechanism": "P1008_T1_DERIVED_KPI_ADAPTER_V1",
+  "forbidden": [
+    "formal_csv_write",
+    "authority_manifest_write",
+    "owner_publish_execution",
+    "formal_authority_minting",
+    "actionable_true",
+    "publication_true",
+    "production_scoring_enablement",
+    "t2_promotion",
+    "proxy_substitution",
+    "previous_period_carry",
+    "silent_imputation"
+  ],
+  "domain_guards": {
+    "ROIC": "DATA_GAP",
+    "INDUSTRY_AI": "NO_ELIGIBLE_CURRENT_NUMERIC_KPI",
+    "POSITIONING": "RAW_SOURCE_REMEDIATION_REQUIRED",
+    "MACRO_DIRECT_OBSERVATIONS": "DIRECT_OBSERVATION_USE_REQUIRED"
+  },
+  "owner_review_required": true,
+  "formal_authority": false,
+  "actionable": false,
+  "publication": false,
+  "production_scoring_enabled": false
+}

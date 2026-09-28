@@ -1,0 +1,26 @@
+{
+  "schema_version": "P1008_T2_ANNOTATED_USE_APPROVAL_V1",
+  "approval_id": "T2APP-44838A41BD825DD5-99D63D9DB764",
+  "candidate_id": "T2C-E2E8617A2EFC04E3-643F507A8188",
+  "candidate_hash": "44838A41BD825DD53D5C5F4559D1C6212B6A7C87019A670109AB6921AFBA905E",
+  "metric_id": "TEST_ESTIMATED_PB_MULTIPLE",
+  "period": "2026-09-18",
+  "point_estimate": "1.905",
+  "estimate_range": {"lower_bound": "1.800", "upper_bound": "2.050", "unit": "MULTIPLE"},
+  "formula_id": "P1008_TEST_ESTIMATED_PB_PRICE_DIV_BVPS",
+  "formula_version": "TEST_ONLY_V1",
+  "approved_use_scope": ["REPORT_KPI_TABLE", "RESEARCH_APPENDIX"],
+  "scope_wiring_status": {
+    "REPORT_KPI_TABLE": "ISOLATED_FORMATTER_READY",
+    "RESEARCH_APPENDIX": "ISOLATED_FORMATTER_READY"
+  },
+  "approved_at": "2026-09-18T09:00:00Z",
+  "approved_by": "Owner",
+  "approval_phrase_hash": "3CDA047DF16604A496B62E5FBF57BDD84CBD7DF0B8F27FE1C3D91517EFB9D55D",
+  "owner_approved_for_annotated_use": true,
+  "formal_authority": false,
+  "formal_scoring_eligible": false,
+  "formal_publish_eligible": false,
+  "research_only": true,
+  "actionable": false
+}

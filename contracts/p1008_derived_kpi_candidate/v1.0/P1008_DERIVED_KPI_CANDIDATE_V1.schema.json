@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "p1008://contracts/p1008_derived_kpi_candidate/v1.0/P1008_DERIVED_KPI_CANDIDATE_V1.schema.json",
+  "title": "P1008 Derived KPI Candidate V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "candidate_id", "synthetic_fixture", "metric_id", "metric_name",
+    "dimension", "period", "as_of_date", "value", "unit", "data_tier",
+    "derivation_method", "formula_id", "formula_version", "formula_expression",
+    "input_metric_ids", "input_values", "input_units", "input_periods",
+    "input_source_ids", "input_source_tiers", "input_source_locators", "input_hashes",
+    "input_semantic_names", "input_governed", "denominator_definition",
+    "period_alignment_rule", "unit_conversion_rule", "rounding_rule", "assumptions",
+    "assumption_count", "sensitivity_range", "derivation_trace", "recomputation",
+    "semantic_name", "semantic_match_status", "proxy_metric_used",
+    "proxy_relabelled_as_direct", "confidence", "validation_status", "candidate_status",
+    "owner_review_required", "owner_authorization_reference", "actionable", "publication",
+    "production_scoring_enabled"
+  ],
+  "properties": {
+    "schema_version": {"const": "P1008_DERIVED_KPI_CANDIDATE_V1"},
+    "candidate_id": {"type": "string", "minLength": 1, "maxLength": 160},
+    "synthetic_fixture": {"type": "boolean"},
+    "metric_id": {"type": "string", "minLength": 1},
+    "metric_name": {"type": "string", "minLength": 1},
+    "dimension": {"enum": ["FUNDAMENTAL", "INDUSTRY_AI", "POSITIONING", "MACRO", "VALUATION"]},
+    "period": {"type": "string", "minLength": 1},
+    "as_of_date": {"type": "string", "format": "date"},
+    "value": {"type": "string", "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$"},
+    "unit": {"type": "string", "minLength": 1},
+    "data_tier": {"enum": ["T1_EXACT_DERIVED", "T2_ESTIMATED_DERIVED"]},
+    "derivation_method": {"enum": ["EXACT_DETERMINISTIC", "ESTIMATED_WITH_DECLARED_ASSUMPTIONS"]},
+    "formula_id": {"type": "string", "minLength": 1},
+    "formula_version": {"type": "string", "minLength": 1},
+    "formula_expression": {"type": "string", "minLength": 1},
+    "input_metric_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "input_values": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$"}},
+    "input_units": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "input_periods": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "input_source_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "input_source_tiers": {"type": "array", "minItems": 1, "items": {"enum": ["T0_DIRECT_OFFICIAL", "T1_EXACT_DERIVED", "T2_ESTIMATED_DERIVED"]}},
+    "input_source_locators": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "input_hashes": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^[A-F0-9]{64}$"}},
+    "input_semantic_names": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "input_governed": {"type": "array", "minItems": 1, "items": {"const": true}},
+    "denominator_definition": {"type": "string", "minLength": 1},
+    "period_alignment_rule": {"type": "string", "minLength": 1},
+    "unit_conversion_rule": {"type": "string", "minLength": 1},
+    "rounding_rule": {"type": "string", "pattern": "^DECIMAL_HALF_UP_[0-9]+DP$"},
+    "assumptions": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "assumption_count": {"type": "integer", "minimum": 0},
+    "sensitivity_range": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "object", "additionalProperties": false, "required": ["low", "high", "unit", "method"], "properties": {
+          "low": {"type": "string", "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$"},
+          "high": {"type": "string", "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$"},
+          "unit": {"type": "string", "minLength": 1},
+          "method": {"type": "string", "minLength": 1}
+        }}
+      ]
+    },
+    "derivation_trace": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "recomputation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["operator", "left_input_metric_id", "right_input_metric_id", "multiplier"],
+      "properties": {
+        "operator": {"enum": ["ADD", "SUBTRACT", "MULTIPLY", "DIVIDE"]},
+        "left_input_metric_id": {"type": "string", "minLength": 1},
+        "right_input_metric_id": {"type": "string", "minLength": 1},
+        "multiplier": {"type": "string", "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$"}
+      }
+    },
+    "semantic_name": {"type": "string", "minLength": 1},
+    "semantic_match_status": {"const": "EXACT_MATCH"},
+    "proxy_metric_used": {"const": false},
+    "proxy_relabelled_as_direct": {"const": false},
+    "confidence": {"enum": ["HIGH", "MEDIUM", "LOW"]},
+    "validation_status": {"const": "VALIDATED_CANDIDATE"},
+    "candidate_status": {"const": "OWNER_REVIEW_REQUIRED"},
+    "owner_review_required": {"const": true},
+    "owner_authorization_reference": {"type": ["string", "null"]},
+    "actionable": {"const": false},
+    "publication": {"const": false},
+    "production_scoring_enabled": {"const": false}
+  }
+}

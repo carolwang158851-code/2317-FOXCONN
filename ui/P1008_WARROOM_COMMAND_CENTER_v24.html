@@ -4409,6 +4409,65 @@
         }
       }
 
+      async function fetchAppState() {
+        const serverState = await fetchJson("api/p1008/status");
+        if (serverState && Object.keys(serverState).length) return serverState;
+        return fetchJson("runtime/p1008_app_state.json");
+      }
+
+      function applyResolvedKpiProjection(metrics, projection) {
+        const rows = Array.isArray(projection?.metrics) ? projection.metrics : [];
+        const byMetric = new Map(rows.map((item) => [String(item?.metric_id || "").toUpperCase(), item]));
+        const bindings = [
+          { target: "us10y", ids: ["US10Y", "US_10Y"] },
+          { target: "vix", ids: ["VIX"] },
+          { target: "dxy", ids: ["DXY"] },
+          { target: "twdUsd", ids: ["TWD_USD"] },
+          { target: "wti", ids: ["WTI"] },
+          { target: "aiSpecificShare", ids: ["FOXCONN_AI_REVENUE_SHARE"] },
+          { target: "cloudNetworkSharePct", ids: ["CLOUD_NETWORKING_SHARE"] }
+        ];
+        metrics.resolvedSupplements = {};
+        bindings.forEach(({ target, ids }) => {
+          const item = ids.map((id) => byMetric.get(id)).find(Boolean);
+          if (!item || item.resolved_tier === "DATA_MISSING" || item.resolved_value === null) return;
+          if (item.resolved_tier === "T2_ESTIMATED_DERIVED" && item.owner_approved_for_annotated_use !== true) return;
+          const value = toNumber(item.resolved_value);
+          if (value === null) return;
+          metrics[target] = value;
+          metrics.resolvedSupplements[target] = item;
+        });
+        return metrics;
+      }
+
+      function supplementStatus(metrics, targets, fallback) {
+        const item = targets.map((target) => metrics.resolvedSupplements?.[target]).find(Boolean);
+        if (!item || item.resolved_tier === "T0_DIRECT_OFFICIAL") return fallback;
+        return item.display_status || item.provenance_label || fallback;
+      }
+
+      function supplementDetail(metrics, targets) {
+        const item = targets.map((target) => metrics.resolvedSupplements?.[target]).find(Boolean);
+        if (!item || item.resolved_tier === "T0_DIRECT_OFFICIAL") return "";
+        const parts = [item.display_status || item.provenance_label].filter(Boolean);
+        if (item.confidence) parts.push(`信心 ${item.confidence}`);
+        if (item.estimate_lower_bound !== null || item.estimate_upper_bound !== null) {
+          parts.push(`區間 ${item.estimate_lower_bound ?? "N/A"}–${item.estimate_upper_bound ?? "N/A"} ${item.unit || ""}`.trim());
+        }
+        if (item.display_name) parts.push(item.display_name);
+        return parts.length ? `${parts.join("；")}。` : "";
+      }
+
+      function refreshResolvedKpiSummaries(state) {
+        const metrics = state?.metrics || {};
+        if (state?.systems?.cash) {
+          state.systems.cash.headline = `現金股利殖利率 ${pct(metrics.dividendYield)}（推算）；US10Y ${pct(metrics.us10y)}。`;
+        }
+        if (state?.systems?.macro) {
+          state.systems.macro.headline = `USD/TWD ${fixed(metrics.twdUsd, 3)}、DXY ${fixed(metrics.dxy, 2)}、US10Y ${pct(metrics.us10y, 2)}、VIX ${fixed(metrics.vix, 2)}、WTI ${fixed(metrics.wti, 2)}。`;
+        }
+      }
+
       function parseCsv(text) {
         const rows = [];
         const clean = String(text || "").replace(/^\uFEFF/, "");
@@ -4742,11 +4801,11 @@
         const rows = [
           { id: "PB", value: metrics.pb === null ? "N/A" : `${fixed(metrics.pb, 3)}x`, status: "正式衍生", note: `PB_daily = Close ${fixed(metrics.close, 1)} / BVPS_ref ${fixed(metrics.bvps, 2)}。`, key: "val", color: systems.val.color, meter: 0 },
           { id: "ROE", value: pct(metrics.roe), status: `${metrics.roePeriod}官方／未年化`, note: `EPS YoY ${pct(metrics.epsYoY)}；ROE不是Q2單季、TTM或年化值，也不轉成IC分數。`, key: "fund", color: systems.fund.color, meter: 0 },
-          { id: "殖利率 / US10Y", value: `${pct(metrics.dividendYield)} / ${pct(metrics.us10y)}`, status: "不同期別", note: "殖利率為正式資料推算；US10Y 是觀察資料，保留各自日期。", key: "cash", color: systems.cash.color, meter: 0 },
+          { id: "殖利率 / US10Y", value: `${pct(metrics.dividendYield)} / ${pct(metrics.us10y)}`, status: supplementStatus(metrics, ["us10y"], "不同期別"), note: `殖利率為正式資料推算；US10Y 是觀察資料，保留各自日期。${supplementDetail(metrics, ["us10y"])}`, key: "cash", color: systems.cash.color, meter: 0 },
           { id: metrics.taiexOfficial ? "台灣加權指數" : "TAIEX", value: metrics.taiexOfficial ? groupedFixed(metrics.taiexClose, 2) : "N/A", status: metrics.taiexOfficial ? `TWSE 官方 ${metrics.taiexSourceDate}` : "本次官方來源未取得", note: metrics.taiexOfficial ? `近5交易日 ${metrics.taiex5dChange === null ? "N/A" : `${metrics.taiex5dChange >= 0 ? "+" : ""}${fixed(metrics.taiex5dChange, 2)}%`}；OFFICIAL_EXCHANGE / OBSERVATION_ONLY；actionable:false。` : `${metrics.taiexWeeklyChange === null ? "無可用歷史觀察" : `最近歷史觀察 ${metrics.taiexObservationDate} ${metrics.taiexWeeklyChange >= 0 ? "+" : ""}${fixed(metrics.taiexWeeklyChange, 2)}%`}；不得視為 current；actionable:false。`, key: "macro", color: systems.macro.color, meter: 0 },
-          { id: "USD/TWD", value: fixed(metrics.twdUsd, 3), status: "匯率觀察資料", note: "只顯示匯率趨勢觀察檔的最新列，不跨來源補值。", key: "macro", color: systems.macro.color, meter: 0 },
-          { id: "VIX / DXY", value: `${fixed(metrics.vix, 2)} / ${fixed(metrics.dxy, 2)}`, status: "不同觀察來源", note: "VIX 來自總經觀察；DXY 來自匯率觀察；不換算 IC 分數。", key: "macro", color: systems.macro.color, meter: 0 },
-          { id: "AI需求代理", value: `Cloud & Networking ${pct(metrics.cloudNetworkSharePct, 0)}`, status: `${metrics.aiPeriod} / Hon Hai Official Earnings`, note: `QoQ Trend ${metrics.cloudNetworkTrend}${metrics.cloudNetworkRevenueQoqPct === null ? `（${metrics.cloudNetworkQoqReason}）` : ` ${pct(metrics.cloudNetworkRevenueQoqPct, 2)}`}；AI-specific ${metrics.aiSpecificShare === null ? "N/A" : pct(metrics.aiSpecificShare)} / ${metrics.aiSpecificStatus === "NOT_DISCLOSED" ? "官方未揭露" : metrics.aiSpecificStatus}；官方展望 ${metrics.officialDemandOutlook}；actionable:false。`, key: "ai", color: systems.ai.color, meter: 0 }
+          { id: "USD/TWD", value: fixed(metrics.twdUsd, 3), status: supplementStatus(metrics, ["twdUsd"], "匯率觀察資料"), note: `只顯示同語義、同期間資料，不跨來源補值。${supplementDetail(metrics, ["twdUsd"])}`, key: "macro", color: systems.macro.color, meter: 0 },
+          { id: "VIX / DXY", value: `${fixed(metrics.vix, 2)} / ${fixed(metrics.dxy, 2)}`, status: supplementStatus(metrics, ["vix", "dxy"], "不同觀察來源"), note: `VIX 與 DXY 保留各自語義與期間；不換算 IC 分數。${supplementDetail(metrics, ["vix", "dxy"])}`, key: "macro", color: systems.macro.color, meter: 0 },
+          { id: "AI需求代理", value: `Cloud & Networking ${pct(metrics.cloudNetworkSharePct, 0)}`, status: supplementStatus(metrics, ["cloudNetworkSharePct", "aiSpecificShare"], `${metrics.aiPeriod} / Hon Hai Official Earnings`), note: `QoQ Trend ${metrics.cloudNetworkTrend}${metrics.cloudNetworkRevenueQoqPct === null ? `（${metrics.cloudNetworkQoqReason}）` : ` ${pct(metrics.cloudNetworkRevenueQoqPct, 2)}`}；AI-specific ${metrics.aiSpecificShare === null ? "N/A" : pct(metrics.aiSpecificShare)} / ${metrics.aiSpecificStatus === "NOT_DISCLOSED" ? "官方未揭露" : metrics.aiSpecificStatus}；官方展望 ${metrics.officialDemandOutlook}；${supplementDetail(metrics, ["cloudNetworkSharePct", "aiSpecificShare"])}actionable:false。`, key: "ai", color: systems.ai.color, meter: 0 }
         ];
         rightPanel.className = "panel right-panel v24-dynamic-panel has-seven-signals";
         rightPanel.innerHTML = `
@@ -4967,7 +5026,7 @@
 
       async function init() {
         const [appState, eventState, news, realtimeSnapshot, dailyRows, masterRows, quarterlyEvidence, quarterlyReport, fxRows, macroRows] = await Promise.all([
-          fetchJson("runtime/p1008_app_state.json"),
+          fetchAppState(),
           fetchJson("runtime/warroom_event_review_state.json"),
           fetchJson("runtime/warroom_news_scan_snapshot.json"),
           fetchJson("runtime/warroom_realtime_snapshot.json"),
@@ -4985,6 +5044,8 @@
         const macro = latestByDate(macroRows, "Date");
         const taiexObservation = latestNumericObservation(macroRows, "TAIEX_Weekly_Chg");
         const state = buildSystems({ appState, eventState, news, realtimeSnapshot, daily, master, quarterlyEvidence, quarterlyReport, historicalAi, taiexObservation, fx, macro });
+        applyResolvedKpiProjection(state.metrics, appState?.kpiSupplementProjection);
+        refreshResolvedKpiSummaries(state);
         applyIcTones(state.systems);
         window.__p1008DynamicState = state;
         if (shell) shell.classList.add("p1008-runtime-bound");

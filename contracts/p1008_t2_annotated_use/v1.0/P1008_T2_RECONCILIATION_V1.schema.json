@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "P1008_T2_RECONCILIATION_V1.schema.json",
+  "title": "P1008 T2 reconciliation record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "reconciliation_id", "candidate_id", "candidate_hash", "metric_id", "period",
+    "original_point_estimate", "original_estimate_lower_bound", "original_estimate_upper_bound", "unit",
+    "replacement_data_tier", "replacement_value", "replacement_source_id", "replacement_source_hash",
+    "reconciliation_state", "recorded_at", "estimate_lineage_retained", "t2_current_canonical",
+    "canonical_display_preference", "formal_authority_created", "formal_scoring_eligible", "actionable"
+  ],
+  "properties": {
+    "schema_version": {"const": "P1008_T2_RECONCILIATION_V1"},
+    "reconciliation_id": {"type": "string"},
+    "candidate_id": {"type": "string"},
+    "candidate_hash": {"type": "string", "pattern": "^[A-F0-9]{64}$"},
+    "metric_id": {"type": "string"},
+    "period": {"type": "string"},
+    "original_point_estimate": {"type": "string"},
+    "original_estimate_lower_bound": {"type": "string"},
+    "original_estimate_upper_bound": {"type": "string"},
+    "unit": {"type": "string"},
+    "replacement_data_tier": {"type": ["string", "null"], "enum": ["T0_DIRECT_OFFICIAL", "T1_EXACT_DERIVED", null]},
+    "replacement_value": {"type": ["string", "null"]},
+    "replacement_source_id": {"type": ["string", "null"]},
+    "replacement_source_hash": {"type": ["string", "null"]},
+    "reconciliation_state": {"enum": ["OFFICIAL_REPLACEMENT_AVAILABLE", "RECONCILED", "ESTIMATE_REJECTED"]},
+    "recorded_at": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "estimate_lineage_retained": {"const": true},
+    "t2_current_canonical": {"const": false},
+    "canonical_display_preference": {"enum": ["T0_T1_REPLACEMENT", "NO_T2_DISPLAY"]},
+    "rejection_reason": {"type": "string", "minLength": 1},
+    "formal_authority_created": {"const": false},
+    "formal_scoring_eligible": {"const": false},
+    "actionable": {"const": false}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"reconciliation_state": {"const": "ESTIMATE_REJECTED"}}},
+      "then": {"required": ["rejection_reason"]}
+    }
+  ]
+}

@@ -189,6 +189,16 @@ contracts/p1008_report_production/v1.1/templates/HON_HAI_WAR_REPORT_MOTHER_V1.ht
 contracts/p1008_research_plugin/acceptance/v1.1/P1008_FY2026Q2_AUTHORITY_CI_REANCHOR_AMENDMENT.json text eol=lf
 contracts/p1008_research_plugin/acceptance/v1.1/P1008_FY2026Q2_ROIC_FINALIZATION_CLOSEOUT.json text eol=lf
 contracts/p1008_research_plugin/acceptance/v1.1/P1008_TWSE_AUTHORITY_INCREMENTAL_REMEDIATION_AMENDMENT.json text eol=lf
+tools/p1008_t1_derived_kpi_bridge_v1.py text eol=lf
+tools/p1008_t2_annotated_use_v1.py text eol=lf
+contracts/p1008_t1_derived_kpi_bridge/v1.0/fixtures/P1008_T1_BRIDGE_MANIFEST_V1.synthetic.json text eol=lf
+contracts/p1008_t1_derived_kpi_bridge/v1.0/fixtures/P1008_T1_VALIDATION_RECEIPT_V1.synthetic.json text eol=lf
+contracts/p1008_t1_derived_kpi_bridge/v1.0/fixtures/P1008_T1_WAR_ROOM_CANDIDATE_V1.synthetic.json text eol=lf
+contracts/p1008_t2_annotated_use/v1.0/fixtures/P1008_DERIVED_KPI_CANDIDATE_V1.t2.synthetic.json text eol=lf
+contracts/p1008_t2_annotated_use/v1.0/fixtures/P1008_T2_ANNOTATED_DISPLAY_V1.synthetic.json text eol=lf
+contracts/p1008_t2_annotated_use/v1.0/fixtures/P1008_T2_ANNOTATED_USE_APPROVAL_V1.synthetic.json text eol=lf
+contracts/p1008_t2_annotated_use/v1.0/fixtures/P1008_T2_RECONCILIATION_V1.synthetic.json text eol=lf
+contracts/p1008_t2_annotated_use/v1.0/fixtures/P1008_T2_RESEARCH_CANDIDATE_V1.synthetic.json text eol=lf
 modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/runtime/research_plugin/latest_content_integration.json binary
 modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/runtime/report_trigger/latest_decision.json binary
 modules/p1008_research_plugin/tests/fixtures/phaseb1/governed_q2/runtime/official_ir_evidence/P1008-OFFICIAL-IR-20260812T161537534050Z/receipts/IR-RECEIPT-6D5D0281AD7B2C179220.json binary
