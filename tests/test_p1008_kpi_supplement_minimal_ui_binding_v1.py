@@ -287,25 +287,25 @@ class ServerAndProtectionTests(unittest.TestCase):
         self.assertEqual(("READY", []), (result["status"], result["metrics"]))
 
     def test_45_manifest_hash_unchanged(self):
-        self.assertEqual("4306D225FDFF0F48AEDEA6C758E7B76EAA5F9FB7735C9FFDB5E9823D75FE465F", digest("data/CSV_AUTHORITY_MANIFEST.json"))
+        self.assertEqual("6E4DDF7FA9E922F60088F4C1ADA0C2680526FF7158E5E021A16937997B9CB218", digest("data/CSV_AUTHORITY_MANIFEST.json"))
 
     def test_46_master_hash_unchanged(self):
         self.assertEqual("E623CA082F2A080613C33F4155BA8006646E30D6A517DE926AF6108062F84D48", digest("data/2317_master_v9.csv"))
 
     def test_47_daily_price_hash_unchanged(self):
-        self.assertEqual("91EEBDB6BC6FD0E85CA2BF537056CAF941246F13412417EDFAE96B16D6DD02D1", digest("data/2317_daily_price.csv"))
+        self.assertEqual("E39E364C528F353E350A6591C0C55EE55EA2FF862958B157860BD98EC98BA368", digest("data/2317_daily_price.csv"))
 
     def test_48_daily_activity_hash_unchanged(self):
-        self.assertEqual("747D4C3BFA40C239B9E2EBB4F39D695F88F186020D19DE310B57CD3D8D432F01", digest("data/2317_daily_market_activity.csv"))
+        self.assertEqual("3E4D7B55446D6B167FE1BC1B0B44419A95EF311E775C14A422EBB67563E9585B", digest("data/2317_daily_market_activity.csv"))
 
     def test_49_macro_hash_unchanged(self):
-        self.assertEqual("6BD02B0894139D00D881FF53A6EEEEED404DED21EC782CF54F716665EB25123B", digest("data/macro_snapshot.csv"))
+        self.assertEqual("7F635FDDD88D4321384DA89C20B2E07C4504A4EB14D25FA98B181994E941202F", digest("data/macro_snapshot.csv"))
 
     def test_50_event_hash_unchanged(self):
-        self.assertEqual("4A8E1D8079D9E1F9F210222C5383DD69AF17B2F731A2AA5D38485BC07277A64F", digest("data/macro_event_observations.csv"))
+        self.assertEqual("EBFD5CD6C327557A99803908FE468E16514C2546E36D8D1B2FF928442DFF4565", digest("data/macro_event_observations.csv"))
 
     def test_51_fx_hash_unchanged(self):
-        self.assertEqual("4F16E86F09F5B9594407084081C81E4D95853DDD30EA3C24B9D9815AAB0F02E6", digest("data/fx_trend_observations.csv"))
+        self.assertEqual("F629CE510E3881CA0FA61D4A03CC30452B18BA7EB9855A92C1FA23163C1803BC", digest("data/fx_trend_observations.csv"))
 
     def test_52_publisher_hash_unchanged(self):
         self.assertEqual("9FA584A2F76B931CCB2DDBB32B16F112AAC7B7A3CCD4FEC05111C1D57213E8BB", digest("tools/owner_publish_csv_v2.py"))

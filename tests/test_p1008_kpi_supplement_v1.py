@@ -374,13 +374,13 @@ class StoreAndProtectedArtifactTests(unittest.TestCase):
             self.assertTrue(errors)
 
     def test_44_formal_csv_manifest_hash_unchanged(self):
-        self.assertEqual("4306D225FDFF0F48AEDEA6C758E7B76EAA5F9FB7735C9FFDB5E9823D75FE465F", hashlib.sha256((ROOT / "data/CSV_AUTHORITY_MANIFEST.json").read_bytes()).hexdigest().upper())
+        self.assertEqual("6E4DDF7FA9E922F60088F4C1ADA0C2680526FF7158E5E021A16937997B9CB218", hashlib.sha256((ROOT / "data/CSV_AUTHORITY_MANIFEST.json").read_bytes()).hexdigest().upper())
 
     def test_45_master_csv_hash_unchanged(self):
         self.assertEqual("E623CA082F2A080613C33F4155BA8006646E30D6A517DE926AF6108062F84D48", hashlib.sha256((ROOT / "data/2317_master_v9.csv").read_bytes()).hexdigest().upper())
 
     def test_46_macro_csv_hash_unchanged(self):
-        self.assertEqual("6BD02B0894139D00D881FF53A6EEEEED404DED21EC782CF54F716665EB25123B", hashlib.sha256((ROOT / "data/macro_snapshot.csv").read_bytes()).hexdigest().upper())
+        self.assertEqual("7F635FDDD88D4321384DA89C20B2E07C4504A4EB14D25FA98B181994E941202F", hashlib.sha256((ROOT / "data/macro_snapshot.csv").read_bytes()).hexdigest().upper())
 
     def test_47_publisher_hash_unchanged(self):
         self.assertEqual("9FA584A2F76B931CCB2DDBB32B16F112AAC7B7A3CCD4FEC05111C1D57213E8BB", hashlib.sha256((ROOT / "tools/owner_publish_csv_v2.py").read_bytes()).hexdigest().upper())
