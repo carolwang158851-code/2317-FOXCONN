@@ -10,6 +10,17 @@
     "phase4dStatus": "P1008_PHASE4D_OPERATIONAL_ACCEPTANCE_PASS"
   },
   "previousOperationalRoot": "P1008_RESEARCH_CONTENT_INTEGRATION_V1",
+  "canonicalGitRemote": {
+    "canonical_remote": "github",
+    "canonical_main_ref": "refs/heads/main",
+    "origin_role": "NON_AUTHORITATIVE_LOCAL_SIBLING",
+    "non_authoritative_remotes": [
+      "origin"
+    ],
+    "direct_query_required": true,
+    "fallback_allowed": false,
+    "fail_closed": true
+  },
   "actionable": false,
   "publishAuthorized": false,
   "publication": false

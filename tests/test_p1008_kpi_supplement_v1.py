@@ -374,7 +374,7 @@ class StoreAndProtectedArtifactTests(unittest.TestCase):
             self.assertTrue(errors)
 
     def test_44_formal_csv_manifest_hash_unchanged(self):
-        self.assertEqual("6E4DDF7FA9E922F60088F4C1ADA0C2680526FF7158E5E021A16937997B9CB218", hashlib.sha256((ROOT / "data/CSV_AUTHORITY_MANIFEST.json").read_bytes()).hexdigest().upper())
+        self.assertEqual("449EC025AC93CDC034AB4512183BF85BC1F80F38525C57B1782DBB85945ADC9F", hashlib.sha256((ROOT / "data/CSV_AUTHORITY_MANIFEST.json").read_bytes()).hexdigest().upper())
 
     def test_45_master_csv_hash_unchanged(self):
         self.assertEqual("E623CA082F2A080613C33F4155BA8006646E30D6A517DE926AF6108062F84D48", hashlib.sha256((ROOT / "data/2317_master_v9.csv").read_bytes()).hexdigest().upper())

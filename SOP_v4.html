@@ -609,6 +609,16 @@
       </div>
     </section>
 
+    <section>
+      <h2>18. Canonical Git remote 治理</h2>
+      <ul>
+        <li><code>P1008_CANONICAL_GIT_REMOTE = github</code>；<code>P1008_CANONICAL_MAIN_REF = refs/heads/main</code>。</li>
+        <li><code>origin</code> 是 <code>NON_AUTHORITATIVE_LOCAL_SIBLING</code>，不得用於 authority、recovery base、merge-base、ahead/behind、fast-forward eligibility 或 production push target 判定。</li>
+        <li>canonical authority 必須以 <code>git ls-remote github refs/heads/main</code> direct query 驗證；「remote main」、branch upstream、remote HEAD、default remote 或 cached tracking ref 都不是充分證據。</li>
+        <li>若 <code>github</code> 不存在、ref 無法查詢、direct query 失敗或操作要求其他 remote，必須 fail closed；不得 fallback、改 remote 名稱／URL 或改 upstream。</li>
+      </ul>
+    </section>
+
   </main>
 
   <script>

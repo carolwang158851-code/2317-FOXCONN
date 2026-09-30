@@ -1,5 +1,23 @@
 # P1008 Git 工作樹與 commit 原則
 
+## Canonical Git remote identity
+
+P1008 的 canonical Git authority 固定為：
+
+```text
+P1008_CANONICAL_GIT_REMOTE = github
+P1008_CANONICAL_MAIN_REF = refs/heads/main
+origin = NON_AUTHORITATIVE_LOCAL_SIBLING
+```
+
+治理、recovery base、merge-base、ahead/behind、fast-forward eligibility 與
+production push target 的判定，必須直接查詢
+`git ls-remote github refs/heads/main`。`remote main`、`origin/main`、目前
+branch upstream、remote HEAD、default remote 或 cached tracking ref 都不是充分的
+canonical authority 證據。若 `github` 不存在或 direct query 失敗，必須
+fail closed；不得 fallback 到 `origin`，也不得自動改 remote URL、upstream 或
+remote 名稱。
+
 ## 目前狀態代表什麼
 
 `CODEX_P1008_PACKAGE` 已初始化成 Git 工作樹，但尚未 commit。

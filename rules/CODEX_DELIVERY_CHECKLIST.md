@@ -163,6 +163,22 @@ ForbiddenFiles（禁止使用）:
   - REVIEW_REQUIRED：未 Owner ack 前不得自動過期，只能顯示 HOLD_UNDER_REVIEW / REVIEW_REQUIRED。
 ```
 
+### 2.8 Canonical Git remote 治理
+
+```text
+P1008_CANONICAL_GIT_REMOTE = github
+P1008_CANONICAL_MAIN_REF = refs/heads/main
+origin = NON_AUTHORITATIVE_LOCAL_SIBLING
+
+任何 authority、recovery base、merge-base、ahead/behind、fast-forward 或
+production push target 判定，都必須直接執行等價於：
+  git ls-remote github refs/heads/main
+
+"remote main"、origin/main、branch upstream、remote HEAD、default remote 或
+cached tracking ref 不足以通過 canonical authority gate。github 不存在或 direct
+query 失敗時必須 fail closed，不得 fallback、改 remote、改 URL 或改 upstream。
+```
+
 ---
 
 ## 第3章：交付前自查清單（Codex 提交前必須逐項確認）
