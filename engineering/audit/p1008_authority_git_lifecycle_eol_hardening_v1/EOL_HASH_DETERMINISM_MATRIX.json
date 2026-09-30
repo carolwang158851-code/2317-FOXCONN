@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "P1008_EOL_HASH_DETERMINISM_MATRIX_V1",
+  "currentEolPolicy": "EXPLICIT_TEXT_EOL_LF_FOR_ALL_GOVERNED_AUTHORITY_PATHS",
+  "currentPolicyDeterministic": true,
+  "currentPolicyPreservesFormalAuthoritySemantics": true,
+  "currentPolicySupportsDeterministicGitIdentity": true,
+  "gitAttributesChangeRequired": false,
+  "ownerEolPolicyDecisionRequired": false,
+  "configurations": [
+    {
+      "coreAutocrlf": "true",
+      "checkoutEol": "LF",
+      "formalExactByteValidation": "PASS",
+      "pathAwareGitIdentity": "MATCHES_INDEX_BLOB"
+    },
+    {
+      "coreAutocrlf": "false",
+      "checkoutEol": "LF",
+      "formalExactByteValidation": "PASS",
+      "pathAwareGitIdentity": "MATCHES_INDEX_BLOB"
+    }
+  ],
+  "manifestIncident": {
+    "crlfRawSha256": "6E4DDF7FA9E922F60088F4C1ADA0C2680526FF7158E5E021A16937997B9CB218",
+    "lfRawSha256": "449EC025AC93CDC034AB4512183BF85BC1F80F38525C57B1782DBB85945ADC9F",
+    "semanticTextEqualAfterNewlineNormalization": true,
+    "pathAwareGitBlobEqual": true,
+    "falseAuthorityStateChange": false,
+    "falseGitSyncPending": false
+  },
+  "identityDomains": [
+    "FORMAL_BYTE_IDENTITY",
+    "GIT_BLOB_IDENTITY",
+    "WORKTREE_BYTE_IDENTITY",
+    "SEMANTIC_TEXT_IDENTITY"
+  ]
+}

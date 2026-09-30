@@ -10,7 +10,7 @@ from typing import Callable
 
 CODE_ROOT = Path(__file__).resolve().parents[1]
 RECORD = CODE_ROOT / "contracts/p1008_operational_governance/v1.0/canonical_warroom.json"
-APPROVED_RECORD_SHA256 = "2193C754C538CEB2BF962EF71E24CBE7F7E61236A3A3758C1A4BF64A39B381A0"
+APPROVED_RECORD_SHA256 = "9DCE85BCD3079FFB90BEE7C5D968FFBC82A123314C32430217E39987C636F225"
 
 
 class CanonicalWarroomError(RuntimeError):

@@ -21,6 +21,20 @@
     "fallback_allowed": false,
     "fail_closed": true
   },
+  "authorityGitLifecycle": {
+    "formal_authority_identity_model": "EXISTING_MANIFEST_EXACT_BYTE_SHA256_AND_OWNER_APPROVAL_LINEAGE",
+    "git_canonical_identity_model": "PATH_AWARE_GIT_BLOB_OID",
+    "status_values": [
+      "SYNCED",
+      "PENDING",
+      "BLOCKED"
+    ],
+    "formal_publish_implies_git_commit": false,
+    "git_sync_required_for_formal_publish": false,
+    "automatic_git_mutation": false,
+    "worktree_raw_sha_is_git_canonical_identity": false,
+    "canonical_remote_dependency": "canonicalGitRemote"
+  },
   "actionable": false,
   "publishAuthorized": false,
   "publication": false

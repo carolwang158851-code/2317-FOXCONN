@@ -18,6 +18,27 @@ canonical authority 證據。若 `github` 不存在或 direct query 失敗，必
 fail closed；不得 fallback 到 `origin`，也不得自動改 remote URL、upstream 或
 remote 名稱。
 
+## Formal Authority 與 Git lifecycle
+
+`FORMAL_PUBLISH != GIT_COMMIT`。Owner Formal Publish Gate、正式 authority
+檔案、`CSV_AUTHORITY_MANIFEST.json` 與核准 lineage 決定 formal authority；Git
+不決定資料是否已成為正式 authority。
+
+Authority/Git evaluator 只讀比較兩個身分域：formal authority 沿用 manifest
+規定的 exact-byte SHA-256；Git canonical identity 使用 repository attribute-aware
+的 `git hash-object --path` blob OID，並與 direct-query 得到的
+`github:refs/heads/main` commit tree 比較。raw Windows checkout SHA-256、文字正規化
+SHA-256 與 Git blob OID 不得互相替代。
+
+- `SYNCED`：formal authority 有效且 canonical Git blobs 全部相符。
+- `PENDING`：formal authority 有效，但 canonical Git 尚未記錄相同 blobs。這不會讓
+  publish 失敗，也不改變 KPI、scoring 或 actionable。
+- `BLOCKED`：formal authority 無效／不一致、canonical remote 無法安全查詢，或
+  identity 無法安全判定。`BLOCKED` 不得降級為 `PENDING`。
+
+Evaluator 與 Owner publisher 都不得自動執行 `git add/commit/push/merge/rebase/reset/stash/clean`。
+CRLF/LF checkout 表示差異本身不構成 authority、governance 或 Git sync 狀態變更。
+
 ## 目前狀態代表什麼
 
 `CODEX_P1008_PACKAGE` 已初始化成 Git 工作樹，但尚未 commit。

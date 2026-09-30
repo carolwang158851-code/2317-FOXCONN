@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "P1008_AUTHORITY_GIT_SYNC_STATE_MATRIX_V1",
+  "formalPublishEqualsGitCommit": false,
+  "gitSyncRequiredForFormalPublish": false,
+  "states": {
+    "SYNCED": "Formal authority is valid and every path-aware expected Git blob matches canonical github/main.",
+    "PENDING": "Formal authority is valid but at least one canonical github/main blob is absent or different.",
+    "BLOCKED": "Formal authority, canonical remote identity, or Git identity cannot be determined safely. BLOCKED is never converted to PENDING."
+  },
+  "transitions": [
+    {
+      "event": "OWNER_FORMAL_PUBLISH_SUCCESS",
+      "formalAuthorityEffective": true,
+      "gitMutation": false,
+      "nextObservation": "PENDING_OR_SYNCED_OR_BLOCKED"
+    },
+    {
+      "event": "VERIFIED_CANONICAL_GIT_RECONCILIATION",
+      "formalAuthorityChanged": false,
+      "gitMutationByEvaluator": false,
+      "nextObservation": "SYNCED"
+    }
+  ],
+  "testCases": {
+    "A": "VALID_PLUS_IDENTICAL_TO_GITHUB_IS_SYNCED",
+    "B": "VALID_PLUS_OLDER_GITHUB_IS_PENDING",
+    "C": "CRLF_WORKTREE_DIFFERENCE_PLUS_EQUAL_PATH_AWARE_BLOB_IS_SYNCED",
+    "D": "INVALID_FORMAL_AUTHORITY_IS_BLOCKED",
+    "E": "GITHUB_UNAVAILABLE_IS_BLOCKED",
+    "F": "ORIGIN_MATCH_CANNOT_OVERRIDE_GITHUB_MISMATCH",
+    "G": "FORMAL_AUTHORITY_REMAINS_VALID_WHILE_PENDING",
+    "H": "EVALUATOR_PERFORMS_NO_GIT_OR_AUTHORITY_MUTATION"
+  },
+  "currentEvaluation": {
+    "canonicalSha": "cd25bfa7961c0f17f1a652d973d54245b70da975",
+    "formalAuthorityValid": true,
+    "authorityGitSyncStatus": "SYNCED",
+    "authorityGitSyncPending": false,
+    "authorityGitSynced": true,
+    "gitMutationPerformed": false
+  }
+}

@@ -179,6 +179,28 @@ cached tracking ref 不足以通過 canonical authority gate。github 不存在�
 query 失敗時必須 fail closed，不得 fallback、改 remote、改 URL 或改 upstream。
 ```
 
+### 2.9 Authority ↔ Git lifecycle 與 hash/EOL 治理
+
+```text
+FORMAL_PUBLISH != GIT_COMMIT
+
+Domain A — Formal Authority Identity:
+  沿用 Owner Formal Publish Gate、正式檔案、CSV authority manifest 與核准 lineage。
+  exact-byte SHA-256 不得被文字正規化 hash 或 Git object identity 取代。
+
+Domain B — Git Canonical Identity:
+  使用 git hash-object --path 的 attribute-aware blob OID，與 direct-query 得到的
+  github:refs/heads/main commit tree 比較。
+
+SYNCED  = formal authority 有效且 canonical Git 相符。
+PENDING = formal authority 有效但 canonical Git 尚未記錄；不得阻擋 formal publish、
+          KPI、scoring 或改變 actionable。
+BLOCKED = authority、canonical remote 或 identity 無法安全驗證；不得轉成 PENDING。
+
+Evaluator / publisher 禁止自動 git add、commit、push、merge、rebase、reset、stash、clean。
+CRLF/LF checkout 差異不得單獨判定為 authority change、governance change 或 sync pending。
+```
+
 ---
 
 ## 第3章：交付前自查清單（Codex 提交前必須逐項確認）

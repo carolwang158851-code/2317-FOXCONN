@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "P1008_HARDENING_DIFF_CLASSIFICATION_V1",
+  "allowedCategories": [
+    "AUTHORITY_GIT_SYNC_EVALUATOR",
+    "GOVERNANCE_INTEGRATION",
+    "TEST",
+    "GOVERNANCE_DOC"
+  ],
+  "paths": [
+    {"path": "contracts/p1008_operational_governance/v1.0/canonical_warroom.json", "category": "AUTHORITY_GIT_SYNC_EVALUATOR"},
+    {"path": "tools/p1008_canonical_warroom.py", "category": "AUTHORITY_GIT_SYNC_EVALUATOR"},
+    {"path": "tools/p1008_authority_git_sync.py", "category": "AUTHORITY_GIT_SYNC_EVALUATOR"},
+    {"path": "tools/p1008_app_server.py", "category": "GOVERNANCE_INTEGRATION"},
+    {"path": "tests/test_p1008_authority_git_lifecycle_v1.py", "category": "TEST"},
+    {"path": "tests/test_p1008_authority_git_eol_hash_v1.py", "category": "TEST"},
+    {"path": "docs/GIT_VERSIONING.md", "category": "GOVERNANCE_DOC"},
+    {"path": "rules/CODEX_DELIVERY_CHECKLIST.md", "category": "GOVERNANCE_DOC"},
+    {"path": "SOP_v4.html", "category": "GOVERNANCE_DOC"},
+    {"path": "engineering/audit/p1008_authority_git_lifecycle_eol_hardening_v1/OWNER_REVIEW_REPORT.md", "category": "GOVERNANCE_DOC"},
+    {"path": "engineering/audit/p1008_authority_git_lifecycle_eol_hardening_v1/AUTHORITY_GIT_IDENTITY_MATRIX.json", "category": "GOVERNANCE_DOC"},
+    {"path": "engineering/audit/p1008_authority_git_lifecycle_eol_hardening_v1/AUTHORITY_GIT_SYNC_STATE_MATRIX.json", "category": "GOVERNANCE_DOC"},
+    {"path": "engineering/audit/p1008_authority_git_lifecycle_eol_hardening_v1/EOL_HASH_DETERMINISM_MATRIX.json", "category": "GOVERNANCE_DOC"},
+    {"path": "engineering/audit/p1008_authority_git_lifecycle_eol_hardening_v1/HARDENING_DIFF_CLASSIFICATION.json", "category": "GOVERNANCE_DOC"}
+  ],
+  "authorityFileContentChanged": 0,
+  "gitAttributesChanged": false,
+  "uiChanged": false,
+  "formulaChanged": false,
+  "scoringChanged": false,
+  "unexpectedFiles": 0
+}

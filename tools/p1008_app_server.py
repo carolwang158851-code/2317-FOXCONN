@@ -34,6 +34,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 import owner_publish_csv_v2 as owner_publish
+import p1008_authority_git_sync as authority_git_sync
 import p1008_kpi_supplement_v1 as kpi_supplement
 import warroom_report_governance as report_governance
 import warroom_report_trigger_runtime as report_trigger_runtime
@@ -743,6 +744,7 @@ class P1008JobManager:
             "warnings": [],
             "logPath": "",
             "componentStatus": {},
+            "authorityGitSync": authority_git_sync.not_evaluated_result(),
         }
 
     def snapshot(self) -> dict[str, Any]:
@@ -755,6 +757,7 @@ class P1008JobManager:
         state["authorityManifestSha256"] = (
             sha256_file(authority_manifest) if authority_manifest.is_file() else "MISSING"
         )
+        state.setdefault("authorityGitSync", authority_git_sync.not_evaluated_result())
         state["serverInstanceId"] = self.server_instance_id
         state["serverContext"] = server_context()
         state["pendingOwnerReview"] = self.pending_owner_review()
@@ -773,6 +776,14 @@ class P1008JobManager:
             self.package_root
         )
         return state
+
+    def refresh_authority_git_sync(self) -> dict[str, Any]:
+        """Evaluate read-only Git observability without gating formal authority."""
+        result = authority_git_sync.evaluate_authority_git_sync(self.package_root)
+        with self.lock:
+            self.state["authorityGitSync"] = result
+            self._persist_locked()
+        return result
 
     def source_manifest_status(self) -> dict[str, Any]:
         manifest, warnings = load_source_manifest(self.package_root)
@@ -1150,6 +1161,8 @@ class P1008JobManager:
             self._persist_locked()
         try:
             self._run_owner_publish_inner(date_str, approval_phrase, before)
+            if not self.state.get("errors"):
+                self.refresh_authority_git_sync()
             with self.lock:
                 self.state["status"] = "FAILED" if self.state.get("errors") else "SUCCEEDED"
                 self.state["finishedAt"] = now_iso()
@@ -2269,6 +2282,9 @@ class P1008AppHandler(http.server.SimpleHTTPRequestHandler):
             return
         if parsed.path == "/api/p1008/status":
             self._send_json(200, self.manager.snapshot())
+            return
+        if parsed.path == "/api/p1008/authority-git-sync":
+            self._send_json(200, self.manager.refresh_authority_git_sync())
             return
         if parsed.path == "/api/p1008/review-package":
             query = urllib.parse.parse_qs(parsed.query)

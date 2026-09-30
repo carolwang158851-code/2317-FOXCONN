@@ -619,6 +619,17 @@
       </ul>
     </section>
 
+    <section>
+      <h2>19. Formal Authority ↔ Git lifecycle 與 EOL/hash 治理</h2>
+      <ul>
+        <li><code>FORMAL_PUBLISH != GIT_COMMIT</code>。Owner Formal Publish Gate、正式 authority 檔案、CSV authority manifest 與核准 lineage 決定正式性；Git 不決定資料是否為 formal authority。</li>
+        <li>Formal identity 沿用 exact-byte SHA-256；Git canonical identity 使用 <code>git hash-object --path</code> 的 attribute-aware blob OID，並與 direct-query 所得 <code>github:refs/heads/main</code> commit tree 比較。兩個身分域不得互相替代。</li>
+        <li><code>SYNCED</code> 表示 formal authority 有效且 canonical Git 相符；<code>PENDING</code> 只表示 Git 尚未記錄，不阻擋 formal publish、KPI 或 scoring，也不改變 actionable；<code>BLOCKED</code> 表示 authority、remote 或 identity 無法安全驗證，且不得降級為 PENDING。</li>
+        <li>CRLF/LF checkout 表示差異本身不得判定為 authority change、governance change 或 sync pending。現行 governed paths 維持 <code>text eol=lf</code>；如需變更 attribute policy，必須另行取得 Owner 決定。</li>
+        <li>Evaluator 與 publisher 均不得自動執行 <code>git add/commit/push/merge/rebase/reset/stash/clean</code>。</li>
+      </ul>
+    </section>
+
   </main>
 
   <script>
