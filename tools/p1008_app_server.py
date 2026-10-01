@@ -859,10 +859,15 @@ class P1008JobManager:
             return staging_dir
         latest_date = latest_staging_date(self.package_root)
         if latest_date:
-            staging_dir = self.package_root / "staging" / latest_date
-            if (staging_dir / "DRY_RUN.json").exists():
-                return staging_dir
-        return owner_publish.latest_staging_dir(self.package_root)
+            # An absent current dry-run must not select an older candidate.
+            return self._resolve_staging_dir(latest_date)
+        try:
+            return owner_publish.latest_staging_dir(self.package_root)
+        except SystemExit as error:
+            if error.code != "No staging/<date>/DRY_RUN.json was found.":
+                raise
+            # Reuse the existing read-only ERROR/non-publishable response.
+            raise FileNotFoundError(str(error.code)) from error
 
     def review_package(self, date_str: str | None = None) -> dict[str, Any]:
         try:
