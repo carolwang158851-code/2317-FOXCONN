@@ -22,9 +22,9 @@ HISTORICAL_AUTHORITY_HASHES = {
 }
 CURRENT_AUTHORITY_HASHES = {
     "data/2317_master_v9.csv": "E623CA082F2A080613C33F4155BA8006646E30D6A517DE926AF6108062F84D48",
-    "data/2317_daily_price.csv": "E1C597220F80172773CD39894E3A5315333CD6F36EE8654D4C41AB7411492AF8",
-    "data/2317_daily_market_activity.csv": "15630F0E7A7ADDB9D861F75FC5CC707C788B72791D63997187BA53900F84710D",
-    "data/CSV_AUTHORITY_MANIFEST.json": "B4D02481E1AB196633A43491BA97E78C5BB183E30CBE1E086CB94ABFAB82D265",
+    "data/2317_daily_price.csv": "E39E364C528F353E350A6591C0C55EE55EA2FF862958B157860BD98EC98BA368",
+    "data/2317_daily_market_activity.csv": "3E4D7B55446D6B167FE1BC1B0B44419A95EF311E775C14A422EBB67563E9585B",
+    "data/CSV_AUTHORITY_MANIFEST.json": "449EC025AC93CDC034AB4512183BF85BC1F80F38525C57B1782DBB85945ADC9F",
 }
 
 
@@ -239,12 +239,12 @@ class MidrTruthfulnessTests(unittest.TestCase):
                 macro_row[field] = latest_nonblank[field]
             total, verdict = _midr_numeric(daily_row, master_row, macro_row)
             replay.append((daily_row["Date"], total, verdict))
-        self.assertEqual(len(replay), 154)
-        self.assertEqual(Counter(verdict for _, _, verdict in replay), {"SEVERE": 51, "CAUTION": 51, "NEUTRAL": 52})
+        self.assertEqual(len(replay), 159)
+        self.assertEqual(Counter(verdict for _, _, verdict in replay), {"SEVERE": 51, "CAUTION": 56, "NEUTRAL": 52})
         replay_material = "\n".join(f"{day}|{total:.3f}|{verdict}" for day, total, verdict in replay)
         self.assertEqual(
             hashlib.sha256(replay_material.encode("utf-8")).hexdigest().upper(),
-            "E80257D29B6F450C4D993338BD203032DD04558EC430C4AA95CEFE5F8F462437",
+            "39361B119AC72FE7D2851A87AB37BFE734A86BB0EBA3788276E6ED8F81869CF9",
         )
 
     def test_source_bundle_and_runtime_html_parity(self):

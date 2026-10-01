@@ -311,7 +311,17 @@ class ServerAndProtectionTests(unittest.TestCase):
         self.assertEqual("9FA584A2F76B931CCB2DDBB32B16F112AAC7B7A3CCD4FEC05111C1D57213E8BB", digest("tools/owner_publish_csv_v2.py"))
 
     def test_53_formula_registry_hash_unchanged(self):
-        self.assertEqual("F712A770DF5337AC7FC15549CA52079F6673A3CC5B6612ABDF8C794520787CA5", digest("contracts/p1008_formula_registry/v1.2/formula_registry.json"))
+        # Fixed governed identity uses exact HEAD blob bytes, not checkout EOL.
+        expected = "2A6FF32E48608A122A2089588D1C73B56A89E2C48254FCC185B7F0F84C543314"
+        path = "contracts/p1008_formula_registry/v1.2/formula_registry.json"
+        blob = subprocess.run(
+            ["git", "--no-optional-locks", "cat-file", "blob", f"HEAD:{path}"],
+            cwd=ROOT, check=True, capture_output=True,
+        ).stdout
+        self.assertEqual(expected, hashlib.sha256(blob).hexdigest().upper())
+        manifest = json.loads((ROOT / "contracts/p1008_formula_registry/v1.2/contract.manifest.json").read_text(encoding="utf-8"))
+        pinned = next(item["sha256"] for item in manifest["artifacts"] if item["path"] == "formula_registry.json")
+        self.assertEqual(expected, pinned)
 
     def test_54_core_investment_ui_hash_unchanged(self):
         self.assertEqual("D722329A1C1F5AE648A150B642D4C4AB29B050C4FEDAAE159DD8C2C4F11F79DE", digest("src/index_p1008_v7.source.html"))

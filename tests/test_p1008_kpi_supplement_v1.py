@@ -5,6 +5,7 @@ import contextlib
 import hashlib
 import json
 import shutil
+import subprocess
 import sys
 import unittest
 import uuid
@@ -392,7 +393,17 @@ class StoreAndProtectedArtifactTests(unittest.TestCase):
         self.assertEqual("AFC27FE6440A2DEFE446DB4519B586EFA56474B922A3901A84ABA3FF90DF8150", hashlib.sha256((ROOT / "launcher.html").read_bytes()).hexdigest().upper())
 
     def test_50_formula_registry_hash_unchanged(self):
-        self.assertEqual("F712A770DF5337AC7FC15549CA52079F6673A3CC5B6612ABDF8C794520787CA5", hashlib.sha256((ROOT / "contracts/p1008_formula_registry/v1.2/formula_registry.json").read_bytes()).hexdigest().upper())
+        # Fixed governed identity uses exact HEAD blob bytes, not checkout EOL.
+        expected = "2A6FF32E48608A122A2089588D1C73B56A89E2C48254FCC185B7F0F84C543314"
+        path = "contracts/p1008_formula_registry/v1.2/formula_registry.json"
+        blob = subprocess.run(
+            ["git", "--no-optional-locks", "cat-file", "blob", f"HEAD:{path}"],
+            cwd=ROOT, check=True, capture_output=True,
+        ).stdout
+        self.assertEqual(expected, hashlib.sha256(blob).hexdigest().upper())
+        manifest = json.loads((ROOT / "contracts/p1008_formula_registry/v1.2/contract.manifest.json").read_text(encoding="utf-8"))
+        pinned = next(item["sha256"] for item in manifest["artifacts"] if item["path"] == "formula_registry.json")
+        self.assertEqual(expected, pinned)
 
     def test_51_report_adapter_rejects_declared_stale_fed_value(self):
         import warroom_periodic_report_v1 as periodic

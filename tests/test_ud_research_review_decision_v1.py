@@ -18,9 +18,9 @@ HISTORICAL_AUTHORITY_HASHES = {
 }
 CURRENT_AUTHORITY_HASHES = {
     "data/2317_master_v9.csv": "E623CA082F2A080613C33F4155BA8006646E30D6A517DE926AF6108062F84D48",
-    "data/2317_daily_price.csv": "E1C597220F80172773CD39894E3A5315333CD6F36EE8654D4C41AB7411492AF8",
-    "data/2317_daily_market_activity.csv": "15630F0E7A7ADDB9D861F75FC5CC707C788B72791D63997187BA53900F84710D",
-    "data/CSV_AUTHORITY_MANIFEST.json": "B4D02481E1AB196633A43491BA97E78C5BB183E30CBE1E086CB94ABFAB82D265",
+    "data/2317_daily_price.csv": "E39E364C528F353E350A6591C0C55EE55EA2FF862958B157860BD98EC98BA368",
+    "data/2317_daily_market_activity.csv": "3E4D7B55446D6B167FE1BC1B0B44419A95EF311E775C14A422EBB67563E9585B",
+    "data/CSV_AUTHORITY_MANIFEST.json": "449EC025AC93CDC034AB4512183BF85BC1F80F38525C57B1782DBB85945ADC9F",
 }
 
 PROTECTED_HEAD_PATHS = (
@@ -75,7 +75,17 @@ class UdResearchReviewDecisionTests(unittest.TestCase):
         for entry in entries:
             artifact = V12 / entry["path"]
             self.assertTrue(artifact.is_file(), entry["path"])
-            payload = _governed_text_bytes(artifact)
+            if entry["path"] == "formula_registry.json":
+                expected = "2A6FF32E48608A122A2089588D1C73B56A89E2C48254FCC185B7F0F84C543314"
+                path = "contracts/p1008_formula_registry/v1.2/formula_registry.json"
+                payload = subprocess.run(
+                    ["git", "--no-optional-locks", "cat-file", "blob", f"HEAD:{path}"],
+                    cwd=ROOT, check=True, capture_output=True,
+                ).stdout
+                self.assertEqual(expected, hashlib.sha256(payload).hexdigest().upper())
+                self.assertEqual(expected, entry["sha256"])
+            else:
+                payload = _governed_text_bytes(artifact)
             self.assertEqual(hashlib.sha256(payload).hexdigest().upper(), entry["sha256"])
             self.assertEqual(len(payload), entry["sizeBytes"])
         material = "\n".join(sorted(f'{entry["path"]}|{entry["sha256"]}' for entry in entries))

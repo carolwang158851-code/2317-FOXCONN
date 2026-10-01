@@ -147,9 +147,9 @@ class Rtm0RegistryActivationTests(unittest.TestCase):
 
     def test_only_rtm_changes_across_current_authority_replay(self):
         rows = _replay_rows()
-        self.assertEqual(len(rows), 154)
-        self.assertEqual(Counter(row["old_verdict"] for row in rows), {"SEVERE": 51, "CAUTION": 51, "NEUTRAL": 52})
-        self.assertEqual(Counter(row["new_verdict"] for row in rows), {"SEVERE": 51, "CAUTION": 58, "NEUTRAL": 45})
+        self.assertEqual(len(rows), 159)
+        self.assertEqual(Counter(row["old_verdict"] for row in rows), {"SEVERE": 51, "CAUTION": 56, "NEUTRAL": 52})
+        self.assertEqual(Counter(row["new_verdict"] for row in rows), {"SEVERE": 51, "CAUTION": 63, "NEUTRAL": 45})
         flips = Counter((row["old_verdict"], row["new_verdict"]) for row in rows if row["old_verdict"] != row["new_verdict"])
         self.assertEqual(flips, {("NEUTRAL", "CAUTION"): 7})
         for row in rows:
@@ -158,7 +158,7 @@ class Rtm0RegistryActivationTests(unittest.TestCase):
         serialization = _activation_serialization(rows)
         self.assertEqual(
             hashlib.sha256(serialization.encode("utf-8")).hexdigest().upper(),
-            "2F35CAF71BC8D745907135C37078CE0D3E86DAAB66DDDADF1EAB03C4C6D69B1A",
+            "AC55F2CA6ACAA4479DDC97A113F5B614740CF656B23B955D5749EAD9F62F96AA",
         )
 
     def test_invariants_and_authority_bytes_are_protected(self):
