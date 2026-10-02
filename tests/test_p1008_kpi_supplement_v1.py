@@ -19,6 +19,7 @@ if str(TOOLS) not in sys.path:
 
 import p1008_kpi_supplement_v1 as supplement
 import p1008_t2_annotated_use_v1 as t2
+from scoring_ui_contract_assertions import historical_ui_sha, assert_current_formula_protection
 
 
 T1_FIXTURE = ROOT / "contracts/p1008_derived_kpi_candidate/v1.0/P1008_DERIVED_KPI_CANDIDATE_V1.sample.json"
@@ -386,8 +387,9 @@ class StoreAndProtectedArtifactTests(unittest.TestCase):
     def test_47_publisher_hash_unchanged(self):
         self.assertEqual("9FA584A2F76B931CCB2DDBB32B16F112AAC7B7A3CCD4FEC05111C1D57213E8BB", hashlib.sha256((ROOT / "tools/owner_publish_csv_v2.py").read_bytes()).hexdigest().upper())
 
-    def test_48_scoring_and_ui_hash_unchanged(self):
-        self.assertEqual("D722329A1C1F5AE648A150B642D4C4AB29B050C4FEDAAE159DD8C2C4F11F79DE", hashlib.sha256((ROOT / "src/index_p1008_v7.source.html").read_bytes()).hexdigest().upper())
+    def test_48_historical_ui_hash_and_current_formula_protection(self):
+        self.assertEqual("D722329A1C1F5AE648A150B642D4C4AB29B050C4FEDAAE159DD8C2C4F11F79DE", historical_ui_sha(ROOT, "src/index_p1008_v7.source.html"))
+        assert_current_formula_protection(self, ROOT)
 
     def test_49_launcher_hash_unchanged(self):
         self.assertEqual("AFC27FE6440A2DEFE446DB4519B586EFA56474B922A3901A84ABA3FF90DF8150", hashlib.sha256((ROOT / "launcher.html").read_bytes()).hexdigest().upper())

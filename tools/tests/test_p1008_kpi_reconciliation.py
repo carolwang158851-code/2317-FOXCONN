@@ -3,7 +3,9 @@ import hashlib
 import importlib.util
 import json
 import sys
+import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 
@@ -34,8 +36,11 @@ def csv_rows(path):
 class KpiReconciliationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.result = audit.generate(PACKAGE)
-        cls.out = PACKAGE / audit.OUTPUT_DIR
+        temporary = tempfile.TemporaryDirectory(dir=PACKAGE / "tests", prefix=".tmp-reconciliation-")
+        cls.addClassCleanup(temporary.cleanup)
+        cls.out = Path(temporary.name)
+        with patch.object(audit, "OUTPUT_DIR", cls.out):
+            cls.result = audit.generate(PACKAGE)
         cls.new_ui = (PACKAGE / "ui/P1008_WARROOM_COMMAND_CENTER_v24.html").read_text(encoding="utf-8")
         cls.old_source = (PACKAGE / "src/index_p1008_v7.source.html").read_text(encoding="utf-8")
         cls.old_bundle = (PACKAGE / "dist/index_p1008_v7.bundle.js").read_text(encoding="utf-8")
@@ -115,23 +120,24 @@ class KpiReconciliationTests(unittest.TestCase):
             block = text[text.index("function calculateRadarPackage"):text.index("const RadarChart")]
             self.assertIn("radarValues: null", block)
             self.assertIn("total: null", block)
-            self.assertIn("availableWeight", block)
+            self.assertIn("formal_scoring_coverage", block)
             self.assertIn("knownContribution", block)
             self.assertNotIn("knownContribution / availableWeight", block)
-        self.assertIn("AI_Revenue_Pct 無合格正式 authority", self.old_source)
+        self.assertIn("canonical?.blocking_inputs", self.old_source)
         self.assertIn("五維評分尚未完整", self.old_source)
-        self.assertIn("正式可評分", self.old_source)
-        self.assertIn("資料完整度", self.old_source)
+        self.assertIn("正式評分資格", self.old_source)
+        self.assertIn("當期研究模型資料覆蓋", self.old_source)
         self.assertIn("完整總分", self.old_source)
-        self.assertIn("已知加權貢獻，不等於完整總分", self.old_source)
+        self.assertIn("研究數值不等於正式分數", self.old_source)
         self.assertIn("不得重新正規化", self.old_source)
         self.assertNotIn("46.35 / 0.75", self.old_source)
 
-    def test_old_ui_complete_five_dimension_path_keeps_radar_and_total(self):
+    def test_old_ui_complete_legacy_inputs_do_not_activate_formal_radar_or_total(self):
         for text in (self.old_source, self.old_bundle):
             block = text[text.index("function calculateRadarPackage"):text.index("const RadarChart")]
-            self.assertIn("const total = Math.round(dimensions.reduce", block)
-            self.assertIn("radarValues: dimensions.map(item => item.score)", block)
+            self.assertIn("total: null", block)
+            self.assertIn("radarValues: null", block)
+            self.assertNotIn("const total = Math.round(dimensions.reduce", block)
             self.assertTrue("<RadarChart" in text or "React.createElement(RadarChart" in text)
 
     def test_new_ui_separates_monitoring_publication_and_decision_scoring(self):
@@ -147,9 +153,9 @@ class KpiReconciliationTests(unittest.TestCase):
         self.assertIn("formalScoreCount", self.new_ui)
         self.assertIn("Decision Scoring", self.new_ui)
         self.assertNotIn("信號強度：中等", self.new_ui)
-        self.assertIn("HOLD / 觀察", self.new_ui)
-        self.assertIn("Fail-closed 保守狀態", self.new_ui)
-        self.assertIn("非六大 IC 計分後的正式投資評等", self.new_ui)
+        self.assertNotIn("HOLD / 觀察", self.new_ui)
+        self.assertIn("未形成正式評等", self.new_ui)
+        self.assertIn("研究觀察，非投資指令", self.new_ui)
         self.assertIn("actionable:false", self.new_ui)
 
     def test_ui_remediation_does_not_invent_ai_share_or_six_ic_scores(self):
@@ -219,7 +225,8 @@ class KpiReconciliationTests(unittest.TestCase):
         self.assertEqual(7, panel.count("{ id:"))
         self.assertIn("formalScoreCount", self.new_ui)
         self.assertIn("Decision Scoring", self.new_ui)
-        self.assertIn("HOLD / 觀察", self.new_ui)
+        self.assertNotIn("HOLD / 觀察", self.new_ui)
+        self.assertIn("未形成正式評等", self.new_ui)
         self.assertIn("actionable:false", panel)
 
     def test_old_ui_uses_formal_fx_sidecar_for_shared_fx_metrics(self):

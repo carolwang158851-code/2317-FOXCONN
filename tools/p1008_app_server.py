@@ -36,6 +36,7 @@ from typing import Any
 import owner_publish_csv_v2 as owner_publish
 import p1008_authority_git_sync as authority_git_sync
 import p1008_kpi_supplement_v1 as kpi_supplement
+import p1008_scoring_state as scoring_state
 import warroom_report_governance as report_governance
 import warroom_report_trigger_runtime as report_trigger_runtime
 import warroom_rolling_brief as rolling_brief
@@ -775,6 +776,7 @@ class P1008JobManager:
         state["kpiSupplementProjection"] = kpi_supplement.build_ui_projection(
             self.package_root
         )
+        state["scoringState"] = scoring_state.build_scoring_state(self.package_root)
         return state
 
     def refresh_authority_git_sync(self) -> dict[str, Any]:
@@ -2287,6 +2289,9 @@ class P1008AppHandler(http.server.SimpleHTTPRequestHandler):
             return
         if parsed.path == "/api/p1008/status":
             self._send_json(200, self.manager.snapshot())
+            return
+        if parsed.path == "/api/p1008/scoring-state":
+            self._send_json(200, scoring_state.build_scoring_state(self.manager.package_root))
             return
         if parsed.path == "/api/p1008/authority-git-sync":
             self._send_json(200, self.manager.refresh_authority_git_sync())

@@ -224,9 +224,11 @@ class T1DerivedKpiBridgeTests(unittest.TestCase):
         rel = "launcher.html"
         self.assertEqual(BASELINE_HASHES[rel], file_sha(ROOT / rel))
 
-    def test_ui_entrypoints_unchanged(self):
+    def test_historical_ui_entrypoints_and_current_formula_protection(self):
+        from scoring_ui_contract_assertions import historical_ui_sha, assert_current_formula_protection
         for rel in ("index_p1008_v7.html", "ui/P1008_WARROOM_COMMAND_CENTER_v24.html"):
-            self.assertEqual(BASELINE_HASHES[rel], file_sha(ROOT / rel), rel)
+            self.assertEqual(BASELINE_HASHES[rel], historical_ui_sha(ROOT, rel), rel)
+        assert_current_formula_protection(self, ROOT)
 
     def test_formal_publisher_unchanged(self):
         rel = "tools/owner_publish_csv_v2.py"

@@ -895,7 +895,8 @@ function calculateRadarPackage({
   capScore,
   currentPB,
   foreignHoldChange,
-  foreignHoldTrend
+  foreignHoldTrend,
+  scoringState
 }) {
   const fundScore = clampScore(quality);
   const indScore = clampScore(Number.isFinite(aiRevPct) ? aiRevPct / 50 * 100 : null);
@@ -941,41 +942,28 @@ function calculateRadarPackage({
     source: 'PB 參考區間換算',
     note: '避免主觀情緒分數'
   }];
-  const scoredDimensions = dimensions.filter(item => Number.isFinite(item.score));
-  const missingDimensions = dimensions.filter(item => !Number.isFinite(item.score));
-  const availableWeight = scoredDimensions.reduce((sum, item) => sum + item.weight, 0);
-  const knownContribution = scoredDimensions.reduce((sum, item) => sum + item.score * item.weight, 0);
-  const coverage = {
-    scoredCount: scoredDimensions.length,
-    dimensionCount: dimensions.length,
-    completenessPct: Math.round(availableWeight * 100),
-    knownContribution,
-    missingReasons: missingDimensions.map(item => ({
-      label: item.label,
-      reason: item.key === 'industry' ? 'AI_Revenue_Pct 無合格正式 authority' : `${item.source} 缺少合格正式輸入`
-    }))
-  };
-
-  if (missingDimensions.length) {
-    return {
-      radarValues: null,
-      dimensions,
-      total: null,
-      missing: missingDimensions.map(item => item.label),
-      ...coverage,
-      methodologyZh: '五維度分數只使用 CSV 或 runtime 快照可追溯欄位；缺值不補假分數。',
-      actionable: false
-    };
-  }
-
-  const total = Math.round(dimensions.reduce((sum, item) => sum + item.score * item.weight, 0));
+  const canonical = scoringState?.schema_version === 'P1008_SCORING_READINESS_STATE_V1' ? scoringState : null;
+  const researchDimensions = canonical?.dimensions || dimensions.map(item => ({ ...item,
+    score: null,
+    formal_eligible: false,
+    weighted_contribution: null
+  }));
   return {
-    radarValues: dimensions.map(item => item.score),
-    dimensions,
-    total,
-    missing: [],
-    ...coverage,
-    methodologyZh: '五維度為可追溯欄位換算的模型分數，不是原始官方指標；僅供觀察，actionable:false。',
+    scoringState: canonical,
+    radarValues: null,
+    dimensions: researchDimensions,
+    total: null,
+    scoredCount: canonical?.formal_scoring_coverage?.eligible_count ?? 0,
+    dimensionCount: 5,
+    researchCount: canonical?.data_coverage?.research_model_count ?? 0,
+    completenessPct: canonical?.data_coverage?.percent ?? 0,
+    knownContribution: null,
+    missing: researchDimensions.filter(item => !item.formal_eligible).map(item => item.label),
+    missingReasons: (canonical?.blocking_inputs || ['評分狀態 API 未取得；維持 fail-closed，不承接舊值。']).map(reason => ({
+      label: '資格',
+      reason
+    })),
+    methodologyZh: canonical?.decision_reason || '正式評分合約未驗證。',
     actionable: false
   };
 }
@@ -1915,6 +1903,9 @@ function buildWarroomBrief({
     narrative = `${narrative} 目前仍有資料狀態或新鮮度註記，正式報告必須同步揭露。`;
   }
 
+  title = window.__p1008ScoringState?.decision_label || '未形成正式評等';
+  stance = '研究觀察 / 非投資指令';
+  narrative = `${window.__p1008ScoringState?.decision_reason || '正式評分狀態未驗證。'} ${narrative}`;
   const confidencePackage = calculateDecisionConfidence({
     coreData,
     governance,
@@ -2799,7 +2790,7 @@ const ConceptEvidenceTable = ({
     className: "panel-kicker"
   }, "Evidence List"), React.createElement("h3", {
     className: "panel-title text-[16px] mt-1"
-  }, "\u8B49\u64DA\u6E05\u55AE\u7D50\u8AD6\uFF1A\u652F\u6301 HOLD \u89C0\u5BDF"), React.createElement("p", {
+  }, "\u7814\u7A76\u8B49\u64DA\u6E05\u55AE\uFF1A\u672A\u5F62\u6210\u6B63\u5F0F\u8A55\u7B49"), React.createElement("p", {
     className: "panel-subtitle mt-1"
   }, "\u76EE\u524D\u6709 ", supportCount, " \u9805\u652F\u6301\u3001", riskCount, " \u9805\u98A8\u96AA\uFF1B\u7528\u9014\u662F\u89E3\u91CB\u7CFB\u7D71\u7D50\u8AD6\uFF0C\u4E0D\u8F38\u51FA\u8CB7\u8CE3\u6307\u4EE4\u3002")), React.createElement("span", {
     className: "status-chip text-slate-300"
@@ -3715,7 +3706,7 @@ const App = () => {
     const loadPipeline = async () => {
       try {
         setStatus('COMPUTING');
-        const [authorityManifest, ruleManifest, mText, macText, dText, eventText, fxText, runtimeSnapshot, newsScanSnapshot, reportManifest, eventReviewState] = await Promise.all([fetchRequiredJson('data/CSV_AUTHORITY_MANIFEST.json'), fetchRequiredJson('rules/RULE_STATUS_MANIFEST.json'), fetchRequiredText('data/2317_master_v9.csv'), fetchRequiredText('data/macro_snapshot.csv'), fetchRequiredText('data/2317_daily_price.csv'), fetchOptionalText('data/macro_event_observations.csv'), fetchOptionalText('data/fx_trend_observations.csv'), fetchOptionalJson('runtime/warroom_realtime_snapshot.json'), fetchOptionalJson('runtime/warroom_news_scan_snapshot.json'), fetchOptionalJson('runtime/warroom_report_manifest.json'), fetchOptionalJson('runtime/warroom_event_review_state.json')]);
+        const [authorityManifest, ruleManifest, mText, macText, dText, eventText, fxText, runtimeSnapshot, newsScanSnapshot, reportManifest, eventReviewState, scoringState] = await Promise.all([fetchRequiredJson('data/CSV_AUTHORITY_MANIFEST.json'), fetchRequiredJson('rules/RULE_STATUS_MANIFEST.json'), fetchRequiredText('data/2317_master_v9.csv'), fetchRequiredText('data/macro_snapshot.csv'), fetchRequiredText('data/2317_daily_price.csv'), fetchOptionalText('data/macro_event_observations.csv'), fetchOptionalText('data/fx_trend_observations.csv'), fetchOptionalJson('runtime/warroom_realtime_snapshot.json'), fetchOptionalJson('runtime/warroom_news_scan_snapshot.json'), fetchOptionalJson('runtime/warroom_report_manifest.json'), fetchOptionalJson('runtime/warroom_event_review_state.json'), fetchOptionalJson('/api/p1008/scoring-state')]);
         if (cancelled) return;
         const authorityEntry = authorityManifest.authoritativeFiles?.find(entry => entry.fileName === '2317_master_v9.csv');
         if (!authorityEntry) throw new Error('AUTHORITY_MANIFEST_MISSING: 找不到 v9 權威登錄');
@@ -3797,7 +3788,8 @@ const App = () => {
         const latestMacroEvent = validMacroEvents[0] || null;
         const latestFxTrend = validFxTrends[0] || null;
         const latestFormalFxTrend = validFxTrendCsv[validFxTrendCsv.length - 1] || null;
-        const latestMaster = validMas[0];
+        const latestMaster = scoringState?.current_source_rows?.master || {};
+        window.__p1008ScoringState = scoringState;
         const latestGovernedForeignRow = validMas.find(row => {
           const change = finiteNumber(row, 'ForeignHoldChange_Pct');
           return Number.isFinite(change) && ['RISING', 'STABLE', 'DECLINING'].includes(row?.ForeignHoldTrend);
@@ -3951,7 +3943,7 @@ const App = () => {
         setGovernance(governanceSnapshot);
         setLastSyncTime(runtimeOverlayActive ? `${runtimeSnapshot?.candidateDate || latestMac?.Date} 臨時快照` : latestMac?.Date || 'N/A');
 
-        if (!decisionReady) {
+        if (!decisionReady || !Number.isFinite(finiteNumber(latestMaster, 'ROIC_Precise_Pct'))) {
           const obsPrice = finiteNumber(latestDaily, 'Close');
           const obsPB = finiteNumber(latestDaily, 'PB_daily');
           const obsBvps = finiteNumber(latestDaily, 'BVPS_ref');
@@ -4005,6 +3997,7 @@ const App = () => {
             latestGovernedForeignPeriod
           });
           const obsRadar = calculateRadarPackage({
+            scoringState,
             quality: obsQuality,
             aiRevPct: obsAiRevPct,
             capScore: obsCap,
@@ -4044,7 +4037,7 @@ const App = () => {
               riskNote: latestMac?.RiskNote || '資料不足，未產生市場判斷'
             },
             batch1Data: {
-              signal: '🟡 HOLD',
+              signal: '未形成正式評等',
               pb: Number.isFinite(obsPB) ? `${obsPB}x` : 'N/A',
               price: obsPrice,
               actionable: false
@@ -4382,6 +4375,7 @@ const App = () => {
         const foreignHoldChange = currentForeignHoldChange;
         const foreignHoldTrend = currentForeignHoldTrend;
         const radarPackage = calculateRadarPackage({
+          scoringState,
           quality: qScore,
           aiRevPct,
           capScore: cap,
@@ -6070,14 +6064,14 @@ const App = () => {
     className: "text-2xl md:text-3xl font-black tracking-normal text-white mt-1"
   }, dimasScore >= 10 ? '高風險觀察' : dimasScore >= 6 ? '謹慎觀察' : '一般觀察'), React.createElement("div", {
     className: "readable-small mt-2"
-  }, "\u7D50\u8AD6\uFF1A\u7DAD\u6301 HOLD / \u4E0D\u8FFD\u50F9\uFF1B\u6B63\u5F0F\u898F\u5247\u4ECD\u70BA KEEP_DISABLED\u3002"), React.createElement("div", {
+  }, batch4Data?.scoringState?.decision_label || '未形成正式評等', "\uFF1B\u7814\u7A76\u89C0\u5BDF\u3001\u975E\u6295\u8CC7\u6307\u4EE4\uFF1B\u6B63\u5F0F\u898F\u5247\u4ECD\u70BA KEEP_DISABLED\u3002"), React.createElement("div", {
     className: "status-chip mt-2 w-fit font-mono text-slate-300"
   }, "actionable:false"))), React.createElement("div", {
     className: "space-y-3"
   }, [{
     no: '01',
     title: '主結論',
-    text: `目前股價 ${Number.isFinite(currentPrice) ? `${formatNumber(currentPrice, 2)} 元` : 'N/A'}、PB ${Number.isFinite(currentPB) ? `${formatNumber(currentPB, 3)}x` : 'N/A'}；結論是估值偏高但基本面仍支撐，維持 HOLD / 不追價。`
+    text: `目前股價 ${Number.isFinite(currentPrice) ? `${formatNumber(currentPrice, 2)} 元` : 'N/A'}、PB ${Number.isFinite(currentPB) ? `${formatNumber(currentPB, 3)}x` : 'N/A'}；${batch4Data?.scoringState?.decision_label || '未形成正式評等'}，數值只供研究觀察。`
   }, {
     no: '02',
     title: '支持證據',
@@ -6122,11 +6116,13 @@ const App = () => {
         className: "panel-title text-[16px]"
       }, "\u4E94\u7DAD\u8A55\u5206\u5C1A\u672A\u5B8C\u6574"), React.createElement("div", {
         className: "mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-1"
-      }, React.createElement("span", null, "\u6B63\u5F0F\u53EF\u8A55\u5206\uFF1A", React.createElement("strong", null, batch4Data?.scoredCount ?? 0, " / ", batch4Data?.dimensionCount ?? 5)), React.createElement("span", null, "\u8CC7\u6599\u5B8C\u6574\u5EA6\uFF1A", React.createElement("strong", null, batch4Data?.completenessPct ?? 0, "%")), React.createElement("span", null, "\u7F3A\u5C11\uFF1A", React.createElement("strong", null, batch4Data?.missing?.join('、') || 'N/A')), React.createElement("span", null, "\u5B8C\u6574\u7E3D\u5206\uFF1A", React.createElement("strong", null, "N/A"))), React.createElement("div", {
+      }, React.createElement("span", null, "\u6B63\u5F0F\u8A55\u5206\u8CC7\u683C\uFF1A", React.createElement("strong", null, batch4Data?.scoredCount ?? 0, " / ", batch4Data?.dimensionCount ?? 5)), React.createElement("span", null, "\u7576\u671F\u7814\u7A76\u6A21\u578B\u8CC7\u6599\u8986\u84CB\uFF1A", React.createElement("strong", null, batch4Data?.researchCount ?? 0, " / 5\uFF08", batch4Data?.completenessPct ?? 0, "%\uFF09")), React.createElement("span", null, "\u7F3A\u5C11\uFF1A", React.createElement("strong", null, batch4Data?.missing?.join('、') || 'N/A')), React.createElement("span", null, "\u5B8C\u6574\u7E3D\u5206\uFF1A", React.createElement("strong", null, "N/A"))), React.createElement("div", {
         className: "mt-2 text-[12px]"
       }, "\u539F\u56E0\uFF1A", missingReasons.map(item => `${item.label}：${item.reason}`).join('；') || '缺少合格正式輸入'), React.createElement("div", {
         className: "mt-2 font-bold text-amber-200"
-      }, "\u5DF2\u77E5\u52A0\u6B0A\u8CA2\u737B\uFF0C\u4E0D\u7B49\u65BC\u5B8C\u6574\u7E3D\u5206\uFF1B\u4E0D\u5F97\u91CD\u65B0\u6B63\u898F\u5316\u3002"));
+      }, "\u7814\u7A76\u6578\u503C\u4E0D\u7B49\u65BC\u6B63\u5F0F\u5206\u6578\uFF1B\u6B77\u53F2\u6B0A\u91CD\u672A\u555F\u7528\uFF0C\u4E0D\u8F38\u51FA\u6B63\u5F0F\u52A0\u6B0A\u8CA2\u737B\u3001\u4E0D\u5F97\u91CD\u65B0\u6B63\u898F\u5316\u3002"), React.createElement("div", {
+        className: "mt-2 text-[12px]"
+      }, "\u6B77\u53F2\u54C1\u8CEA\u7814\u7A76\u503C\uFF1A", batch4Data?.scoringState?.research_kpi_values?.historical_quality?.value ?? 'N/A', "\uFF08", batch4Data?.scoringState?.research_kpi_values?.historical_quality?.period || 'N/A', "\uFF0C\u975E\u7576\u671F\u3001\u4E0D\u627F\u63A5\uFF09\u3002Cloud & Networking\uFF1A", batch4Data?.scoringState?.research_kpi_values?.cloud_networking_share_pct ?? 'N/A', "%\uFF08\u7522\u54C1\u7D44\u5408\uFF0C\u975E AI-specific\uFF09\u3002"));
     }
 
     const ranked = [...dimensions].sort((a, b) => a.score - b.score);
@@ -6168,7 +6164,7 @@ const App = () => {
     }
   })), React.createElement("div", {
     className: "mt-3 text-sm text-slate-300"
-  }, "\u6B63\u5F0F\u53EF\u8A55\u5206 ", batch4Data?.scoredCount ?? 0, " / ", batch4Data?.dimensionCount ?? 5, "\uFF1B\u5B8C\u6574\u7E3D\u5206 N/A\u3002"), React.createElement("div", {
+  }, "\u6B63\u5F0F\u8A55\u5206\u8CC7\u683C ", batch4Data?.scoredCount ?? 0, " / ", batch4Data?.dimensionCount ?? 5, "\uFF1B\u7576\u671F\u7814\u7A76\u6A21\u578B ", batch4Data?.researchCount ?? 0, " / 5\uFF1B\u5B8C\u6574\u7E3D\u5206 N/A\u3002"), React.createElement("div", {
     className: "mt-2 text-sm text-slate-400"
   }, "\u7F3A\u5C11\uFF1A", batch4Data?.missing?.join('、') || 'N/A', "\u3002\u672C\u5340\u4E0D\u7E6A\u88FD\u5047 radar score\u3002"))), React.createElement("div", {
     className: "w-full flex flex-col justify-center"
@@ -6178,11 +6174,11 @@ const App = () => {
     className: "border-b border-slate-700/80 text-slate-400"
   }, React.createElement("th", {
     className: "pb-2 font-bold"
-  }, "\u7DAD\u5EA6(\u6B0A\u91CD)"), React.createElement("th", {
+  }, "\u7DAD\u5EA6\uFF08\u6B77\u53F2\u6B0A\u91CD\uFF0C\u672A\u555F\u7528\uFF09"), React.createElement("th", {
     className: "pb-2 font-bold text-center"
-  }, "\u63A8\u5C0E\u5206"), React.createElement("th", {
+  }, "\u7814\u7A76\u6A21\u578B\u503C\uFF08\u975E\u6B63\u5F0F\uFF09"), React.createElement("th", {
     className: "pb-2 font-bold text-right"
-  }, "\u52A0\u6B0A\u8CA2\u737B"))), React.createElement("tbody", {
+  }, "\u6B63\u5F0F\u52A0\u6B0A\u8CA2\u737B"))), React.createElement("tbody", {
     className: "text-slate-300"
   }, (batch4Data?.dimensions || []).map((item, index) => React.createElement("tr", {
     key: item.key,
@@ -6197,12 +6193,12 @@ const App = () => {
     className: "py-3 text-center font-num text-white text-[14px]"
   }, Number.isFinite(item.score) ? item.score : 'N/A'), React.createElement("td", {
     className: "py-3 text-right font-num text-sky-100 text-[13px]"
-  }, Number.isFinite(item.score) ? `${item.score} × ${item.weight.toFixed(2)} = ${(item.score * item.weight).toFixed(2)}` : 'N/A（不補分）')))), React.createElement("tfoot", null, React.createElement("tr", null, React.createElement("td", {
+  }, item.formal_eligible && Number.isFinite(item.weighted_contribution) ? item.weighted_contribution.toFixed(2) : '未啟用（不套權重）')))), React.createElement("tfoot", null, React.createElement("tr", null, React.createElement("td", {
     colSpan: "3",
     className: "pt-3 text-right text-[12px] text-slate-400"
   }, React.createElement("div", {
     className: "flex flex-wrap justify-end gap-1 items-center"
-  }, React.createElement("span", null, Number.isFinite(batch4Data?.total) ? batch4Data?.methodologyZh || '五維度資料完整。' : `已知加權貢獻 ${Number(batch4Data?.knownContribution || 0).toFixed(2)}；不等於完整總分`), React.createElement("span", {
+  }, React.createElement("span", null, Number.isFinite(batch4Data?.total) ? batch4Data?.methodologyZh || '五維度資料完整。' : batch4Data?.methodologyZh || '正式公式 / 權重未啟用，僅供研究。'), React.createElement("span", {
     className: "mx-1"
   }, "="), React.createElement("strong", {
     className: "text-[14px] text-white bg-sky-900/50 px-2 py-0.5 rounded border border-sky-500/30"

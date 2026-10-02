@@ -3423,9 +3423,9 @@
           <div class="section-title"><h2>決策輸出</h2><span>Decision Output</span></div>
           <div class="decision-copy">
             <small>決策結論</small>
-            <div class="hold-word">HOLD / 觀察</div>
+            <div class="hold-word">未形成正式評等</div>
             <h4>正式 IC 分數未完整</h4>
-            <p>Fail-closed 保守狀態，不是六大 IC 計算後的正式投資評等。</p>
+            <p>研究觀察，非投資指令；正式資格待驗證。</p>
             <div class="decision-foot">僅供決策參考 ｜ actionable:false</div>
           </div>
         </section>
@@ -3496,16 +3496,16 @@
 
         <section class="decision-core">
           <small>Decision Core</small>
-          <b>HOLD / 觀察</b>
-          <span>Fail-closed 保守狀態</span>
+          <b>未形成正式評等</b>
+          <span>研究觀察，非投資指令</span>
           <em>actionable:false</em>
           <div class="strength">Decision Scoring：N/A</div>
         </section>
 
         <div class="neutral-core-overlay" aria-label="Decision Core HOLD">
           <small>Decision Core</small>
-          <strong>HOLD / 觀察</strong>
-          <span>Fail-closed 保守狀態</span>
+          <strong>未形成正式評等</strong>
+          <span>研究觀察，非投資指令</span>
           <em>actionable:false</em>
         </div>
 
@@ -4565,7 +4565,7 @@
         }
       }
 
-      function renderConfidence(readiness, news, formalSynced, systems) {
+      function renderConfidence(readiness, news, formalSynced, systems, scoringState) {
         const rawScore = toNumber(readiness?.score);
         const score = rawScore === null ? null : Math.round(rawScore);
         const body = document.querySelector(".left-stack .panel:nth-child(2) .confidence-body");
@@ -4580,10 +4580,9 @@
         const validation = metricScore(readiness?.validationScore);
         const candidateScore = metricScore(readiness?.candidateFileScore);
         const eventRows = toNumber(news?.candidateRowCount) ?? 0;
-        const systemList = Object.values(systems || {});
-        const formalScoreCount = systemList.filter((item) => Number.isFinite(item?.score)).length;
-        const formalScoreTotal = systemList.length;
-        const decisionScoring = formalScoreTotal > 0 && formalScoreCount === formalScoreTotal ? "可用" : "N/A";
+        const formalScoreCount = scoringState?.ic_readiness?.score_count ?? 0;
+        const formalScoreTotal = scoringState?.ic_readiness?.monitor_count ?? 6;
+        const decisionScoring = scoringState?.formal_score_available === true ? "可用" : "N/A（正式公式 / 權重未啟用）";
         body.className = "confidence-body v21-confidence-body";
         body.innerHTML = `
           <div class="v21-confidence-top">
@@ -4592,6 +4591,8 @@
               <h4>${formalSynced ? "正式 CSV 已核准" : "候選資料未達發布門檻"}</h4>
               <p>${formalSynced ? "此百分比只代表正式 CSV 與來源稽核狀態，不是 decision confidence。" : "此百分比只代表 Owner publish gate；runtime 沿用值不能升格正式 CSV。"}</p>
               <p><strong>正式 IC 分數：${formalScoreCount} / ${formalScoreTotal || "N/A"}</strong><br />Decision Scoring：${decisionScoring}</p>
+              <p>五維正式資格：${scoringState?.formal_scoring_coverage?.eligible_count ?? 0} / 5；當期研究模型資料覆蓋：${scoringState?.data_coverage?.research_model_count ?? 0} / 5。六個 IC 為監控面板，不是六維投資評分。</p>
+              <p>${escapeHtml(scoringState?.industry_ai_blocker || "正式資格尚未驗證，不補分。")}</p>
             </div>
           </div>
           <div class="quality-bars">
@@ -4904,8 +4905,8 @@
         const paragraph = decisionBrief.querySelector("p");
         const foot = decisionBrief.querySelector(".decision-foot");
         if (status) status.textContent = `${item.label}：${item.state}`;
-        if (heading) heading.textContent = "HOLD / 觀察｜正式 IC 分數未完整";
-        if (paragraph) paragraph.textContent = `Fail-closed 保守狀態；非六大 IC 計分後的正式投資評等。${item.evidence}`;
+        if (heading) heading.textContent = state.scoringState?.decision_label || "未形成正式評等";
+        if (paragraph) paragraph.textContent = `${state.scoringState?.decision_reason || "正式資格未驗證。"} ${item.evidence} 非投資指令。`;
         if (foot) foot.textContent = `正式 CSV ${state.published ? "已核准" : "待審"}；${state.latestDate || "N/A"}；actionable:false`;
       }
 
@@ -4920,7 +4921,7 @@
             <div class="active-summary-line"><b>Owner</b><span>${escapeHtml(brief(item.owner, 52))}</span></div>
           </div>
           <div>
-            <div class="active-summary-line"><b>結論</b><span>HOLD / 觀察；${escapeHtml(source)} 不改正式結論。</span></div>
+            <div class="active-summary-line"><b>結論</b><span>${escapeHtml(state.scoringState?.decision_label || "未形成正式評等")}；${escapeHtml(source)} 僅切換研究焦點，非投資指令。</span></div>
             <div class="active-summary-line"><b>風險</b><span>${escapeHtml(brief(item.headline, 56))}</span></div>
             <div class="v19-action-note">下次檢視：${escapeHtml(state.nextReview)}；異常只提示重審，不輸出買賣指令。</div>
           </div>
@@ -4949,8 +4950,8 @@
           const span = core.querySelector("span");
           const em = core.querySelector("em");
           if (small) small.textContent = item.label;
-          if (strong) strong.textContent = "HOLD / 觀察";
-          if (span) span.textContent = "Fail-closed 保守狀態";
+          if (strong) strong.textContent = state.scoringState?.decision_label || "未形成正式評等";
+          if (span) span.textContent = "研究觀察，非投資指令";
           if (em) em.textContent = "actionable:false";
         }
         updateDecisionBrief(item, state);
@@ -5025,7 +5026,7 @@
       }
 
       async function init() {
-        const [appState, eventState, news, realtimeSnapshot, dailyRows, masterRows, quarterlyEvidence, quarterlyReport, fxRows, macroRows] = await Promise.all([
+        const [appState, eventState, news, realtimeSnapshot, dailyRows, masterRows, quarterlyEvidence, quarterlyReport, fxRows, macroRows, scoringState] = await Promise.all([
           fetchAppState(),
           fetchJson("runtime/warroom_event_review_state.json"),
           fetchJson("runtime/warroom_news_scan_snapshot.json"),
@@ -5035,7 +5036,8 @@
           fetchJson("modules/p1008_research_plugin/config/normalized_evidence/FY2026_H1_ROE.json"),
           fetchJson("modules/p1008_research_plugin/config/quarterly_earnings/FY2026_Q2.json"),
           fetchCsv("data/fx_trend_observations.csv"),
-          fetchCsv("data/macro_snapshot.csv")
+          fetchCsv("data/macro_snapshot.csv"),
+          fetchJson("api/p1008/scoring-state")
         ]);
         const daily = latestByDate(dailyRows, "Date");
         const master = latestByDate(masterRows, "QuarterEndDate");
@@ -5044,13 +5046,15 @@
         const macro = latestByDate(macroRows, "Date");
         const taiexObservation = latestNumericObservation(macroRows, "TAIEX_Weekly_Chg");
         const state = buildSystems({ appState, eventState, news, realtimeSnapshot, daily, master, quarterlyEvidence, quarterlyReport, historicalAi, taiexObservation, fx, macro });
+        state.scoringState = scoringState?.schema_version === "P1008_SCORING_READINESS_STATE_V1" ? scoringState : null;
+        window.__p1008ScoringState = state.scoringState;
         applyResolvedKpiProjection(state.metrics, appState?.kpiSupplementProjection);
         refreshResolvedKpiSummaries(state);
         applyIcTones(state.systems);
         window.__p1008DynamicState = state;
         if (shell) shell.classList.add("p1008-runtime-bound");
         renderDecisionHeader(state, appState, news);
-        renderConfidence(appState?.reviewPackage?.readiness || {}, news, state.published, state.systems);
+        renderConfidence(appState?.reviewPackage?.readiness || {}, news, state.published, state.systems, state.scoringState);
         renderRightPanel(state);
         renderBottom(state, appState, eventState, news);
         renderGovernance(state, appState);

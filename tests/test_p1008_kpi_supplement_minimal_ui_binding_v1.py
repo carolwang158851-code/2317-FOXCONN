@@ -16,6 +16,7 @@ if str(ROOT / "tests") not in sys.path:
     sys.path.insert(0, str(ROOT / "tests"))
 
 import p1008_kpi_supplement_v1 as supplement
+from scoring_ui_contract_assertions import historical_ui_sha, assert_current_formula_protection
 from test_p1008_kpi_supplement_v1 import (
     request_t1,
     request_t2,
@@ -323,8 +324,9 @@ class ServerAndProtectionTests(unittest.TestCase):
         pinned = next(item["sha256"] for item in manifest["artifacts"] if item["path"] == "formula_registry.json")
         self.assertEqual(expected, pinned)
 
-    def test_54_core_investment_ui_hash_unchanged(self):
-        self.assertEqual("D722329A1C1F5AE648A150B642D4C4AB29B050C4FEDAAE159DD8C2C4F11F79DE", digest("src/index_p1008_v7.source.html"))
+    def test_54_historical_ui_hash_and_current_formula_protection(self):
+        self.assertEqual("D722329A1C1F5AE648A150B642D4C4AB29B050C4FEDAAE159DD8C2C4F11F79DE", historical_ui_sha(ROOT, "src/index_p1008_v7.source.html"))
+        assert_current_formula_protection(self, ROOT)
 
     def test_55_report_integration_still_calls_resolver(self):
         text = (ROOT / "tools/warroom_periodic_report_v1.py").read_text(encoding="utf-8")
