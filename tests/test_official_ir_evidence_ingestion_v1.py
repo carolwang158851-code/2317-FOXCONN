@@ -25,6 +25,7 @@ from p1008_research_plugin.adapters.official_ir_evidence_adapter import (  # noq
     OfficialIREvidenceError,
     _ascii_transport_url,
     _period,
+    _SafeRedirect,
 )
 from p1008_research_plugin.orchestrator.research_content_integration import (  # noqa: E402
     ResearchContentIntegrationError,
@@ -36,7 +37,8 @@ import warroom_report_trigger_runtime as trigger_runtime  # noqa: E402
 NOW = "2026-08-12T12:30:00Z"
 CALENDAR = "https://www.honhai.com/zh-tw/investor-relations/investor-relations-activities/event-calendar"
 CONFERENCE = "https://www.honhai.com/zh-tw/investor-relations/investor-relations-activities/investor-conference"
-QUARTERLY = "https://www.honhai.com/zh-tw/investor-relations/financial-information/reports?category=quarterly"
+QUARTERLY = "https://www.honhai.com/zh-tw/investor-relations/financial-information/reports"
+REDIRECTING_QUARTERLY = QUARTERLY + "?category=quarterly"
 OBSOLETE_QUARTERLY = "https://www.honhai.com/zh-tw/investor-relations/financial-information/reports?section=quarterly"
 PRESS = "https://www.honhai.com/zh-tw/press-center/press-releases/latest-news"
 MOPS = "https://mops.twse.com.tw/mops/api/t164sb03"
@@ -383,6 +385,75 @@ class OfficialIREvidenceIngestionTests(unittest.TestCase):
         self.assertEqual(adapter.validate_url(QUARTERLY, fixed_page=True), QUARTERLY)
         with self.assertRaisesRegex(OfficialIREvidenceError, "OFF_DOMAIN_URL_REJECTED"):
             adapter.validate_url(OBSOLETE_QUARTERLY, fixed_page=True)
+
+    def test_domain_hotfix_canonical_quarterly_url_is_fixed_and_accepted(self) -> None:
+        adapter = OfficialIREvidenceAdapter(self.root, transport=FixtureTransport(self.mapping()))
+        source = next(s for s in adapter.authorization['sources'] if s['sourceId'] == 'HON_HAI_QUARTERLY_REPORTS')
+        self.assertEqual(source['url'], QUARTERLY)
+        self.assertEqual(adapter._fetch(QUARTERLY, fixed_page=True).final_url, QUARTERLY)
+        with self.assertRaisesRegex(OfficialIREvidenceError, 'OFF_DOMAIN_URL_REJECTED'):
+            adapter.validate_url(REDIRECTING_QUARTERLY, fixed_page=True)
+
+    def test_domain_hotfix_home_redirect_and_off_domain_final_stay_rejected(self) -> None:
+        from urllib.request import Request
+        adapter = OfficialIREvidenceAdapter(self.root, transport=FixtureTransport(self.mapping()))
+        redirects = []
+        guard = _SafeRedirect(adapter.validate_url, redirects)
+        with self.assertRaisesRegex(OfficialIREvidenceError, 'OFF_DOMAIN_URL_REJECTED'):
+            guard.redirect_request(Request(REDIRECTING_QUARTERLY), None, 302, 'Found',
+                                   {'Location': '/zh-tw'}, 'https://www.honhai.com/zh-tw')
+        self.assertEqual(redirects, [])
+        for final in ('https://www.honhai.com/zh-tw', 'https://evil.example/reports'):
+            adapter.transport = FixtureTransport({QUARTERLY: html('quarterly', final)})
+            with self.assertRaisesRegex(OfficialIREvidenceError, 'OFF_DOMAIN_URL_REJECTED'):
+                adapter._fetch(QUARTERLY, fixed_page=True)
+        response = guard.redirect_request(Request(QUARTERLY), None, 302, 'Found',
+                                          {'Location': REPORT}, REPORT)
+        self.assertEqual(response.full_url, REPORT)
+        self.assertEqual(redirects[0]['target_url'], REPORT)
+
+    def test_domain_hotfix_lookalike_hosts_stay_rejected(self) -> None:
+        adapter = OfficialIREvidenceAdapter(self.root)
+        for host in ('honhai.com.example.org', 'fakehonhai.com', 'www.honhai.com.example.org',
+                     'image.honhai.com.example.org'):
+            with self.subTest(host=host), self.assertRaisesRegex(OfficialIREvidenceError, 'OFF_DOMAIN_URL_REJECTED'):
+                adapter.validate_url('https://' + host + '/zh-tw/investor-relations/reports')
+
+    def test_domain_hotfix_external_documents_are_not_official(self) -> None:
+        result = self.scan(self.mapping(quarterly='<a href="https://external.example/2026Q2.pdf">2026 Q2 財務報告</a>'))
+        self.assertFalse(result['coverage_complete'])
+        self.assertEqual(result['validated_event_evidence'], [])
+        self.assertIn({'source_id': 'HON_HAI_QUARTERLY_REPORTS', 'status': 'SECURITY_REJECTED',
+                       'error': 'OFF_DOMAIN_URL_REJECTED'}, result['failed_sources'])
+
+    def test_domain_hotfix_investor_conference_remains_unchanged_and_accepted(self) -> None:
+        adapter = OfficialIREvidenceAdapter(self.root)
+        source = next(s for s in adapter.authorization['sources'] if s['sourceId'] == 'HON_HAI_INVESTOR_CONFERENCE')
+        self.assertEqual(source['url'], CONFERENCE)
+        self.assertEqual(adapter.validate_url(CONFERENCE, fixed_page=True), CONFERENCE)
+        result = self.scan(self.mapping(conference=f'<a href="{RESULTS}">2Q26 Results</a>',
+                                       documents={RESULTS: b'official-results'}))
+        self.assertIn('HON_HAI_INVESTOR_CONFERENCE', result['successful_sources'])
+        self.assertEqual(result['validated_event_evidence'][0]['source_id'], 'HON_HAI_INVESTOR_CONFERENCE')
+
+    def test_domain_hotfix_complete_coverage_requires_all_source_requests_to_succeed(self) -> None:
+        values = self.mapping(quarterly=f'<a href="{REPORT}">2026 Q2 財務報告</a>', documents={REPORT: b'official-quarterly'})
+        result = self.scan(values)
+        self.assertTrue(result['coverage_complete'])
+        self.assertTrue(result['source_scan_complete'])
+        self.assertEqual(result['failed_sources'], [])
+        self.assertIn('HON_HAI_QUARTERLY_REPORTS', result['successful_sources'])
+        self.assertNotIn('PARTIAL_FAILURE', result['status'])
+
+    def test_domain_hotfix_real_failure_keeps_partial_status_despite_quarterly_success(self) -> None:
+        values = self.mapping(quarterly=f'<a href="{REPORT}">2026 Q2 財務報告</a>', documents={REPORT: b'official-quarterly'})
+        values[MOPS] = OfficialIREvidenceError('OFFICIAL_ENDPOINT_ERROR')
+        result = self.scan(values)
+        self.assertEqual(result['status'], 'PARTIAL_FAILURE_WITH_AUTHORITY')
+        self.assertEqual(result['scan_status'], 'PARTIAL_FAILURE')
+        self.assertFalse(result['coverage_complete'])
+        self.assertIn('HON_HAI_QUARTERLY_REPORTS', result['successful_sources'])
+        self.assertEqual(result['failed_sources'][0]['source_id'], 'MOPS_OFFICIAL_DISCLOSURE')
 
     def test_hash_mismatch_is_rejected(self) -> None:
         result = self.scan(self.mapping(conference=f'<a href="{RESULTS}">2Q26 Results</a>', documents={RESULTS: b"genuine"}))
