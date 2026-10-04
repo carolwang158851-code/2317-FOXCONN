@@ -24,7 +24,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -861,6 +861,95 @@ def validation_score(validation_checks: list[dict[str, Any]]) -> int:
     return round(sum(status_score(str(check.get("status", ""))) for check in validation_checks) / len(validation_checks))
 
 
+def resolve_twse_requirement(package_root: Path, target_date: str) -> dict[str, Any]:
+    """Read existing receipt-backed authority evidence; never fetch or publish.
+
+    An absent STOCK_DAY row is not proof of closure before that day's close.
+    Evidence must cover the target month and be observed on/after the target
+    (after 16:00 Taipei on weekdays). Weekend detection alone grants nothing.
+    Freshness is revalidated against actual formal bytes, not a cached PASS.
+    """
+    result: dict[str, Any] = {
+        "targetDate": target_date,
+        "marketState": "TWSE_TRADING_DAY_OR_UNKNOWN",
+        "dailyPriceRequirement": "APPLICABLE",
+        "marketActivityRequirement": "APPLICABLE",
+        "latestValidatedTradingDate": None,
+        "blockers": [],
+        "actionable": False,
+    }
+    try:
+        target = date.fromisoformat(target_date)
+        status_path = package_root / DAILY_PRICE_STATUS_PATH
+        if not status_path.is_file():
+            return result
+        status = read_json(status_path)
+        if not status.get("run_dir") or not status.get("receipt_paths"):
+            return result  # Legacy/unproven state never grants an exemption.
+        # Lazy import avoids the existing freshness -> publisher import cycle.
+        import warroom_authority_freshness as freshness
+        run_dir = Path(str(status.get("run_dir") or "")).resolve()
+        allowed = (package_root / "runtime/daily_price_incremental").resolve()
+        if run_dir.parent != allowed or run_dir.name != status.get("run_id"):
+            raise ValueError("Daily Price receipt run is outside governed runtime")
+        if read_json(run_dir / "RESULT.json") != status:
+            raise ValueError("Daily Price latest status differs from immutable run result")
+        if status.get("exit_code") != 0 or status.get("actionable") is not False:
+            raise ValueError("Latest Daily Price run did not validate successfully")
+        receipt_dir = run_dir / "receipts"
+        declared = {Path(str(item)).resolve() for item in status.get("receipt_paths", [])}
+        if not declared or declared != set(receipt_dir.glob("*.receipt.json")):
+            raise ValueError("Daily Price receipt lineage mismatch")
+        month_path = receipt_dir / f"{target:%Y-%m}.receipt.json"
+        if month_path not in declared:
+            return result  # Previous-month evidence cannot waive today's checks.
+        receipt = read_json(month_path)
+        if receipt.get("http_status") != 200:
+            raise ValueError("TWSE receipt HTTP status is not 200")
+        observed = datetime.fromisoformat(str(receipt.get("fetched_at_utc") or "").replace("Z", "+00:00"))
+        if observed.tzinfo is None:
+            raise ValueError("TWSE receipt observation timestamp has no timezone")
+        cutoff = datetime.combine(target, time(16) if target.weekday() < 5 else time(), timezone(timedelta(hours=8)))
+        if observed < cutoff:
+            return result  # No holiday inference from an intraday/old receipt.
+        rows, _ = freshness._load_twse_receipts(receipt_dir)
+        latest = max(day for day in rows if day <= target_date)
+        result["latestValidatedTradingDate"] = latest
+        if target_date in rows:
+            result["marketState"] = "TWSE_TRADING_DAY"
+            return result
+        result["marketState"] = "TWSE_NON_TRADING_DAY"
+        market_status = read_json(package_root / MARKET_ACTIVITY_STATUS_PATH)
+        market_run = Path(str(market_status.get("run_dir") or "")).resolve()
+        if (
+            market_run.parent != (package_root / "runtime/market_activity_incremental").resolve()
+            or market_run.name != market_status.get("run_id")
+            or read_json(market_run / "RESULT.json") != market_status
+            or market_status.get("exit_code") != 0
+            or market_status.get("actionable") is not False
+        ):
+            raise ValueError("Latest Market Activity run did not validate successfully")
+        market_receipts = market_run / "receipts"
+        if {Path(str(item)).resolve() for item in market_status.get("receipt_paths", [])} != set(market_receipts.glob("*.receipt.json")):
+            raise ValueError("Market Activity receipt lineage mismatch")
+        market_rows, _ = freshness._load_twse_receipts(market_receipts)
+        if market_rows != rows:
+            raise ValueError("Daily Price / Market Activity TWSE receipt evidence disagrees")
+        validated = freshness.validate(package_root, receipt_dir)
+        if validated["twse_latest_validated_trading_date"] != latest:
+            raise ValueError("TWSE receipt cutoff differs from target-date authority")
+        result.update({
+            "dailyPriceRequirement": "NOT_APPLICABLE_MARKET_CLOSED",
+            "marketActivityRequirement": "NOT_APPLICABLE_MARKET_CLOSED",
+            "formalAuthorityFreshness": "PASS",
+        })
+    except (OSError, ValueError, KeyError, InvalidOperation, RuntimeError, ImportError) as exc:
+        result["dailyPriceRequirement"] = "FAIL"
+        result["marketActivityRequirement"] = "FAIL"
+        result["blockers"] = [f"TWSE formal authority requirement failed: {exc}"]
+    return result
+
+
 def inspect_candidate_files(package_root: Path, generated_files: list[str]) -> tuple[list[dict[str, Any]], list[str], int]:
     diagnostics: list[dict[str, Any]] = []
     blockers: list[str] = []
@@ -969,6 +1058,18 @@ def build_publish_readiness(
         declared_datasets(declared_files) if selected_datasets is not None else ()
     )
     generated_files = filter_generated_files(declared_files, selected_datasets)
+    twse_requirement = resolve_twse_requirement(
+        package_root, str(dry_run.get("candidateDate") or "")
+    )
+    closed_datasets = (
+        {"daily", "market_activity"}
+        if twse_requirement["dailyPriceRequirement"] == "NOT_APPLICABLE_MARKET_CLOSED"
+        else set()
+    )
+    generated_files = [
+        item for item in generated_files
+        if generated_file_dataset(item) not in closed_datasets
+    ]
     excluded_datasets = (
         tuple(item for item in declared_scope if item not in selected_datasets)
         if selected_datasets is not None
@@ -1033,16 +1134,22 @@ def build_publish_readiness(
         if selected_datasets is not None
         else None
     )
+    if closed_datasets:
+        selected_gate_datasets = tuple(
+            item for item in (selected_gate_datasets if selected_gate_datasets is not None else SUPPORTED_DATASETS)
+            if item not in closed_datasets
+        )
     if selected_datasets is None:
         no_action_required = (
             bool(dry_run.get("noPublishRequired"))
             or bool(already_published_targets)
+            or bool(closed_datasets)
         ) and not generated_files
     else:
         no_action_required = (
             not generated_files
             and bool(selected_datasets)
-            and set(selected_datasets).issubset(already_published_datasets)
+            and set(selected_datasets).issubset(already_published_datasets | closed_datasets)
         )
     critical_missing = dry_run.get("criticalMissingFields")
     if critical_missing is None:
@@ -1068,26 +1175,33 @@ def build_publish_readiness(
             or check.get("dataset") in selected_gate_datasets
         ]
         validation_checks = selected_checks
-    checks_score = validation_score(validation_checks)
+    checks_score = (
+        None if closed_datasets and not validation_checks
+        else validation_score(validation_checks)
+    )
     if no_action_required:
-        candidate_diagnostics, candidate_blockers, candidate_score = [], [], 100
+        candidate_diagnostics, candidate_blockers, candidate_score = [], [], (None if closed_datasets else 100)
     else:
         candidate_diagnostics, candidate_blockers, candidate_score = inspect_candidate_files(package_root, generated_files)
     completeness_score = 100 if not critical_missing else max(0, 100 - len(critical_missing) * 25)
-    score = round(
-        source_score * 0.30
-        + checks_score * 0.25
-        + candidate_score * 0.25
-        + completeness_score * 0.20
-    )
+    components = [(source_score, .30), (checks_score, .25), (candidate_score, .25), (completeness_score, .20)]
+    applicable = [(value, weight) for value, weight in components if value is not None]
+    score = round(sum(value * weight for value, weight in applicable) / sum(weight for _, weight in applicable))
 
     blockers = list(candidate_blockers)
+    if selected_datasets is None or {"daily", "market_activity"} & set(selected_datasets):
+        blockers.extend(twse_requirement["blockers"])
+        if twse_requirement["marketState"] == "TWSE_TRADING_DAY" and "daily" not in effective_datasets:
+            _, formal_rows, _ = read_csv_header_and_rows(package_root / DAILY_TARGET)
+            if not formal_rows or formal_rows[-1][0] != twse_requirement["targetDate"]:
+                blockers.append("Trading-day Daily Price candidate missing for TWSE target date.")
     if selected_datasets is not None:
         missing_selected = [
             item
             for item in selected_datasets
             if item not in effective_datasets
             and item not in already_published_datasets
+            and item not in closed_datasets
         ]
         if missing_selected:
             blockers.append(
@@ -1143,7 +1257,7 @@ def build_publish_readiness(
     elif no_action_required:
         selected_candidate_date = ""
 
-    if not no_action_required:
+    if not no_action_required or closed_datasets:
         if trade_plan_error:
             blockers.append(f"Trade-date publish plan failed: {trade_plan_error}")
         if critical_missing:
@@ -1163,6 +1277,14 @@ def build_publish_readiness(
     )
     return {
         "score": score,
+        "twseRequirement": twse_requirement,
+        "notApplicableDatasets": sorted(closed_datasets),
+        "validationChecks": [
+            {**check, "status": "NOT_APPLICABLE_MARKET_CLOSED"}
+            if check.get("dataset") in closed_datasets else dict(check)
+            for check in dry_run.get("validationChecks", []) or []
+        ],
+        "applicableValidationCheckCount": len(validation_checks),
         "threshold": MIN_PUBLISH_SCORE,
         "allowed": not blockers,
         "blockers": blockers,

@@ -881,7 +881,18 @@ class P1008JobManager:
             execution_date = str(readiness.get("executionDate") or date.today().isoformat())
             formal_target_date = str(readiness.get("formalTargetDate") or staging_candidate_date)
             explanations = readiness_explanation_zh(readiness, formal_target_date)
-            generated_files = dry_run.get("generatedFiles", []) or []
+            generated_files = readiness.get("publishFiles", []) or []
+            twse_requirement = readiness.get("twseRequirement", {})
+            context = market_context(formal_target_date)
+            if twse_requirement.get("marketState") == "TWSE_NON_TRADING_DAY":
+                context["status"] = "TWSE_NON_TRADING_DAY"
+                if not context.get("isWeekend"):
+                    context["zh"] = f"{formal_target_date} 為 TWSE receipt 已驗證之非交易日；沒有 2317 日收盤價屬正常狀況。"
+            if readiness.get("notApplicableDatasets"):
+                explanations["advisoriesZh"].append(
+                    "日價／市場活動：NOT_APPLICABLE_MARKET_CLOSED；正式資料已驗證至 "
+                    f"{twse_requirement.get('latestValidatedTradingDate')}，不要求休市日候選列，不列入發布。"
+                )
             pending_owner = self.pending_owner_review()
             news = read_json(self.package_root / "runtime" / "warroom_news_scan_snapshot.json", default={}) or {}
             event_review = read_json(self.package_root / "runtime" / "warroom_event_review_state.json", default={}) or {}
@@ -898,13 +909,13 @@ class P1008JobManager:
                 "dryRunPath": str(dry_run_path.relative_to(self.package_root)).replace("/", "\\"),
                 "generatedFiles": generated_files,
                 "candidatePending": bool(generated_files),
-                "dailyRow": dry_run.get("dailyRow"),
+                "dailyRow": None if readiness.get("notApplicableDatasets") else dry_run.get("dailyRow"),
                 "macroSourceHealth": dry_run.get("macroSourceHealth", []) or [],
                 "macroSourceSummary": dry_run.get("macroSourceSummary", {}) or {},
                 "marketProxyManifest": dry_run.get("marketProxyManifest", []) or [],
                 "readiness": readiness,
                 "readinessExplanation": explanations,
-                "marketContext": market_context(formal_target_date),
+                "marketContext": context,
                 "ownerApprovalPhrase": approval_phrase,
                 "pendingOwnerReview": pending_owner,
                 "newsScan": {
