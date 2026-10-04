@@ -748,6 +748,40 @@ class P1008JobManager:
             "authorityGitSync": authority_git_sync.not_evaluated_result(),
         }
 
+    def refresh_payload(self) -> dict[str, Any]:
+        """Read the current persisted job without starting work or writing state."""
+        with self.lock:
+            # An executing local worker owns its in-memory progress; never replace it
+            # with another process's persisted state halfway through a transaction.
+            if self.active_thread is not None and self.active_thread.is_alive():
+                source = "ACTIVE_JOB"
+            elif self.state_path.exists():
+                persisted = json.loads(self.state_path.read_text(encoding="utf-8"))
+                if (not isinstance(persisted, dict)
+                        or persisted.get("status") not in {
+                            "IDLE", "RUNNING", "SUCCEEDED", "FAILED", "ERROR", "INTERRUPTED"
+                        }
+                        or not isinstance(persisted.get("steps", []), list)
+                        or not isinstance(persisted.get("errors", []), list)):
+                    raise ValueError("Invalid current runtime/p1008_app_state.json schema.")
+                self.state = persisted
+                source = "DISK"
+            elif self.state.get("jobId"):
+                raise ValueError("Current runtime/p1008_app_state.json is missing.")
+            else:
+                source = "INITIAL"
+        app = self.snapshot()
+        editorial = quarterly_editorial.quarterly_editorial_catalog(self.package_root)
+        log = ""
+        if app.get("logPath"):
+            log_path = (self.package_root / app["logPath"]).resolve()
+            if not log_path.is_relative_to((self.package_root / "logs").resolve()):
+                raise ValueError("Current job log path is outside logs/.")
+            if log_path.is_file():
+                log = log_path.read_text(encoding="utf-8", errors="replace")[-20000:]
+        return {"app": app, "review": app["reviewPackage"], "editorial": editorial,
+                "log": log, "stateSource": source}
+
     def snapshot(self) -> dict[str, Any]:
         with self.lock:
             state = dict(self.state)
@@ -2300,6 +2334,14 @@ class P1008AppHandler(http.server.SimpleHTTPRequestHandler):
             return
         if parsed.path == "/api/p1008/status":
             self._send_json(200, self.manager.snapshot())
+            return
+        if parsed.path == "/api/p1008/refresh":
+            try:
+                payload = self.manager.refresh_payload()
+            except Exception as error:
+                self._send_json(409, {"status": "FAIL_CLOSED", "error": str(error)})
+                return
+            self._send_json(200, payload)
             return
         if parsed.path == "/api/p1008/scoring-state":
             self._send_json(200, scoring_state.build_scoring_state(self.manager.package_root))

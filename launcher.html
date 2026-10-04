@@ -212,6 +212,7 @@
         <button id="run-report">產生日報</button>
         <button id="refresh">刷新狀態</button>
       </div>
+      <div id="refresh-feedback" class="small" role="status" aria-live="polite"></div>
       <div class="notice blue" style="margin-top:12px">
         <div class="between"><div><strong>Official IR Evidence</strong><div class="small">Schedule awareness is not results authority.</div></div><span id="official-ir-status" class="badge blue">NO_CHANGE</span></div>
         <div class="grid four" style="margin-top:10px">
@@ -857,30 +858,41 @@
       }
     }
 
-    async function refreshAll() {
+    async function refreshAll(event) {
+      if (state.refreshing) return;
+      const manual = event?.type === 'click';
+      state.refreshing = true;
+      const button = $('refresh');
+      const feedback = $('refresh-feedback');
+      button.disabled = true;
+      if (manual) {
+        button.textContent = '刷新中…';
+        feedback.textContent = '正在重新讀取目前狀態…';
+      }
       try {
-        const [app, review, editorial] = await Promise.all([
-          fetchJson(`/api/p1008/status?t=${Date.now()}`),
-          fetchJson(`/api/p1008/review-package?t=${Date.now()}`),
-          fetchJson(`/api/p1008/quarterly-editorial/catalog?t=${Date.now()}`),
-        ]);
+        const { app, review, editorial, log } = await fetchJson(`/api/p1008/refresh?t=${Date.now()}`);
+        if (!app || typeof app.status !== 'string' || !review || typeof review.status !== 'string' || !editorial) {
+          throw new Error('刷新回應缺少必要的 app / review / editorial 狀態。');
+        }
         state.app = app;
         state.review = review;
         state.editorial = editorial;
-        if (app.jobId) {
-          try {
-            const response = await fetch(`/api/p1008/log?jobId=${encodeURIComponent(app.jobId)}&t=${Date.now()}`, { cache: 'no-store' });
-            state.log = response.ok ? await response.text() : '';
-          } catch {
-            state.log = '';
-          }
-        }
+        state.log = log || '';
+        renderStatus();
+        renderEditorial();
+        if (manual) feedback.textContent = `已刷新狀態：${new Date().toLocaleTimeString('zh-TW')}（${app.jobId || app.status}）`;
       } catch (error) {
+        console.error('Launcher refresh failed', error);
         state.app = { status: 'ERROR', errors: [error.message] };
         state.review = { launcherGate: { code: 'APP_API_UNAVAILABLE', zh: 'App API 未啟動，請使用 P1008_APP.bat 開啟。', canEnterNewUi: false }, readiness: { blockers: [error.message] } };
+        feedback.textContent = `刷新失敗：${error.message}`;
+        try { renderStatus(); }
+        catch (renderError) { console.error('Launcher refresh error render failed', renderError); }
+      } finally {
+        state.refreshing = false;
+        button.disabled = false;
+        button.textContent = '刷新狀態';
       }
-      renderStatus();
-      renderEditorial();
     }
 
     function selectedEditorialReport() {
